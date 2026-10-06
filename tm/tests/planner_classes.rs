@@ -1480,6 +1480,44 @@ fn every_clause_of_binary_holds_bites() {
     fails(&w, "6:");
 }
 
+/// **`binary_holds` asks the BINARY whether it accepts a world's model — both kinds** (W-47 track
+/// C, README gap 4992).  A frozen world handed a model the shipped binary refuses by parity P26 is
+/// refused by clause 6 with the binary's own message naming `.tm/model.json`: the hash arm's
+/// spelling (`Learned::Mult`) carrying a multiplier of 30 decimal places, and the whole file
+/// (`Learned::ModelJson`) carrying a lounge weight of 2.  Each world with its own model is held.
+/// Until the gap closed a `Mult` world's file was never written, so its refusal could not happen —
+/// whether the binary accepts a multiplier was asked of the harness's codec alone — and nothing in a
+/// plain run failed if `forkclass::binary_model_file` wrote no file for either kind.
+#[test]
+fn binary_holds_asks_the_binary_whether_it_accepts_the_model() {
+    let tz = tz();
+    let refused_by_the_binary = |w: &ClassWorld, what: &str| {
+        let e = forkclass::binary_holds(&Built::of(w.clone())).err().unwrap_or_default();
+        assert!(
+            e.iter().any(|m| m.starts_with("6:") && m.contains(".tm/model.json") && m.contains(what)),
+            "clause 6 did not carry the binary's refusal of the model ({what}): {e:?}"
+        );
+    };
+    // The hash arm's spelling: a frozen class world carrying a multiplier, held as it is, then
+    // handed one of 30 decimal places.
+    let line = frozen_lines()
+        .iter()
+        .find(|l| l["world"]["mult"].is_string() && l["secondary"].is_null())
+        .expect("a primary class line carrying a multiplier");
+    let mut w = ClassWorld::of_json(&line["world"], tz).expect("a stored world");
+    assert!(forkclass::binary_holds(&Built::of(w.clone())).is_ok(), "{}: the frozen world is not held", line["class"]);
+    w.mult = Some(forkclass::Learned::Mult("1e-30".to_string()));
+    refused_by_the_binary(&w, "decimal places");
+    // The whole file: a frozen learned-model world, held as it is, then given a lounge weight of 2.
+    let line = forkclass::model_lines().first().expect("a learned-model line");
+    let mut w = ClassWorld::of_json(&line["world"], tz).expect("a stored world");
+    assert!(forkclass::binary_holds(&Built::of(w.clone())).is_ok(), "{}: the frozen world is not held", line["name"]);
+    let mut model: Value = serde_json::from_str(w.model_file().expect("the world's model file")).expect("the file is JSON");
+    model["p_lounge"]["Mon"] = serde_json::json!(2.0);
+    w.mult = Some(forkclass::Learned::ModelJson(model.to_string()));
+    refused_by_the_binary(&w, "outside [0, 1]");
+}
+
 /// **Every parity flag a frozen line carries names a REGISTERED number** (the
 /// owner's D64(a)): the comparand's flags are named by their number
 /// (`d57.p46`, `d57.p47`, `d60.p51`, and whatever flag a later step adds), and

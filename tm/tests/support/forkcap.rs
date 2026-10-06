@@ -37,6 +37,16 @@
 //!   `is_d21`): no line records a departure, so there is nothing a committed version could
 //!   license, and a re-bless is a decision, never a repair (AGENTS §7.2).
 //!
+//! # The census a sweep reads
+//!
+//! Whatever the backend, [`CENSUS_VAR`] set to a directory makes the store append one line per
+//! request it answers to `<dir>/<its frozen file>.asks` — `<mode>\t<op>\t<key>` ([`Store::note`]).
+//! `run-oracle.sh`'s set 7 sets it for the whole workspace under `TM_ORACLE` and reads the
+//! directory with `capacity-census.py` against the CLASS of frozen capacity files, so every binary
+//! that asks the oracle says what it asked — until W-47 only T13 printed its own [`Store::census`],
+//! and a sweep's figure for the other ten targets was a count of tests, not of requests (W-47
+//! track C, README gap 4998).  Unset, nothing is written.
+//!
 //! # The file
 //!
 //! One JSON object a line, sorted by `key`: a configuration line `{"key":"config:<fnv>","config":
@@ -164,6 +174,12 @@ pub enum Mode {
 /// [`fork_rebless`] on the test binary it re-runs, never by hand.
 pub const RECORD_VAR: &str = "TM_FORKCAP_RECORD";
 
+/// **The variable a census reads** (W-47 track C, README gap 4998): a DIRECTORY.  When it is set,
+/// every request the store answers is appended, one line each, to `<dir>/<FROZEN>.asks` —
+/// `<mode>\t<op>\t<key>`, a fresh request's op suffixed ` (live)` and its key `-` ([`Store::note`]).
+/// `run-oracle.sh`'s set 7 sets it and `capacity-census.py` reads it; unset, nothing is written.
+pub const CENSUS_VAR: &str = "TM_FORKCAP_CENSUS";
+
 /// **The frozen answers of one file, and the oracle when one is set.**
 pub struct Store {
     name: &'static str,
@@ -173,6 +189,7 @@ pub struct Store {
     pipe: Mutex<Option<Pipe>>,
     record: Mutex<Option<std::fs::File>>,
     asked: Mutex<BTreeMap<String, u64>>,
+    census_to: Mutex<Option<std::fs::File>>,
 }
 
 static STORE: OnceLock<Store> = OnceLock::new();
@@ -202,6 +219,11 @@ impl Store {
         let record = record_to.map(|p| {
             std::fs::OpenOptions::new().append(true).create(true).open(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
         });
+        let census_to = std::env::var_os(CENSUS_VAR).map(PathBuf::from).map(|dir| {
+            std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("{CENSUS_VAR} {}: {e}", dir.display()));
+            let p = dir.join(format!("{name}.asks"));
+            std::fs::OpenOptions::new().append(true).create(true).open(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
+        });
         let pipe = oracle.map(|bin| {
             assert_capacity_mode(&bin);
             Pipe { bin, io: None }
@@ -229,7 +251,21 @@ impl Store {
             pipe: Mutex::new(pipe),
             record: Mutex::new(record),
             asked: Mutex::new(BTreeMap::new()),
+            census_to: Mutex::new(census_to),
         }
+    }
+
+    /// **One request counted** — in this process's [`Store::census`], and, when [`CENSUS_VAR`] names
+    /// a directory, as one appended line `<mode>\t<op>\t<key>` (one `write` of the whole line, so a
+    /// line is never interleaved with another appender's).  Called before the request is answered:
+    /// the census says what was ASKED, and a request whose answer then fails a comparison fails its
+    /// test by name.
+    fn note(&self, op: String, key: &str) {
+        if let Some(f) = self.census_to.lock().expect("the census file").as_mut() {
+            let line = format!("{:?}\t{op}\t{key}\n", self.mode);
+            f.write_all(line.as_bytes()).expect("append to the census");
+        }
+        *self.asked.lock().expect("census").entry(op).or_default() += 1;
     }
 
     /// The backend this run asks.
@@ -250,7 +286,7 @@ impl Store {
         let mut canon = req.clone();
         canon["config"] = json!(ckey);
         let key = format!("{op}:{}", fnv::fnv1a64_hex(serde_json::to_string(&canon).expect("a request serialises").as_bytes()));
-        *self.asked.lock().expect("census").entry(op.clone()).or_default() += 1;
+        self.note(op.clone(), &key);
         let frozen = || -> Result<&Value, String> {
             let held = self.configs.get(&ckey).ok_or_else(|| format!("{}: no frozen configuration {ckey}", self.name))?;
             if *held != toml {
@@ -314,7 +350,7 @@ impl Store {
     /// is inert without `TM_ORACLE` and must say so before it asks.
     pub fn ask_live(&self, req: Value) -> Value {
         let op = req["op"].as_str().unwrap_or_else(|| panic!("a request with no op: {req}")).to_string();
-        *self.asked.lock().expect("census").entry(format!("{op} (live)")).or_default() += 1;
+        self.note(format!("{op} (live)"), "-");
         let mut pipe = self.pipe.lock().expect("the oracle's pipe");
         pipe.as_mut()
             .unwrap_or_else(|| panic!("{}: a live {op} request with no oracle — set TM_ORACLE", self.name))

@@ -93089,7 +93089,10 @@ kernel step.
      night; 48 learned-model days frozen with the fork's answers by value;
      T13's capacity requests re-keyed to the file's text, every answer
      unchanged; in its second commit 48 more with no wake logged (gap 4991),
-     `run-oracle.sh` run whole, and two script defects of the sweep fixed.
+     `run-oracle.sh` run whole, and two script defects of the sweep fixed; in
+     its third, the second commit's whole sweep recorded, every capacity
+     arm's census (gap 4998) and the hash arm's multiplier handed to the
+     binary (gap 4992).
      Gaps 4990-5009 are this track's (4990-4998 used); no parity number (no
      behaviour of the binary moved, and no departure is registered).  Whoever
      merges renumbers nothing: the range is the track's own.
@@ -93097,8 +93100,8 @@ kernel step.
 
 ## Stage 6 — W-47 track C: a learned model's tables meet the fork — the oracle reads `.tm/model.json` with the fork's own loader, and 96 learned-model days are frozen, 48 of them with no wake logged
 
-**Status (kept current; a cut is recoverable from this block and the branch `w47-c`).**  **Two sessions of this
-track, two commits.**  The FIRST session wrote §§1-8, measured them (§9's first-session runs) and was cut off during
+**Status (kept current; a cut is recoverable from this block and the branch `w47-c`).**  **Three sessions of this
+track, three commits.**  The FIRST session wrote §§1-8, measured them (§9's first-session runs) and was cut off during
 its fourth workspace run (2026-10-06 00:29), before any commit; the snapshot `refs/archive/w47/c-wip` (`20dafb3`,
 2026-10-05 23:30 — not a step's commit) holds its working files, and every file the second session found in the
 worktree was byte-identical to that snapshot but this block (`git show refs/archive/w47/c-wip:<file> | cmp - <file>`,
@@ -93109,8 +93112,14 @@ live oracle (§5, §6), `check.sh` and three workspace runs of its own (§9) —
 commit, **`cd17611`**.  **Its own work is the second commit**: §10, `run-oracle.sh` run whole over the first commit's
 tree with a freshly built oracle, every arm's figures; §11, 48 learned-model lines with no wake logged, compared with
 the fork's day and bitten (gap 4991 CLOSED); and the two defects the sweep met in its own scripts, `build-oracle.sh`'s
-target directory (gap 4996) and set 7's `set -e` (gap 4997), both CLOSED; gap 4998 opened.  Nothing is owed by this
-track after it but the open gaps of §8 (4990, 4992-4995, 4998).
+target directory (gap 4996) and set 7's `set -e` (gap 4997), both CLOSED; gap 4998 opened.  The second session then
+ran `run-oracle.sh` whole over its own commit's tree and was cut off before it wrote that down.  The THIRD session
+(2026-10-06, from 06:41) wrote no code of the first two commits: its work is the third commit — §12, that last sweep
+recorded from its log (exit 0, every set, set 7's loop run by the script itself), and §13, every capacity arm's
+census (gap 4998 CLOSED: `support/forkcap.rs`' store writes what it asked, `capacity-census.py` reads it against the
+class of frozen capacity files, `run-oracle.sh`'s set 7 fails a file whose binary asked the oracle nothing), with its
+three bites; and §14, the hash arm's multiplier handed to the binary as `.tm/model.json` (gap 4992 CLOSED); §15 is what
+it measured.  Nothing is owed by this track after it but the open gaps of §8 (4990, 4993-4995).
 
 Rust tests, the oracle and fixtures only: no `.lean` file, nothing under `tm/src` or `tm-core/src`.  The files: the
 oracle (`kernel/tm-kernel-ffi/examples/oracle/src/main.rs`, `build-oracle.sh`'s and `run-oracle.sh`'s comments and set 6,
@@ -93123,6 +93132,9 @@ The second commit's: `tm/tests/support/forkclass.rs` and `tm/tests/planner_class
 `without_wake`, `NO_WAKE`, `model_line_without_wake` and the four tests, the bless and the fresh arm widened), the frozen
 file (48 lines added, none changed), `forkcap.rs` and `planner_classes.rs` each one stray blank line fewer,
 `build-oracle.sh`'s target directory (gap 4996) and `run-oracle.sh`'s set 7 (gap 4997).
+The third commit's: `tm/tests/support/forkcap.rs` (the census writer), `run-oracle.sh`'s set 7 and its header, the new
+`kernel/tm-kernel-ffi/examples/oracle/capacity-census.py`, `tm/tests/support/forkclass.rs` (§14's one model file),
+`tm/tests/planner_classes.rs` (§14's witness), and this block (§§12-15).
 
 ### 0. The brief, measured before it was acted on
 
@@ -93392,13 +93404,17 @@ cache (D42's rebuild).  3. *Cost.*  A bend of day 0's arrival fallback moves onl
 4. *Clears it.*  Learned-model draws with no `tm wake` logged, beside these.  **CLOSED by §11** (the track's later
 commit, the second session's): 48 lines with no wake logged, compared with the fork's day, the arrival bitten.
 
-**Gap 4992 — the hash arm's multiplier is never written where the binary is asked whether it holds the world.**
+**Gap 4992 — the hash arm's multiplier is never written where the binary is asked whether it holds the world —
+CLOSED (§14).**
 1. *What.*  `binary_rebuilds` writes `.tm/model.json` only for a `Learned::ModelJson` world; a `Learned::Mult` world (every class, batch and
 driven line before W-47) is asked of the binary with no model, so whether the binary accepts its multiplier is asked
 only of the harness's codec (`kernel_answer_with_grants`, P26's 18 places), never of the binary.  2. *Why.*  Writing it
 would re-run clause 6 on every frozen hash-arm world — a measurement, and possibly a re-draw, that is not this step's.
 3. *Cost.*  None measured: every drawn multiplier is inside P26's bound (`0.30000000000000004` has 17 places).
 4. *Clears it.*  Write the `_default` table for a `Mult` world too, and re-run the four `binary_holds` properties.
+*Cleared by §14 (the third session's): one function hands the binary its file for both kinds, every
+`binary_holds` property — five, counting the driven world's — holds unchanged, and a witness the binary refuses pins
+the write (a harness that wrote no file passed every test until it existed).*
 
 **Gap 4993 — the kernel's proofs do not tell the fitted shift from the configured one.**  1. *What.*  §7's K1
 (`SleepCfg.shift := s.shiftConfig`) built the whole library; check 9's constants do not reach the bend (it is a
@@ -93443,7 +93459,7 @@ the arm list.  Driven with `cargo` and `arms.py` stubbed (`scratchpad/w47-c/r2/s
 `cargo: workspace fails` and exited 101 with no arm run; the new one ran all three stub arms, named the workspace and
 the failing arm, and exited 1.  Sets 1-6 still stop at their first failure, deliberately (§10).
 
-**Gap 4998 — ten of the eleven capacity arms do not say what they asked.**  1. *What.*  Under TM_ORACLE every target
+**Gap 4998 — ten of the eleven capacity arms do not say what they asked — CLOSED (§13).**  1. *What.*  Under TM_ORACLE every target
 whose comparand moved to `tm-oracle capacity` (W-46 track C) asks the live oracle beside each frozen answer and holds
 the two equal, but only T13 prints `forkcap::Store::census`; the other ten (`capacity_slots`, `priority_edf`,
 `planner_w40_runs`, the `priority_*` and `tui_queue_*` targets) pass printing nothing, so a sweep's figure for them is
@@ -93452,6 +93468,8 @@ it; a static store is never dropped, so it cannot print itself at the end.  3. *
 asking would still report its pass count under TM_ORACLE; the frozen arm asks the same requests, so nothing is
 compared less, but nothing says so.  4. *Clears it.*  Each target prints its store's census once (a test of its own,
 `forkcap::store().census()`), or set 7 runs them with a flag that does — in files this track does not hold.
+*Cleared by the second route, in files this track does hold (§13, the third session's): the flag is
+`TM_FORKCAP_CENSUS`, the store itself writes what it asked, and set 7 reads it — no target file edited.*
 
 ### 9. Measured
 
@@ -93697,3 +93715,232 @@ move when the expected arrivals are taken out (the ablation above).
 | `model draw 45 without a wake` | `interrupted/travel` | — | — | 07:11 | — | — |
 | `model draw 46 without a wake` | `running/lounge` | P51 | yes | config | yes | — |
 | `model draw 47 without a wake` | `interrupted/late` | P51 | yes | config | — | — |
+
+### 12. `run-oracle.sh`, whole, over the second commit's tree — exit 0, set 7's loop run by the script itself (the second session's last run, recorded by the third)
+
+*Run by the second session after it committed `fe0eb83`, which was cut off before it wrote it down; the third session
+read the run's script and log (`scratchpad/w47-c/r2/sweep2.sh`, `r2/sweep2.log` — scratch, and volatile, so every
+figure is copied here) and re-derived each figure below from the log.*  A clone of `fe0eb83` (`r2/sweep2`, its
+porcelain 0 after the run, the shared tree's 0), an oracle built FRESH by the script into `r2/oracle-sweep2` (the stamp
+of §0), `./run-oracle.sh <oracle-sweep2> 512 4` under the 40G cap **with CARGO_TARGET_DIR set on purpose** — gap
+4996's case, on the tree that fixes it.  04:23:10 – 04:52:37 (29 min 26 s; load 9.0 → 6.0).  **The script exited 0**:
+every set ran, and set 7's arm loop was run by the script itself — §10's run was the first commit's tree, where
+`set -e` ended the script after set 7's workspace and the arms were run by hand (gap 4997).
+
+* **Set 1**: 138 compared, 43 with nothing to report (`itemCheck/danglingParent` 55, `est edit — different line` 37;
+  the comparisons ran on 138, 138, 78, 138, 138 and 78 lines) — §10's figures, unmoved.
+* **Set 2**: 2,048 compared, 1,395 with nothing to report (`id — Rust reads none, kernel reads one` 485, `missing state`
+  347, `id — Rust reads one, kernel refuses (manyIds)` 26; the `est` edit ran on 177) — unmoved.
+* **Set 3**: 469 logs over 6 zones, 8,442 `Replay` keys, 285 `tm event` names, 469 entry counts, 7 refused-line lists,
+  8 fitted models, **195,375 scalar values**; P21 on 49 day records, each displaying the same `round1` load and
+  `load_blocks`; P81: 48 breaks netted in 23 inputs, each asked again as a pause and an unpause (22 of them answered
+  unlike the log as given); P85: 162 clock starts inside a break in 2 inputs; **no disagreement beyond the recorded
+  exceptions** (2.72 s).
+* **Set 4**: 1,380 kernel renderings read back to the fork's own entry; 3,868 lines skipped (blank, refused by either
+  side, or P14/P15 residue); 2 P100 rendering-residue lines held by name in T1.
+* **Set 5**: frozen grids 46 of 46; 16 fresh weeks, 16 compared, 32 named cells and 1,255 minutes moved to `wall` by
+  P63's rule (17.76 s).
+* **Set 6**: the frozen lines **325 of 325** (8 carrying P81's answer; 4,286 oracle requests) — so §11's 48 no-wake lines
+  met the fresh oracle inside the sweep this time — and the fresh learned-model arm **96 drawn, 0 the binary cannot
+  hold, 96 compared and 96 again without a wake, 0 findings** (short nights 61, learned curves 71, fitted shifts 46, P45
+  days 4; 2,240 requests), the two in 174.27 s; `planner_invariants`' fresh arm **287 drawn, 287 compared** (3,298
+  requests; what-ifs 128; P45 10, P46 7, P47 4, P51 185, P52 4, P55 0, P56 3; 299.18 s); `planner_p56_cut` frozen 24 of
+  24 (432 requests) and 16 fresh P56 days, 16 compared (27.33 s); the frozen TUI days (234 requests) and start days (20
+  requests), both passed.
+* **Set 7**: the whole workspace under TM_ORACLE, **155 result lines, 2,901 passed, 0 failed, 53 ignored** (the box at
+  load ≈ 6-12: no latency row missed this time); then the loop, **9 arms, 9 passed** — `cli_end_at`'s back-dated ends (3
+  inputs, 54 `Replay` keys, 293 scalar values, 0 other exceptions), `emit_planner` 3 of 3, plan-basic days 147 of 147,
+  the overrun lines (the logged break changes the rows of 5 of 6), `planner_fixtures` 4 of 4, `planner_p85_days` (20
+  requests) and `planner_separator_days` (40 requests), `planner_w39_conference` 3 of 3, and `planner_w40_runs`' D74
+  census (128 draws held, P64's precondition on 2 days, the kernel unlike the comparand on 0 days; 122 days by value,
+  1,263 fork rows, 64,768 other values, 122 of 122 hashes; 120.31 s).  The capacity arms ran inside the workspace and
+  printed what they asked only for T13 — gap 4998, which §13 closes.
+
+### 13. Every capacity arm says what it asked — the census (gap 4998 CLOSED; the third session's)
+
+*Written and measured by the third session.*  Gap 4998: under TM_ORACLE every target whose comparand W-46 track C moved
+to `tm-oracle capacity` asks the oracle live, and only T13 printed its `Store::census` — the other ten passed printing
+nothing, so a sweep's figure for them was a count of tests, and a target whose tests stopped asking would have reported
+its pass count.  The gap's second route is taken, in files this track holds; no target file is edited.
+
+* **The writer** — `tm/tests/support/forkcap.rs`: `CENSUS_VAR` (`TM_FORKCAP_CENSUS`), a directory.  With it set, the
+  store opens `<dir>/<its frozen file>.asks` for appending, and `Store::note` — now the one place `Store::ask` and
+  `Store::ask_live` count a request, where the per-process count `Store::census` reads already was — appends
+  `<mode>\t<op>\t<key>` (a fresh request: op ` (live)`, key `-`), one `write` per line, before the request is answered:
+  the census says what was ASKED.  Unset, nothing is written: a plain `cargo test --workspace` is the run it was.
+* **The reader** — `kernel/tm-kernel-ffi/examples/oracle/capacity-census.py <dir>`, against the CLASS of frozen capacity
+  files — every `tm/tests/fixtures/fork-4748911-capacity-*.jsonl`, eleven today, by no list: a binary is counted by
+  having been blessed.  Per file: the frozen-held requests its binary asked the oracle, by op; how many distinct frozen
+  answer lines they asked, of how many the file holds; the fresh requests.  **It FAILS, naming the file**: a file whose
+  binary asked none of its frozen lines (gap 4998's case — its tests stopped asking, or did not run); a request answered
+  from the frozen file alone (mode `Frozen`: the binary did not see TM_ORACLE, so nothing it asked met the fork today);
+  an asked frozen-held key the file does not hold (`Store::ask` refuses such a request: a test already failed on it by
+  name, or the census is not the store's); a census file with frozen-held requests and no frozen file.  A frozen line no test asks any more is
+  printed, not failed: it leaves at the next bless, as the store's module doc has always declared.
+* **`run-oracle.sh`'s set 7** empties `<scratch>/capacity-census` (so an earlier sweep's census can never answer for
+  this one), runs the workspace and every arm with `TM_FORKCAP_CENSUS` naming it, and runs the reader last; its failure
+  is recorded and the set runs on, like every other in set 7 (gap 4997's rule), and the script then exits non-zero.
+* **Driven, the eleven targets alone** (`scratchpad/w47-c/r3/eleven.sh`: every target a frozen capacity file names,
+  its plain tests, `TM_ORACLE` the oracle built fresh for this session into `r3/oracle` — the stamp of §0 — and the
+  census set; the worktree's build, 06:48, load 26): eleven `ok`, and the census **exit 0 — 4,502 frozen-held requests
+  asked of the oracle, 1,339 of 1,339 frozen answer lines asked, 0 fresh**:
+
+| target (its frozen file `fork-4748911-capacity-<target>.jsonl`) | asked the oracle, by op | frozen lines asked |
+|---|---|---|
+| `capacity_slots` (tm-core) | cut 2, wall_minutes 4 | 6 of 6 |
+| `kernel_lookahead_parity` (T13) | cut 1,104, lookahead 3,025, rank 148, today 131 | 1,286 of 1,286 |
+| `planner_w40_runs` | batches 2 | 2 of 2 |
+| `priority_edf` (tm-core) | rank 3 | 3 of 3 |
+| `priority_plan_basic` | batches 1, rank 3 | 3 of 3 |
+| `priority_regressions` | batches 3, cand 1, rank 11 | 15 of 15 |
+| `priority_rules` | cand 3, rank 6, sort_key 1 | 10 of 10 |
+| `tui_queue_capture` | rank 15 | 1 of 1 |
+| `tui_queue_keys` | rank 8 | 1 of 1 |
+| `tui_queue_reorder` | rank 5 | 3 of 3 |
+| `tui_queue_screens` | rank 26 | 9 of 9 |
+
+  T13's row is the census T13 prints itself: driven again with `--nocapture --test-threads=1` (07:14), its last
+  `Store::census` line reads `asked cut 1104, lookahead 3025, rank 148, today 131` and that run's census file holds the
+  same four counts — §6's figures — so the file and the one in-test census agree where both exist.
+* **It bites** — A and C are plants in the clone `scratchpad/w47-c/r3/bend` (`git clone --shared` of `w47-c` at
+  `fe0eb83`, the step's three files then copied in, the Lean build copied, its own target directory; the shared tree's
+  porcelain 0 before and after); B bends no code and ran on the worktree's build.  Each is driven through the same
+  eleven targets, under the fresh oracle but for B:
+  - **A — a target stops asking**, gap 4998's own case: `capacity_slots`' two asking tests `#[ignore]`d.  The eleven
+    targets: **all `ok`** (`capacity_slots` 3 passed, 3 ignored) — the pass count a sweep would have reported.  The
+    census: **exit 1**, one failure, `capacity_slots: its binary asked the oracle NONE of the 6 answer line(s) frozen in
+    fork-4748911-capacity-capacity_slots.jsonl (no census file)`; the other ten asked 1,333 of their 1,333 lines.
+  - **B — the binary does not see TM_ORACLE**: the census set and TM_ORACLE unset (no code bent; the worktree's build):
+    eleven `ok`; the census **exit 1, eleven failures**, each `<n> request(s) answered from <its file> alone (mode
+    Frozen)`.
+  - **C — the census writes a key the store never asked**: `Store::note` writing the key upper-cased.  Eleven `ok`; the
+    census **exit 1, 22 failures** — on every file, its asked keys not in its frozen file, and none of its frozen lines
+    asked.
+* **What it cannot see, declared.**  A binary that includes the store, has no frozen file and asks nothing (it is in
+  no class this reads; such a binary's frozen-held asks would fail its own plain run by name).  A frozen line no test
+  asks is printed, never failed (the bless's rule).  And the planner arms' `tm-oracle plan` requests are outside this
+  census: each of those arms prints its own count (`tm-oracle plan asked N time(s)`, the classes' censuses).
+
+### 14. The hash arm's multiplier is handed to the binary (gap 4992 CLOSED; the third session's)
+
+*Written and measured by the third session.*  Gap 4992: `binary_rebuilds` wrote `.tm/model.json` only for a
+`Learned::ModelJson` world, so the 53 frozen worlds that carry the hash arm's `_default` multiplier as `Learned::Mult`
+(the class file 27, the batch 26) — and the one driven line, whose parent carries 1.125 — were asked of the binary with
+NO model, and whether the binary accepts a multiplier was asked only of the harness's codec.
+
+* **`forkclass::binary_model_file`** — the one reading of the file the binary is handed, used by `binary_rebuilds` (clauses
+  5 and 6) and by `drive`: the file's text for a `Learned::ModelJson` world; for a `Learned::Mult` world the host
+  writer's text (`Model::to_json`) of **`forkclass::mult_model`** — `Model::default()` with the `_default` table set,
+  which `Built::of` now plans the world at through the same function, so the binary's file and the harness's candidates
+  have one source — held to read back as THAT model through the binary's own loader (`host_model`), or refused by name;
+  `None` without a model.  No frozen line changes: a `Mult` line is still spelled `mult`.
+* **Every `binary_holds` property holds unchanged** (`planner_classes`, the worktree's build, 07:05, load 10):
+  `every_frozen_world_is_one_the_binary_holds`, `the_frozen_batch_is_every_draw_the_binary_holds` (128 held, 0 refused,
+  of 128), `the_frozen_models_are_every_draw_the_binary_holds` (48 held and 48 without a wake), the driven world's
+  `the_driven_worlds_are_held_by_the_binarys_rebuild` (`binary_holds says []`) and `every_clause_of_binary_holds_bites`;
+  and `every_driven_world_is_the_binarys_own_output` — the drive re-run with the 1.125 file written — leaves the stored
+  world byte for byte.  The other suites that ask `binary_holds` (`planner_invariants`' fresh draws, `planner_w40_runs`,
+  `planner_p85_days`, `planner_separator_days`, `planner_w41_starts` and `support/forkp56.rs`' P56 days) run in the
+  workspace runs below.
+* **It bites** (the clone `scratchpad/w47-c/r3/bend`, restored to the step's files after each; the shared tree's
+  porcelain 0 before and after):
+  - **G1 — a `Mult` world's file handed to the binary broken** (`{`, written in place of the text after the harness's
+    check): **4 FAILED** — `every_frozen_world_is_one_the_binary_holds` names the **27** class worlds, each `6: tm now
+    exited Some(1): tm: .tm/model.json: EOF while parsing an object at line 1 column 1`; the batch property holds **102 of
+    128** and names the first refused (`batch draw 1: frozen, and a world the binary cannot hold: 6: tm now exited …`);
+    the driven world's rebuild and `every_clause_of_binary_holds_bites` fail carrying the same `6: tm now exited …`; the
+    96 model lines pass.  So the BINARY reads the file now (by reading the old code: before this step `binary_rebuilds`
+    wrote no file for a `Mult` world, so the same plant had nothing to bend).
+  - **G2 — the file written from a different multiplier** (twice the line's): **4 FAILED** — the driven world's
+    rebuild and its re-drive (`drive` reads the same function), `every_frozen_world_is_one_the_binary_holds` (the 27
+    class worlds) and the batch (102 of 128) — each by the harness's own read-back, `the multiplier 1.125's
+    .tm/model.json does not read back as the model the harness plans at: Ok(Model { … duration: {"_default": 2.25} …
+    })` on the driven world; `every_clause_of_binary_holds_bites` and the model lines pass.
+* **The witness that pins it — `binary_holds_asks_the_binary_whether_it_accepts_the_model`** (`planner_classes.rs`,
+  new, plain run): the first primary class line carrying a multiplier (`idle/lounge`, 1.125) is held as it is and,
+  handed `Learned::Mult("1e-30")`, refused by clause 6 with the binary's own P26 message (`tm: .tm/model.json: duration
+  multiplier for ^… has 30 decimal places (at most 18)`); `model draw 0` is held as it is and, its file given
+  `p_lounge.Mon = 2`, refused the same way (`… is outside [0, 1]`).  The two refusals were found by driving the shipped
+  binary first (`scratchpad/w47-c/r3/probe`: on `idle/lounge` it accepts no file, the 1.125 file and `_default` 0, and
+  refuses 1e-30 and −1 by P26's name, 1e300 as `badCandidate 0 multiplier`, a lounge weight of 2, and `{`).
+* **Every new definition mutated, in the clone** (D40's rule, applied to this step's Rust):
+  - **M1 — `mult_model`'s body a constant** (`Model::default()`): `the_kernel_plans_every_generated_class_the_fork_planned`
+    FAILED (137 disagreements — `idle/lounge: diagnostics.plan_honesty: kernel 0.5 fork 0.5638888888888889`, its rows
+    from 6 on) and `the_kernel_plans_every_frozen_batch_day_the_fork_planned` FAILED (113); every `binary_holds`
+    property passed — the default model is a file the binary accepts.
+  - **M2 — `binary_model_file`'s body a constant** (`Ok(None)`): **the witness alone FAILED** (`clause 6 did not carry the
+    binary's refusal of the model (decimal places): []`); all six other hold tests passed.  So before the witness a
+    harness that wrote NO model file for either kind passed every test of the plain run: G1 bit it only by a plant,
+    because no frozen or drawn world carries a model the binary refuses.  That blind spot is what the witness closes.
+  - **M3 — the predecessor** (a `Mult` world handed no file, as before this step): the witness FAILED on its `Mult`
+    half; `every_frozen_world_is_one_the_binary_holds` and the driven world's rebuild passed.
+  - `Store::note` and `capacity-census.py` are §13's: plant C bends the writer, plants A and B the reader's inputs.
+    The census is read by set 7 alone, so a bent `Store::note` passes a plain run and fails the sweep — by design: the
+    plain run's answers are frozen, and what the census adds is what the LIVE asks were.
+* **What it cannot see, declared.**  `binary_holds` asks the binary to LOAD the world and rebuild its cache; it does
+  not compare the binary's day.  That the binary plans a `Mult` world with the multiplier is asked by the comparisons
+  that send the multiplier on the candidates (`kernel_answer_with_grants`, D34), as before.
+
+### 15. Measured (the third session's)
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`; 16G for the oracle build, 8G for
+the census reader and the probe), in the worktree unless said, the shared tree's porcelain 0 throughout.  The box was
+shared with this run's other tracks — track L's check.sh and workspace runs, a Lean build at 1,600% CPU — and an unrelated
+session's Lean and Dafny work: load 7-50.
+
+* **`check.sh`**: seventeen lines, all ok (31 s, 08:27:14, load 8.4) — axiom audit **6,398** theorems (no Lean file
+  touched); Negative.lean rejected; FFI **96** tests; corpus **29/37 files and 4/5 whole plans**; stage goals **1**;
+  prose citations **62,563** (58,913 resolved, 3,650 allowed: 206 vocabulary, 699 counted); check 9 **750** rostered, 0 owed; parity **P1-P102**; twins 0 unanswered; check 12
+  **1,520** reachable, **1,099** exempt; check 13's four lines 0 unanswered; replay **95** modules.
+* **`cargo test --workspace --no-fail-fast`, on this commit's files** — the census, the one model file and the witness
+  (the five files' digests recorded before the runs, `scratchpad/w47-c/r3/ws-files.md5`), each run over **155 result
+  lines**, the worktree's porcelain exactly the six working files after each (no proptest seed written):
+  run 1 (07:37-07:53, load 7.4 → 38) **2,902 passed, 0 failed, 53 ignored**;
+  run 2 (07:53-08:08, load 38 → 16) **2,902 passed, 0 failed, 53 ignored**;
+  run 3 (08:08-08:23, load 16 → 13) **2,902 passed, 0 failed, 53 ignored**.
+  Against the second commit's 2,901 / 53: +1 passed, §14's witness.  Two earlier runs are NOT counted: they were of
+  the census and the model file before the witness existed (`r3/ws-pre-witness-run1.log`: 2,901 / 0 / 53; and a run
+  stopped at 106 of 155 result lines when the witness was written, whose `cli_latency` had missed two three-year rows
+  at load ≈ 18 — `tm drop ^z2` and `tm drop ^a1` each `still running after 5s`, a Lean build at 1,600% CPU beside it:
+  gap 4901's rows, no binary code in this commit).
+* **The suites the brief names**, the same in all three runs: T5 (`kernel_replay_parity`) 52 passed (4 ignored); the
+  door (`kernel_log_door`) 44; `cli_switch_acceptance` 16; `cli_latency` 7 (1 ignored); `kernel_call_counts` 3;
+  `one_padder` 9; `one_renderer` 35; `kernel_row_cells` 36; `kernel_planner_wire` 27; `planner_classes` **75** (10
+  ignored; the witness the one new test); `planner_invariants` 31 (1 ignored); `cli_conformance` 7; `cli_json_matrix`
+  8; T13 (`kernel_lookahead_parity`) 4 (1 ignored); and the suites that ask `binary_holds`: `planner_w40_runs` 31,
+  `planner_p85_days` 20, `planner_separator_days` 20, `planner_w41_starts` 24, `planner_p56_cut` 19.  The FFI's 96 are
+  check 5's.
+* **`cli_latency --include-ignored`, three runs** (08:24:50-08:26:55, load 6.3 → 11.5): **8 of 8** each; `review week`
+  561, 653 and 496 ms against its 1 s band, the stall's worst day 714, 875 and 739 ms — numbers of a loaded box (gap
+  4901), never a band to move.  (A triple run a minute earlier is not counted: the filter it was read through cut its
+  result lines, so whether it passed is not known.)
+* **`run-oracle.sh`, whole, over this commit's files** — a clone of `w47-c` at `fe0eb83` holding this commit's six
+  working files (`scratchpad/w47-c/r3/sweep`, porcelain exactly those six after the run; the Lean build copied), an
+  oracle built FRESH by the script into a directory that did not exist (`r3/oracle-sweep`, `.oracle-ref` the stamp of
+  §0), `./run-oracle.sh <oracle-sweep> 512 4` with CARGO_TARGET_DIR set (`r3/sweep-target`) and at `nice -n 19` beside
+  runs 1-3.  07:40:08 – 08:10:25 (30 min 17 s; load 7.8 → 11.2).  **The script exited 0.**  Every set, every arm:
+  - **Set 1**: 138 compared, 43 with nothing to report (`itemCheck/danglingParent` 55, `est edit — different line` 37,
+    `manyIds` 1); the comparisons ran on 138, 138, 78, 138, 138 and 78 lines.  **Set 2**: 2,048 compared, 1,395 with
+    nothing to report (`id — Rust reads none, kernel reads one` 485, `missing state` 347, `manyIds` 26, `est edit` 70).
+    Both §12's, unmoved.
+  - **Set 3**: 469 logs over 6 zones, 8,442 `Replay` keys, 285 `tm event` names, 469 entry counts, 7 refused-line lists,
+    8 fitted models, **195,375 scalar values**; P21 on 49 day records (each the same displayed load), P81 48 breaks in 23
+    inputs, P85 162 clock starts in 2 inputs; no disagreement beyond the recorded exceptions (2.64 s).
+  - **Set 4**: 1,380 renderings read back to the fork's own entry, 3,868 skipped, 2 P100 residue lines.
+  - **Set 5**: frozen grids 46 of 46; 16 fresh weeks, 16 compared, 27 named cells and 888 minutes moved to `wall` by
+    P63's rule (23.61 s).
+  - **Set 6**: the frozen lines **325 of 325** (8 carrying P81's answer; 4,286 requests); the fresh learned-model arm
+    **96 drawn, 0 the binary cannot hold, 96 compared and 96 again without a wake, 0 findings** (short nights 58, learned
+    curves 79, fitted shifts 49, P45 days 3; 2,328 requests) — the two 168.87 s; `planner_invariants`' fresh arm **287
+    drawn, 287 compared** (3,366 requests; what-ifs 130; P45 21, P46 7, P47 11, P51 206, P52 0, P55 0, P56 2; 356.64 s);
+    `planner_p56_cut` frozen 24 of 24 (432 requests) and 16 fresh P56 days, 16 compared (31.24 s); the frozen TUI days
+    (234 requests) and start days (20 requests).
+  - **Set 7**: the whole workspace under TM_ORACLE with the census set, **155 result lines, 2,902 passed, 0 failed, 53
+    ignored**; the loop, **9 arms, 9 passed** — `cli_end_at` (3 inputs, 54 `Replay` keys, 293 scalar values, 0 other
+    exceptions), `emit_planner` 3 of 3, plan-basic days 147 of 147, the overrun lines 5 of 6, `planner_fixtures` 4 of 4,
+    `planner_p85_days` (20 requests), `planner_separator_days` (40), `planner_w39_conference` 3 of 3, and the D74 census
+    (128 draws held, P64's precondition on 2 days, the kernel unlike the comparand on 0; 122 of 122 hashes; 124.81 s);
+    and then **the capacity census, exit 0, 0 failures — 4,502 frozen-held requests asked of the oracle, 1,339 of 1,339
+    frozen answer lines asked, 364 fresh**: every row of §13's table, request for request, and one row more —
+    `planner_w40_runs: … 364 fresh (batches (live) 364)`, the D74 census arm's live asks, which its own print does not
+    count.  That is gap 4998's figure for the first time inside a sweep.

@@ -48,7 +48,10 @@
 #   7. every other arm, by the class and not by a list (the W-46 audit, README
 #      gap 4896): the whole workspace under TM_ORACLE — the capacity arms of
 #      track C's targets ask `tm-oracle capacity` live — and every `#[ignore]`d
-#      arm `arms.py` reads off the test sources that sets 3-6 do not name.
+#      arm `arms.py` reads off the test sources that sets 3-6 do not name; then
+#      what every capacity arm asked, from the census its store writes, against
+#      the class of frozen capacity files (`capacity-census.py`, W-47 track C,
+#      README gap 4998).
 #
 # Nothing is written inside the repository and no Rust is built in this
 # worktree.
@@ -153,8 +156,19 @@ echo "############ input set 7: every other arm that asks the oracle, read off t
 # ended the script before a single arm below it ran -- the sweep reported a latency row and
 # compared nothing.  Every arm now runs, every failure is printed by name, and the script exits
 # non-zero at the end when any failed.
+#
+# And every capacity arm SAYS WHAT IT ASKED (W-47 track C, README gap 4998): the workspace and the
+# arms run with TM_FORKCAP_CENSUS naming a fresh directory, where `support/forkcap.rs`' store
+# appends a line per request it answers, and `capacity-census.py` reads it against the class of
+# frozen capacity files -- each one's requests by op and how many of its frozen lines were asked --
+# and fails, by name, a file whose binary asked the oracle none of them (until then only T13 printed
+# its census, and the other targets' figure was a count of tests).  The directory is emptied first,
+# so an earlier sweep's census can never answer for this one.
 set7=0
-( cd "$repo" && TM_ORACLE="$oracle" cargo test --quiet --workspace --no-fail-fast ) \
+census="$scratch/capacity-census"
+rm -rf "$census"
+mkdir -p "$census"
+( cd "$repo" && TM_ORACLE="$oracle" TM_FORKCAP_CENSUS="$census" cargo test --quiet --workspace --no-fail-fast ) \
   || { echo "FAILED: the whole workspace under TM_ORACLE (its failing tests are named above)"; set7=1; }
 self="$ffi/examples/oracle/run-oracle.sh"
 while read -r package target name; do
@@ -163,7 +177,10 @@ while read -r package target name; do
   fi
   echo "-- ${package} ${target} ${name}"
   # Its stdin is /dev/null: the loop's is the arm list, which nothing the arm runs may read.
-  ( cd "$repo" && TM_ORACLE="$oracle" cargo test --quiet -p "$package" --test "$target" \
+  ( cd "$repo" && TM_ORACLE="$oracle" TM_FORKCAP_CENSUS="$census" cargo test --quiet -p "$package" --test "$target" \
       -- --ignored --exact --nocapture "$name" ) < /dev/null || { echo "FAILED: ${package} ${target} ${name}"; set7=1; }
 done < <(python3 "$ffi/examples/oracle/arms.py")
+echo
+python3 "$ffi/examples/oracle/capacity-census.py" "$census" \
+  || { echo "FAILED: the capacity census (each failing file is named above)"; set7=1; }
 exit "$set7"

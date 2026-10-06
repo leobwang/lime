@@ -285,6 +285,42 @@ impl ClassWorld {
     }
 }
 
+/// **The model a [`Learned::Mult`] world plans at**: `Model::default()` with the `_default`
+/// duration multiplier set to the line's decimal — what [`Built::of`] collects the candidates at,
+/// and, as the host's writer writes it, the `.tm/model.json` [`binary_rebuilds`] hands the binary
+/// (README gap 4992).
+pub fn mult_model(m: &str) -> Model {
+    let mut model = Model::default();
+    let m: f64 = m.parse().expect("a stored multiplier is a decimal");
+    model.duration.insert(DEFAULT_TAG.to_string(), m);
+    model
+}
+
+/// **The `.tm/model.json` the shipped binary is handed for a world** — [`binary_rebuilds`]' and
+/// [`drive`]'s one reading (README gap 4992): the file's text for a [`Learned::ModelJson`] world;
+/// for a [`Learned::Mult`] world the host writer's text (`Model::to_json`, what `tm model --fit`
+/// writes) of [`mult_model`], the model [`Built::of`] plans it at, held to read back as THAT model
+/// through the binary's own loader ([`host_model`]) or refused by name; `None` for a world with no
+/// model.  Until the gap closed only a `Learned::ModelJson` world's file was written, so whether the
+/// binary accepts the hash arm's multiplier was asked of the harness's codec alone, never of the
+/// binary.
+pub fn binary_model_file(world: &ClassWorld) -> Result<Option<String>, String> {
+    match &world.mult {
+        None => Ok(None),
+        Some(Learned::ModelJson(text)) => Ok(Some(text.clone())),
+        Some(Learned::Mult(m)) => {
+            let model = mult_model(m);
+            let text = model.to_json();
+            match host_model(&text) {
+                Ok(back) if back == model => Ok(Some(text)),
+                other => Err(format!(
+                    "the multiplier {m}'s .tm/model.json does not read back as the model the harness plans at: {other:?}"
+                )),
+            }
+        }
+    }
+}
+
 /// A stored world, rebuilt into what both planners read.
 pub struct Built {
     pub world: ClassWorld,
@@ -325,12 +361,7 @@ impl Built {
         let replay = chokepoint::replay_of_text(&world.log, cfg.tz);
         let model = match &world.mult {
             None => Model::default(),
-            Some(Learned::Mult(m)) => {
-                let mut model = Model::default();
-                let m: f64 = m.parse().expect("a stored multiplier is a decimal");
-                model.duration.insert(DEFAULT_TAG.to_string(), m);
-                model
-            }
+            Some(Learned::Mult(m)) => mult_model(m),
             Some(Learned::ModelJson(text)) => host_model(text).unwrap_or_else(|e| panic!("a stored model the binary reads: {e}")),
         };
         let date = planwire::plan_date(&world.state, world.now);
@@ -783,6 +814,12 @@ pub fn host_only_state() -> Vec<String> {
 pub fn binary_rebuilds(world: &ClassWorld) -> Vec<String> {
     let host_only = host_only_state();
     let mut bad = Vec::new();
+    // The world's `.tm/model.json` (W-47 track C, README gaps 4891 and 4992): the binary plans the
+    // world it reads, and a model it refuses (§13.2's P26) fails clause 6 here by name.
+    let model_file = binary_model_file(world).unwrap_or_else(|e| {
+        bad.push(format!("6: {e}"));
+        None
+    });
     // The world's files, and `.tm/state.json` holding `state` when there is one.
     let write = |state: Option<&Value>| -> Result<tempfile::TempDir, String> {
         let dir = tempfile::TempDir::new().map_err(|e| format!("tempdir: {e}"))?;
@@ -796,9 +833,8 @@ pub fn binary_rebuilds(world: &ClassWorld) -> Vec<String> {
             std::fs::write(&f, t).map_err(|e| e.to_string())?;
         }
         std::fs::write(root.join(".tm/log.jsonl"), &world.log).map_err(|e| e.to_string())?;
-        // The world's `.tm/model.json` (W-47 track C, README gap 4891): the binary plans the
-        // world it reads, and a model it refuses (§13.2's P26) fails clause 6 here by name.
-        if let Some(text) = world.model_file() {
+        // The world's `.tm/model.json`, both kinds (above).
+        if let Some(text) = &model_file {
             std::fs::write(root.join(".tm/model.json"), text).map_err(|e| e.to_string())?;
         }
         let cfg = world.ratio.as_ref().map(|r| format!("[day]\nbudget_ratio = {r}\n")).unwrap_or_default();
@@ -1309,7 +1345,7 @@ pub fn drive(parent: &ClassWorld, d: &Drive) -> Result<ClassWorld, String> {
         std::fs::write(&f, t).map_err(|e| e.to_string())?;
     }
     std::fs::write(root.join(".tm/log.jsonl"), &parent.log).map_err(|e| e.to_string())?;
-    if let Some(text) = parent.model_file() {
+    if let Some(text) = binary_model_file(parent)? {
         std::fs::write(root.join(".tm/model.json"), text).map_err(|e| e.to_string())?;
     }
     let cfg = parent.ratio.as_ref().map(|r| format!("[day]\nbudget_ratio = {r}\n")).unwrap_or_default();
