@@ -2494,10 +2494,15 @@ theorem wallTodayIsReadOfEveryCandidate :
    after `m1`'s 08:05 `done` (since W-44, a world with one reading: no clock
    read the break before `m1` was closed; D94 nets every break a clock meets)
    gives the day a Break row INSIDE a Block row.  This block claims the checker
-   says `true` there.  `decide` refuses: it says `false`, and so does `planOkCore`. -/
+   says `true` there.  `decide` refuses: it says `false`, and so does `planOkCore`.
+   Since the owner's D100 (W-47 track K) the replay cuts that closed block around
+   the break and the checker says `true` at `theMidBreakRequest`, so the claim is
+   made at `thePreD100MidBreakRequest`, the same day as the replay drew it before
+   D100 — a run the decoder no longer builds (CHEAT 289 holds the old verdict at
+   the decoder's own day). -/
 theorem theMidBreakDayKeepsItsBlocksOffTheBreak :
-    PlanCheck.noBlockOverABreak PlannerWit.theMidBreakRequest
-      (Planner.dayPlan PlannerWit.theMidBreakRequest) = true := by decide
+    PlanCheck.noBlockOverABreak PlannerWit.thePreD100MidBreakRequest
+      (Planner.dayPlan PlannerWit.thePreD100MidBreakRequest) = true := by decide
 
 /- CHEAT 202 — `noBlockOverABreak` asserted to range over nothing at the census
    request, which is what README gap 650 claimed of it until W-18: it gave the
@@ -2854,7 +2859,7 @@ theorem aStoppedBlockIsDrawnAcrossItsBreak :
 theorem aBreaksArmIsItsDayArm :
     Replay.arm (fun _ => 739865) (fun _ => none)
         ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none,
-          739865, [], []⟩, none, none, [], none⟩
+          739865, [], []⟩, none, none, [], none, []⟩
         (Replay.bE 2 63924370200 (.brk 20 (some 20) none)) (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865
       = Replay.dayArm (fun _ => 739865) (fun _ => none) (Replay.bE 2 63924370200 (.brk 20 (some 20) none))
           (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865 := by
@@ -3050,7 +3055,7 @@ theorem aBreakStartIsAnUnknownEvent :
    still write (`Seal.machineDays`), and a reseal may not pass it.  `decide`
    computes `[739865]` and refuses `[]`. -/
 theorem aRunningBreakHoldsNoLedgerDay :
-    Seal.machineDays ⟨none, none, none, [], some ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), 20, none, 739865⟩⟩ = [] := by
+    Seal.machineDays ⟨none, none, none, [], some ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), 20, none, 739865⟩, []⟩ = [] := by
   decide
 
 /- ===========================================================================
@@ -3095,6 +3100,59 @@ theorem aPauseStampedBeforeTheStartIdlesTheBlock :
     ((Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (Replay.bStart ['a']),
         Replay.bE 2 63924367800 (.pause ['a']), Replay.bE 3 63924370200 (.unpause ['a']),
         Replay.bE 4 63924372000 (.stop ['a'] 0)]).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+/- ===========================================================================
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK K — the owner's D100 (README
+   "Stage 6 — W-47 track K" §11, gap 4520b; parity P105): a break logged after
+   a block closed, stamped inside it, is netted from it — the later break wins.
+   Cheats 289-292, numbered above the highest this track has used (286 on the
+   branch, 287 and 288 in the archived D110 snapshot, README §10); whoever lands
+   renumbers (AGENTS 6.2).  CHEAT 201's request and comment, and CHEAT 248's
+   and CHEAT 283's machine literals (`Replay.Machine` gained `closed`), were
+   edited so each still fails for the reason it states: CHEAT 201 compiled at
+   `theMidBreakRequest` once D100 cut that day's block around its break, and
+   the two literals failed on their arity.
+   =========================================================================== -/
+
+/- CHEAT 289 — the mid-break day claimed to lay `m1`'s Block across the Break as
+   the replay drew it before D100 (`PlannerWit.theMidBreakRequest`: a break
+   stamped 07:10 inside `m1`'s 07:05-08:05 block, logged after its `done`).  The
+   replay cuts the closed block around the break (`Replay.netClosed`), so the
+   battery's `noBlockOverABreak` says `true` there: `decide` refuses `false`. -/
+theorem theMidBreakDayStillLaysItsBlockAcrossTheBreak :
+    PlanCheck.noBlockOverABreak PlannerWit.theMidBreakRequest
+      (Planner.dayPlan PlannerWit.theMidBreakRequest) = false := by decide
+
+/- CHEAT 290 — the class table's M11 credited as fork 4748911 and the replay
+   before D100 credited it: `start a` 08:00, `done a` 09:00 (sixty), then a
+   twenty-minute `break` at 08:30 logged after — the item claimed sixty.  The
+   later break wins: `decide` computes forty and refuses sixty. -/
+theorem aBreakLoggedAfterADoneIsNotNetted :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false),
+        Replay.bE 3 63924366600 (.brk 20 (some 20) none)]).items.get ['a']).map (·.minutes) = some 60 := by
+  decide
+
+/- CHEAT 291 — the duration fit claimed to read M11's `done` as it was logged,
+   sixty minutes, past the break logged after it.  The observation is netted
+   with the block (`Replay.netDur`): `decide` computes `[40]` and refuses
+   `[60]`. -/
+theorem theFitReadsADonesLoggedMinutesPastALateBreak :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false),
+        Replay.bE 3 63924366600 (.brk 20 (some 20) none)]).durations.map (·.actualMin) = [60] := by
+  decide
+
+/- CHEAT 292 — D100's bound claimed absent: a block closed thirty-two ledger
+   days before the newest one held, netted by a late break across it (forty).
+   `Replay.pruneClosed` dropped it when the newer block closed (README gap
+   4917): `decide` computes sixty and refuses forty. -/
+theorem aLateBreakNetsABlockPrunedFromTheMachine :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false),
+        Replay.bE 3 63927129600 (Replay.bStart ['b']), Replay.bE 4 63927133200 (Replay.bDone ['b'] 60 false),
+        Replay.bE 5 63924366600 (.brk 20 (some 20) none)]).items.get ['a']).map (·.minutes) = some 40 := by
   decide
 
 end Tm

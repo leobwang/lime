@@ -440,3 +440,116 @@ fn the_driven_gap_4506_day_spelled_planned_only_reads_one_way() {
     assert_eq!(host, Some(25));
     assert_eq!(whole.items.get("a").map(|i| i.minutes), Some(25));
 }
+
+/// One break logged AFTER the block closed: its start in minutes into the block's frame and its length.
+#[derive(Clone, Copy, Debug)]
+struct Late {
+    from: i64,
+    len: i64,
+}
+
+/// How the drawn block closes: a `stop`, or a `done` carrying the host's minutes at its instant (what `tm done` logs).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Close {
+    Stop,
+    Done,
+}
+
+fn late_strategy() -> impl Strategy<Value = (Day, Vec<Late>, Close)> {
+    day_strategy().prop_flat_map(|d| {
+        let (start, stop) = (d.start, d.stop);
+        let late = (start - 20..stop + 5, 1i64..=40).prop_map(|(from, len)| Late { from, len });
+        (Just(d), prop::collection::vec(late, 1..=2), prop_oneof![Just(Close::Stop), Just(Close::Done)])
+    })
+}
+
+/// The `done` line `tm done` logs at `t` with `actual` minutes (§10.1's fields, `bDone`'s values).
+fn done_line(t: DateTime<FixedOffset>, actual: u32) -> String {
+    line(t, &format!("\"ev\":\"done\",\"id\":\"a\",\"est_min\":50,\"actual_min\":{actual},\"went\":2,\"ci\":3"))
+}
+
+/// The drawn day closed by `close`, with the `late` breaks logged after the close; and the host's union over the same
+/// marks, read at the close's instant with the late breaks logged while the block ran (it is order-free), and before
+/// them (what a `done` logs).
+fn late_readings(d: &Day, late: &[Late], close: Close) -> (Option<u32>, Option<u32>, Option<u32>, Vec<u32>) {
+    let tz = chrono_tz::America::Chicago;
+    let (prefix, stop) = lines(d);
+    let lates: Vec<String> = late.iter().map(|b| break_line(d.t(b.from), b.len)).collect();
+    let before = prefix.join("\n") + "\n";
+    let at_close = replay::replay_of_text(&before, tz).running_worked_min("a", today(), d.t(d.stop), None);
+    let with_late = prefix.iter().chain(&lates).cloned().collect::<Vec<_>>().join("\n") + "\n";
+    let host = replay::replay_of_text(&with_late, tz).running_worked_min("a", today(), d.t(d.stop), None);
+    let close_line = match close {
+        Close::Stop => stop,
+        Close::Done => done_line(d.t(d.stop), at_close.unwrap_or(0)),
+    };
+    let whole = before + &close_line + "\n" + &lates.join("\n") + "\n";
+    let r = replay::replay_of_text(&whole, tz);
+    let credit = r.items.get("a").map(|i| i.minutes);
+    let durations = r.durations_on(today()).map(|o| o.actual_min).collect();
+    (at_close, host, credit, durations)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: std::env::var("TM_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256),
+        max_shrink_iters: 2_000,
+        ..ProptestConfig::default()
+    })]
+
+    /// **A break logged AFTER the block closed, stamped inside it, is netted as if the clock had met it** — the owner's
+    /// **D100** (README gap 4520b, W-47 track K, parity P105): the later break wins.  The arm's day is closed by a `stop`,
+    /// or by a `done` carrying the host's minutes at its instant (what `tm done` logs), and one or two breaks are logged
+    /// after it, stamped from twenty minutes before the `start` to five after the close.  The host's union of idle spans
+    /// is order-free, so its reading at the close over the same marks — the late breaks logged while the block ran — is
+    /// the one number: the replay's credit (`items.a.minutes`: `tm review day`'s minutes, the item's) and, for a `done`,
+    /// its duration observation (the fit's) are held to it.  Until D100 both kept the close's number whatever was logged
+    /// after.
+    #[test]
+    fn a_break_logged_after_the_close_is_netted_as_the_host_unions_it(t in late_strategy()) {
+        /// `[cases, compared, a late break moved the reading, closed by a done, of those moved: closed by a done]`.
+        static CENSUS: Mutex<[u64; 5]> = Mutex::new([0; 5]);
+        let (d, late, close) = t;
+        let (at_close, host, credit, durations) = late_readings(&d, &late, close);
+        prop_assert!(host.is_some() && at_close.is_some(), "the host reads no running block before the close: {d:?}");
+        prop_assert_eq!(credit, host, "D100: the credit after a late break is not the host's union (P105): {:?} {:?} {:?}", d, late, close);
+        if close == Close::Done {
+            // A `done` of zero minutes pushes no observation (§10.1: the fit reads a block that was worked); one that
+            // pushed one has it netted, to zero if the late breaks took every minute (`Replay.netMin`'s bound).
+            let want: Vec<u32> = if at_close.unwrap_or(0) > 0 { vec![host.unwrap_or(0)] } else { vec![] };
+            prop_assert_eq!(durations, want, "D100: the done's duration observation is not netted (P105): {:?} {:?}", d, late);
+        }
+        let moved = host != at_close;
+        let r = {
+            let mut r = CENSUS.lock().expect("census");
+            r[0] += 1;
+            r[1] += 1;
+            r[2] += u64::from(moved);
+            r[3] += u64::from(close == Close::Done);
+            r[4] += u64::from(moved && close == Close::Done);
+            *r
+        };
+        let generated: u64 = std::env::var("TM_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256);
+        if r[0] >= generated {
+            // Floors (AGENTS §9.2): a late break that nets nothing on every day drawn compares nothing.
+            prop_assert!(r[2] * 4 > r[0], "fewer than a quarter of the days drawn held a late break the block's reading moved by (gap 4520b): {r:?}");
+            prop_assert!(r[4] > 0, "no day closed by a done held a late break that moved it (gap 4520b): {r:?}");
+        }
+        eprintln!(
+            "kernel_break_union late-break census (D100): {} cases, {} compared, {} moved by a late break, {} closed by a \
+             done ({} of them moved)",
+            r[0], r[1], r[2], r[3], r[4]
+        );
+    }
+}
+
+/// **The class holds the driven M11** (README "Stage 6 — W-47 track K" §1): `start` 08:00 — here 09:00, the arm's
+/// frame — `done` an hour later with sixty minutes, then a twenty-minute break thirty minutes in, logged after.  The
+/// host's union and the replay's credit read forty, and so does the `done`'s duration observation; before D100 the
+/// credit read sixty.
+#[test]
+fn the_late_break_class_holds_the_driven_m11() {
+    let d = Day { start: 0, stop: 60, breaks: vec![], marks: None, day_before: None };
+    let (at_close, host, credit, durations) = late_readings(&d, &[Late { from: 30, len: 20 }], Close::Done);
+    assert_eq!((at_close, host, credit, durations), (Some(60), Some(40), Some(40), vec![40]));
+}

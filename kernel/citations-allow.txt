@@ -763,6 +763,16 @@ can_fail
 1 the_residual_the_arm_leaves_out_reads_two_ways_by_its_witnesses
 1 Replay.brkFx_cases
 
+# W-47 track K (the owner's D100, README gap 4520b): the mid-break day's witness is false since D100 cut that day's block
+# around its break, and it is restated as what the day now is (`PlannerWit.the_mid_break_day_cuts_its_block_around_the_break`),
+# its old statement kept at a run the decoder no longer builds
+# (`PlannerWit.the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`).  The citation counted here is an
+# append-only README block (W-44's) naming it as it stood; conserves_doneClose, restated over the held blocks as
+# `Replay.conserves_doneClosed`, is named by the stage-5 block that proved it.
+1 conserves_doneClose
+2 PlannerWit.the_mid_break_day_lays_a_block_across_a_break
+4 the_mid_break_day_lays_a_block_across_a_break
+
 # ====================== 4. GRANDFATHERED (README, unadjudicated) ======================
 #
 # 161 names, seeded from `README.md` at W-19 so check 8 could land as a RATCHET on new prose

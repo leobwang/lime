@@ -93518,8 +93518,8 @@ re-blesses the merged binary's grid by §5's recipe (a fresh `build-oracle.sh` a
 
 The owner's D110 (gap 4748: a block started inside a calendar wall is paused from its start until the wall ends,
 parity `P105`) and D99's wall-rule days (gaps 4616 and 4619's wall half: the rule reads the open block's marks from
-its own ledger day on, and the interruption the replay holds open from before it, parity `P106`) are BUILT and
-archived as one snapshot, `refs/archive/w47-k/d110` (`7ffd91c`, a snapshot and not a step's commit), whose README
+its own ledger day on, and the interruption the replay holds open from before it, parity `P106`; `P106` and `P107`
+once this branch's §11 took P105) are BUILT and archived as one snapshot, `refs/archive/w47-k/d110` (`7ffd91c`, a snapshot and not a step's commit), whose README
 holds this track's §10 whole: the Lean (written by the session that was cut off, in its scratch clone, ported after the
 first commit and checked line by line), the audit (twelve theorems; the renamed D61 law's line removed), cheats 287 and
 288 (each failing on its `decide`), the 26 mutation rows (22 drifted re-verified, 4 owed, every one PINNED but the
@@ -93544,3 +93544,354 @@ track C rewrote the class-world generator and `planner_classes.rs` this run.  (T
 grid itself, gap 4915; this commit does not, the rule being explicit and the class worlds being in active change.)
 3. *Cost.*  Until the Land merges the snapshot, a block begun inside a meeting is counted as worked through it, and the
 wall rule reads only the day before and the day of a mark.  4. *Clears it.*  The Land, by the snapshot's §10.3 recipe.
+
+### 11. The closed half — D100 (gap 4520b): a break logged after a block closed, stamped inside it, wins
+
+The owner's D100: a `break` logged after the `done` or `stop` that closed a block, and stamped inside it, is netted from
+the block — the later break wins — and the review's minutes, the drawn rows, the heat grid and the duration fit read
+the block net of it, as D87 reads a break inside a running block.  It is the class table's M11, M12 and M15 (§1): the
+binary writes it when a `--now` moves backwards after a `done` or a `stop` (a clock behind the log), and a hand edit
+writes it anywhere.  Built after the first commit in a scratch clone (`scratchpad/w47-k/kclone`), archived as work in
+progress at `refs/archive/w47-k/d100-wip` (`916c54e`, then `25ccbcf`: snapshots, not steps) before its acceptance ran,
+and committed here.
+
+#### 11.1 One reading over a closed block
+
+* **The machine holds the blocks it closed** (`Replay.Closed`: the block's id, its ledger day, the day its credit was
+  filed and that credit's ci, the minutes of it still standing, the pieces drawn for it, and the line of the duration
+  observation its `done` pushed), the last closed first, within `Seal.maxKeepDays` ledger days of the newest held
+  (`Replay.pruneClosed` — D94's bound for the breaks that can net them, and the first is never dropped: it is the last
+  cut while one stands).  A `cut` (a `stop`, or a `start` cutting the block before it) pushes one; a `done` pushes its
+  own, or — the stop-then-done replacement — rewrites the head's credit with its own (`Replay.doneClosed`).
+* **A `break` nets every held block it lies across** (`Replay.netClosed`, after D99's `settle` in `Replay.brkFx`): a
+  break filed on a ledger day before the block's nets nothing (D94's rule for an open block, kept); otherwise the
+  block's pieces are cut around the break (`Replay.cutOut`, each piece on its own) and re-drawn (`Replay.redraw`), and
+  what that took — the pieces' minutes before less after, never more than its credit still standing (`Replay.netMin`)
+  — comes off the day's credit at the block's ci (`DayOp.net`: block minutes, the ci fifths, the item's minutes on that
+  day), off the item's minutes, and off the `done`'s duration observation (`DayAcc.durNet`, read by `Replay.netDur`
+  when the facts are finished and by `Seal.OpenDay.finish` for a sealed day).  A piece already cut nets nothing again,
+  so two late breaks net their union once, and a break netted while the block ran is not netted again after its
+  `done`.
+* **The conservation invariant carries the held blocks** (`Replay.Conserves`: the day accumulators balanced, the
+  credits of the held cuts of each item and day within that day's ci-unknown minutes for it — a sum written in place,
+  since as a definition it was emitted and reached by nothing (check 12, §11.6) — and the last cut's within its head
+  (`Replay.HeadOk`)), re-proved through every arm.  **The window**: a late break re-draws a held block, so the
+  break's step reads the day index at the starts of the pieces it may draw (`Seal.closedReads` in `Seal.stepQueries`),
+  and the machine's instants include every held block's piece starts (`Seal.machineInstants`); the sixteen window laws
+  are re-proved with their statements unchanged.  **The checkpoint** carries the held blocks (written in place in
+  `Seal.cMachine`, as `Seal.cBlock` writes its pieces) and the duration nets (`Seal.cDayAcc`), so an older binary's checkpoint does not decode and
+  its kernel id refuses it first (D113: rebuilt, never served).
+
+Witnesses, each probed under `MemoryMax=8G timeout 120` (`Replay`, section ClosedWitnesses100):
+`a_break_logged_after_a_done_is_netted_from_the_block` (M11: 40 on the item, the day and the duration observation;
+drawn `[08:00, 08:30]` and `[08:50, 09:00]` with the Break between), `a_break_logged_after_a_stop_is_netted_from_the_block`
+(M12: 40, no observation), `a_late_break_nets_the_block_it_crosses_and_not_the_next` (M15: `a` 40, `b` 30, the day 70),
+`a_late_break_nets_a_done_that_replaced_a_stop` (30), `a_done_after_a_stop_and_a_late_break_credits_its_own_minutes`
+(40, once), `a_late_break_past_the_blocks_end_takes_what_it_covers` (50), `a_late_break_takes_no_more_than_the_blocks_credit`
+(`netMin`'s bound: the item keeps 60, the first observation reads 0), `two_late_breaks_net_their_union_once` (30),
+`a_break_netted_while_open_is_not_netted_again_after_the_done` (40), and the two edges by name —
+`a_late_break_nets_a_block_held_and_not_one_pruned` (31 ledger days behind the newest: netted, 40; 32: not, 60) and
+`a_late_break_filed_the_day_before_nets_nothing` (55).  Laws — D99's two (`settle_avoids_every_span_it_nets`,
+`cut_avoids_every_span_it_nets`) for a block already closed: `Replay.netOne_avoids_the_break` and
+`Replay.netClosed_avoids_the_break` (every Block segment a late break writes lies outside it, when it is nonempty),
+`Replay.netOne_leaves_no_piece_across_the_break` and `Replay.netClosed_leaves_no_piece_across_the_break` (no piece the
+machine keeps for a block of a ledger day at or before the break's lies across it), on `Replay.cutOut_avoids` and
+`Replay.redraw_fst_spans`.
+
+#### 11.2 The laws, and what D5 asks of each one D100 changed
+
+Every theorem whose statement moved, read off the two trees by a statement diff (`scratchpad/w47-k/d100/stmts.py`,
+`restated.txt`): fifteen, and none weakened to make a proof go through.
+
+| theorem | was | is | the new implies the old? |
+|---|---|---|---|
+| `Replay.brkFx_with_no_block_open` | with no block open a break writes only its span (the machine) | it writes the held blocks' netting and the netted machine | no — the old is FALSE since D100 and refuted by name, `Replay.brkFx_with_no_block_open_as_d99_stated_it_is_refuted` (a cut block, a late break: seven effects where it stated one); its narrowing is `Replay.brkFx_with_nothing_open_or_held` (the old conclusion where nothing closed is held) |
+| `Replay.brkFx_machine` | a break keeps the last cut | it keeps the last cut's id, instant and day | no — the old is false where a late break nets the last cut's block: its minutes come down with the block's (`netClosed`); what still holds is the new statement, and `Replay.lastCut_le_unk` bounds the minutes |
+| `Replay.conserves_cut` | `Conserves` after a cut, and the cut's minutes within the item's unknown-ci minutes | the day accumulators balanced, every held cut's credit within its day's ci-unknown minutes (the held sum ≤ `unk`), and no day's unknown-ci minutes fall | yes, with `Replay.cut_headOk`: the new `Conserves` implies the old (`Replay.lastCut_le_unk` — the last cut is the first held block, whose credit the held sum counts) |
+| `Replay.conserves_safe_then_machine` | a machine whose last cut is the old one or none conserves | a machine whose held blocks are within the old ones' (`hh`) and whose head is consistent (`ho`) conserves | different hypotheses, not a weakening: the old one (`hm`, the last cut kept or cleared) says nothing of the held blocks the new invariant reads; every caller supplies `hh` and `ho` |
+| `Replay.DayOp.bal_apply` | every op but `uncredit` keeps the balance | the same, `net` excluded too (`hnet`) | yes, on the ops it covered; `net` has its own law, `Replay.DayAcc.bal_net` |
+| `Seal.mem_machineInstants` | the open block's instants, or a held break's end | the same, or a held closed block's piece start | yes (one more disjunct) |
+| `Seal.mi_of_block` | equal blocks and breaks keep the instants | the same, with equal held blocks (`hc`) | the hypothesis it adds is what the conclusion now reads |
+| `Seal.doneFx_machines` | a `done` writes `doneClose`'s machine | it writes `doneClose`'s machine with `doneClosed`'s held blocks | no — the old is false whenever a `done` closes a block: the machine now holds it; every other field as before |
+| `Seal.arm_lastCut` | the last cut kept, cleared, or a new one of the step's day | the same, with "kept" read on its day | no — the old is false where a late break lowers the last cut's minutes; its day never moves |
+| `Seal.a_machine_holds_its_last_breaks_end`, `Seal.a_machine_holds_the_end_of_every_break_it_holds` | the machine literal | the literal with `closed := []` | yes — the same machines |
+| `SealLaw.obs_perm_state` | the sealed observations are the state's | the same, the durations read through `Replay.netDur` | yes where nothing is netted (`netDur` of no net is the identity, `Replay.netDur_day`) |
+| `PlannerWit.the_core_seven_is_false_on_three_whole_days`, `the_paying_past_fails_on_four_whole_days`, `every_refuted_day_refutes_its_own_clause` | the third day is `theMidBreakRequest` | it is `thePreD100MidBreakRequest`, the same request with today's record as the replay drew it before D100 — a run the decoder no longer builds | the same claims at the day that still makes them; §11.3 |
+
+Replay.conserves_doneClose is replaced by `Replay.conserves_doneClosed` (a `done`'s machine with its held blocks
+conserves), and `Replay.Conserves` gained its two conjuncts; every theorem stated over it — the arms', `conserves_init`
+and the fold's — is re-proved, and the conclusion a reader of the replay uses, the balanced day accumulators, is
+unchanged.  `Replay.finish` reads every `done`'s observation through `Replay.netDur`, so the observation laws
+(`Replay.observations_are_in_file_order_on_increasing_lines`, `Seal.observations_read_state`) are re-proved over the netted durations with
+their statements unchanged.
+
+#### 11.3 The mid-break day, the census it sat in, and the four `PlannerWit` witnesses D100 moved
+
+The library build after D100 failed on exactly four `decide`s in `PlannerWit.lean`, all of them the mid-break day
+(`theMidBreakRequest`: W-44's census log with a break stamped 07:10 inside `m1`'s 07:05-08:05 block, logged after its
+`done`), and each was read before it was restated: the day now draws `m1` as `[07:05, 07:10]`, the Break `[07:10,
+07:25]` and `[07:25, 08:05]`, and `PlanCheck.noBlockOverABreak`, `planOkCore` and all four clauses of
+`PlanCheck.PastPays` hold there (a scratch probe, `scratchpad/w47-k/d100/probe/mid.out`).
+
+* the_mid_break_day_lays_a_block_across_a_break is false and is restated as what the day now is,
+  `PlannerWit.the_mid_break_day_cuts_its_block_around_the_break` (the rows, and both verdicts `true`).  Its old
+  statement is kept, unchanged but for the request, at `thePreD100MidBreakRequest` — section 14's request with today's
+  record as the replay drew it before D100 (`joinAcrossTheBreak`: `m1`'s two pieces joined), **a run the decoder does
+  not build**, named so (`preD100MidBreakRun`), as `openAcrossBreakRun` is for D94 —
+  `PlannerWit.the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`, probed to reproduce the old rows and
+  verdicts exactly.
+* The census's third refuted day (`the_core_seven_is_false_on_three_whole_days`), the `offBreak` row of
+  `the_paying_past_fails_on_four_whole_days` and the matching conjuncts of `every_refuted_day_refutes_its_own_clause`
+  move to `thePreD100MidBreakRequest`, so each clause of `PastPays` keeps a day that refutes it over `PlanReq` — which
+  is what the lifts quantify over — and none is AGENTS §9.2's check no input can fail.  **No day this module builds
+  from a log refutes `offBreak` any more**; that no run the decoder builds can is the last goal's past half (§11.8).
+* The decoder's own mid-break day joins the lift's domain: `PlannerWit.the_paying_past_at_the_mid_break_request`
+  (`PastPays` holds) and `PlannerWit.the_core_seven_hold_on_the_mid_break_day_by_the_lift` (the core seven, by
+  `PlanCheck.dayPlan_ok_core_of_a_paying_past_on_an_unassigned_day` and not by a `decide` on the battery).
+
+**Line-neutral, on purpose** (§11.6): every declaration of `PlannerWit.lean` that stood at `75a1eb0` stands at the same
+line — the new theorem replaces the old one in the same 27 lines, the three fixtures take the place of the record of the
+refutation the W-44 repair deleted, that record moves to a new section 34 at the end of the module with the old
+statement and the two lift witnesses, and the census docstrings are rewritten in their own line counts — because 147
+mutation rows pin a line of this module and a line that moves is a drifted row to re-run at six minutes a build.
+`PlanCheck.lean`'s one doc edit is line-neutral for the same reason.
+
+#### 11.4 The audit and the cheats
+
+`Check.lean` gains **74** lines under its own banner — every theorem `leanfiles.py --theorems` reports new against the
+first commit's tree, the eleven `Replay` witnesses, the six avoidance laws and D40's two among them — and loses
+**2**, each a theorem whose statement is gone: Replay.conserves_doneClose (restated over the held blocks as
+`Replay.conserves_doneClosed`) and PlannerWit.the_mid_break_day_lays_a_block_across_a_break (§11.3).  The audit prints
+one line for each of its 6,507 lines, no `sorryAx` (check 3, §11.10).  The README's append-only blocks still cite the
+two removed theorems, counted entries in `kernel/citations-allow.txt`.
+
+`Negative.lean` gains **cheats 289-292**, numbered above every cheat this track has written (286 on the branch, 287 and
+288 in the archived D110 snapshot, §10): **289** the mid-break day claimed to lay its Block across the Break at the
+decoder's own day, **290** the class table's M11 credited sixty, **291** its duration observation read as the `done`
+logged it, **292** D100's bound claimed absent (a block closed 32 ledger days behind the newest, netted).  Three
+existing blocks were edited so each still fails for the reason it states — the precedent is W-43's and this track's
+first commit's: **CHEAT 201** claimed `noBlockOverABreak` true at `theMidBreakRequest`, which D100 made TRUE (the block
+compiled), and it now makes the claim at `thePreD100MidBreakRequest`, the day that still lays the Block across the
+Break; **CHEAT 248** and **CHEAT 283** carried `Replay.Machine` literals one field short (`closed`), which would have
+failed on the arity and not on their `decide`.  Run with check 4's own flags (`-DmaxErrors=1000000`,
+`scratchpad/w47-k/d100/neg.out`): every one of the 243 blocks errs inside itself, each of 201, 248, 283 and 289-292
+with `Tactic decide proved that the proposition … is false`, and every other block's errors are the base run's, kind
+for kind (`neg-k4.out`, compared by cheat number).
+
+#### 11.5 The comparands (step 3)
+
+* **The class, drawn — a new arm in `tm/tests/kernel_break_union.rs`**: `a_break_logged_after_the_close_is_netted_as_the_host_unions_it`
+  takes the arm's generated day (breaks ahead of the block and inside it, a pause or an interruption, a break of the
+  day before), closes it by a `stop` or by a `done` carrying the host's minutes at its instant (what `tm done` logs),
+  and logs one or two breaks AFTER the close, stamped from twenty minutes before the `start` to five after the close.
+  The host's union of idle spans is order-free, so its reading at the close over the same marks — the late breaks
+  logged while the block ran — is the one number, and the replay's credit and, for a `done`, its duration observation
+  are held to it.  Floors: a quarter of the days drawn must hold a late break that moved the reading, and some day
+  closed by a `done` must.  Its first run drew a case its own expectation had wrong — a block every minute of which an
+  earlier break covered, a `done` of zero minutes, which pushes no observation (`0 < actual`) — and the seed is
+  committed (D46) with the expectation corrected; the kernel was right.  Run alone with its census
+  (`scratchpad/w47-k/d100/kbu-census.log`): **258 cases** (256 drawn and the two seeds), **258 compared**, 216 moved by
+  a late break, 142 closed by a `done` (120 of them moved).  `the_late_break_class_holds_the_driven_m11` pins the class
+  to the driven M11: 60 at the close, 40 after, on the credit and the observation.
+* **T5 and the door, frozen: D100 moves nothing they hold**, and that was measured rather than assumed: T5
+  (`kernel_replay_parity`) **53 passed**, the door (`kernel_log_door`) **44** — the representative generated month and
+  every corpus log hold no `break` logged after the close of a block it lies across, so P105 has no leaf there to carry
+  (P104's seven are carried as before, `support/p104.rs`).  T5's own decoder of the kernel's answer reads the day
+  record's 29th field (`durNet`, below) and nothing else changed in it.
+* **T5 under `TM_ORACLE`** (the stage-5 arm, through the oracle the first commit built, `oracle/target/debug/tm-oracle`;
+  `scratchpad/w47-k/d100/t5-oracle-d100.out`): **RED, 92 disagreements over 34 inputs, where the first commit's run had
+  9 over 6** — the 9 are P104's, unchanged, and the other **83, in 28 inputs, are P105's**: every one of the 28 holds a
+  `break` logged after the `done` or `stop` of a block it lies across (`scratchpad/w47-k/d100/latescan.py` over the
+  dumped inputs, `scratchpad/w47-k/dump`; the generated sequences 14, 68, 111, 122, 134, 146, 167, 187, 205 and 247,
+  and the undo triples 17, 31, 34, 35, 40 and 44 in each of their three logs), and the leaves that move are the class's
+  (a day's `block_min`, its ci minutes and load, the item's minutes, a Block segment's end, a `done`'s
+  `actual_min` in `durations`).  The scan flags five more inputs that do not move, each read by hand: sequences 41 and
+  88 and triple 29 (three logs) lay their late break over a stretch the block was not running — paused, or held by an
+  interruption left open — so there is nothing to net.  The arm carries no P105 rule, as it carries none for P104
+  (README gap 4912); README gap 4919.
+* **Track C's comparands move nothing**: `planner_classes` 70 passed (8 ignored), `fork_week_grid` 22 (3 ignored), on
+  this commit's binary — no frozen class world or week grid logs a break after a close.  So D100, unlike D110 (§10), is
+  committed here.
+* **The host's decoder** (`tm/src/cli/kernel_log.rs`, `decode_facts`): the day record the kernel answers with is the
+  sealed day record's own codec, and it gained `durNet` (D100's duration nets); the decoder reads a day record of 29
+  fields, reading the 29th only to refuse a malformed pair — the observations it hands the fit are already net.
+
+#### 11.6 D40 — every definition this commit added or changed, constant-folded in clones (never the worktree)
+
+The four clones of the first commit (`scratchpad/w47-k/d40b/mutA`–mutD, each a `git clone` of the repository),
+synced from the scratch clone by `scratchpad/w47-k/d100/syncmut.sh` (`kernel/` with its `.lake`), `mutrun3.sh` running
+`mutate.py --verify --write --only <name>` or `--write --only <name>` under a 16 GB cap, one name at a time; `git status
+--porcelain` and `git diff` hashed before and after every run, `kernel/mutations.txt` excluded, and equal every time.
+Rows merged by `scratchpad/w47-k/d40/merge_named.py` through `mutate.write_rows` (a key replaced, never duplicated).
+
+* **Drift first, and most of it avoided.**  The first owed run refused: **424 pin sites drifted**, because D100 grew
+  `Replay.lean` by 972 lines and `PlannerWit.lean` by 97, ahead of lines the roster pins.  `PlannerWit.lean` and
+  `PlanCheck.lean` were then made line-neutral (§11.3) — the 147 definitions pinned in `PlannerWit.lean` would have
+  cost a six-minute build each — and the drift fell to **49 definitions**: 35 of `Replay.lean`'s, 12 of the `Seal*`
+  modules' and `PlannerWit.midBreakLine` and `midBreakLines` (pinned on the renamed witness).  Each was re-run with
+  `--verify --write` (`scratchpad/w47-k/d100/v1A.out`–v1D.out): **every verdict as before, every site rewritten,
+  none failed re-verification**.
+* **The 30 owed** (w2A–w2D.out, w3B.out), the drifted rows merged first so no run refused: PINNED — `Replay.Ci6.get`,
+  `Ci6.sub`, `pruneClosed` (the identity on the list among them), `DayAcc.netCredit`, `DayAcc.netDurOf`, `doneClosed`,
+  `doneFx`, `Closed.spans`, `cutOut`, `netMin`, `netOne`, `netClosed`, `netDur`, `Effect.plain`, `HeadOk` and
+  `Conserves` (`True` and `False`, on `lastCut_le_unk` with `conserves_safe` or `conserves_safe_then_kept`),
+  `Seal.OpenDay.finish`, `Seal.closedReads`, and the fixture `PlannerWit.joinAcrossTheBreak` (on the census, its
+  statement decided false); witness fixtures by rule — `preD100MidBreakRun` and `thePreD100MidBreakRequest`
+  (`Seal.Run` and `PlanReq`, no constant, a `WITNESS_MODULES` leaf); **pinned by nothing, by name** (no constant of
+  the type, no identity, no synthesised term that elaborates) — `Replay.DayAcc.empty`, `State.init`, `finish` and the
+  codecs `Seal.cDayAcc`, `cMachine` and the held block's (written in place in `cMachine` since, below), held by the
+  checkpoint round trips (`Seal.readCkpt_emitCkpt`), as
+  `Seal.cBlock` is (README gap 980's exemption, counted by the gate).
+* **Found: three definitions nothing told from a constant** — the gate's purpose, and this commit's own definitions.
+  `Replay.Effect.safe` (`fun _ => true`) was ALONE on `safe_apply`'s proof; the held credit (`0`) ALONE on
+  `heldOf_cons`'s; the witness machine of the D99 refutation (the empty machine) ALONE on the refutation — with each proof
+  `sorry`ed the package built, so the conservation invariant's held-block half said nothing a `0` would not satisfy.
+  `Effect.safe` is answered by `Replay.the_unsafe_effects_are_the_machine_an_uncredit_and_a_net` and re-run (w4C.out,
+  PINNED, `also` on it).  The other two were answered too, and then **check 12 found them emitted and reached by
+  nothing** (§11.10's first `check.sh`), with the held-block codec beside them — the compiler had folded the separate
+  codec into `Seal.cMachine`'s closed term, as it folded the piece codec into `Seal.cBlock` at the first commit.
+  `reach-exempt.txt` is shrink-only, so none was exempted: each is **written in place** — the held credit as the sum it
+  was in `Replay.Conserves` and its lemmas (`Replay.heldOf_cons`, `heldOf_filter_le` keep their names), the machine in
+  the refutation's proof, the codec in `Seal.cMachine` — line-neutral where a pin follows, and their three rows went with
+  them.  The held credit keeps a witness that tells it from `0`, `Replay.the_held_credit_counts_a_cut_and_not_a_done`;
+  `Replay.Conserves` and `Seal.cMachine`, whose bodies changed, were re-run (w6A.out, w6D.out: `Conserves`
+  PINNED, `True` and `False`, on `lastCut_le_unk` also `conserves_safe`; `cMachine` UNFOLDABLE and pinned by nothing, as
+  every codec is), and `Effect.safe`'s row re-verified where its witness moved (w5C.out).
+* **The gate**, check 9 of this commit's `check.sh` (§11.10): 796 new or changed since `86c4dc6`, **796 rostered, 0
+  owed**, no drifted site.
+
+#### 11.7 Driven on this commit's binary
+
+The class of §1, every row, on `scratchpad/w47-k/drive/tm-k6` (this commit's `target/debug/tm`, `class-k6.out`) against
+the first commit's (`class-k4.out`): **three rows move and no other** —
+
+| shape | `tm review day` (block min, load) | heat hour 8 | plan rows |
+|---|---|---|---|
+| M11 (`done` 09:00 with 60, then `--now 08:30 break 20m` and its end) | 60, 60.0 → **40, 40.0** | `[60, 20]` → **`[40, 20]`** | `08:00-09:00` Block across `08:30-08:50` Break → **`08:00-08:30` Block, `08:30-08:50` Break, `08:50-09:00` Block** |
+| M12 (M11 with `stop`) | 60, 60.0 → **40, 40.0** | `[60, 20]` → **`[40, 20]`** | the same as M11 |
+| M15 (M11 with `^m2` 09:10-09:40 between) | 90, 84.0 → **70, 64.0** | `[60, 20]` → **`[40, 20]`** | M11's three rows, then `^m2` `09:10-09:40` |
+
+The log keeps what was written — the `done` still says `actual_min: 60`, and `tm done` printed `60m` when it ran — and
+every reader of the block reads forty: the day's review, the heat grid, the plan's past rows and (witnessed in Lean and
+by the arm's `durations_on`, not drivable from one observation) the duration fit.  M13 (an interruption after the
+`done`) is unchanged, README gap 4913; M17 is D110's (§10).
+#### 11.8 The last goal, `Goals.plan_places_no_block_over_a_break` — its fate: it stays, and why, measured
+
+Burn-down stays **1**.  The brief allowed two ways to 0 and neither was reached, so the goal is not touched beyond its
+doc comment (`Goals.lean`'s "The debt", rewritten to the state this commit leaves).
+
+* **A refutation over every `PlanReq` exists and is not a discharge.**  Two days in this tree lay a Block across a
+  Break — `PlannerWit.theOpenAcrossBreakRequest` (D94's) and `PlannerWit.thePreD100MidBreakRequest` (this commit's) —
+  and both stand on runs the decoder does not build, so a refutation on either would be the campaign's lesson 4 again.
+* **Over the logs the replay reads, D99 and D100 leave two bounds, and a refutation on either is not one with ONE
+  reading.**  A held break more than `Seal.maxKeepDays` ledger days behind the newest is dropped while its block is
+  open (README gap 4914), and a closed block more than that behind the newest closed is dropped before a late break
+  reaches it (`Replay.a_late_break_nets_a_block_held_and_not_one_pruned`, gap 4917).  On such a log the day does lay a
+  Block across a Break — and it reads that span twice (the heat grid's hour as Block and as Break), which is exactly
+  the reading the W-44 repair withdrew a refutation over.  Each needs a log written a month behind its own clock.
+* **A proof over the runs the decoder builds was not written.**  It is a statement about every `Seal.Run` that
+  `Seal.resumeRun` can produce: that no day record holds a Block piece across a Break piece (an invariant of the
+  replay's fold through every arm — the open block's `settle`, a cut's pieces, a late break's `netClosed`, the day
+  family's segments), that the open block's row (`Planner.openBlockRows`) lies across no replayed Break and the running
+  break's row (`Planner.breakRows`) across no replayed Block, and the two bounds above named in its hypotheses — the
+  `PlanCheck.plan_places_no_block_over_a_break` half for the rows from `now` on is already proved.  Its size is the
+  size of the conservation invariant this commit re-proved, again, over geometry rather than minutes; it did not fit
+  this run, and it is README gap 4918.
+
+#### 11.9 Parity P105 — issued
+
+**Parity P105 taken**: a `break` logged after the `done` or `stop` that closed a block, and stamped inside that block, is netted from it — the later break wins: the kernel's replay holds the blocks it closed (`Replay.Closed`) and re-draws one around such a break (`Replay.netClosed`), so the day's rows and `tm review week`'s heat grid draw the block around the break, and the minutes the break covers of its pieces — never more than the block still stands for — come off the block's credit (`tm review day`'s block minutes and load, the item's minutes) and off its `done`'s duration observation (the fit's); a break filed on a ledger day before the block's nets nothing, and a block closed more than `Seal.maxKeepDays` ledger days before the newest held is no longer held (README gap 4917); the log keeps the `done`'s `actual_min` as written; fork 4748911's replay closed a block's minutes and drawing when it closed, credited the `done`'s `actual_min` whole and drew the block across the break, so the hour held both (the owner's D100, W-47 track K, README gap 4520b)
+
+**Behaviour rows**: the class table's M11, M12 and M15 (§11.7) — `tm review day`'s block minutes and load, the heat
+grid's hour and the plan's past rows; and the late-break arm of `tm/tests/kernel_break_union.rs` (§11.5).
+
+**For the Land: D110's numbers move up by one.**  This branch issues P105 for D100; the archived D110 snapshot (§10,
+`refs/archive/w47-k/d110`) names its two `P105` and `P106`, and they land as `P106` and `P107` — its README, `parity.txt`
+rows and the Lean and Rust comments that cite them renumbered at the merge (AGENTS §6.5 item 7; `parity.py` requires
+P1..Pmax contiguous).  The snapshot was cut from the first commit, so its merge over this one meets D100 in
+`Replay.lean`, `PlannerWit.lean`, `mutations.txt` and the four append-only files; its Lean is disjoint by declaration
+(`OpenBlock.day`, `WallTimer`, `Seal.cOpenBlock` against D100's `Machine.closed`, `Closed`, `DayAcc.durNet`), and its
+cheats 287 and 288 sit below this commit's 289-292.
+#### 11.10 Acceptance
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16G for the mutation runs and
+the oracle), from the worktree, over the tree this commit holds.
+
+* **`check.sh`** (`scratchpad/w47-k/d100/check-k7.log`; 11:31:52-11:48:44, 16m52s, load 1.39 → 15.48) — **seventeen
+  lines, every one ok, exit 0**: the build; totality; the axiom audit **6,507** (6,499 theorems — the first commit's
+  6,427, 74 appended, 2 removed — and the eight definitions §6.3 names); `Negative.lean` rejected; FFI **96** tests;
+  the corpus 29/37 files and 4/5 whole plans; stage goals **1** (all stage 6); prose citations 62,765 (59,016
+  resolved, 3,749 allowed, 728 counted, 0 allow entries unused); new definitions mutated **796 rostered, 0 owed**;
+  parity **P1-P105**, next free P106; no two names for one definition, 0 unanswered; reach 1,545 reachable, 1,099
+  exempt, 0 unanswered (the Replay section's census 100 of 240, SealResume's 32 of 49, re-derived); the four field and
+  key checks 0 unanswered; the kernel replays 95 modules.  Its first run on this tree (`check-k6.log`) was RED on four
+  lines, each repaired before this one: check 5 (the FFI's day-record shapes, `the_log_op_answers_the_day_facts` and
+  two `stack.rs` patterns, which now carry the record's 29th field), check 8 (scratch-file names this block had
+  backticked, and three removed names), check 10 (P105's anchor, which this block's later edits moved) and check 12
+  (§11.6's three emitted, unreached definitions, written in place).
+* **`cargo test --workspace --no-fail-fast`, three runs** (`scratchpad/w47-k/ws-k7a.log` … `ws-k7c.log`, each with its
+  `uptime`): **2,903 passed / 0 failed / 51 ignored over 156 result lines, three runs** (11:49-12:03, load 9.61 → 3.13,
+  14m40s; 12:03-12:18, load 3.13 → 23.24, 14m45s; 12:18-12:32, load 23.24 → 4.42, 14m13s).  The first commit measured
+  2,901 over 156: the late-break arm and its M11 witness are this commit's two (`kernel_break_union` 19 → 21).  No
+  `.proptest-regressions` file moved in any of the three; the one seed this commit adds is §11.5's.
+* **The named suites**, the same in each of the three runs: T5 (`kernel_replay_parity`) 53 passed (4 ignored), the
+  door (`kernel_log_door`) 44, `cli_switch_acceptance` 16, `cli_latency` 7 (1 ignored), `kernel_call_counts` 3,
+  `one_padder` 9, `one_renderer` 35, `kernel_row_cells` 36, `kernel_planner_wire` 27, `planner_classes` 70 (8 ignored),
+  `planner_invariants` 31 (1 ignored), `cli_conformance` 7, `cli_json_matrix` 8, `kernel_break_union` 21,
+  `cli_interruption_at_start` 3, `cli_resume_replan` 17, `fork_week_grid` 22 (3 ignored), `cli_wall_pause` 11.  FFI:
+  check 5 and check 6.  The class drive on this commit's binary (`scratchpad/w47-k/drive/tm-k7`, `class-k7.out`) is
+  byte-identical to §11.7's.
+* **`cli_latency --include-ignored`, two runs alone** (`scratchpad/w47-k/d100/lat-1.log`, `lat-2.log`; 12:33-12:34,
+  load 4.03 → 2.96): **8 of 8 pass on both**, every band held.  **But genesis is slower, and that is measured, not
+  waved through:** the first verb over the three-year log **3.00-3.15 s** against the W-46 repair's 2,257.8-2,317.3 ms
+  (inside `FIRST_VERB`'s 5 s), over the one-year log 1.50-1.54 s against 1.23-1.35 s at earlier stamps; later verbs
+  71-76 ms (months), 116-117 ms (1 y) and 162-197 ms (3 y) against 70.9-81.2, 106.5-111.5 and 156.9-162.2; T18's
+  planner call 75-76 ms on the three-year log against 65.5-68.1.  Every `break` now walks the blocks the machine
+  holds (`Replay.netClosed`, a month of them) and the checkpoint carries them: README gap 4920.
+* **T5 under `TM_ORACLE`**: §11.5.
+
+#### 11.11 Gaps 4917-4920
+
+**Gap 4917 — a late break nets only the blocks the machine still holds.**  1. *What.*  `Replay.pruneClosed` keeps the
+closed blocks within `Seal.maxKeepDays` (31) ledger days of the newest held, and `Replay.netOne` nets nothing from a
+block whose ledger day is after the break's (D94's rule for an open block).  So a `break` logged after a block closed
+does not net it when a block closed more than 31 ledger days after it has been closed in between — one line a month
+ahead of the log's clock is enough, a clock running fast — nor when the break is filed on the ledger day before the
+block's (a break begun before the wake that opened the block's day): the day then draws the Block across the Break and
+credits it whole (`Replay.a_late_break_nets_a_block_held_and_not_one_pruned`,
+`Replay.a_late_break_filed_the_day_before_nets_nothing`).  2. *Why.*  The bound is D94's, for the same reason: the
+machine and the checkpoint that carries it hold at most 32 ledger days, whatever the log's length; and the ledger-day
+rule is the host's (its idle marks are read from the block's own ledger days).  3. *Cost.*  On a log written with a
+clock a month off, or with a break across the wake that opened a block's day, one late break is read two ways — as
+the block's minutes and the break's on the heat grid.  It is also why `Goals.plan_places_no_block_over_a_break` cannot
+be proved without naming the bound (gap 4918).  4. *Clears it.*  An owner decision on the bound (key it on `now` rather
+than on the newest held, or carry the held blocks by month), or the decision that such logs are out of scope.
+
+**Gap 4918 — the last goal is neither proved nor refuted.**  1. *What.*  `Goals.plan_places_no_block_over_a_break`
+stays in `Goals.lean`, burn-down 1.  2. *Why.*  §11.8: every refuting day in the tree stands on a run the decoder does
+not build or on a log read two ways (gap 4917, 4914), and the proof over the runs the decoder builds is an invariant of
+the whole replay fold, geometric where the conservation invariant is arithmetic, that this run did not reach.  3.
+*Cost.*  The planner's past half carries `PlanCheck.PastPays`' `offBreak` as a hypothesis, not a theorem: every lift that
+reaches the whole day assumes it.  4. *Clears it.*  A run that states which runs `Seal.resumeRun` builds and proves
+the fold invariant over them, with gap 4917's and 4914's bounds in its hypotheses — or an owner decision removing the
+bounds, after which the hypotheses go too.
+
+**Gap 4919 — P105 is carried by no rule in T5's `TM_ORACLE` arm.**  1. *What.*  The stage-5 oracle arm compares the
+kernel with fork 4748911 over 469 logs and holds registered numbers by rule (P21, P81, P85) or not at all; P105, like
+P104 (gap 4912), has no rule there, so the arm reports P105's 83 leaves in 28 inputs as disagreements.  2. *Why.*  A
+rule needs the fork asked a log it would answer as the kernel does — the late break moved before the close as a pause
+and an unpause, and a `done`'s `actual_min` lowered by what the break covers of the block's pieces — and the last
+quantity is the kernel's own reading, which a rule must not borrow; this run classified the 83 by a scan of the inputs
+instead (§11.5).  3. *Cost.*  The arm is red (92), as it was red (9) before this commit; it is `#[ignore]`d and inert
+without `TM_ORACLE`, so no acceptance suite reads it.  4. *Clears it.*  A rule as above with the host's union as the
+covered minutes, or the arm's §17 list widened to name P104's and P105's classes by input.
+
+**Gap 4920 — D100's netting makes genesis slower by about a third.**  1. *What.*  Every `break` the replay steps runs
+`Replay.netClosed` over every closed block the machine holds (`Replay.pruneClosed`: a month of them), cutting each
+one's pieces around the break and re-drawing it even where the break does not meet it, and the checkpoint now carries
+the held blocks; on the three-year log the first verb (genesis) measured 3.00-3.15 s where the W-46 repair measured
+2.26-2.32 s, and the one-year 1.50-1.54 s (§11.10).  2. *Why.*  The netting was written to be proved first: `netOne`
+decides by the ledger day alone.  Which of the two costs dominates was not profiled.  3. *Cost.*  Inside every band
+(`FIRST_VERB` 5 s), so nothing fails; a log longer than three years, or a day with many breaks, pays it in proportion.
+4. *Clears it.*  An early exit in `netOne` for a held block none of whose pieces the break meets — the result is the
+block unchanged, so `netOne`'s laws carry over with one more case — and a profile of genesis before and after.

@@ -3722,8 +3722,8 @@ complement and uses `keepFromNow` — the same one instant, not a second reading
 
 **The bound in the other direction is four refuted days, three of them already here.**
 `PlannerWit.the_core_seven_is_false_on_three_whole_days` computes `planOkCore = false` at
-`theMorningWallRequest`, `theShortBlockRequest` and `theMidBreakRequest`, and
-`PlannerWit.the_paying_past_fails_on_four_whole_days` computes which clause of `PastPays`
+`theMorningWallRequest`, `theShortBlockRequest` and `thePreD100MidBreakRequest` (`theMidBreakRequest` until D100
+cut its block around its break), and `PlannerWit.the_paying_past_fails_on_four_whole_days` computes which clause of `PastPays`
 fails at each, and adds a fourth day for the fourth clause.  Every row of it has exactly one
 `false`, so no clause of the four is implied by the other three and none is a checker nothing
 can fail (AGENTS §9.2's *"a check no input can fail"*).  The fourth day is

@@ -47,6 +47,11 @@ def cutReads (m : Machine) (t : Replay.At) : List Cal.Instant :=
   | some b => redrawReads b.drawn (Replay.cutPieces b m t)
   | none => []
 
+/-- **The instants netting the held closed blocks reads the index at** (the owner's D100, README gap 4520b): each
+block a break of ledger day `d` nets, the starts of the pieces it draws anew for it (`redrawReads`). -/
+def closedReads (s e : Replay.At) (d : Nat) (l : List Replay.Closed) : List Cal.Instant :=
+  l.flatMap (fun C => if d < C.day then [] else redrawReads C.drawn (Replay.cutOut s e C.spans))
+
 /-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), the open block's pause start
 when the step closes it (`closePause`), and — since the owner's D99 (README gap 4520a) — the start of every piece the
 step draws for the open block that was not drawn before (`settleReads`, `cutReads`): a piece drawn before is moved by
@@ -93,7 +98,9 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       | none => []
     | .brk planned actual _ =>
       settleReads { m with brks := Replay.pruneBrks (⟨(e.t.val, e.off.val),
-        Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)), dy e.t.val⟩ :: m.brks), brkOpen := none }
+        Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)), dy e.t.val⟩ :: m.brks), brkOpen := none } ++
+      closedReads (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)))
+        (dy e.t.val) m.closed
     | _ => []
 
 /-- **A step's queries read the index only at its own stamp** (D99): two indexes agreeing there give one list. -/

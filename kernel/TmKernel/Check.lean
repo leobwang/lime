@@ -3398,7 +3398,6 @@ open Tm
 #print axioms Tm.Replay.unk_credit_none
 #print axioms Tm.Replay.conserves_cut
 #print axioms Tm.Replay.bal_apply_uncredit
-#print axioms Tm.Replay.conserves_doneClose
 #print axioms Tm.Replay.conserves_arm
 #print axioms Tm.Replay.conserves_init
 #print axioms Tm.Replay.conserves_step
@@ -5617,7 +5616,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlannerWit.the_census_request_is_plain
 #print axioms Tm.PlannerWit.the_lift_applies_at_the_census_request
 #print axioms Tm.PlannerWit.midBreakRun_resumes_ok
-#print axioms Tm.PlannerWit.the_mid_break_day_lays_a_block_across_a_break
 #print axioms Tm.PlannerWit.the_break_law_applies_at_the_census_request
 
 -- ===========================================================================
@@ -8447,3 +8445,91 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.Seal.unpaused_mi
 #print axioms Tm.Replay.brkFx_with_no_block_open
 #print axioms Tm.Replay.brkFx_of_stopped_as_d92_stated_it_is_refuted
+
+/-
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK K — the owner's D100 (README "Stage 6 — W-47 track K" §11, gap 4520b;
+   parity P105): the machine holds the blocks it closed (`Replay.Closed`, `Replay.pruneClosed`), and a `break` logged
+   after one closed, stamped inside it, nets it (`Replay.netClosed`): its pieces re-drawn around the break, and what the
+   break took off its credit, its item's minutes and its `done`'s duration observation (`DayOp.net`, `Replay.netDur`).
+   The conservation invariant carries the held blocks (`Replay.Conserves`, `Replay.HeadOk`); the window
+   reads the index where a late break re-draws a held block (`Seal.closedReads`) and the checkpoint codec carries the
+   held blocks and the duration nets (`Seal.cMachine`, `Seal.cDayAcc`).  Two lines removed: Replay.conserves_doneClose,
+   restated over the held blocks as `Replay.conserves_doneClosed`, and
+   PlannerWit.the_mid_break_day_lays_a_block_across_a_break, false since D100 at the decoder's own day and restated
+   as `PlannerWit.the_mid_break_day_cuts_its_block_around_the_break`, its old statement kept at a run the decoder no
+   longer builds (`PlannerWit.the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`).
+-/
+#print axioms Tm.PlannerWit.the_core_seven_hold_on_the_mid_break_day_by_the_lift
+#print axioms Tm.PlannerWit.the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break
+#print axioms Tm.PlannerWit.the_mid_break_day_cuts_its_block_around_the_break
+#print axioms Tm.PlannerWit.the_paying_past_at_the_mid_break_request
+#print axioms Tm.Replay.bal_apply_net
+#print axioms Tm.Replay.brkFx_with_no_block_open_as_d99_stated_it_is_refuted
+#print axioms Tm.Replay.brkFx_with_nothing_open_or_held
+#print axioms Tm.Replay.Ci6.fifths_ge
+#print axioms Tm.Replay.Ci6.fifths_sub
+#print axioms Tm.Replay.Ci6.get_le_sum
+#print axioms Tm.Replay.Ci6.sum_sub
+#print axioms Tm.Replay.closePauseM_closed
+#print axioms Tm.Replay.conserves_after
+#print axioms Tm.Replay.conserves_doneClosed
+#print axioms Tm.Replay.conserves_machine_kept
+#print axioms Tm.Replay.conserves_netClosed
+#print axioms Tm.Replay.conserves_safe_then_kept
+#print axioms Tm.Replay.cut_headOk
+#print axioms Tm.Replay.cutOut_starts
+#print axioms Tm.Replay.DayAcc.bal_net
+#print axioms Tm.Replay.filter_map_netDur
+#print axioms Tm.Replay.heldOf_cons
+#print axioms Tm.Replay.heldOf_filter_le
+#print axioms Tm.Replay.interruptMachine_closed
+#print axioms Tm.Replay.lastCut_le_unk
+#print axioms Tm.Replay.map_line_netDur
+#print axioms Tm.Replay.mem_pruneClosed
+#print axioms Tm.Replay.netAll_conserves
+#print axioms Tm.Replay.netClosed_blockOnly
+#print axioms Tm.Replay.netClosed_keeps
+#print axioms Tm.Replay.netClosed_mem
+#print axioms Tm.Replay.netClosed_obs
+#print axioms Tm.Replay.netClosed_pendLines
+#print axioms Tm.Replay.netClosed_sleptOk
+#print axioms Tm.Replay.netDur_day
+#print axioms Tm.Replay.netOne_conserves
+#print axioms Tm.Replay.netOne_keeps
+#print axioms Tm.Replay.netOne_mem
+#print axioms Tm.Replay.pruneClosed_cons
+#print axioms Tm.Replay.pruneClosed_held
+#print axioms Tm.Replay.redraw_fst_starts
+#print axioms Tm.Replay.settle_closed
+#print axioms Tm.Replay.unk_credit_none_eq
+#print axioms Tm.Replay.unk_net
+#print axioms Tm.Replay.unk_uncredit_eq
+#print axioms Tm.Seal.closedReads_mi
+#print axioms Tm.Seal.cut_interrupt
+#print axioms Tm.Seal.cutPieces_mi
+#print axioms Tm.Seal.doneClosed_congr
+#print axioms Tm.Seal.doneClosed_mi
+#print axioms Tm.Seal.doneClose_keeps
+#print axioms Tm.Seal.netClosed_congr
+#print axioms Tm.Seal.netClosed_mi
+#print axioms Tm.Seal.netOne_congr
+#print axioms Tm.Seal.settleReads_startedMachine
+#print axioms Tm.Replay.a_break_logged_after_a_done_is_netted_from_the_block
+#print axioms Tm.Replay.a_break_logged_after_a_stop_is_netted_from_the_block
+#print axioms Tm.Replay.a_late_break_nets_the_block_it_crosses_and_not_the_next
+#print axioms Tm.Replay.a_late_break_nets_a_done_that_replaced_a_stop
+#print axioms Tm.Replay.a_late_break_past_the_blocks_end_takes_what_it_covers
+#print axioms Tm.Replay.a_late_break_takes_no_more_than_the_blocks_credit
+#print axioms Tm.Replay.a_late_break_nets_a_block_held_and_not_one_pruned
+#print axioms Tm.Replay.a_late_break_filed_the_day_before_nets_nothing
+#print axioms Tm.Replay.two_late_breaks_net_their_union_once
+#print axioms Tm.Replay.a_break_netted_while_open_is_not_netted_again_after_the_done
+#print axioms Tm.Replay.a_done_after_a_stop_and_a_late_break_credits_its_own_minutes
+#print axioms Tm.Replay.redraw_fst_spans
+#print axioms Tm.Replay.cutOut_avoids
+#print axioms Tm.Replay.netOne_avoids_the_break
+#print axioms Tm.Replay.netOne_leaves_no_piece_across_the_break
+#print axioms Tm.Replay.netClosed_avoids_the_break
+#print axioms Tm.Replay.netClosed_leaves_no_piece_across_the_break
+#print axioms Tm.Replay.the_unsafe_effects_are_the_machine_an_uncredit_and_a_net
+#print axioms Tm.Replay.the_held_credit_counts_a_cut_and_not_a_done

@@ -367,7 +367,10 @@ fn kernel_view(log: &Value) -> Facts {
         assert!(!seams.contains_key(&d) && !block.days.contains_key(&d) && rows.iter().all(|r| r.3 != d), "a repeated day {d}");
         if !p[1].is_null() {
             let a = j_arr(&p[1], "a day record");
-            assert_eq!(a.len(), 28, "a day record has 28 fields: {}", p[1]);
+            // 29 since the owner's D100 (README gap 4520b, parity P105): the last, `durNet`, is the kernel's own
+            // bookkeeping of what a late break took off a `done`'s observation, which the fork has no counterpart of
+            // and which the observations compared below are already net of.
+            assert_eq!(a.len(), 29, "a day record has 29 fields: {}", p[1]);
             let mut ci_unknown = BTreeMap::new();
             for c in j_arr(&a[6], "ciUnknown") {
                 let c = j_arr(c, "a ciUnknown pair");

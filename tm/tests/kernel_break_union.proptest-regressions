@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 68cf7e5ef5e157535c8f805f137cb86f0d88d275a29e74eb44f0f38788f9811c # shrinks to d = Day { start: 0, stop: 30, breaks: [Brk { from: 1, len: 1, when: InBlock(0) }, Brk { from: 0, len: 1, when: InBlock(0) }], marks: None, day_before: None }
+cc 0441f3e127978697228f46bf9911bb92edb7ee26e0c77ea5cc2599ec59a736ba # shrinks to t = (Day { start: 45, stop: 80, breaks: [Brk { from: 41, len: 39, when: Ahead }], marks: None, day_before: None }, [Late { from: 25, len: 1 }], Done)

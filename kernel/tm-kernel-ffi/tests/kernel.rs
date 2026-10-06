@@ -1481,7 +1481,8 @@ fn the_log_op_answers_the_completion_facts() {
 /// positional array) holds the 09:10–09:30 `Idle` segment, the wake, its sleep, 20 leak
 /// minutes, the longest 20 and the idle record; the global longest leak is the gap.
 /// C6: in §8.4's view, the day's seam and headers beside its record.  W3: in the codec
-/// shapes (the idle segment's kind is `[5, "leak"]`).
+/// shapes (the idle segment's kind is `[5, "leak"]`).  W-47 track K (the owner's D100):
+/// the record's 29th field, the duration nets a late break took, is `[]` here.
 #[test]
 fn the_log_op_answers_the_day_facts() {
     let utc = r#"{"key":"UTC","base":"+00:00:00","then":[]}"#;
@@ -1489,7 +1490,7 @@ fn the_log_op_answers_the_day_facts() {
     let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
     assert_eq!(
         out,
-        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
+        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null,[]],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
     );
 }
 

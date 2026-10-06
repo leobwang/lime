@@ -1970,8 +1970,16 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         let date = d_date(dn, "a day's number")?;
         let rec = d_at(p, 1, "a day record")?;
         if !rec.is_null() {
-            let a = d_tuple(rec, 28, "a day record")?;
+            let a = d_tuple(rec, 29, "a day record")?;
             let g = |i: usize, what: &'static str| -> D<&Value> { d_at(a, i, what) };
+            // Field 28, `durNet` (the owner's D100, README gap 4520b, parity P105): the minutes a break logged after a
+            // `done` took off that `done`'s duration observation, by the observation's line.  The kernel nets the
+            // observations it hands over (`Replay.netDur`), so the host reads the pairs only to refuse a malformed one.
+            for c in d_arr(g(28, "durNet")?, "durNet")? {
+                let c = d_tuple(c, 2, "a durNet pair")?;
+                d_u64(d_at(c, 0, "a durNet line")?, "a durNet line")?;
+                d_u32(d_at(c, 1, "a durNet minute")?, "a durNet minute")?;
+            }
             let mut ci_unknown = BTreeMap::new();
             for c in d_arr(g(6, "ciUnknown")?, "ciUnknown")? {
                 let c = d_tuple(c, 2, "a ciUnknown pair")?;
