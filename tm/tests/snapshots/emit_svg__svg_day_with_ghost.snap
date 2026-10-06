@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_svg.rs
+source: tm/tests/emit_svg.rs
 expression: out
 ---
 <svg xmlns="http://www.w3.org/2000/svg" width="480" height="60" viewBox="0 0 480 60" role="img" aria-label="day bar 2026-09-07">

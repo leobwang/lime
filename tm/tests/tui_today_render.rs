@@ -94,6 +94,10 @@ fn a_row_that_contains_the_divider_glyph_is_still_its_own_segment() {
     // segment — `e` would then open the wrong file and line (§12).
     let mut app = app();
     app.plan.segments[0].flags.note = Some("a ─── b".to_string());
+    // The rows are the kernel's cells (the owner's D112): a test that edits a
+    // segment asks for them again, as the binary does for every day it plans,
+    // the edited note crossing as written.
+    app.plan = tui_common::rowwire::with_kernel_cells(tui_common::docs_json(), app.plan.clone(), &app.cfg);
     app.refresh();
     assert!(app.rows[0].text.contains("───"), "{}", app.rows[0].text);
     assert_eq!(app.rows[0].segment, Some(0));

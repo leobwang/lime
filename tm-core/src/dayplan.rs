@@ -326,6 +326,20 @@ pub struct DayPlan {
     pub diagnostics: Diagnostics,
     /// Every candidate's priority (§7), for the Queue and `--explain`.
     pub priorities: Vec<(Id, Prio)>,
+    /// **The day's rows as the kernel's cells**, one per segment, in the
+    /// segments' order (the owner's **D112**: D30 Q6 (a) built, "the kernel
+    /// emits cells; one Rust function pads"). The binary asks the kernel for
+    /// them through the `plan` section with the day it planned
+    /// (`planwire::rows_request`, `planwire::read_rows`); every surface that
+    /// prints a row prints `emit::render_row` of one of these, and no Rust
+    /// builds one. **Empty on a day nobody asked rows for** — the ghost row's
+    /// days, drawn in the day bar alone.
+    ///
+    /// **Printed, and not serialised**: `tm plan --json` carries each row's
+    /// padded `text`, and `.tm/last_plan.json` is the planner's record, not a
+    /// drawing.
+    #[serde(skip)]
+    pub cells: Vec<crate::emit::RowCells>,
 }
 
 impl DayPlan {
@@ -342,6 +356,7 @@ impl DayPlan {
             segments: Vec::new(),
             diagnostics: Diagnostics::default(),
             priorities: Vec::new(),
+            cells: Vec::new(),
         }
     }
 
@@ -480,7 +495,7 @@ impl PlanDiff {
 /// `--explain` names a slot by, and what `tm plan --json`'s `kind` field says
 /// of every row but one — a replayed pause, which `emit::row_kind` calls
 /// `pause` (D68, P59). It is never padded, truncated or printed in a column;
-/// `emit::title_cell` is the cell.
+/// the kernel's `Emit.titleCell` is the cell (`DayPlan::cells`, D112).
 ///
 /// **Public since W-23** (AGENTS §5.3). `tm/src/cli/render.rs::kind_name` held a
 /// byte-for-byte copy of these ten arms, found by body shape rather than by

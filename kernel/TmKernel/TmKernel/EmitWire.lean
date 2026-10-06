@@ -284,12 +284,12 @@ def secWithin {ρ : Type} (r : ρ) (sec : Nat) : Except ρ Nat :=
   | some i => .ok i.val.sec
   | none => .error r
 
-/-! ## `Note` — the eleven names, read back
+/-! ## `Note` — the twelve names, read back as the planner writes them
 
-`Planner.Note` carries the *name* and its arguments and `Emit.noteText` holds the words, which
-is AGENTS §5.7 paid off at the far end.  The wire therefore carries the name, never the
-sentence: a host that sent the rendered text would be a second writer of it and the comparison
-this module exists for would compare a string to itself. -/
+`Planner.Note` carries the *name* and its arguments and `Emit.noteText` holds the words (AGENTS
+§5.7).  The wire carries the name, never the sentence — under the key `note`, as `PlanWire.noteJson`
+writes it, so a day the planner answered goes back through this section as it came (D112, W-47:
+this read `name`, a second spelling of one value on one wire, and had no reader for `soFar`). -/
 
 /-- **The bound on a replayed note's text** (R10).  `Note.breakWhere` and `Note.idleAttributed`
 play back the log's own words, which reached the kernel inside a `Replay.Segment` bounded at the
@@ -298,10 +298,10 @@ of their own.  200 characters is far longer than any `break --where` or idle att
 shorter than a line this kernel will hold. -/
 def maxNoteText : Nat := 200
 
-/-- One note, by name.  An unknown name is `badSegment <i> note`, never a silent `none`. -/
+/-- One note, by name (`note`, `PlanWire.noteJson`'s key).  An unknown name is `badSegment <i> note`. -/
 def readNote (i : Nat) (v : JVal) : Except RowRefusal Note := do
   let r : RowRefusal := .badSegment i .note
-  let nm ← strAtP v "name" r
+  let nm ← strAtP v "note" r
   if nm = "travelDay".toList then pure .travelDay
   else if nm = "travelDayWall".toList then pure .travelDayWall
   else if nm = "paused".toList then pure .paused
@@ -322,9 +322,9 @@ def readNote (i : Nat) (v : JVal) : Except RowRefusal Note := do
   else if nm = "bufferBefore".toList then do
     let id ← idWithin r (← strAtP v "id" r)
     pure (.bufferBefore id)
-  else if nm = "runningLeft".toList then do
-    let n ← u32Within r (← natAtP v "leftMin" r)
-    pure (.runningLeft n)
+  else if nm = "runningLeft".toList then do pure (.runningLeft (← u32Within r (← natAtP v "leftMin" r)))
+  -- the twelfth, `PlanWire.noteJson`'s `soFar` (fork open_block_segment's note), read since W-47
+  else if nm = "soFar".toList then do pure (.soFar (← u32Within r (← natAtP v "workedMin" r)))
   else if nm = "breakWhere".toList then do
     let t ← strAtP v "text" r
     if t.length ≤ maxNoteText then pure (.breakWhere t) else throw r
@@ -488,10 +488,10 @@ def readRowSection (sec : JVal) : Except RowRefusal RowReq := do
   let segs ← readSegs ss
   pure ⟨bed, prios, segs⟩
 
-/-- **The rows this call answers** — `Emit.rowOf` over the segments the host sent, against the
-kernel's **own** loaded plan.  This is the caller `Emit.lean` did not have. -/
-def rowsOfReq (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) : List Row :=
-  q.segs.val.map (fun s => Emit.rowOf p z bm q.bed q.prios.val s.val)
+/-- **The rows this call answers** — `Emit.rowOf` over the segments the host sent, against the kernel's **own** loaded
+plan, a HOT row told on the request's `now` (the planned day, D112) when it carries one.  The caller `Emit.lean` lacked. -/
+def rowsOfReq (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) (now : Option Nat := none) : List Row :=
+  q.segs.val.map (fun s => match now with | some d => Emit.rowOf p z bm q.bed q.prios.val s.val d | none => Emit.rowOf p z bm q.bed q.prios.val s.val)
 
 /-- A batch row's members, whole, for the Rust fitter — `Emit.batchNames`, the one reader of
 them (`Emit.batchTitle_is_the_frame_over_batchNames`).  Every other kind answers `[]`. -/
@@ -517,8 +517,8 @@ def rowJson (p : PlanCore) (s : Seg) (r : Row) : JVal :=
 It goes through `rowsOfReq` rather than mapping `Emit.rowOf` again: the day's row list has one
 definition and this is its serializer.  The `zip` is what lets `rowJson` reach the segment as
 well as the row, which it needs for the batch members only. -/
-def rowsJson (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) : JVal :=
-  .arr ((q.segs.val.zip (rowsOfReq p z bm q)).map (fun sr => rowJson p sr.1.val sr.2))
+def rowsJson (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) (now : Option Nat := none) : JVal :=
+  .arr ((q.segs.val.zip (rowsOfReq p z bm q now)).map (fun sr => rowJson p sr.1.val sr.2))
 
 /-- The `plan` key, after `lookahead` (design §10.2's order). -/
 def withPlan (r v : JVal) : JVal :=
@@ -565,7 +565,7 @@ def runRowsP (j : JVal) : Except JVal (JVal × Option CapParts) :=
           | some bm =>
             match readRowSection sec with
             | .error x => .error (rowRefusalJson x)
-            | .ok q => .ok (withPlan r (rowsJson p.val z bm.val q), parts)
+            | .ok q => .ok (withPlan r (rowsJson p.val z bm.val q clock.now), parts)
 
 /-- **The bytes of it** — what every law below this point is about, and byte for byte what
 `runRows` was before W-28 widened the seam (`Boundary.CapParts`).  One match tree, two readers
@@ -704,7 +704,7 @@ is the witness and the second half is the load-bearing one. -/
 theorem readOptNote_of_an_absent_note (i : Nat) : readOptNote i (.obj []) = .ok none := rfl
 
 theorem readOptNote_of_a_present_note (i : Nat) :
-    readOptNote i (.obj [("note".toList, .obj [("name".toList, .str "paused".toList)])])
+    readOptNote i (.obj [("note".toList, .obj [("note".toList, .str "paused".toList)])])
       = .ok (some .paused) := rfl
 
 /-- **A batch row's members are `Emit.batchNames`', whatever the plan says** — the one reader,
@@ -770,14 +770,14 @@ theorem readPrio_accepts_seven :
 set_option maxRecDepth 20000 in
 /-- **A replayed note's text past `maxNoteText` is refused.** -/
 theorem readNote_refuses_a_long_text :
-    readNote 3 (.obj [("name".toList, .str "breakWhere".toList),
+    readNote 3 (.obj [("note".toList, .str "breakWhere".toList),
       ("text".toList, .str (List.replicate (maxNoteText + 1) 'x'))])
       = .error (.badSegment 3 .note) := by
   rfl
 
 /-- And a short one is accepted, so the refusal is not the only outcome. -/
 theorem readNote_accepts_a_short_text (i : Nat) :
-    readNote i (.obj [("name".toList, .str "breakWhere".toList),
+    readNote i (.obj [("note".toList, .str "breakWhere".toList),
       ("text".toList, .str "walk".toList)]) = .ok (.breakWhere "walk".toList) := by
   rfl
 
@@ -924,7 +924,7 @@ theorem readKind_refuses_a_long_batch_member (i : Nat) (v : JVal) (id : Id)
 /-- **A replayed `noPosition`'s id past the bound is refused** — the first of the two ids
 `readNote` reads back, and neither was named by the audit that opened gap 1415. -/
 theorem readNote_refuses_a_long_no_position_id (i : Nat) (v : JVal) (id : Id)
-    (hn : strAtP v "name" (RowRefusal.badSegment i RowKey.note) = .ok "noPosition".toList)
+    (hn : strAtP v "note" (RowRefusal.badSegment i RowKey.note) = .ok "noPosition".toList)
     (hid : strAtP v "id" (RowRefusal.badSegment i RowKey.note) = .ok id)
     (h : CapWire.maxCandId < id.length) :
     readNote i v = .error (.badSegment i .note) := by
@@ -934,7 +934,7 @@ theorem readNote_refuses_a_long_no_position_id (i : Nat) (v : JVal) (id : Id)
 
 /-- **And a `bufferBefore`'s**, which is the id a `buffer:` puts in front of a wall. -/
 theorem readNote_refuses_a_long_buffer_before_id (i : Nat) (v : JVal) (id : Id)
-    (hn : strAtP v "name" (RowRefusal.badSegment i RowKey.note) = .ok "bufferBefore".toList)
+    (hn : strAtP v "note" (RowRefusal.badSegment i RowKey.note) = .ok "bufferBefore".toList)
     (hid : strAtP v "id" (RowRefusal.badSegment i RowKey.note) = .ok id)
     (h : CapWire.maxCandId < id.length) :
     readNote i v = .error (.badSegment i .note) := by
@@ -1024,7 +1024,7 @@ theorem secWithin_is_the_clause_Seg_wf_puts_on_a_stop {ρ : Type} (r : ρ) (sec 
 
 /-- **`durMin` past the width is refused** — the first of `noPosition`'s three numbers. -/
 theorem readNote_refuses_a_long_duration (i : Nat) :
-    readNote i (.obj [("name".toList, .str "noPosition".toList),
+    readNote i (.obj [("note".toList, .str "noPosition".toList),
       ("id".toList, .str "a1".toList),
       ("durMin".toList, .num (CapWire.maxRemaining + 1)),
       ("lo".toList, .num 0), ("hi".toList, .num 60)])
@@ -1033,7 +1033,7 @@ theorem readNote_refuses_a_long_duration (i : Nat) :
 
 /-- **`lo` past the calendar is refused.** -/
 theorem readNote_refuses_a_low_past_the_calendar (i : Nat) :
-    readNote i (.obj [("name".toList, .str "noPosition".toList),
+    readNote i (.obj [("note".toList, .str "noPosition".toList),
       ("id".toList, .str "a1".toList), ("durMin".toList, .num 30),
       ("lo".toList, .num 315537897600), ("hi".toList, .num 60)])
       = .error (.badSegment i .note) := by
@@ -1041,7 +1041,7 @@ theorem readNote_refuses_a_low_past_the_calendar (i : Nat) :
 
 /-- **And `hi`**, which is the other half of the window the fork prints. -/
 theorem readNote_refuses_a_high_past_the_calendar (i : Nat) :
-    readNote i (.obj [("name".toList, .str "noPosition".toList),
+    readNote i (.obj [("note".toList, .str "noPosition".toList),
       ("id".toList, .str "a1".toList), ("durMin".toList, .num 30),
       ("lo".toList, .num 0), ("hi".toList, .num 315537897600)])
       = .error (.badSegment i .note) := by
@@ -1049,28 +1049,28 @@ theorem readNote_refuses_a_high_past_the_calendar (i : Nat) :
 
 /-- **`blocksDone` past the width is refused** — the count the fork keeps in a `u32`. -/
 theorem readNote_refuses_a_blocks_done_past_the_width (i : Nat) :
-    readNote i (.obj [("name".toList, .str "budgetSpent".toList),
+    readNote i (.obj [("note".toList, .str "budgetSpent".toList),
       ("blocksDone".toList, .num (CapWire.maxRemaining + 1))])
       = .error (.badSegment i .note) := by
   rfl
 
 /-- **`planned` past the width is refused** — `plannedOf`'s numerator. -/
 theorem readNote_refuses_a_planned_past_the_width (i : Nat) :
-    readNote i (.obj [("name".toList, .str "plannedOf".toList),
+    readNote i (.obj [("note".toList, .str "plannedOf".toList),
       ("planned".toList, .num (CapWire.maxRemaining + 1)), ("total".toList, .num 480)])
       = .error (.badSegment i .note) := by
   rfl
 
 /-- **And `total`**, its denominator, which `Emit.noteText` divides by. -/
 theorem readNote_refuses_a_total_past_the_width (i : Nat) :
-    readNote i (.obj [("name".toList, .str "plannedOf".toList),
+    readNote i (.obj [("note".toList, .str "plannedOf".toList),
       ("planned".toList, .num 60), ("total".toList, .num (CapWire.maxRemaining + 1))])
       = .error (.badSegment i .note) := by
   rfl
 
 /-- **`leftMin` past the width is refused** — the running block's reservation. -/
 theorem readNote_refuses_a_left_min_past_the_width (i : Nat) :
-    readNote i (.obj [("name".toList, .str "runningLeft".toList),
+    readNote i (.obj [("note".toList, .str "runningLeft".toList),
       ("leftMin".toList, .num (CapWire.maxRemaining + 1))])
       = .error (.badSegment i .note) := by
   rfl
@@ -1078,17 +1078,17 @@ theorem readNote_refuses_a_left_min_past_the_width (i : Nat) :
 /-- **None of the seven refusals is the only outcome**: each field at a value inside its bound
 reads back the note the fork would have printed, so no guard above is a trapdoor. -/
 theorem readNote_accepts_the_seven_inside_their_bounds (i : Nat) :
-    readNote i (.obj [("name".toList, .str "noPosition".toList),
+    readNote i (.obj [("note".toList, .str "noPosition".toList),
       ("id".toList, .str "a1".toList), ("durMin".toList, .num 30),
       ("lo".toList, .num 315537897599), ("hi".toList, .num 315537897599)])
       = .ok (.noPosition "a1".toList 30 315537897599 315537897599) ∧
-    readNote i (.obj [("name".toList, .str "budgetSpent".toList),
+    readNote i (.obj [("note".toList, .str "budgetSpent".toList),
       ("blocksDone".toList, .num CapWire.maxRemaining)])
       = .ok (.budgetSpent CapWire.maxRemaining) ∧
-    readNote i (.obj [("name".toList, .str "plannedOf".toList),
+    readNote i (.obj [("note".toList, .str "plannedOf".toList),
       ("planned".toList, .num 60), ("total".toList, .num CapWire.maxRemaining)])
       = .ok (.plannedOf 60 CapWire.maxRemaining) ∧
-    readNote i (.obj [("name".toList, .str "runningLeft".toList),
+    readNote i (.obj [("note".toList, .str "runningLeft".toList),
       ("leftMin".toList, .num CapWire.maxRemaining)])
       = .ok (.runningLeft CapWire.maxRemaining) := by
   refine ⟨rfl, rfl, rfl, rfl⟩
@@ -1139,6 +1139,36 @@ theorem the_table_on_the_wire_is_placeWords :
     (JVal.arr (Log.placeWords.map JVal.str)) =
       .arr [.str ['w','a','l','k'], .str ['s','e','a','t'], .str ['b','e','d'], .str ['p','h','o','n','e']] := by
   decide
+
+/-! ## D112 — the `plan` section is the binary's door to its rows (stage 6 W-47 track L, README gap 4897)
+
+APPENDED 2026-10-06.  The owner's D112: the binary's plan rows are the kernel's `Emit.Row` cells, padded by one Rust
+function (`emit::render_row`).  The binary sends the day the planner answered back through this section — its
+`segments` and `priorities` exactly as `PlanWire.segJson` and `PlanWire.planJson` wrote them, which W-27 shaped for this
+round trip — with the request's `now` the planned day, so a HOT row's deadline (`EmitDue.hotCell`) is told against the
+day fork `hot_note` tells it against (`plan.date`).  A request with no `now` tells each row on its own local day, as
+before. -/
+
+/-- **With a `now`, every row is told on that day**; without one, on its own start's local day. -/
+theorem rowsOfReq_tells_the_requests_day (p : PlanCore) (z : Cal.Tz) (bm d : Nat) (q : RowReq) :
+    rowsOfReq p z bm q (some d) = q.segs.val.map (fun s => Emit.rowOf p z bm q.bed q.prios.val s.val d) := rfl
+
+/-- **The twelfth note reads back** — `{"note":"soFar","workedMin":90}`, `PlanWire.noteJson`'s spelling of fork
+open_block_segment's `90m so far`, which this section had no reader for until W-47. -/
+theorem readNote_reads_soFar (i : Nat) :
+    readNote i (.obj [("note".toList, .str "soFar".toList), ("workedMin".toList, .num 90)]) = .ok (.soFar 90) := rfl
+
+/-- **A note is read under `note`, the planner's key — and the old second spelling, `name`, is refused by name**, so
+a host that spelled a note two ways would be told, not half-read. -/
+theorem readNote_reads_the_planners_key_and_refuses_the_other (i : Nat) :
+    readNote i (.obj [("note".toList, .str "paused".toList)]) = .ok .paused ∧
+    readNote i (.obj [("name".toList, .str "paused".toList)]) = .error (.badSegment i .note) := ⟨rfl, rfl⟩
+
+/-- **One row per segment sent, whichever day the rows are told on.** -/
+theorem rowsJson_length_on_a_day (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) (now : Option Nat) :
+    ∃ xs, rowsJson p z bm q now = .arr xs ∧ xs.length = q.segs.val.length := by
+  refine ⟨_, rfl, ?_⟩
+  cases now <;> simp [rowsOfReq]
 
 end EmitWire
 end Tm

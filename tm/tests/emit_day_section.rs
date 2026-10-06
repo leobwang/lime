@@ -28,10 +28,18 @@
 //! Everything else — the mark set, the `4↓p3` cell, `2b×1.6`, the note column
 //! at 55, `@parent` at 43, the estimate at 48 and the `───  window ends 16:00`
 //! divider — is the example's.
+//!
+//! **The rows are the kernel's since the owner's D112** (W-47): each day's cells
+//! come from the `plan` section over the fixture's documents
+//! (`emit_fixture::with_rows`) and `emit::render_row` pads them. The snapshots
+//! were written by the Rust builder those cells replace (until W-47, in
+//! `tm-core/tests/`) and are UNCHANGED: they are the frozen comparand, and the
+//! kernel's rows meet them byte for byte. A test that moves a segment asks the
+//! kernel for its rows again, as the binary asks for every day it plans.
 
 mod emit_fixture;
 
-use emit_fixture::{at, config, date, plan, tree};
+use emit_fixture::{at, config, date, plan, tree, with_rows};
 use tm_core::emit::{self, Layout};
 
 /// The *terminal* column a substring starts at (`str::find` counts bytes,
@@ -62,9 +70,8 @@ const SPEC_ROWS: &[(usize, &str)] = &[
 #[test]
 fn day_section_matches_the_spec_example() {
     let cfg = config();
-    let tree = tree(&cfg);
     let day = plan();
-    let (info, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let (info, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
 
     // The `<!-- tm:plan start 10:42 -->` stamp.
     assert_eq!(info, "10:42");
@@ -116,9 +123,8 @@ fn wide_glyphs_do_not_widen_their_row() {
     assert_eq!(emit::char_width('\u{0301}'), 0, "a combining acute");
 
     let cfg = config();
-    let tree = tree(&cfg);
     let day = plan();
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     // Every row's title — the first non-blank run after the mark column —
     // starts at display column 14, whatever glyph the `ci` column holds.
     for line in body.lines().filter(|l| !l.contains("window ends")) {
@@ -133,9 +139,8 @@ fn wide_glyphs_do_not_widen_their_row() {
 #[test]
 fn marks_and_glyphs_are_the_spec_set() {
     let cfg = config();
-    let tree = tree(&cfg);
     let day = plan();
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     let lines: Vec<&str> = body.lines().collect();
 
     assert!(lines[0].contains('✓'), "done");
@@ -152,12 +157,11 @@ fn marks_and_glyphs_are_the_spec_set() {
 #[test]
 fn the_divider_lands_where_the_budget_runs_out() {
     let cfg = config();
-    let tree = tree(&cfg);
     let mut day = plan();
     // A budget nothing exhausts pushes the divider to the window end, in front
     // of the first segment planned past it (dinner at 17:30).
     day.budget_blocks = 12;
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     let lines: Vec<&str> = body.lines().collect();
     let divider = lines
         .iter()
@@ -170,17 +174,17 @@ fn the_divider_lands_where_the_budget_runs_out() {
     let mut short = plan();
     short.segments.retain(|s| s.start < at(15, 0));
     short.budget_blocks = 12;
-    let (_, body) = emit::render_plan_section(&short, &tree, &cfg, at(10, 42));
+    let short = with_rows(short);
+    let (_, body) = emit::render_plan_section(&short, &cfg, at(10, 42));
     assert!(!body.contains("window ends"));
 }
 
 #[test]
 fn titles_are_truncated_to_the_layout_width() {
     let cfg = config();
-    let tree = tree(&cfg);
     let day = plan();
     let (_, body) =
-        emit::render_plan_section_with(&day, &tree, &cfg, at(10, 42), &Layout::new(12));
+        emit::render_plan_section_with(&day, &cfg, at(10, 42), &Layout::new(12));
     let lines: Vec<&str> = body.lines().collect();
     assert_eq!(
         lines[5], "11:50  4↓p3   Claude Code…  @m2  1b     ↓ slot 4, item 3",
@@ -192,9 +196,8 @@ fn titles_are_truncated_to_the_layout_width() {
 #[test]
 fn a_log_faithful_day_keeps_the_actuals_and_the_real_starts() {
     let cfg = config();
-    let tree = tree(&cfg);
     let day = emit_fixture::log_faithful_plan();
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     let lines: Vec<&str> = body.lines().collect();
     // `plan-basic`'s log: 07:02 start ^t1 · 08:09 done 67m · 09:08 break 24m ·
     // 09:32 start ^t3.
@@ -211,7 +214,6 @@ fn a_batch_is_one_row_naming_its_items() {
     use tm_core::dayplan::{SegFlags, SegKind, Segment};
 
     let cfg = config();
-    let tree = tree(&cfg);
     let mut day = plan();
     day.segments.push(Segment {
         start: at(16, 0),
@@ -226,7 +228,8 @@ fn a_batch_is_one_row_naming_its_items() {
         },
     });
     day.segments.sort_by_key(|s| s.start);
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let day = with_rows(day);
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     let row = body
         .lines()
         .find(|l| l.starts_with("16:00"))
@@ -240,7 +243,7 @@ fn a_batch_is_one_row_naming_its_items() {
     assert!(row.contains("(3)"), "the count always survives");
     // A width that fits more shows more of each member, never a longer row.
     for w in 12..90 {
-        let out = emit::render_plan_section_with(&day, &tree, &cfg, at(10, 42), &Layout::new(w)).1;
+        let out = emit::render_plan_section_with(&day, &cfg, at(10, 42), &Layout::new(w)).1;
         let row = out
             .lines()
             .find(|l| l.starts_with("16:00"))
@@ -253,7 +256,7 @@ fn a_batch_is_one_row_naming_its_items() {
         );
         assert!(title.starts_with("batch: "), "the frame survives: {title:?}");
     }
-    let wide = emit::render_plan_section_with(&day, &tree, &cfg, at(10, 42), &Layout::new(90)).1;
+    let wide = emit::render_plan_section_with(&day, &cfg, at(10, 42), &Layout::new(90)).1;
     let row = wide
         .lines()
         .find(|l| l.starts_with("16:00"))
@@ -271,23 +274,27 @@ fn the_notes_are_derived_when_the_planner_writes_none() {
     // planner that sets only `flags.underused` / `flags.hot` produced a `↓` or
     // `⚠` row with an empty note column. The plan carries what both notes need
     // (`diagnostics.underused` is the exact `(t4, 4, 3)` triple; the tree
-    // carries `^a3`'s window).
+    // carries `^a3`'s window). Since D112 the deriving is the kernel's
+    // (`Emit.noteCell`, and `EmitDue.hotCell` for the `⚠` row — README gap
+    // 1102, closed), so the day is handed to it with no note at all.
     let cfg = config();
-    let tree = tree(&cfg);
     let mut day = plan();
     for seg in &mut day.segments {
         seg.flags.note = None;
     }
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let mut day = with_rows(day);
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     let lines: Vec<&str> = body.lines().collect();
     assert!(lines[5].ends_with("↓ slot 4, item 3"), "{}", lines[5]);
     assert!(lines[10].ends_with("due today"), "{}", lines[10]);
-    assert_eq!(body, emit::render_plan_section(&plan(), &tree, &cfg, at(10, 42)).1);
+    assert_eq!(body, emit::render_plan_section(&plan(), &cfg, at(10, 42)).1);
 
     // Without a diagnostics entry the note falls back to the segment's own
-    // slot energy and the item's `ci`.
+    // slot energy and the item's `ci` — the kernel's `Emit.underusedCell`
+    // reads the row's own energy and the item's `ci` and nothing else.
     day.diagnostics.underused.clear();
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let day = with_rows(day);
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     assert!(
         body.lines().nth(5).expect("row").ends_with("↓ slot 4, item 3"),
         "slot energy 4, `^t4` is ci 3"
@@ -296,18 +303,30 @@ fn the_notes_are_derived_when_the_planner_writes_none() {
     // A written note always wins.
     let mut day = plan();
     day.segments[5].flags.note = Some("mine".to_string());
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let day = with_rows(day);
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     assert!(body.lines().nth(5).expect("row").ends_with("mine"));
 
-    // A deadline that is not today reads as the day it falls on.
-    let mut day = plan();
-    day.date = date().pred_opt().expect("2026-09-06");
-    day.segments[9].flags.note = None; // `^a3`, the `⚠` row
-
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    // A deadline that is not today reads as the day it falls on. The kernel
+    // tells a row's deadline against the day the row is planned in (the
+    // planner's answer: `DayPlan.day`; a row the `plan` section is asked for
+    // alone: the local day it starts on), so the `⚠` row is planned the day
+    // before its window closes. Until D112 this moved `plan.date` alone, which
+    // the Rust builder read and no day the kernel answers can tell apart.
+    let base = plan();
+    let mut hot = base.segments[9].clone(); // `^a3`, the `⚠` row
+    hot.flags.note = None;
+    hot.start -= chrono::Duration::days(1);
+    hot.end -= chrono::Duration::days(1);
+    let eve = date().pred_opt().expect("2026-09-06");
+    let mut day = tm_core::dayplan::DayPlan::empty(eve, (base.window.0 - chrono::Duration::days(1), base.window.1 - chrono::Duration::days(1)), 6);
+    day.priorities = base.priorities.clone();
+    day.segments = vec![hot];
+    let day = with_rows(day);
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42) - chrono::Duration::days(1));
     assert!(
-        body.lines().nth(10).expect("row").ends_with("due tomorrow"),
-        "^a3's window closes 2026-09-07"
+        body.lines().next().expect("row").ends_with("due tomorrow"),
+        "^a3's window closes 2026-09-07: {body}"
     );
 }
 
@@ -316,9 +335,8 @@ fn a_late_start_with_a_wall_renders() {
     // M4's second fixture day: the window opens at 10:30, after the dentist,
     // and the 3-block budget runs out at 16:30 — mid-window, not at its edge.
     let cfg = config();
-    let tree = tree(&cfg);
     let day = emit_fixture::late_start_plan();
-    let (info, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let (info, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     assert_eq!(info, "10:42");
     let lines: Vec<&str> = body.lines().collect();
     assert!(lines[0].starts_with("09:00  ⏰"), "the wall comes first");
@@ -342,9 +360,8 @@ fn a_home_day_renders() {
     // column reads 3 even for `^t1` (ci 5). It also carries the batch row and
     // the sleep routine.
     let cfg = config();
-    let tree = tree(&cfg);
     let day = emit_fixture::home_day_plan();
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     let lines: Vec<&str> = body.lines().collect();
     assert!(lines[0].starts_with("08:00  3 p3"), "{}", lines[0]);
     assert!(
@@ -379,7 +396,8 @@ fn a_sleep_segment_with_no_item_still_says_sleep() {
         instance: None,
         flags: SegFlags::default(),
     }];
-    let (_, body) = emit::render_plan_section(&day, &tree, &cfg, at(10, 42));
+    let day = with_rows(day);
+    let (_, body) = emit::render_plan_section(&day, &cfg, at(10, 42));
     assert_eq!(body.lines().last(), Some("22:00  ·      sleep 1h"));
     let bar = emit::daybar_cells(&day, None, &tree, &cfg, 96, at(6, 5), at(22, 30));
     assert_eq!(bar.cells[bar.cursor_col].tooltip, "sleep · 1h");

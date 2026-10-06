@@ -7,6 +7,14 @@
 //! `tests/fixtures/plan-basic` on Monday 2026-09-07, planned at 10:42 with
 //! the window 07:00–16:00 and a budget of 6 blocks.
 //!
+//! **Its rows are the kernel's** (the owner's D112, W-47): every day here is
+//! handed to the `plan` section over the same documents [`tree`] parses
+//! ([`docs`]), and the cells it answers are the day's `cells` ([`with_rows`]) —
+//! the Rust builder that drew these rows until W-47 is deleted, and the
+//! snapshots it wrote are the frozen comparand the kernel's rows are held to,
+//! byte for byte. These tests moved from `tm-core/tests/` for that reason:
+//! `tm-core` does not link the kernel.
+//!
 //! Because it is hand-built it cannot catch a *disagreement* between the
 //! planner and the renderer — change a field the planner sets on a `Segment`
 //! and every snapshot here still passes. `tm/tests/emit_planner.rs` covers
@@ -21,6 +29,10 @@
 //! [`log_faithful_plan`].
 
 #![allow(dead_code)]
+
+/// The `plan` section's wire (D112): a hand-built day's rows are the kernel's.
+#[path = "../support/rowwire.rs"]
+pub mod rowwire;
 
 use chrono::{DateTime, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
@@ -52,52 +64,71 @@ pub fn config() -> Config {
 }
 
 /// The `plan-basic` files the §4.3 timeline names, plus the second `Read
-/// ch.6` task (`^t2`) the example's 08:00 row shows.
+/// ch.6` task (`^t2`) the example's 08:00 row shows — what [`tree`] parses and
+/// what the kernel is handed ([`docs`]).
+pub fn texts() -> Vec<(&'static str, &'static str)> {
+    vec![
+        (
+            "month/2026-09.md",
+            "---\nmonth: 2026-09\n---\n# Outcomes\n\
+             - [ ] 5 !1 Lean: through ch.8 of the tutorial          ^O1\n\
+             - [ ] 4 !1 Soundcode: end-to-end demo runs             ^O2\n\
+             - [ ] 2 !3 Winter course selection + admin done        ^O3\n",
+        ),
+        (
+            "week/2026-W37.md",
+            "---\nweek: 2026-W37\n---\n# Milestones\n\
+             - [ ] 5 6b Finish ch.5 exercises        @O1 ^m1\n\
+             - [ ] 4 6b Rollback path passes tests   @O2 ^m2\n\
+             - [ ] 5 3b Read ch.6                    @O1 ^m3\n\
+             \n# Tasks\n\
+             - [ ] 5 1b Read ch.6 §1–2               @m3 ^t1\n\
+             - [ ] 5 1b Read ch.6 §3                 @m3 ^t2\n\
+             - [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3\n\
+             - [ ] 3 1b Claude Code drafts tests     @m2 ^t4\n\
+             - [ ] 3 1b Review the drafts            @m2 after:^t4 ^t5\n",
+        ),
+        (
+            "backlog.md",
+            "# Untied\n\
+             - [ ] 2 30m Insurance claim for the bike  ^a1\n\
+             - [ ] 1 Pick up package  win:2026-09-07T09:00/21:00 dur:20m ^a3\n\
+             - [ ] 2 20m Call the bank about the card  ^p1\n",
+        ),
+        (
+            "routines.md",
+            "- sleep      win:22:00-08:00 dur:8h30m every:day ci:0\n\
+             - lunch      win:11:30-13:30 dur:30m  every:day\n\
+             - dinner     win:17:30-19:30 dur:30m  every:day\n",
+        ),
+        ("optional.md", "- Severance S3E4  dur:1h\n"),
+        (
+            "calendar/2026-W37.md",
+            "- [ ] 3 Meeting w/ host      at:2026-09-07T12:50/13:50 loc:zoom ^g1\n\
+             - [ ] 2 Dentist             at:2026-09-07T09:00/10:20 loc:out ^g5\n",
+        ),
+    ]
+}
+
+/// The fixture tree.
 pub fn tree(cfg: &Config) -> Tree {
-    Tree::from_texts(
-        &[
-            (
-                "month/2026-09.md",
-                "---\nmonth: 2026-09\n---\n# Outcomes\n\
-                 - [ ] 5 !1 Lean: through ch.8 of the tutorial          ^O1\n\
-                 - [ ] 4 !1 Soundcode: end-to-end demo runs             ^O2\n\
-                 - [ ] 2 !3 Winter course selection + admin done        ^O3\n",
-            ),
-            (
-                "week/2026-W37.md",
-                "---\nweek: 2026-W37\n---\n# Milestones\n\
-                 - [ ] 5 6b Finish ch.5 exercises        @O1 ^m1\n\
-                 - [ ] 4 6b Rollback path passes tests   @O2 ^m2\n\
-                 - [ ] 5 3b Read ch.6                    @O1 ^m3\n\
-                 \n# Tasks\n\
-                 - [ ] 5 1b Read ch.6 §1–2               @m3 ^t1\n\
-                 - [ ] 5 1b Read ch.6 §3                 @m3 ^t2\n\
-                 - [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3\n\
-                 - [ ] 3 1b Claude Code drafts tests     @m2 ^t4\n\
-                 - [ ] 3 1b Review the drafts            @m2 after:^t4 ^t5\n",
-            ),
-            (
-                "backlog.md",
-                "# Untied\n\
-                 - [ ] 2 30m Insurance claim for the bike  ^a1\n\
-                 - [ ] 1 Pick up package  win:2026-09-07T09:00/21:00 dur:20m ^a3\n\
-                 - [ ] 2 20m Call the bank about the card  ^p1\n",
-            ),
-            (
-                "routines.md",
-                "- sleep      win:22:00-08:00 dur:8h30m every:day ci:0\n\
-                 - lunch      win:11:30-13:30 dur:30m  every:day\n\
-                 - dinner     win:17:30-19:30 dur:30m  every:day\n",
-            ),
-            ("optional.md", "- Severance S3E4  dur:1h\n"),
-            (
-                "calendar/2026-W37.md",
-                "- [ ] 3 Meeting w/ host      at:2026-09-07T12:50/13:50 loc:zoom ^g1\n\
-                 - [ ] 2 Dentist             at:2026-09-07T09:00/10:20 loc:out ^g5\n",
-            ),
-        ],
-        cfg,
-    )
+    Tree::from_texts(&texts(), cfg)
+}
+
+/// [`texts`] as the kernel's request carries them, one line per element.
+pub fn docs() -> Vec<serde_json::Value> {
+    texts()
+        .iter()
+        .map(|(p, t)| serde_json::json!({"path": p, "lines": t.lines().collect::<Vec<_>>()}))
+        .collect()
+}
+
+/// **`day` with its rows**: the kernel's cells for its segments as they stand
+/// (`rowwire::with_kernel_cells`), written notes crossing as written. A test
+/// that moves, adds or drops a segment calls this again, as the binary asks the
+/// kernel again for every day it plans.
+pub fn with_rows(day: DayPlan) -> DayPlan {
+    rowwire::with_kernel_cells(docs(), day, &config())
 }
 
 /// A `Prio` with just the fields the timeline and the banners read.
@@ -309,7 +340,7 @@ pub fn plan() -> DayPlan {
         Id::new("t5"),
         vec![tm_core::model::Dep::Item(Id::new("t4"))],
     )];
-    day
+    with_rows(day)
 }
 
 /// The same day as the log actually ran it: finished segments at their true
@@ -324,7 +355,7 @@ pub fn log_faithful_plan() -> DayPlan {
     day.segments[2].start = at(9, 8);
     day.segments[2].end = at(9, 32);
     day.segments[3].start = at(9, 32);
-    day
+    with_rows(day)
 }
 
 /// M4's second fixture day: a **late start with a wall**.
@@ -455,7 +486,7 @@ pub fn late_start_plan() -> DayPlan {
         prio("a3", 0, PrioClass::Mandatory),
     ];
     day.diagnostics.underused = vec![(Id::new("t4"), 5, 3)];
-    day
+    with_rows(day)
 }
 
 /// M4's third fixture day: a **home day**.
@@ -609,7 +640,7 @@ pub fn home_day_plan() -> DayPlan {
         prio("a1", 3, PrioClass::Rank),
         prio("a3", 0, PrioClass::Mandatory),
     ];
-    day
+    with_rows(day)
 }
 
 /// The plan as it stood at arrival (§12.1's ghost row): the same morning, but

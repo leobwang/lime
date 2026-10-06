@@ -744,6 +744,13 @@ can_fail
 1 BREAK_PLACES
 1 each_place_is_its_own_row_of_the_table
 1 from_key
+# W-47 track L (README gap 4897): the owner's D112 makes the binary's plan rows the kernel's cells and DELETES the Rust
+# builder those cells were compared with, so the two harness tables of declared holes (`kernel_row_cells.rs`' and
+# `planner_invariants.rs`') and the encoder's fork-cells helper (`support/rowwire.rs`) went with it.  Every citation
+# counted here is an append-only README block of W-24 or W-25 naming them as they stood.
+2 CELL_HOLES
+3 DECLARED_HOLES
+1 fork_cells
 
 # ====================== 4. GRANDFATHERED (README, unadjudicated) ======================
 #
@@ -1444,7 +1451,7 @@ with_minute
 1 day_start
 1 diff_reports_what_moved_and_the_drift
 5 earliest_free
-86 emit_segments
+85 emit_segments
 1 extending_a_block_names_what_it_drops
 7 fork_answers
 2 fork_assigned
@@ -1512,7 +1519,7 @@ with_minute
 6 the_kernel_keeps_the_break_the_overtime_block_and_the_wall_pause
 12 the_kernel_plans_the_day_the_fork_plans
 4 the_kernel_plans_the_nbsp_box_day_as_the_fork_does
-9 the_kernel_reads_every_day_the_fork_planned
+8 the_kernel_reads_every_day_the_fork_planned
 11 the_kernel_reads_the_hosts_worked_minutes
 4 the_kernel_serves_impossible_ties_by_due_date
 7 the_kernel_writes_the_rest_of_step_8_as_the_fork_does

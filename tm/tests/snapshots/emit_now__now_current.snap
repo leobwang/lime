@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_now.rs
+source: tm/tests/emit_now.rs
 expression: out
 ---
 09:20  4 p1 ▶ Exercises 5.3–5.5            @m1  2b×1.6

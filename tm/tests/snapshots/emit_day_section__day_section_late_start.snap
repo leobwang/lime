@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_day_section.rs
+source: tm/tests/emit_day_section.rs
 expression: body
 ---
 09:00  ⏰     Dentist                           1h20m

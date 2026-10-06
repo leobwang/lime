@@ -7,10 +7,19 @@
 //! returns `String`s and geometry. No I/O, no clock — `now` and `wake` are
 //! parameters (§17.2).
 //!
+//! **A row's cells are the kernel's** (the owner's **D112**, W-47): the binary
+//! hands the day the kernel planned back through the `plan` section and gets
+//! §4.3's nine cells for each segment ([`DayPlan::cells`]; `Emit.rowOf` over the
+//! wire, `planwire::read_rows` the one decoder). This module PADS them
+//! ([`render_row`]) and selects among them; it builds none. The Rust builder of
+//! the same cells — a row-cell function and the eight cell functions it called —
+//! was deleted at W-47: the second implementation of one concept D30 Q6 (a)
+//! named and R3 left standing (README gap 4897).
+//!
 //! # API overview
 //!
 //! **Timeline (§4.3)**
-//! * [`render_plan_section`]`(plan, tree, cfg, now) -> (info, body)` — `info`
+//! * [`render_plan_section`]`(plan, cfg, now) -> (info, body)` — `info`
 //!   is the `10:42` of `<!-- tm:plan start 10:42 -->` (pass it to
 //!   `Store::replace_generated_stamped`), `body` is the rows, one per line,
 //!   newline-terminated.
@@ -34,7 +43,7 @@
 //!   ticks, the cursor line and the ghost row beneath.
 //!
 //! **Text surfaces**
-//! * [`render_now`]`(plan, tree, now) -> String` — `tm now`: the current
+//! * [`render_now_with`]`(plan, now) -> String` — `tm now`: the current
 //!   segment with elapsed/remaining, then the next three.
 //! * [`render_diagnostics`]`(diag, tree, cfg) -> Vec<String>` and
 //!   [`render_banners`]`(plan, tree, cfg) -> Vec<String>` (§7.3's "needs 8b,
@@ -73,9 +82,10 @@
 //! where the budget runs out (see [`render_plan_section`]).
 //!
 //! The trailing note is derived when the segment does not carry one: an
-//! under-used slot reads `↓ slot 4, item 3` (from `diagnostics.underused`) and
-//! a HOT item reads `due today` (from the item's effective due or window) —
-//! see [`note_cell`]. An explicit `SegFlags::note` always wins.
+//! under-used slot reads `↓ slot 4, item 3` and a HOT item reads `due today`
+//! (from the item's effective due or window) — the kernel's `Emit.noteCell`,
+//! which `EmitDue.hotCell` tells the deadline for since W-47 (README gap 1102,
+//! closed). A note of the segment's own always wins.
 //!
 //! # Differences from the §4.3 example
 //!
@@ -106,7 +116,6 @@
 //! * A `Wall` segment with no `item` is §9's ad-hoc interruption wall (a
 //!   synced wall always has an id), so it draws hatched red.
 
-use std::collections::HashMap;
 use std::fmt::Write as _;
 
 use chrono::{DateTime, Duration, NaiveDate, Timelike};
@@ -115,7 +124,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::config::Config;
-use crate::model::{Dep, Dur, Id, Shape, WindowRange};
+use crate::model::{Dep, Dur, Id};
 use crate::dayplan::{DayPlan, Diagnostics, SegKind, Segment, fmt_clock};
 use crate::priority::fmt_blocks;
 use crate::tree::Tree;
@@ -133,26 +142,16 @@ pub enum EmitError {
 }
 
 // ---------------------------------------------------------------------------
-// Marks and glyphs (§4.3)
+// The divider's glyph (§4.3)
 // ---------------------------------------------------------------------------
 
-/// `✓` — the segment is finished.
-pub const MARK_DONE: char = '✓';
-/// `▶` — the segment running at `now`.
-pub const MARK_CURRENT: char = '▶';
-/// `⚠` — a `p = 0` item (§7.2).
-pub const MARK_HOT: char = '⚠';
-/// `↓` — the slot is under-used (§8.2 step 5); sits next to the `ci`.
-pub const MARK_UNDERUSED: char = '↓';
-/// `·` — routines, breaks, rest, sleep and lost time.
-pub const GLYPH_ROUTINE: char = '·';
-/// `⏰` — an Interval instance (a wall).
-pub const GLYPH_WALL: char = '⏰';
-/// `○` — an `optional.md` item.
-pub const GLYPH_OPTIONAL: char = '○';
-/// `🌙` — the wind-down.
-pub const GLYPH_WIND_DOWN: char = '🌙';
-/// The window-end divider row's glyph.
+// The row's marks (`✓ ▶ ⚠`, `↓`) and the `ci` column's glyphs (`· ⏰ ○ 🌙`)
+// stood here as eight constants until W-47: they were the Rust builder's
+// vocabulary, and a row's cells are the kernel's since the owner's D112
+// (`Emit.markCell`, `Emit.ciCell`), so nothing on this side writes one.
+
+/// The window-end divider row's glyph — the one line of the day section that
+/// is not a segment's, and so not a kernel cell.
 pub const DIVIDER: &str = "───";
 
 // ---------------------------------------------------------------------------
@@ -535,127 +534,6 @@ fn is_work(kind: &SegKind) -> bool {
     matches!(kind, SegKind::Block | SegKind::Batch(_))
 }
 
-/// Does this row print its `ci` and `pN`, or the kind's glyph?
-///
-/// Budgeted work always does. So does a Window-shaped *task* placed by §8.2
-/// step 2 — §4.3's `15:10  1 p0 ⚠  Pick up package  20m  due today`: it is a
-/// `Routine` segment because that is how the planner places a window, but it
-/// is on §7's scale. The planner marks it by giving the segment an `energy`;
-/// a `routines.md` line (`11:20  ·  lunch 30m`) has none.
-fn shows_scale(seg: &Segment) -> bool {
-    is_work(&seg.kind) || (matches!(seg.kind, SegKind::Routine) && seg.energy.is_some())
-}
-
-/// The glyph a non-work row puts in the `ci` column.
-fn glyph_of(kind: &SegKind) -> char {
-    match kind {
-        SegKind::Wall => GLYPH_WALL,
-        SegKind::Optional => GLYPH_OPTIONAL,
-        SegKind::WindDown => GLYPH_WIND_DOWN,
-        _ => GLYPH_ROUTINE,
-    }
-}
-
-/// The estimate the row shows, as written where possible (§8.5's `2b×1.6`).
-///
-/// 1. the item's own estimate (`est:`'s original, else `est:`, else `dur:`),
-/// 2. else `planned_min` in blocks,
-/// 3. else, for walls and optionals, the segment's own length;
-///
-/// times `×multiplier` when the planner sized the block with one.
-fn est_cell(seg: &Segment, tree: &Tree, cfg: &Config) -> String {
-    let scheduled_window = matches!(seg.kind, SegKind::Routine) && shows_scale(seg);
-    if !scheduled_window
-        && !matches!(
-            seg.kind,
-            SegKind::Block | SegKind::Batch(_) | SegKind::Wall | SegKind::Optional
-        )
-    {
-        return String::new();
-    }
-    let item = seg.item.as_ref().and_then(|id| tree.get(id));
-    let written = item.and_then(|i| i.est_original.or(i.est).or(i.dur));
-    let base = match (&written, seg.flags.planned_min) {
-        (Some(d), _) => d.to_string(),
-        (None, Some(p)) => {
-            let unscaled = match seg.flags.multiplier {
-                Some(m) if m > 0.0 => (f64::from(p) / m).round() as u32,
-                _ => p,
-            };
-            fmt_blocks(unscaled, cfg.block_min())
-        }
-        (None, None) if matches!(seg.kind, SegKind::Wall | SegKind::Optional) || scheduled_window => {
-            fmt_dur(seg.minutes())
-        }
-        (None, None) => String::new(),
-    };
-    if base.is_empty() {
-        return base;
-    }
-    match seg.flags.multiplier {
-        Some(m) if (m - 1.0).abs() >= 0.005 => {
-            format!("{base}×{}", crate::energy::fmt_multiplier(m))
-        }
-        _ => base,
-    }
-}
-
-/// The title cell: the item's title, or the row's own words for the kinds that
-/// carry their duration in the title (`break 20m`, `lunch 30m`).
-///
-/// **Public since W-23** (D30 Q5 (a), README gap 1104). `tm/src/tui/today.rs`
-/// had a second one — seg_title, which said `break`, `rest`, `interruption`
-/// and `batch (3)` where this says `break 20m`, `rest 20m`, the wall's item and
-/// `batch: … (3)`. Two implementations of one concept is the bug (AGENTS §5.3),
-/// and the one the day file prints is the one that survives, so the Now pane
-/// calls this. `Emit.titleCell` is the kernel's statement of the same cell.
-pub fn title_cell(seg: &Segment, tree: &Tree, cfg: &Config) -> String {
-    let planned = seg.flags.planned_min.unwrap_or_else(|| seg.minutes());
-    let name = |fallback: &str| -> String {
-        seg.item
-            .as_ref()
-            .and_then(|id| tree.get(id))
-            .map(|i| i.title.clone())
-            .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| fallback.to_string())
-    };
-    match &seg.kind {
-        SegKind::Batch(ids) => {
-            let names = batch_names(ids, tree);
-            format!("batch: {} ({})", names.join(" · "), names.len())
-        }
-        SegKind::Break => format!("break {}", fmt_dur(planned)),
-        // A window *task* puts its length in the est column instead (§4.3).
-        SegKind::Routine if shows_scale(seg) => name("—"),
-        SegKind::Routine => format!("{} {}", name("routine"), fmt_dur(planned)),
-        SegKind::Sleep => format!("{} {}", name("sleep"), fmt_dur(planned)),
-        SegKind::Rest => format!("rest {}", fmt_dur(planned)),
-        // **D68** (P59): a replayed pause is not lost time; `Emit.titleCell`
-        // says the same of `Emit.pausedRow`.
-        SegKind::Lost if seg.is_pause() => format!("paused {}", fmt_dur(planned)),
-        SegKind::Lost => format!("lost {}", fmt_dur(planned)),
-        // `crate::model::fmt_time`, not a `{:02}:{:02}` of its own — the kernel's
-        // `Emit.titleCell` renders this cell's clock with `Field.renderClock`
-        // like every other, and this was a ninth `HH:MM` hiding inside the one
-        // renderer (AGENTS §5.3, found by `one_renderer.rs`'s clock guard on its
-        // first run, W-23).
-        SegKind::WindDown => format!("wind-down · bed {}", crate::model::fmt_time(cfg.day.bed)),
-        SegKind::Block | SegKind::Optional | SegKind::Wall => name("—"),
-    }
-}
-
-/// The titles a batch names, in the order it was assigned (§7.5).
-fn batch_names(ids: &[Id], tree: &Tree) -> Vec<String> {
-    ids.iter()
-        .map(|id| {
-            tree.get(id)
-                .map(|i| i.title.clone())
-                .filter(|t| !t.is_empty())
-                .unwrap_or_else(|| id.to_string())
-        })
-        .collect()
-}
-
 /// §7.5's `batch: package · insurance · bank (3)`, fitted into `width`
 /// terminal columns.
 ///
@@ -689,16 +567,6 @@ pub fn fit_batch(names: &[String], width: usize) -> String {
     format!("batch: {} ({n})", parts.join(" · "))
 }
 
-/// `@m3` — the item's written parent, not its root.
-fn parent_cell(seg: &Segment, tree: &Tree) -> String {
-    seg.item
-        .as_ref()
-        .and_then(|id| tree.get(id))
-        .and_then(|i| i.parent.as_ref())
-        .map(|r| r.token())
-        .unwrap_or_default()
-}
-
 /// The id a segment is keyed by: its own item, or — for a batch, which has no
 /// single item — its first member, the key it was assigned at (§7.5).
 fn key_id(seg: &Segment) -> Option<&Id> {
@@ -708,106 +576,24 @@ fn key_id(seg: &Segment) -> Option<&Id> {
     }
 }
 
-/// The trailing note column (§4.3's `↓ slot 4, item 3` and `due today`).
+/// **The note cell the kernel wrote for `seg`** — a READER of [`DayPlan::cells`],
+/// never a builder: the Rust builder of a row's cells was deleted at W-47 (the
+/// owner's **D112**: the binary's rows are the kernel's cells). The row is the
+/// one at the segment's position in `plan.segments` (the first equal segment —
+/// two equal segments have equal cells); `""` answers a segment the day does not
+/// hold, or a day nobody asked rows for.
 ///
-/// An explicit [`SegFlags::note`](crate::dayplan::SegFlags::note) wins; without
-/// one the note is derived from the mark the row already carries, so a planner
-/// that only sets `flags.underused` / `flags.hot` still gets the spec's text:
-///
-/// * `↓` → `↓ slot <slot energy>, item <item ci>`, taken from
-///   `plan.diagnostics.underused` (the planner records the exact pair there)
-///   and falling back to the segment's own `energy` and the item's `ci`;
-/// * `⚠` → `overdue` / `due today` / `due tomorrow` / `due Fri` / `due
-///   2026-11-20`, from the item's effective due (§6.4) or, for a window item
-///   such as `win:2026-09-07T09:00/21:00`, the window's last day.
-pub fn note_cell(seg: &Segment, tree: &Tree, plan: &DayPlan) -> String {
-    if let Some(note) = &seg.flags.note {
-        // **D68** (P59): a replayed pause says `paused` in its title cell, so
-        // its note is not printed a second time (`Emit.noteCell`, the same).
-        return if seg.is_pause() { String::new() } else { note.clone() };
-    }
-    if seg.flags.underused {
-        if let Some(note) = underused_note(seg, tree, plan) {
-            return note;
-        }
-    }
-    if seg.flags.hot {
-        if let Some(note) = hot_note(seg, tree, plan) {
-            return note;
-        }
-    }
-    String::new()
-}
-
-/// `↓ slot 4, item 3` for an under-used slot (§8.2 step 5).
-///
-/// **The ROW's slot** (stage 6 W-39 track H, README gap 3660): the diagnostics
-/// entry read is the one for this item AT this row's slot energy. It read the
-/// item's FIRST entry, so an item under-used in two slots of different energy
-/// — `^zah` at a slot 5 and then a slot 4 — was noted `↓ slot 5` on every one
-/// of its rows, where fork `emit_segments` wrote each row's own slot and the
-/// kernel's `Emit.underusedCell` reads the row's own energy. No shipped path
-/// reached it before R3 (the fork writes its notes itself); the seeded batch
-/// found it on 15 rows of 13 of its 128 days, the classes on none.
-fn underused_note(seg: &Segment, tree: &Tree, plan: &DayPlan) -> Option<String> {
-    let id = key_id(seg)?;
-    let (slot, ci) = plan
-        .diagnostics
-        .underused
+/// **Kept under fork `note_cell`'s name and signature for its one remaining
+/// caller**, track C's `tm/tests/support/forkclass.rs`, which compares the
+/// under-used note the binary prints with the fork's sentence; README gap 4952
+/// asks the W-47 Land to read `plan.cells` there and delete this.
+pub fn note_cell(seg: &Segment, _tree: &Tree, plan: &DayPlan) -> String {
+    plan.segments
         .iter()
-        .find(|(k, slot, _)| k == id && Some(*slot) == seg.energy)
-        .map(|(_, slot, ci)| (*slot, *ci))
-        .or_else(|| Some((seg.energy?, tree.get(id)?.ci)))?;
-    Some(format!("{MARK_UNDERUSED} slot {slot}, item {ci}"))
-}
-
-/// `due today` for a HOT item (§7.2), or the day its deadline falls on.
-fn hot_note(seg: &Segment, tree: &Tree, plan: &DayPlan) -> Option<String> {
-    let due = due_date(tree, key_id(seg)?, plan.date)?;
-    Some(if due < plan.date {
-        "overdue".to_string()
-    } else if due == plan.date {
-        "due today".to_string()
-    } else if plan.date.succ_opt() == Some(due) {
-        "due tomorrow".to_string()
-    } else {
-        format!("due {}", when(due, plan.date))
-    })
-}
-
-/// The day an item is due: its effective due (§6.4), else the last day of its
-/// window (a daily window closes on the day being planned).
-fn due_date(tree: &Tree, id: &Id, today: NaiveDate) -> Option<NaiveDate> {
-    if let Some(dt) = tree.effective_due(id) {
-        return Some(dt.date());
-    }
-    match tree.effective_shape(id) {
-        Shape::Window {
-            range: WindowRange::Absolute { to, .. },
-            ..
-        } => Some(to.date()),
-        Shape::Window {
-            range: WindowRange::Daily { .. },
-            ..
-        } => Some(today),
-        _ => None,
-    }
-}
-
-/// The mark column: done beats current beats hot.
-///
-/// `' '` when the row carries none — §4.3's `✓ ▶ ⚠`, and nothing else: the
-/// glyphs (`· ⏰ ○ 🌙`) belong to the `ci` column, not here.
-pub fn mark_of(seg: &Segment) -> char {
-    if seg.flags.done {
-        MARK_DONE
-    } else if seg.flags.current {
-        MARK_CURRENT
-    } else if seg.flags.hot {
-        MARK_HOT
-    } else {
-        ' '
-    }
+        .position(|s| s == seg)
+        .and_then(|i| plan.cells.get(i))
+        .map(|c| c.note.clone())
+        .unwrap_or_default()
 }
 
 /// The `kind` word `tm plan --json` and `tm now --json` give a row:
@@ -843,13 +629,8 @@ pub const PAUSE_KIND: &str = "pause";
 /// whichever comes first. The row is placed before the first segment that
 /// starts at or after that instant, and carries that instant's time with the
 /// window's own end in its text (§4.3 shows `15:10  ───  window ends 16:00`).
-pub fn render_plan_section(
-    plan: &DayPlan,
-    tree: &Tree,
-    cfg: &Config,
-    now: DateTime<Tz>,
-) -> (String, String) {
-    render_plan_section_with(plan, tree, cfg, now, &Layout::default())
+pub fn render_plan_section(plan: &DayPlan, cfg: &Config, now: DateTime<Tz>) -> (String, String) {
+    render_plan_section_with(plan, cfg, now, &Layout::default())
 }
 
 /// **The day's rows, one per segment, in the day's order** — the list every
@@ -867,14 +648,26 @@ pub fn render_plan_section(
 /// `Vec<String>` and not an iterator for exactly that reason — a caller holds
 /// positions into it.
 ///
-/// It is the kernel's `Emit.rowsOf` on the Rust side of the wire: one row per
-/// segment and no other row (`Emit.rowsOf_length`).
-pub fn plan_rows(plan: &DayPlan, tree: &Tree, cfg: &Config, layout: &Layout) -> Vec<String> {
-    let prios: HashMap<&Id, u8> = plan.priorities.iter().map(|(id, p)| (id, p.p)).collect();
-    plan.segments
-        .iter()
-        .map(|seg| render_row(&row_cells(seg, plan, tree, cfg, &prios), layout))
-        .collect()
+/// **Since the owner's D112 (W-47) these are the KERNEL's rows**: `rows[i]` is
+/// [`render_row`] of `plan.cells[i]`, the cells `Emit.rowOf` wrote for
+/// `plan.segments[i]` when the binary handed the day it planned back through
+/// the `plan` section (`planwire::rows_request`, `planwire::read_rows`, which
+/// refuses an answer that is not one row per segment). There is no Rust builder
+/// of a cell; this padder is the only Rust that touches one — D30 Q6 (a), "the
+/// kernel emits cells; one Rust function pads".
+///
+/// **A day nobody asked rows for has none**: the ghost row's days carry
+/// segments and no cells and are drawn in the day bar alone. Handing one here
+/// is a caller's defect, loud in a debug build.
+pub fn plan_rows(plan: &DayPlan, layout: &Layout) -> Vec<String> {
+    debug_assert_eq!(
+        plan.cells.len(),
+        plan.segments.len(),
+        "a day's rows are the kernel's cells, one per segment (D112): {} for {} segments",
+        plan.cells.len(),
+        plan.segments.len()
+    );
+    plan.cells.iter().map(|c| render_row(c, layout)).collect()
 }
 
 /// **One line of the day section, and the segment it renders.**
@@ -902,8 +695,8 @@ pub struct DayLine {
 /// looking for `───` at a fixed offset in the rendered text and counting
 /// around it — a second answer to a question this function settles, and one
 /// that a title containing the glyph at the right column could have moved.
-pub fn day_lines(plan: &DayPlan, tree: &Tree, cfg: &Config, layout: &Layout) -> Vec<DayLine> {
-    let rows = plan_rows(plan, tree, cfg, layout);
+pub fn day_lines(plan: &DayPlan, cfg: &Config, layout: &Layout) -> Vec<DayLine> {
+    let rows = plan_rows(plan, layout);
     let divider_at = divider_instant(plan, cfg);
     let mut out: Vec<DayLine> = Vec::with_capacity(rows.len() + 1);
     let mut divider_done = divider_at.is_none();
@@ -934,13 +727,12 @@ pub fn day_lines(plan: &DayPlan, tree: &Tree, cfg: &Config, layout: &Layout) -> 
 /// [`render_plan_section`] with an explicit title width.
 pub fn render_plan_section_with(
     plan: &DayPlan,
-    tree: &Tree,
     cfg: &Config,
     now: DateTime<Tz>,
     layout: &Layout,
 ) -> (String, String) {
     let mut body = String::new();
-    for line in day_lines(plan, tree, cfg, layout) {
+    for line in day_lines(plan, cfg, layout) {
         body.push_str(&line.text);
         body.push('\n');
     }
@@ -1036,69 +828,6 @@ impl RowCells {
             &self.actual,
             &self.note,
         ]
-    }
-}
-
-/// **The cells of one row, measured by nothing.**
-///
-/// Everything [`render_row`] prints comes from here, and the Lean kernel's
-/// `Emit.rowOf` answers the same nine for the same segment —
-/// `tm/tests/kernel_row_cells.rs` is the machine that compares them.
-pub fn row_cells(
-    seg: &Segment,
-    plan: &DayPlan,
-    tree: &Tree,
-    cfg: &Config,
-    prios: &HashMap<&Id, u8>,
-) -> RowCells {
-    let item = seg.item.as_ref().and_then(|id| tree.get(id));
-    let work = shows_scale(seg);
-
-    let ci_cell = if work {
-        let level = seg
-            .energy
-            .or_else(|| item.map(|i| i.ci))
-            .map(|c| c.to_string())
-            .unwrap_or_else(|| " ".to_string());
-        let down = if seg.flags.underused {
-            MARK_UNDERUSED.to_string()
-        } else {
-            String::new()
-        };
-        format!("{level}{down}")
-    } else {
-        glyph_of(&seg.kind).to_string()
-    };
-
-    let p_cell = if work {
-        key_id(seg)
-            .and_then(|id| prios.get(id))
-            .map(|p| format!("p{p}"))
-            .unwrap_or_default()
-    } else {
-        String::new()
-    };
-
-    let actual = if seg.flags.done && !matches!(seg.kind, SegKind::Rest) {
-        format!("({}m)", seg.minutes())
-    } else {
-        String::new()
-    };
-
-    RowCells {
-        time: fmt_clock(seg.start),
-        ci: ci_cell,
-        p: p_cell,
-        mark: mark_of(seg).to_string(),
-        title: title_cell(seg, tree, cfg),
-        parent: parent_cell(seg, tree),
-        est: est_cell(seg, tree, cfg),
-        actual,
-        note: note_cell(seg, tree, plan),
-        batch_names: match &seg.kind {
-            SegKind::Batch(ids) => Some(batch_names(ids, tree)),
-            _ => None,
-        },
     }
 }
 
@@ -1497,14 +1226,19 @@ fn cell_of(seg: &Segment, idx: usize, tree: &Tree, cfg: &Config, plan: &DayPlan)
         hue,
         brightness,
         style,
-        tooltip: tooltip(seg, tree, cfg, plan),
+        tooltip: tooltip(seg, idx, tree, plan),
         segment: Some(idx),
     }
 }
 
 /// The name a tooltip leads with: the item's own title (the duration follows
-/// it as its own field), or the row's word for the kinds that have no item.
-fn tooltip_name(seg: &Segment, tree: &Tree, cfg: &Config) -> String {
+/// it as its own field), or the row's word for the kinds that have no item —
+/// and for the rest **the row's own title cell, the kernel's** (`plan.cells` at
+/// the segment's position, the owner's D112; it was the Rust `title_cell` until
+/// W-47). A day nobody asked rows for (the ghost row's) carries no cells, and
+/// its item-less rows read `—`, which is what that cell says of a block with no
+/// item.
+fn tooltip_name(seg: &Segment, idx: usize, tree: &Tree, plan: &DayPlan) -> String {
     if let Some(title) = seg
         .item
         .as_ref()
@@ -1520,13 +1254,13 @@ fn tooltip_name(seg: &Segment, tree: &Tree, cfg: &Config) -> String {
         SegKind::Lost => "lost".to_string(),
         SegKind::Sleep => "sleep".to_string(),
         SegKind::WindDown => "wind-down".to_string(),
-        _ => title_cell(seg, tree, cfg),
+        _ => plan.cells.get(idx).map(|c| c.title.clone()).unwrap_or_else(|| "—".to_string()),
     }
 }
 
 /// `title · duration · ci · p · @root` (§12.1's hover).
-fn tooltip(seg: &Segment, tree: &Tree, cfg: &Config, plan: &DayPlan) -> String {
-    let mut parts = vec![tooltip_name(seg, tree, cfg), fmt_dur(seg.minutes())];
+fn tooltip(seg: &Segment, idx: usize, tree: &Tree, plan: &DayPlan) -> String {
+    let mut parts = vec![tooltip_name(seg, idx, tree, plan), fmt_dur(seg.minutes())];
     if let Some(item) = key_id(seg).and_then(|id| tree.get(id)) {
         parts.push(format!("ci{}", item.ci));
     } else if let Some(e) = seg.energy {
@@ -1828,16 +1562,6 @@ fn next_hour(t: DateTime<Tz>) -> DateTime<Tz> {
 // `tm now` (§13)
 // ---------------------------------------------------------------------------
 
-/// `tm now`: the current block with elapsed and remaining time, then the next
-/// three segments (§13).
-///
-/// Uses the default [`Config`] for the two things a row needs from one (the
-/// block unit behind `1b` and the `bed` time in the wind-down row); pass your
-/// own with [`render_now_with`].
-pub fn render_now(plan: &DayPlan, tree: &Tree, now: DateTime<Tz>) -> String {
-    render_now_with(plan, tree, &Config::default(), now)
-}
-
 /// **The positions `tm now` shows** (§13): the segment `now` is inside — the
 /// one the planner marked current, else the first unfinished one containing
 /// `now` — and the next three that have not started.
@@ -1876,7 +1600,12 @@ pub fn now_window(plan: &DayPlan, now: DateTime<Tz>) -> (Option<usize>, Vec<usiz
     (current, next)
 }
 
-/// [`render_now`] with an explicit config.
+/// `tm now`: the current block with elapsed and remaining time, then the next
+/// three segments (§13). It took a [`Config`] and a [`Tree`] until W-47, for the
+/// two things a row needed from them (the block unit behind `1b` and the `bed`
+/// clock in the wind-down row); the rows are the kernel's cells since the
+/// owner's **D112**, so it takes neither, and render_now — this function over
+/// the default config — went with them.
 ///
 /// **A selection over [`plan_rows`], not a second renderer** (D30 Q5 (a),
 /// README gaps **1104** and **1109**). Until W-23 this function had its own
@@ -1896,8 +1625,8 @@ pub fn now_window(plan: &DayPlan, now: DateTime<Tz>) -> (Option<usize>, Vec<usiz
 /// The two lines that are **not** rows stay `tm now`'s own: the `elapsed … left
 /// …` annotation under the current row (indented two spaces, so it cannot be
 /// mistaken for one) and `— nothing running (HH:MM)`.
-pub fn render_now_with(plan: &DayPlan, tree: &Tree, cfg: &Config, now: DateTime<Tz>) -> String {
-    let rows = plan_rows(plan, tree, cfg, &Layout::default());
+pub fn render_now_with(plan: &DayPlan, now: DateTime<Tz>) -> String {
+    let rows = plan_rows(plan, &Layout::default());
     let (current, next) = now_window(plan, now);
     let mut out = String::new();
     match current {

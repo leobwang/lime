@@ -125,6 +125,9 @@ pub fn plan(
         segments,
         diagnostics: Default::default(),
         priorities: Vec::new(),
+        // The ghost row is drawn in the day bar alone: nobody asks the kernel
+        // for the rows of a day it did not plan (D112).
+        cells: Vec::new(),
     })
 }
 

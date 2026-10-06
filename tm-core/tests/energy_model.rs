@@ -7,10 +7,10 @@ use chrono::{DateTime, TimeZone, Weekday};
 use chrono_tz::Tz;
 use tm_core::config::Config;
 use tm_core::energy::{
-    self, duration_multiplier, fmt_planned, planned_minutes, posterior_weight, predict, Features,
+    self, duration_multiplier, planned_minutes, posterior_weight, predict, Features,
     Model, Posterior, DEFAULT_TAG,
 };
-use tm_core::model::{Dur, Loc};
+use tm_core::model::Loc;
 
 const TZ: Tz = Tz::America__Chicago;
 
@@ -355,7 +355,9 @@ fn duration_multipliers_and_planning() {
     assert_eq!(planned_minutes(120, 1.6), 192);
     assert_eq!(planned_minutes(60, 1.0), 60);
     assert_eq!(planned_minutes(45, 1.3), 59); // rounded
-    assert_eq!(fmt_planned(&Dur::blocks(2, 60), 1.6), "2b×1.6");
-    assert_eq!(fmt_planned(&Dur::blocks(1, 60), 1.0), "1b");
-    assert_eq!(fmt_planned(&Dur::canonical(30), 1.25), "30m×1.25");
+    // §4.3's estimate column (`2b×1.6`, `1b` at ×1.0, `30m×1.25`) is the kernel's
+    // `Emit.estCell` since the owner's D112 (W-47): its Rust formatter, fmt_planned,
+    // went with the Rust row builder, and these three expectations are asserted of the
+    // kernel's cell in `tm/tests/kernel_row_cells.rs`
+    // (`the_estimate_column_is_the_written_estimate_times_the_multiplier`).
 }

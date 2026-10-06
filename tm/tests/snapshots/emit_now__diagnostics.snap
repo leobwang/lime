@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_now.rs
+source: tm/tests/emit_now.rs
 expression: "emit::render_diagnostics(&diag, &tree, &cfg).join(\"\\n\")"
 ---
 1 underused (4→3) · 120m ci-5 lost

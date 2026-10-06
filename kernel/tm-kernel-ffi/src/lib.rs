@@ -97,7 +97,7 @@ pub const TRACE_REQUESTS_ENV: &str = "TM_TRACE_KERNEL_REQUESTS";
 /// `+` on the one line it writes per call: a capacity verb traces
 /// `kernel call: capacity+log`.
 ///
-/// The order is fixed (capacity, log, emit, walls, apply, planner, places) so the line is a
+/// The order is fixed (capacity, log, emit, walls, apply, planner, places, rows) so the line is a
 /// stable key, and a request matching nothing is `other` — never the empty
 /// list, which would trace a blank name.
 ///
@@ -135,6 +135,13 @@ fn trace_kinds(request: &str) -> Vec<&'static str> {
     // section of its own, so it is named and never counted as `other`.
     if request.contains(r#""places":"#) {
         kinds.push("places");
+    }
+    // The `plan` section — the rows of the day the binary just planned, asked
+    // back through it (the owner's D112, `planwire::rows_request`). Its first
+    // key is `bed` (serde writes keys in order), which no candidate's nested
+    // `plan` object carries, so the planner request is never counted here.
+    if request.contains(r#""plan":{"bed":"#) {
+        kinds.push("rows");
     }
     if kinds.is_empty() {
         kinds.push("other");

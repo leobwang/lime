@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_daybar.rs
+source: tm/tests/emit_daybar.rs
 expression: "ids.iter().zip(&hues).map(|(i, h)|\nformat!(\"{i} -> {h}\")).collect::<Vec<_>>().join(\"\\n\")"
 ---
 O1 -> 1

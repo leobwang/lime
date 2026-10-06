@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_svg.rs
+source: tm/tests/emit_svg.rs
 expression: out
 ---
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="48" viewBox="0 0 960 48" role="img" aria-label="day bar 2026-09-07">
@@ -9,19 +9,19 @@ expression: out
 </defs>
 <rect x="0" y="0" width="960" height="48" fill="#f7f7f7"/>
 <g class="plan">
-<rect x="76.67" y="0" width="40" height="37.44" fill="#57126c"><title>Claude Code drafts tests · 1h · ci3 · p3 · @O2</title></rect>
-<rect x="116.67" y="0" width="13.33" height="37.44" fill="#d2d2d2"><title>break · 20m</title></rect>
-<rect x="130" y="0" width="40" height="37.44" fill="#57126c"><title>Review the drafts · 1h · ci3 · p3 · @O2</title></rect>
-<rect x="170" y="0" width="40" height="37.44" fill="#30903c"><title>Exercises 5.3–5.5 · 1h · ci4 · p1 · @O1</title></rect>
+<rect x="116.67" y="0" width="53.33" height="37.44" fill="#333844"><title>Dentist · 1h20m · ci2</title></rect>
+<rect x="170" y="0" width="6.67" height="37.44" fill="url(#tm-lost)"><title>lost · 10m</title></rect>
+<rect x="176.67" y="0" width="40" height="37.44" fill="#3cb44b"><title>Read ch.6 §1–2 · 1h · ci5 · p1 · @O1</title></rect>
 <rect x="216.67" y="0" width="20" height="37.44" fill="#8a8a8a"><title>lunch · 30m · ci1</title></rect>
-<rect x="236.67" y="0" width="33.33" height="37.44" fill="#4c601c"><title>batch: Insurance claim for the bike · Call the bank about the card (2) · 50m · ci2 · p3</title></rect>
-<rect x="276.67" y="0" width="40" height="37.44" fill="#3cb44b"><title>Read ch.6 §1–2 · 1h · ci5 · p1 · @O1</title></rect>
-<rect x="316.67" y="0" width="13.33" height="37.44" fill="#d2d2d2"><title>break · 20m</title></rect>
-<rect x="330" y="0" width="40" height="37.44" fill="#3cb44b"><title>Read ch.6 §3 · 1h · ci5 · p1 · @O1</title></rect>
-<rect x="370" y="0" width="13.33" height="37.44" fill="#0d2a31"><title>Pick up package · 20m · ci1 · p0</title></rect>
+<rect x="236.67" y="0" width="33.33" height="37.44" fill="#30903c"><title>Exercises 5.3–5.5 · 50m · ci4 · p1 · @O1</title></rect>
+<rect x="270" y="0" width="40" height="37.44" fill="#333844"><title>Meeting w/ host · 1h · ci3</title></rect>
+<rect x="310" y="0" width="13.33" height="37.44" fill="#d2d2d2"><title>break · 20m</title></rect>
+<rect x="323.33" y="0" width="40" height="37.44" fill="#57126c"><title>Claude Code drafts tests · 1h · ci3 · p3 · @O2</title></rect>
+<rect x="376.67" y="0" width="40" height="37.44" fill="#57126c"><title>Review the drafts · 1h · ci3 · p3 · @O2</title></rect>
+<rect x="416.67" y="0" width="13.33" height="37.44" fill="#0d2a31"><title>Pick up package · 20m · ci1 · p0</title></rect>
 <rect x="456.67" y="0" width="20" height="37.44" fill="#8a8a8a"><title>dinner · 30m · ci1</title></rect>
+<rect x="516.67" y="0" width="40" height="37.44" fill="#7a8a99" stroke="#5b6670" stroke-width="1" stroke-dasharray="2 2"><title>Severance S3E4 · 1h · ci0</title></rect>
 <rect x="616.67" y="0" width="20" height="37.44" fill="#1b1f2a"><title>wind-down · 30m</title></rect>
-<rect x="636.67" y="0" width="323.33" height="37.44" fill="#1b1f2a"><title>sleep · 8h30m · ci0</title></rect>
 </g>
 <g class="ticks" font-family="monospace" font-size="9" fill="#666">
 <line x1="36.67" y1="0" x2="36.67" y2="37.44" stroke="#000" stroke-opacity="0.12" stroke-width="1"/>

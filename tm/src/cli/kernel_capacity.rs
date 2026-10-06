@@ -475,6 +475,12 @@ pub struct PlannerAsk {
     pub want: u32,
     /// Whether the horizon clamped them.
     pub clamped: bool,
+    /// **What the rows of the day it plans are asked over** (the owner's D112):
+    /// the request's own documents and zone, read once with it, so the `plan`
+    /// section renders the day against the tree the planner planned it on.
+    pub rows_docs: Value,
+    /// The zone table the request carried (`tz`).
+    pub rows_tz: Value,
 }
 
 /// **[`planner_request`], with §9.1's what-if when `extend` names one** — `blocks`
@@ -500,7 +506,16 @@ pub fn planner_ask_from(
     // the routines, the what-if, the running block's worked minutes (`day::worked_min`'s reading).
     let planner =
         tm_core::plansection::planner_section(&state, &ctx.replay, ctx.now_tz, ctx.cfg.tz, &ctx.tree, &cands, &ctx.cfg, extend);
-    Ok(PlannerAsk { request: planwire::with_planner(&request, &planner), cands, order, days, want, clamped })
+    Ok(PlannerAsk {
+        request: planwire::with_planner(&request, &planner),
+        cands,
+        order,
+        days,
+        want,
+        clamped,
+        rows_docs: Value::Array(inputs.reads.docs.clone()),
+        rows_tz: inputs.reads.tz_wire.clone(),
+    })
 }
 
 /// **The day the kernel planned** (R3), with what it was ranked by: the
@@ -578,8 +593,26 @@ pub fn read_day(ctx: &Ctx, ask: PlannerAsk) -> Result<Planned, CliError> {
         }
     }
     let read = planwire::DayCtx { tz: ctx.cfg.tz, cands: &ask.cands, prios: &answer.prios };
-    let day = planwire::read_plan(&resp["ok"]["plan"], &read).map_err(|e| {
+    let mut day = planwire::read_plan(&resp["ok"]["plan"], &read).map_err(|e| {
         CliError::Kernel(kernel_bridge::fault_issue(&format!("planner response: {e}"), ""))
+    })?;
+    // **The day's rows are the kernel's cells** (the owner's D112): the day it just
+    // planned goes back through the `plan` section — its segments and priorities as the
+    // kernel wrote them, over the same documents and zone — and the cells it answers are
+    // what every surface pads (`emit::render_row`). `tm check` asks them too, so a row
+    // the kernel cannot render is a fault `tm check` meets where `tm plan` would (README
+    // gap 4711's rule).
+    let rows = planwire::rows_request(
+        &ask.rows_docs,
+        &ask.rows_tz,
+        ctx.block_min(),
+        day.day.date,
+        ctx.cfg.day.bed,
+        &resp["ok"]["plan"],
+    );
+    let (rows_resp, _) = kernel_bridge::call_text(&rows)?;
+    day.day.cells = planwire::read_rows(&rows_resp, &day.day.segments).map_err(|e| {
+        CliError::Kernel(kernel_bridge::fault_issue(&format!("plan rows: {e}"), ""))
     })?;
     Ok(Planned { day: day.day, cands: ask.cands, prios: answer.prios, caps: answer.days, overtime: day.overtime })
 }

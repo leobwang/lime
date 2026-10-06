@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_svg.rs
+source: tm/tests/emit_svg.rs
 expression: out
 ---
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="48" viewBox="0 0 960 48" role="img" aria-label="day bar 2026-09-07">
@@ -15,12 +15,10 @@ expression: out
 <rect x="130" y="0" width="80" height="37.44" fill="#30903c"><title>Exercises 5.3–5.5 · 2h · ci4 · p1 · @O1</title></rect>
 <rect x="210" y="0" width="20" height="37.44" fill="#8a8a8a"><title>lunch · 30m · ci1</title></rect>
 <rect x="230" y="0" width="40" height="37.44" fill="#57126c"><title>Claude Code drafts tests · 1h · ci3 · p3 · @O2</title></rect>
-<rect x="243.33" y="0" width="36.67" height="37.44" fill="url(#tm-interrupt)"><title>— · 55m</title></rect>
 <rect x="270" y="0" width="40" height="37.44" fill="#333844"><title>Meeting w/ host · 1h · ci3</title></rect>
 <rect x="310" y="0" width="13.33" height="37.44" fill="#d2d2d2"><title>break · 20m</title></rect>
 <rect x="323.33" y="0" width="40" height="37.44" fill="#57126c"><title>Review the drafts · 1h · ci3 · p3 · @O2</title></rect>
 <rect x="363.33" y="0" width="13.33" height="37.44" fill="#0d2a31"><title>Pick up package · 20m · ci1 · p0</title></rect>
-<rect x="376.67" y="0" width="9.33" height="37.44" fill="url(#tm-lost)"><title>lost · 14m</title></rect>
 <rect x="456.67" y="0" width="20" height="37.44" fill="#8a8a8a"><title>dinner · 30m · ci1</title></rect>
 <rect x="476.67" y="0" width="40" height="37.44" fill="#7a8a99" stroke="#5b6670" stroke-width="1" stroke-dasharray="2 2"><title>Severance S3E4 · 1h · ci0</title></rect>
 <rect x="616.67" y="0" width="20" height="37.44" fill="#1b1f2a"><title>wind-down · 30m</title></rect>

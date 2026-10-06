@@ -190,16 +190,17 @@ fn the_week_grid_counts_a_typed_pause_as_a_pause() {
     assert_eq!(style(9, Style::Interrupt), 15, "{day}");
 }
 
-/// **The kernel draws the row the host draws**, through the FFI: a Lost row
-/// carrying `^t4` and the `paused` note is `paused 50m` with an empty note on
-/// both sides (`Emit.titleCell`/`Emit.noteCell` against `emit::row_cells`),
-/// and the same row with the `interruption` note is `lost 50m … interruption`
-/// on both. The note the kernel reads is the NAME the kernel's planner writes
+/// **The kernel draws the row the host drew**, through the FFI: a Lost row
+/// carrying `^t4` and the `paused` note is `paused 50m` with an empty note
+/// (`Emit.titleCell`/`Emit.noteCell`), and the same row with the `interruption`
+/// note is `lost 50m … interruption`. Until W-47 the host's side was the Rust
+/// builder's `row_cells`, deleted with the builder (the owner's D112: the
+/// binary's rows ARE these cells); the two pairs below are what it drew, frozen
+/// by value. The note the kernel reads is the NAME its planner writes
 /// (`Note.paused`), so the host's prose note is set beside it by hand.
 #[test]
 fn the_kernel_and_the_host_draw_a_paused_row_alike() {
     let cfg = tui_common::config();
-    let tree = tui_common::tree(&cfg);
     let base = tui_common::day_plan(&cfg);
     let proto = base
         .segments
@@ -225,25 +226,24 @@ fn the_kernel_and_the_host_draw_a_paused_row_alike() {
         seg.end = seg.start + Duration::minutes(50);
         plan.segments.push(seg);
     }
-    let fork = rowwire::fork_cells(&plan, &tree, &cfg);
+    // The Rust builder's `(title, note)` for the two rows, frozen at W-47 (D112).
+    let fork = [("paused 50m", ""), ("lost 50m", "interruption")];
     let mut req = rowwire::request(docs(), &plan, &cfg);
     // The rows wire sends a paused row's note NAME itself and no other note (W-38 land step,
     // README gap 3436) -- what the generated cell arm in `planner_invariants.rs` relies on.
-    assert_eq!(req["plan"]["segments"][0]["note"], json!({"name": "paused"}));
+    assert_eq!(req["plan"]["segments"][0]["note"], json!({"note": "paused"}));
     assert_eq!(req["plan"]["segments"][1]["note"], Value::Null);
     for (i, (_, name)) in notes.iter().enumerate() {
-        req["plan"]["segments"][i]["note"] = json!({"name": name});
+        req["plan"]["segments"][i]["note"] = json!({"note": name});
     }
     let raw = tm_kernel_ffi::call(&req.to_string()).expect("kernel call");
     let resp: Value = serde_json::from_str(&raw).expect("json");
     let rows = resp["ok"]["plan"]["rows"].as_array().unwrap_or_else(|| panic!("no rows: {raw}"));
     assert_eq!(rows.len(), 2, "{raw}");
-    for (i, f) in fork.iter().enumerate() {
+    for (i, (title, note)) in fork.iter().enumerate() {
         let k = |c: &str| rows[i][c].as_str().unwrap_or_default().to_string();
-        assert_eq!((k("title"), k("note")), (f.title.clone(), f.note.clone()), "row {i}: {raw}");
+        assert_eq!((k("title"), k("note")), (title.to_string(), note.to_string()), "row {i}: {raw}");
     }
-    assert_eq!((fork[0].title.as_str(), fork[0].note.as_str()), ("paused 50m", ""));
-    assert_eq!((fork[1].title.as_str(), fork[1].note.as_str()), ("lost 50m", "interruption"));
 }
 
 /// **The day bar draws the pause as a pause** — the surface `tm tui` and

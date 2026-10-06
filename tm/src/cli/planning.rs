@@ -163,8 +163,8 @@ pub fn build_ranked(ctx: &Ctx, allow_home: bool) -> Result<(DayPlan, Vec<Candida
 }
 
 /// The segments of a plan as JSON rows.
-pub fn seg_out(plan: &DayPlan, ctx: &Ctx) -> Vec<SegOut> {
-    let rows = render::rows(plan, &ctx.tree, &ctx.cfg);
+pub fn seg_out(plan: &DayPlan) -> Vec<SegOut> {
+    let rows = render::rows(plan);
     plan.segments
         .iter()
         .zip(rows)
@@ -278,7 +278,7 @@ pub fn write_plan(ctx: &mut Ctx, plan: &DayPlan, prios: &[Prio]) -> Result<Vec<S
     let previous = ctx.last_plan();
     let mut wrote = Vec::new();
 
-    let body = render::timeline(plan, &ctx.tree, &ctx.cfg, ctx.now_tz);
+    let body = render::timeline(plan, &ctx.cfg, ctx.now_tz);
     // §4.3: a day file the CLI creates gets the whole skeleton, not just the
     // front matter — `# Pinned`, `## Log` and `## Notes` are the human half.
     let day_path = super::dayfile::ensure(ctx, plan.date)?;
@@ -358,7 +358,7 @@ pub fn plan(g: &Globals, args: &super::PlanArgs) -> Result<i32, CliError> {
         budget_blocks: plan.budget_blocks,
         blocks_done: ctx.replay.blocks_done(ctx.today),
         hash: plan.hash(),
-        segments: seg_out(&plan, &ctx),
+        segments: seg_out(&plan),
         diagnostics: plan.diagnostics.clone(),
         priorities: prios.clone(),
         wrote,
@@ -372,7 +372,7 @@ pub fn plan(g: &Globals, args: &super::PlanArgs) -> Result<i32, CliError> {
             if let Some(e) = &explain {
                 return e.clone();
             }
-            let body = render::timeline(&plan, &ctx.tree, &ctx.cfg, ctx.now_tz);
+            let body = render::timeline(&plan, &ctx.cfg, ctx.now_tz);
             s.push_str(&format!(
                 "{} · window {}–{} · budget {} blocks\n",
                 plan.date, out.window[0], out.window[1], plan.budget_blocks
@@ -461,7 +461,7 @@ pub struct NowOut {
 pub fn now(g: &Globals) -> Result<i32, CliError> {
     let ctx = Ctx::load(g, true)?;
     let (plan, _) = build(&ctx, false)?;
-    let segs = seg_out(&plan, &ctx);
+    let segs = seg_out(&plan);
     // **One selection** (W-23, README gap 1104). `tm now`'s text and
     // `tm now --json` each had their own answer to "the current block and the
     // next three" and the two disagreed: this one took the first segment
@@ -535,12 +535,7 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
             }
             // §13: the current block and the next three, rendered by the
             // §4.3 renderer so `tm now` and the day file agree.
-            s.push_str(&tm_core::emit::render_now_with(
-                &plan,
-                &ctx.tree,
-                &ctx.cfg,
-                ctx.now_tz,
-            ));
+            s.push_str(&tm_core::emit::render_now_with(&plan, ctx.now_tz));
             if !s.ends_with('\n') {
                 s.push('\n');
             }

@@ -1,5 +1,6 @@
-//! **The kernel's cells against the shipped bytes** (README gaps **1105** and
-//! **1318**, stage 6 W-24).
+//! **The kernel's cells against the bytes the Rust builder wrote** (README gaps
+//! **1105** and **1318**, stage 6 W-24; restated at W-47 for the owner's
+//! **D112**).
 //!
 //! `Emit.lean` landed at W-22 and had **no caller**. Its nineteen theorems said
 //! the cells were consistent with themselves; the claim that they were the
@@ -8,221 +9,227 @@
 //! consistent with themselves and checked against the fork by reading"* — and
 //! this file is the machine that stops it being true.
 //!
-//! # What it does
+//! # What it does since D112
 //!
-//! One fixture day (`tui_common`'s hand-built §4.3 timeline over the
-//! `plan-basic` tree), rendered twice:
+//! The owner's D112 made the kernel's cells the rows the binary prints (the
+//! binary asks the `plan` section for them right after each planner call,
+//! `planwire::rows_request`, into `DayPlan::cells`) and deleted the Rust builder
+//! (`emit::row_cells` and its cell functions) these cells used to be compared
+//! with. The comparison did not go with it: the builder's cells for this file's
+//! days were frozen **by value** at `49186d7`, the commit before the deletion,
+//! by a scratch run of `emit::row_cells` (README's W-47 track L block), and the
+//! kernel's cells are held to them here — every cell, every row, **no hole**.
 //!
-//! * **Rust**: [`emit::row_cells`] over the `Tree` the fork's parser built, then
-//!   [`emit::render_row`] — the bytes the day file gets, which is
-//!   [`emit::plan_rows`] itself.
-//! * **Lean**: the same segments over the wire's new `plan` section, answered by
-//!   `EmitWire.rowsJson` → `Emit.rowOf`, against the kernel's **own** parse of
-//!   the same markdown, then fed to the same [`emit::render_row`].
+//! * The fixture day is `tui_common`'s hand-built §4.3 timeline over the
+//!   `plan-basic` tree; the kernel answers its segments through the `plan`
+//!   section against its **own** parse of the same markdown, and is never told
+//!   a title, a `ci`, an estimate or a parent: those four cells are the kernel's
+//!   reading of one file against what the fork's parser read of it.
+//! * **The two holes this file declared are closed at their cause**: gap
+//!   **1102** (the `⚠` row's `due today`, `EmitDue.hotCell` over the plan's
+//!   effective shape) and gap **1101** (`2b×1.6` on a line carrying `est:1b`,
+//!   `Emit.itemEstOf` reading the leading estimate first). Both are §4.3's own
+//!   cells; [`the_two_closed_holes_are_the_specs_own_cells`] names them.
 //!
-//! The two cell lists are compared cell by cell, and the padded rows byte for
-//! byte. The Rust never tells the kernel a title, a `ci`, an estimate or a
-//! parent: those four cells are the two parsers' independent answers about one
-//! file, which is the comparison gap 1105 asks for and the one a reader cannot
-//! do.
+//! # What it cannot see
 //!
-//! # What it cannot see, and the one row it is allowed to differ on
-//!
-//! * **The `⚠` note is `Emit.noteCell`'s declared hole** (README gap **1102**):
-//!   `note_cell`'s hot branch needs the fork's `effective_due`, of which this
-//!   kernel has no view, so the kernel answers `[]` where the fork says `due
-//!   today`. [`EXPECTED_NOTE_HOLES`] names the rows this is allowed on **by
-//!   their text**, the count is asserted, and every other cell of those rows is
-//!   still compared exactly — so the hole cannot widen quietly and a row that
-//!   stops differing fails this test.
-//! * **A note the fork's planner wrote as prose cannot cross.** `SegFlags::note`
-//!   is a `String` and `Planner.Note` is eleven names with their arguments
-//!   (D30 Q6: the kernel holds the name, `Emit.noteText` holds the words), so a
-//!   host whose planner produced text has nothing to send. This test therefore
-//!   sends `note: null` and the kernel **derives** the note column; that is why
-//!   the `↓` row below is a real comparison and the `⚠` row is not.
-//!   [`the_kernel_writes_the_forks_note_sentences`] covers the eleven names the
-//!   other way, and says what *it* cannot see.
-//! * It is a **library-level** comparison of one day: no binary is driven, so
-//!   nothing here sees the CLI, the store or the day file's framing. That is
-//!   `one_renderer.rs`'s job and it still does it.
-//! * The fixture day has four of the ten kinds, so
-//!   [`the_kernel_and_the_fork_agree_on_a_batch_row`] and
-//!   [`the_kernel_and_the_fork_agree_on_every_kind_of_row`] build the rest.
-//!   `Ghost` is the eleventh kind and is the kernel's alone — the fork carries
+//! * **A note the planner wrote as prose cannot cross the `plan` section**:
+//!   `SegFlags::note` is a `String` and `Planner.Note` is eleven names with their
+//!   arguments, so the fixture day sends `note: null` and the kernel **derives**
+//!   the note column. [`the_kernel_writes_the_forks_note_sentences`] covers the
+//!   eleven names the other way, and says what *it* cannot see.
+//! * It is a **library-level** comparison of a few days: no binary is driven.
+//!   `one_renderer.rs` drives the surfaces, and `planner_invariants.rs` holds the
+//!   planner's own cells to the `plan` section's on every generated day.
+//! * A frozen comparand is a fixed list: it finds nothing about a day it does
+//!   not hold. The measurement over generated days that no shipped row moved at
+//!   the deletion is the README's, and was made before the builder went.
+//! * `Ghost` is the eleventh kind and is the kernel's alone — the fork carries
 //!   the ghost row as a `SegFlags` bit — so no fork cell exists to compare it
 //!   against and it is **not covered** (README gap 1322).
 
 mod tui_common;
 
-#[allow(dead_code)]
-#[path = "support/rowwire.rs"]
-mod rowwire;
-
-use std::fs;
-
 use chrono::Datelike;
 use serde_json::{json, Value};
 
-use tm_core::emit::{self, Layout};
+use tm_core::emit::{self, Layout, RowCells};
 use tm_core::model::Id;
 use tm_core::dayplan::{self, DayPlan, SegKind};
 
-/// **Every cell the kernel is allowed to disagree with the fork about on this
-/// day, with the gap that records why** — `(row title, cell, fork, kernel, gap)`.
-///
-/// Two, both declared in `Emit.lean`'s own header before this file existed:
-///
-/// * **gap 1102** — `note_cell`'s `⚠` branch needs the fork's `effective_due`,
-///   of which this kernel has no view, so the kernel answers nothing where the
-///   fork says `due today`.
-/// * **gap 1101** — the fork's `est_cell` reads `est_original` first and this
-///   kernel has **one** estimate view, `Core.est`, which is `est:` then the
-///   leading estimate. The fixture's `- [>] 4 2b Exercises 5.3–5.5 @m1 est:1b
-///   ^t3` carries both, so the two readers pick different numbers. Inventing a
-///   second view of the field to agree would be AGENTS §5.3's own defect.
-///
-/// Every entry must fire **exactly once**: a hole that closes fails this test
-/// as loudly as a hole that widens, so neither can happen quietly.
-const DECLARED_HOLES: &[(&str, &str, &str, &str, u32)] = &[
-    ("Pick up package", "note", "due today", "", 1102),
-    ("Exercises 5.3–5.5", "est", "2b×1.6", "1b×1.6", 1101),
+/// **The `plan` section's wire lives in `support/rowwire.rs`**, which
+/// `tui_common` carries: one encoder and, since D112, the binary's own decoder
+/// (`planwire::row_cells_of`).
+use tui_common::rowwire::{differences, kernel_cells, kernel_sec, request};
+
+// ---------------------------------------------------------------------------
+// The Rust builder's cells, frozen at 49186d7 (the owner's D112 deleted it)
+// ---------------------------------------------------------------------------
+
+/// The fixture day's nine cells per row, as `emit::row_cells` wrote them.
+const FROZEN_DAY: [[&str; 9]; 13] = [
+    ["07:00", "5", "p1", "✓", "Read ch.6 §1–2", "@m3", "1b", "(67m)", ""],
+    ["08:07", "5", "p1", "✓", "Read ch.6", "@O1", "3b", "(61m)", ""],
+    ["09:08", "·", "", "✓", "break 20m", "", "", "(24m)", ""],
+    ["09:32", "4", "p1", "▶", "Exercises 5.3–5.5", "@m1", "2b×1.6", "", ""],
+    ["11:20", "·", "", " ", "lunch 30m", "", "", "", ""],
+    ["11:50", "4↓", "p3", " ", "Claude Code drafts tests", "@m2", "1b", "", "↓ slot 4, item 3"],
+    ["12:50", "⏰", "", " ", "Meeting w/ host", "", "1h", "", ""],
+    ["13:50", "·", "", " ", "break 20m", "", "", "", ""],
+    ["14:10", "3", "p3", " ", "Review the drafts", "@m2", "1b", "", ""],
+    ["15:10", "1", "p0", "⚠", "Pick up package", "", "20m", "", "due today"],
+    ["17:30", "·", "", " ", "dinner 30m", "", "", "", ""],
+    ["18:00", "○", "", " ", "Severance S3E4", "", "1h", "", ""],
+    ["21:30", "🌙", "", " ", "wind-down · bed 22:00", "", "", "", ""],
 ];
-/// **The `plan` section's wire lives in `support/rowwire.rs` since stage 6
-/// W-25 (step R2)**, because `tm/tests/planner_invariants.rs` now sends its
-/// generated days through the same encoder. Nothing about it changed in the
-/// move; what changed is that there is one of it (AGENTS §5.3).
-use rowwire::{differences, fork_cells, kernel_cells, kernel_sec, request};
+/// The same rows padded at the default layout, as `emit::plan_rows` wrote them.
+const FROZEN_DAY_ROWS: [&str; 13] = [
+    "07:00  5 p1 ✓ Read ch.6 §1–2               @m3  1b  (67m)",
+    "08:07  5 p1 ✓ Read ch.6                    @O1  3b  (61m)",
+    "09:08  ·    ✓ break 20m                             (24m)",
+    "09:32  4 p1 ▶ Exercises 5.3–5.5            @m1  2b×1.6",
+    "11:20  ·      lunch 30m",
+    "11:50  4↓p3   Claude Code drafts tests     @m2  1b     ↓ slot 4, item 3",
+    "12:50  ⏰     Meeting w/ host                   1h",
+    "13:50  ·      break 20m",
+    "14:10  3 p3   Review the drafts            @m2  1b",
+    "15:10  1 p0 ⚠ Pick up package                   20m     due today",
+    "17:30  ·      dinner 30m",
+    "18:00  ○      Severance S3E4                    1h",
+    "21:30  🌙     wind-down · bed 22:00",
+];
+/// The batch row of [`the_kernel_and_the_fork_agree_on_a_batch_row`].
+const FROZEN_BATCH: [&str; 9] = ["07:00", "5", "p3", "✓", "batch: Claude Code drafts tests · Review the drafts · Pick up package (3)", "", "1b", "(67m)", ""];
+const FROZEN_BATCH_MEMBERS: [&str; 3] = ["Claude Code drafts tests", "Review the drafts", "Pick up package"];
+/// Its padded bytes at three title widths, the narrower two forcing `fit_batch` to cut.
+const FROZEN_BATCH_ROWS: [(usize, &str); 3] = [(27, "07:00  5 p3 ✓ batch: Cla… · Re… · Pi… (3)       1b  (67m)"), (24, "07:00  5 p3 ✓ batch: Cl… · R… · P… (3)       1b  (67m)"), (18, "07:00  5 p3 ✓ batch: Claude Cod…       1b  (67m)")];
+/// One row of every kind, with and without an item, of
+/// [`the_kernel_and_the_fork_agree_on_every_kind_of_row`].
+const FROZEN_KINDS: [[&str; 9]; 20] = [
+    ["07:00", "5", "p3", " ", "Claude Code drafts tests", "@m2", "1b", "", ""],
+    ["07:00", "5", "", " ", "—", "", "1b", "", ""],
+    ["07:00", "5", "p3", " ", "batch: Claude Code drafts tests · Review the drafts (2)", "@m2", "1b", "", ""],
+    ["07:00", "5", "p3", " ", "batch: Claude Code drafts tests · Review the drafts (2)", "", "1b", "", ""],
+    ["07:00", "·", "", " ", "break 1h", "@m2", "", "", ""],
+    ["07:00", "·", "", " ", "break 1h", "", "", "", ""],
+    ["07:00", "5", "p3", " ", "Claude Code drafts tests", "@m2", "1b", "", ""],
+    ["07:00", "5", "", " ", "—", "", "1b", "", ""],
+    ["07:00", "⏰", "", " ", "Claude Code drafts tests", "@m2", "1b", "", ""],
+    ["07:00", "⏰", "", " ", "—", "", "1b", "", ""],
+    ["07:00", "·", "", " ", "rest 1h", "@m2", "", "", ""],
+    ["07:00", "·", "", " ", "rest 1h", "", "", "", ""],
+    ["07:00", "○", "", " ", "Claude Code drafts tests", "@m2", "1b", "", ""],
+    ["07:00", "○", "", " ", "—", "", "1b", "", ""],
+    ["07:00", "🌙", "", " ", "wind-down · bed 22:00", "@m2", "", "", ""],
+    ["07:00", "🌙", "", " ", "wind-down · bed 22:00", "", "", "", ""],
+    ["07:00", "·", "", " ", "Claude Code drafts tests 1h", "@m2", "", "", ""],
+    ["07:00", "·", "", " ", "sleep 1h", "", "", "", ""],
+    ["07:00", "·", "", " ", "lost 1h", "@m2", "", "", ""],
+    ["07:00", "·", "", " ", "lost 1h", "", "", "", ""],
+];
+/// The members of [`FROZEN_KINDS`]' batch rows (2 and 3), `None` on every other.
+const FROZEN_KINDS_MEMBERS: [Option<[&str; 2]>; 20] = [
+    None,
+    None,
+    Some(["Claude Code drafts tests", "Review the drafts"]),
+    Some(["Claude Code drafts tests", "Review the drafts"]),
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+];
+
+/// A frozen row as [`RowCells`].
+fn frozen(cells: &[&str; 9], members: Option<&[&str]>) -> RowCells {
+    let s = |i: usize| cells[i].to_string();
+    RowCells {
+        time: s(0),
+        ci: s(1),
+        p: s(2),
+        mark: s(3),
+        title: s(4),
+        parent: s(5),
+        est: s(6),
+        actual: s(7),
+        note: s(8),
+        batch_names: members.map(|m| m.iter().map(|x| x.to_string()).collect()),
+    }
+}
 
 /// The fixture's documents, as the wire carries them.
 fn docs() -> Vec<Value> {
-    let dir = tui_common::fixture_dir();
-    let files = [
-        "month/2026-09.md",
-        "week/2026-W37.md",
-        "backlog.md",
-        "routines.md",
-        "optional.md",
-        "calendar/2026-W37.md",
-        "day/2026-09-07.md",
-        "inbox.md",
-    ];
-    files
-        .iter()
-        .filter_map(|rel| {
-            fs::read_to_string(dir.join(rel))
-                .ok()
-                .map(|t| json!({"path": rel, "lines": t.lines().collect::<Vec<_>>()}))
-        })
-        .collect()
+    tui_common::docs_json()
 }
-
 
 // ---------------------------------------------------------------------------
 // The comparisons
 // ---------------------------------------------------------------------------
 
-/// **Every cell of every row, both ways, on one day.**
+/// **Every cell of every row, on one day: the kernel's against the Rust
+/// builder's, frozen.**
 ///
 /// The kernel is not told a single one of the four cells it has to read the
 /// plan for — `title`, `ci` (through the item), `est` and `parent` — so an
 /// agreement here is two parsers agreeing about one tree, not a copy of an
-/// answer.
+/// answer. No cell is excused: until D112 two were (gaps 1101 and 1102), and
+/// both are closed at their cause.
 #[test]
 fn the_kernel_and_the_fork_write_the_same_cells() {
     let cfg = tui_common::config();
-    let tree = tui_common::tree(&cfg);
     let plan = tui_common::day_plan(&cfg);
-
-    let fork = fork_cells(&plan, &tree, &cfg);
     let lean = kernel_cells(docs(), &plan, &cfg);
     assert_eq!(
         lean.len(),
-        fork.len(),
-        "the kernel answered {} rows for {} segments (`Emit.rowsOf_length`'s wire half)",
+        FROZEN_DAY.len(),
+        "the kernel answered {} rows for the {} the builder wrote (`Emit.rowsOf_length`'s wire half)",
         lean.len(),
-        fork.len()
+        FROZEN_DAY.len()
     );
-    assert!(fork.len() > 10, "a day worth comparing: {}", fork.len());
-
-    let mut fired = vec![0usize; DECLARED_HOLES.len()];
-    for (i, (f, k)) in fork.iter().zip(&lean).enumerate() {
-        for (cell, a, b) in differences(f, k) {
-            let hit = DECLARED_HOLES.iter().position(|(title, c, fk, kn, _)| {
-                *title == f.title && *c == cell && *fk == a && *kn == b
-            });
-            match hit {
-                Some(n) => fired[n] += 1,
-                None => panic!(
-                    "row {i} (`{}`) differs in `{cell}` and no README gap declares it:\n  \
-                     fork: {a:?}\n  kernel: {b:?}\n  {f:#?}\n  {k:#?}",
-                    f.title
-                ),
-            }
-        }
-    }
-    for (n, (title, cell, _, _, gap)) in DECLARED_HOLES.iter().enumerate() {
+    assert!(lean.len() > 10, "a day worth comparing: {}", lean.len());
+    for (i, (want, k)) in FROZEN_DAY.iter().zip(&lean).enumerate() {
         assert_eq!(
-            fired[n], 1,
-            "README gap {gap} is one cell of this day (`{title}`'s `{cell}`) and it fired \
-             {} times. If the gap CLOSED, delete its row from DECLARED_HOLES.",
-            fired[n]
+            differences(&frozen(want, None), k),
+            vec![],
+            "row {i} (`{}`): the kernel's cells are not the ones the Rust builder wrote",
+            want[4]
         );
     }
+    // And they are the day's own rows, which `tui_common::day_plan` asked the
+    // kernel for through the same door.
+    assert_eq!(plan.cells, lean, "the fixture day's rows are not the door's answer");
 }
 
-/// **And the bytes.** The kernel's cells, padded by the one padder, are the day
-/// file's lines.
+/// **And the bytes.** The kernel's cells, padded by the one padder, are the
+/// rows the Rust builder's day file held — and `emit::plan_rows`, which every
+/// surface prints since D112, is exactly them.
 ///
-/// This is the sentence gap 1105 says has never been checked: *"no byte
-/// comparison between the two has ever been run"*. The two [`DECLARED_HOLES`]
-/// cells are substituted before padding and **nothing else is**, so on every
-/// other row every byte the file gets came out of the kernel.
+/// This is the sentence gap 1105 said had never been checked: *"no byte
+/// comparison between the two has ever been run"*. It runs on every row, and
+/// since D112 nothing is substituted before padding.
 #[test]
 fn the_kernels_cells_padded_are_the_day_files_bytes() {
     let cfg = tui_common::config();
-    let tree = tui_common::tree(&cfg);
     let plan = tui_common::day_plan(&cfg);
     let layout = Layout::default();
-
-    let shipped = emit::plan_rows(&plan, &tree, &cfg, &layout);
-    let fork = fork_cells(&plan, &tree, &cfg);
     let lean = kernel_cells(docs(), &plan, &cfg);
-    assert_eq!(shipped.len(), lean.len());
-
-    let mut patched = 0usize;
-    let mut untouched = 0usize;
-    for (i, ((want, cells), f)) in shipped.iter().zip(&lean).zip(&fork).enumerate() {
-        let mut cells = cells.clone();
-        let mut here = 0usize;
-        for (title, cell, fk, _, _) in DECLARED_HOLES {
-            if *title != f.title {
-                continue;
-            }
-            match *cell {
-                "note" => cells.note = (*fk).to_string(),
-                "est" => cells.est = (*fk).to_string(),
-                other => panic!("DECLARED_HOLES names a cell this test cannot patch: {other}"),
-            }
-            here += 1;
-        }
-        if here == 0 {
-            untouched += 1;
-        } else {
-            patched += here;
-        }
-        assert_eq!(
-            &emit::render_row(&cells, &layout),
-            want,
-            "row {i}'s bytes are not the day file's"
-        );
+    let shipped = emit::plan_rows(&plan, &layout);
+    assert_eq!(shipped.len(), FROZEN_DAY_ROWS.len());
+    for (i, ((want, cells), row)) in FROZEN_DAY_ROWS.iter().zip(&lean).zip(&shipped).enumerate() {
+        assert_eq!(&emit::render_row(cells, &layout), want, "row {i}'s bytes are not the day file's");
+        assert_eq!(row, want, "row {i}: `plan_rows` printed something else");
     }
-    assert_eq!(patched, DECLARED_HOLES.len(), "the declared holes, and no others");
-    assert!(
-        untouched >= shipped.len() - DECLARED_HOLES.len(),
-        "more rows were patched than there are declared holes"
-    );
-
     // And the padder really is doing work: at least one row was padded wider
     // than its cells, so `render_row` is not an identity this test could not
     // tell from one.
@@ -232,14 +239,154 @@ fn the_kernels_cells_padded_are_the_day_files_bytes() {
     );
 }
 
+/// **The two holes this file declared, closed at their cause** (the owner's
+/// D112): §4.3's own day prints `15:10  1 p0 ⚠  Pick up package  20m  due
+/// today` and `09:20  4 p1 ▶ Exercises 5.3–5.5  @m1  2b×1.6` for a line
+/// carrying both a leading `2b` and `est:1b`. The kernel answered `""` (README
+/// gap 1102: no view of the deadline) and `1b×1.6` (gap 1101: `est:` first)
+/// until W-47; a hole in the cells the binary prints is a moved byte on every
+/// surface, so both were fixed rather than kept.
+#[test]
+fn the_two_closed_holes_are_the_specs_own_cells() {
+    let cfg = tui_common::config();
+    let plan = tui_common::day_plan(&cfg);
+    let lean = kernel_cells(docs(), &plan, &cfg);
+    let row = |title: &str| lean.iter().find(|c| c.title == title).unwrap_or_else(|| panic!("no `{title}` row"));
+    let hot = row("Pick up package");
+    assert_eq!((hot.mark.as_str(), hot.note.as_str()), ("⚠", "due today"), "gap 1102: {hot:?}");
+    let t3 = row("Exercises 5.3–5.5");
+    assert_eq!(t3.est, "2b×1.6", "gap 1101: the leading estimate, as written: {t3:?}");
+}
+
+/// One block of the fixture tree's item `id`, every mark and note cleared — the
+/// shape [`the_kernel_and_the_fork_agree_on_every_kind_of_row`] places.
+fn plain_block(base: &DayPlan, id: &str) -> tm_core::dayplan::Segment {
+    let mut seg = base
+        .segments
+        .iter()
+        .find(|s| matches!(s.kind, SegKind::Block))
+        .expect("a block")
+        .clone();
+    seg.item = Some(Id::new(id));
+    seg.instance = None;
+    seg.flags.note = None;
+    seg.flags.done = false;
+    seg.flags.current = false;
+    seg.flags.hot = false;
+    seg.flags.underused = false;
+    seg.flags.multiplier = None;
+    seg
+}
+
+/// **Parity P109, its first clause: a multiplier at a tie is written half-up**
+/// (the owner's D112; README gap 1103). `Emit.multCell` rounds the multiplier
+/// to two places with `Arith.halfUpQ`, the kernel's one rounding, so `1.125`
+/// is `×1.13`; the deleted Rust builder wrote `energy::fmt_multiplier`, a
+/// `{:.2}` that rounds the double half to even, `×1.12`. The fork's side is
+/// asked of that function live, not transcribed — it is still the model
+/// tables' formatter. Every row the switch census found differing (128 of
+/// 3,095 over three runs) was this cell at this tie.
+#[test]
+fn a_multiplier_at_a_tie_is_written_half_up_p109() {
+    let cfg = tui_common::config();
+    let base = tui_common::day_plan(&cfg);
+    let mut seg = plain_block(&base, "t4");
+    seg.flags.multiplier = Some(1.125);
+    seg.flags.planned_min = Some(68);
+    let mut plan = DayPlan::empty(base.date, base.window, base.budget_blocks);
+    plan.priorities = base.priorities.clone();
+    plan.segments = vec![seg];
+    let lean = kernel_cells(docs(), &plan, &cfg);
+    assert_eq!(lean[0].est, "1b×1.13", "the kernel's cell: {:?}", lean[0]);
+    let fork = format!("1b×{}", tm_core::energy::fmt_multiplier(1.125));
+    assert_eq!(fork, "1b×1.12", "the formatter the Rust builder called");
+    // And a multiplier that is not a tie is the same in both.
+    let mut plan = plan.clone();
+    plan.segments[0].flags.multiplier = Some(1.6);
+    plan.segments[0].flags.planned_min = Some(96);
+    let lean = kernel_cells(docs(), &plan, &cfg);
+    assert_eq!(lean[0].est, format!("1b×{}", tm_core::energy::fmt_multiplier(1.6)), "{:?}", lean[0]);
+}
+
+/// **The estimate column is the item's written estimate times the multiplier**
+/// — the three shapes `tm-core/tests/energy_model.rs` asserted of fmt_planned,
+/// the Rust formatter of this column, until it went with the Rust row builder at
+/// W-47 (the owner's D112): `2b×1.6` (§4.3's own `^t3`, a leading `2b` beside
+/// `est:1b`), `1b` with the `×1` dropped, and `30m×1.25` (`^a1`'s leading
+/// `30m`). Re-anchored on the kernel's `Emit.estCell`, the one writer of the
+/// column since, rather than deleted with the formatter.
+#[test]
+fn the_estimate_column_is_the_written_estimate_times_the_multiplier() {
+    let cfg = tui_common::config();
+    let base = tui_common::day_plan(&cfg);
+    let mut plan = DayPlan::empty(base.date, base.window, base.budget_blocks);
+    plan.priorities = base.priorities.clone();
+    plan.segments = [("t3", 1.6, 192), ("t4", 1.0, 60), ("a1", 1.25, 38)]
+        .iter()
+        .map(|(id, m, planned)| {
+            let mut seg = plain_block(&base, id);
+            seg.flags.multiplier = Some(*m);
+            seg.flags.planned_min = Some(*planned);
+            seg
+        })
+        .collect();
+    let lean = kernel_cells(docs(), &plan, &cfg);
+    let est: Vec<&str> = lean.iter().map(|c| c.est.as_str()).collect();
+    assert_eq!(est, ["2b×1.6", "1b", "30m×1.25"], "{lean:?}");
+}
+
+/// **Parity P109, its second clause: a HOT row's deadline is §3.2's prep rule,
+/// ONE step** (the owner's D112). The fixture's `^x2 Midterm review @x1` is
+/// the interval `^x1`'s prep child, due at its start; a shapeless `^x3` under
+/// `^x2` has no shape of its own and no interval for a parent, so the kernel's
+/// `effectiveShape` gives it none (`effectiveShape_does_not_reach_the_grandparent`)
+/// and its `⚠` row says nothing, where fork `Tree::effective_shape` walks every
+/// shapeless ancestor and the deleted Rust builder wrote `due 2026-10-20`. The
+/// host's reading is asked live of `Tree::effective_due`, which still feeds the
+/// candidates (README gap 4955). No generated day of the switch census drew
+/// such a row (0 of 666 hot rows).
+#[test]
+fn a_hot_rows_deadline_is_read_one_step_down_p109() {
+    let cfg = tui_common::config();
+    let base = tui_common::day_plan(&cfg);
+    let mut texts = tui_common::tree_texts();
+    let week = texts
+        .iter_mut()
+        .find(|(p, _)| p == "week/2026-W37.md")
+        .expect("the fixture's week");
+    let prep = "- [ ] 5 8b Midterm review               @x1 ^x2\n";
+    assert!(week.1.contains(prep), "the fixture moved: {}", week.1);
+    week.1 = week.1.replace(prep, &format!("{prep}- [ ] 4 1b Practice exam @x2 ^x3\n"));
+    let refs: Vec<(&str, &str)> = texts.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
+    let tree = tm_core::tree::Tree::from_texts(&refs, &cfg);
+    let due = |id: &str| tree.effective_due(&Id::new(id)).map(|d| d.date().to_string());
+    assert_eq!(due("x2"), Some("2026-10-20".to_string()), "the host's prep due, one step");
+    assert_eq!(due("x3"), Some("2026-10-20".to_string()), "the host's walk, two steps");
+    let docs: Vec<Value> = texts
+        .iter()
+        .map(|(p, t)| json!({"path": p, "lines": t.lines().collect::<Vec<_>>()}))
+        .collect();
+    let mut plan = DayPlan::empty(base.date, base.window, base.budget_blocks);
+    plan.segments = ["x2", "x3"]
+        .iter()
+        .map(|id| {
+            let mut seg = plain_block(&base, id);
+            seg.flags.hot = true;
+            seg
+        })
+        .collect();
+    let lean = kernel_cells(docs, &plan, &cfg);
+    assert_eq!((lean[0].mark.as_str(), lean[0].note.as_str()), ("⚠", "due 2026-10-20"), "{:?}", lean[0]);
+    assert_eq!((lean[1].mark.as_str(), lean[1].note.as_str()), ("⚠", ""), "{:?}", lean[1]);
+}
+
 /// **A batch row**, which the fixture day has none of: `Emit.batchTitle` is
-/// §7.5's frame over `Emit.batchNames`, and `emit::fit_batch` is the frame over
-/// `emit::batch_names`, and the wire carries the members so the fitter can
-/// reach them.
+/// §7.5's frame over `Emit.batchNames`, the wire carries the members so the
+/// fitter can reach them, and the fitted bytes are the ones `emit::fit_batch`
+/// wrote over the Rust builder's member list.
 #[test]
 fn the_kernel_and_the_fork_agree_on_a_batch_row() {
     let cfg = tui_common::config();
-    let tree = tui_common::tree(&cfg);
     let base = tui_common::day_plan(&cfg);
 
     // Three real ids of the fixture tree, gathered into one block.
@@ -250,22 +397,17 @@ fn the_kernel_and_the_fork_agree_on_a_batch_row() {
         .find(|s| matches!(s.kind, SegKind::Block))
         .expect("a block to turn into a batch")
         .clone();
-    seg.kind = SegKind::Batch(members.clone());
+    seg.kind = SegKind::Batch(members);
     seg.item = None;
     seg.flags.note = None;
     let mut plan = DayPlan::empty(base.date, base.window, base.budget_blocks);
     plan.priorities = base.priorities.clone();
     plan.segments = vec![seg];
 
-    let fork = fork_cells(&plan, &tree, &cfg);
     let lean = kernel_cells(docs(), &plan, &cfg);
     assert_eq!(lean.len(), 1);
-    assert_eq!(differences(&fork[0], &lean[0]), vec![], "the batch row's cells");
-    assert_eq!(
-        lean[0].batch_names,
-        fork[0].batch_names,
-        "the members the fitter needs"
-    );
+    let want = frozen(&FROZEN_BATCH, Some(&FROZEN_BATCH_MEMBERS));
+    assert_eq!(differences(&want, &lean[0]), vec![], "the batch row's cells");
     // The title really is the batch frame, so this test is not comparing two
     // empty strings.
     assert!(
@@ -273,19 +415,14 @@ fn the_kernel_and_the_fork_agree_on_a_batch_row() {
         "{:?}",
         lean[0].title
     );
-    // And the fitted bytes agree at a width that forces `fit_batch` to cut.
-    for w in [emit::DEFAULT_TITLE_W, 24, 18] {
-        let layout = Layout::new(w);
-        assert_eq!(
-            emit::render_row(&lean[0], &layout),
-            emit::render_row(&fork[0], &layout),
-            "the batch row at title width {w}"
-        );
+    // And the fitted bytes, at a width that fits and two that force a cut.
+    for (w, row) in FROZEN_BATCH_ROWS {
+        assert_eq!(emit::render_row(&lean[0], &Layout::new(w)), row, "the batch row at title width {w}");
     }
 }
 
 /// **One row of every kind the fork can produce**, because the fixture day has
-/// four of ten.
+/// four of ten — each against the cells the Rust builder wrote for it.
 ///
 /// `SegKind::Rest`, `SegKind::Lost`, `SegKind::Sleep` and `SegKind::WindDown`
 /// are the kinds whose *title* carries a duration (`rest 20m`, `lost 20m`,
@@ -295,12 +432,11 @@ fn the_kernel_and_the_fork_agree_on_a_batch_row() {
 /// repository green.
 ///
 /// Each kind is placed twice — once with an item of the fixture tree and once
-/// without — because `title_cell`'s fallback (`—`, `routine`, `sleep`) only
+/// without — because the title cell's fallback (`—`, `routine`, `sleep`) only
 /// fires on the second.
 #[test]
 fn the_kernel_and_the_fork_agree_on_every_kind_of_row() {
     let cfg = tui_common::config();
-    let tree = tui_common::tree(&cfg);
     let base = tui_common::day_plan(&cfg);
     let proto = base
         .segments
@@ -340,13 +476,14 @@ fn the_kernel_and_the_fork_agree_on_every_kind_of_row() {
     plan.priorities = base.priorities.clone();
     plan.segments = segments;
 
-    let fork = fork_cells(&plan, &tree, &cfg);
     let lean = kernel_cells(docs(), &plan, &cfg);
     assert_eq!(lean.len(), kinds.len() * 2);
-    for (i, (f, k)) in fork.iter().zip(&lean).enumerate() {
+    assert_eq!(FROZEN_KINDS.len(), lean.len());
+    for (i, ((want, members), k)) in FROZEN_KINDS.iter().zip(&FROZEN_KINDS_MEMBERS).zip(&lean).enumerate() {
         let kind = dayplan::kind_label(&plan.segments[i].kind);
+        let want = frozen(want, members.as_ref().map(|m| m.as_slice()));
         assert_eq!(
-            differences(f, k),
+            differences(&want, k),
             vec![],
             "a `{kind}` row with item {:?}",
             plan.segments[i].item
@@ -385,38 +522,38 @@ fn the_kernel_writes_the_forks_note_sentences() {
     // (the wire's note, the sentence `tm-core/src/planner.rs` writes)
     let cases: Vec<(Value, String)> = vec![
         (
-            json!({"name": "travelDay"}),
+            json!({"note": "travelDay"}),
             "travel day: no blocks planned (`travel-day` wall today)".to_string(),
         ),
-        (json!({"name": "travelDayWall"}), "travel day".to_string()),
-        (json!({"name": "paused"}), "paused".to_string()),
-        (json!({"name": "interruption"}), "interruption".to_string()),
+        (json!({"note": "travelDayWall"}), "travel day".to_string()),
+        (json!({"note": "paused"}), "paused".to_string()),
+        (json!({"note": "interruption"}), "interruption".to_string()),
         (
-            json!({"name": "budgetSpent", "blocksDone": 6}),
+            json!({"note": "budgetSpent", "blocksDone": 6}),
             "budget spent: 6 blocks done, the rest of the day is rest".to_string(),
         ),
         (
-            json!({"name": "runningLeft", "leftMin": 23}),
+            json!({"note": "runningLeft", "leftMin": 23}),
             "running · 23m left".to_string(),
         ),
         (
-            json!({"name": "breakWhere", "text": "walk"}),
+            json!({"note": "breakWhere", "text": "walk"}),
             "walk".to_string(),
         ),
         (
-            json!({"name": "idleAttributed", "text": "idle → ^t3"}),
+            json!({"note": "idleAttributed", "text": "idle → ^t3"}),
             "idle → ^t3".to_string(),
         ),
         (
-            json!({"name": "plannedOf", "planned": 300, "total": 360}),
+            json!({"note": "plannedOf", "planned": 300, "total": 360}),
             "planned 5b of 6b (83%)".to_string(),
         ),
         (
-            json!({"name": "bufferBefore", "id": "g1"}),
+            json!({"note": "bufferBefore", "id": "g1"}),
             format!("buffer before {}", tui_common::tree(&cfg).get(&Id::new("g1")).map(|i| i.title.clone()).expect("g1")),
         ),
         (
-            json!({"name": "noPosition", "id": "t9", "durMin": 45, "lo": 0, "hi": 0}),
+            json!({"note": "noPosition", "id": "t9", "durMin": 45, "lo": 0, "hi": 0}),
             String::new(), // filled in below: the two clocks are the window's
         ),
     ];
@@ -442,7 +579,7 @@ fn the_kernel_writes_the_forks_note_sentences() {
     );
     for (i, (note, _)) in cases.iter().enumerate() {
         let mut note = note.clone();
-        if note["name"] == json!("noPosition") {
+        if note["note"] == json!("noPosition") {
             note["lo"] = json!(lo);
             note["hi"] = json!(hi);
         }
@@ -575,17 +712,12 @@ fn a_request_without_a_plan_section_is_unchanged() {
 #[test]
 fn the_fixture_day_fills_every_column() {
     let cfg = tui_common::config();
-    let tree = tui_common::tree(&cfg);
     let plan = tui_common::day_plan(&cfg);
-    let fork = fork_cells(&plan, &tree, &cfg);
     const NAMES: [&str; 9] = [
         "time", "ci", "p", "mark", "title", "parent", "est", "actual", "note",
     ];
     for (i, name) in NAMES.iter().enumerate() {
-        let filled = fork
-            .iter()
-            .filter(|c| !c.cells()[i].trim().is_empty())
-            .count();
+        let filled = FROZEN_DAY.iter().filter(|c| !c[i].trim().is_empty()).count();
         assert!(filled > 0, "no row of the fixture day has a `{name}` cell");
     }
     // And the day covers more than one kind.

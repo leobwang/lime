@@ -93260,3 +93260,415 @@ move into `Log.lean`, and `placeOf?` becomes the table's own reader.
   write 138 ms; three years: a later verb 219 ms, the gated write 187 ms.  T18 (the planner call): example tree
   9.1 ms, T11's tree 122 ms, a due 3 years out 157 ms, 10 years out 335 ms.  D111 adds one kernel call to a process
   that needs a place, and none to any verb T11 or T18 times.
+
+### 2. D112 — the binary's plan rows are the kernel's cells (README gap 4897, CLOSED for the rows; parity P109)
+
+**Who did this section's work, because the track was cut off twice.**  The second attempt at this track committed D111
+(`dc5e8ee`, §1) and drafted D112 in a scratch clone, then copied the draft into this worktree, uncommitted, at
+2026-10-06 04:45 — mid-way through its mutation pass and before `check.sh` or any workspace run of it — and was cut
+off.  A third attempt resumed from the worktree at 06:41 and is the author of every figure below.  **The draft did
+not build its tests**: it deleted `energy.rs`' estimate-column formatter as "called by nothing but its own test" while
+`tm-core/tests/energy_model.rs` still called it (`unresolved import`); its first workspace run (one, discovery, not an
+acceptance run) then failed one test, `tui_today_render.rs`' `a_row_that_contains_the_divider_glyph_is_still_its_own_segment`,
+which edits a segment's note after the rows were asked and so printed the kernel's rows for the unedited segment —
+fixed by asking the kernel again, as the moved `emit_*` suites do.  The third attempt also verified the draft's frozen
+cells against the deleted builder itself (below), added the decoder's refusal tests, narrowed one exemption line,
+extended T19, and ran every measurement here — and made one defect of its own on the way: its first version of those
+decoder tests built two `Segment` literals, which grew `no_second_planner.rs`' day-builder census (`planwire.rs` 7 ->
+9) and failed an acceptance run; the tests now share the four rows the module's older decode test builds
+(`sample_segments`), and the census is back at 7.  Two more defects of the draft: a second table of the weekday words,
+found by reading and named by check 11 only on a build where nothing reached it (below; gap 4960), and a constant
+`hotCell` told from the definition by one proof alone, found by the mutation pass (below).
+
+**What changed.**  The owner's D112: *"D30(Q6) is BUILT — the binary's plan rows come from the kernel's `Emit.Row`
+cells, and one Rust function pads them"*.  Until this step the binary rendered every row with a Rust builder in
+`tm-core/src/emit.rs` (a row-cell function and the eight cell functions it called) and sent no `plan` section, so
+`Emit.lean`'s cells reached nothing (check 12 answered them by the `CLASS unsent plan` line).
+
+* **How the cells reach the host — the design: the binary asks the `plan` section for the day it just planned.**
+  `kernel_capacity::read_day`, the one place every planned day is decoded (`tm plan`, `tm now`, `tm review day`,
+  `tm check`'s planner problems, every verb that replans, the TUI's reload, its minute tick and its what-if), makes a
+  SECOND kernel call right after the planner call: `planwire::rows_request` sends the planner answer's own `segments`
+  and `priorities` back exactly as the kernel wrote them (`PlanWire.segJson`'s doc says it is shaped for that round
+  trip), over the same documents and zone, with the planned day as `now`; `planwire::read_rows` is the ONE decoder of
+  a row's cells, into `DayPlan::cells`, one per segment and in its order.  A refusal, a row count that is not the
+  segments' or members on a row that is not a batch's is a fault (`kernelFault`), never a row printed beside the
+  wrong segment.  **Why a second call and not the planner's own answer:** a `cells` key in the planner answer is
+  `PlanWire.runPlanner`'s, and this run's brief gives track L `PlanWire.lean`'s decoder exits only; the `plan` section
+  has existed since W-24 for exactly this purpose and is this track's file.  Its cost is measured below, and gap 4954
+  prices the one-call shape.
+* **One padder, unchanged:** every surface prints `emit::render_row` over those cells.  `emit::plan_rows` pads
+  `plan.cells` and nothing else (a debug assertion holds it to one cell per segment), so a day nobody asked rows for
+  prints none — the ghost row's days, which are drawn in the day bar alone.
+* **The Rust builder is DELETED**, not kept beside the kernel's cells (§5.3): the row-cell function, the title,
+  estimate and parent cells, the note's two derivations (the under-used one and the HOT one with its deadline reader),
+  the mark and `ci`-glyph functions, the scale predicate, the batch title's member list, the eight mark and glyph
+  constants, render_now (the default-config `tm now`; deleted, so not backticked), and `energy.rs`' estimate-column
+  formatter (fmt_planned).
+  **That last one was NOT "called by nothing but its own test", as the second attempt's draft said**: its two tests
+  were `energy.rs`' unit test and `tm-core/tests/energy_model.rs`, which the draft did not touch and which no longer
+  compiled.  Both are re-anchored rather than deleted with it: the unit test asserts `energy::fmt_multiplier` (the
+  model tables' formatter, which stays), and `energy_model.rs`' three column expectations (`2b×1.6`, `1b` at ×1,
+  `30m×1.25`) are asserted of the kernel's cell, the one writer of the column since
+  (`kernel_row_cells.rs`' `the_estimate_column_is_the_written_estimate_times_the_multiplier`, `^t3`, `^t4` and
+  `^a1` of the fixture tree).  `emit::note_cell` survives as a READER of `plan.cells` under its fork name, for one
+  caller in track C's file (gap 4952).
+
+**Every surface that prints a plan row, found by body shape** (every caller of `emit::render_row`, `plan_rows`,
+`day_lines`, `render_plan_section` and `render_now_with` in `tm/src` and `tm-core/src`, and every reader of a
+`RowCells` field):
+
+| surface | path | what it prints now |
+|---|---|---|
+| the day file's `tm:plan` block | `planning::write_plan` → `render::timeline` → `emit::render_plan_section` → `emit::day_lines` → `emit::plan_rows` | the kernel's cells, padded |
+| `tm plan` | `planning::plan` → `render::timeline` (the same) | the same |
+| `tm plan --json`, `tm now --json` | `planning::seg_out` → `render::rows`: `text` is `plan_rows`; `time` and `mark` are the row's own cells | the same; `time`/`mark` were a second read of the segment (`fmt_clock` and the Rust mark function) and are the cells now |
+| `tm now` | `emit::render_now_with` → `plan_rows` (the current row and the next three) | the same |
+| the TUI's Today timeline | `App::timeline_rows` → `emit::day_lines` | the same |
+| the TUI's Now pane | `today::title_of` for the current row and the next three | the row's title cell; the pane's other words (`ci4 p1`, `@m1 #tag`, `est 2b ×1.6`) are §12.1's own and unchanged (gap 4958) |
+| the day bar's hover and the SVG's `<title>` | `emit::tooltip_name` | the row's title cell for a row with no item title of its own; the item's title otherwise, as before |
+
+**The kernel half.**  `EmitDue.lean` (new, imported before `Emit` in the same commit) is fork hot_note's words over the
+kernel's own reading of a deadline: `Emit.dueDayOf` (`effectiveShape`: a point's day, an interval's start day, an
+absolute window's last day, a daily window the day being planned), `Emit.dueWords` (`overdue`, `due today`, `due
+tomorrow`, a weekday within the week in `Field.renderWeekday`'s three letters — `every:`'s table, chrono's `%a` — else
+the date in `Field.renderDate`) and `Emit.hotCell`.  **The draft had a second table of the seven weekday words in this
+module, character for character `Field.renderWeekday`'s — found by reading; check 11 named it only in the mutation
+clone, where nothing reached it, and answered it on a clean build (gap 4960) — and it is deleted, its place a comment so
+no pin site below it moved.**
+`Emit.noteCell` falls through to it on a HOT row with no note of its own and no `↓` it can name (README gap 1102
+CLOSED at its cause), told against the day being planned (`today`, a default argument: `Emit.rowsOf` passes the planned
+day, `EmitWire.runRowsP` the request's `now`).  `Emit.itemEstOf` reads the leading estimate first, then `Core.est`,
+then `dur:` — the fork's order, so a line carrying both `2b` and `est:1b` shows `2b×1.6` as §4.3 prints it (README gap
+1101 CLOSED at its cause) — through views the kernel already has, so the estimate gains no second reader.
+`EmitWire.readNote` reads the planner's own key: it read `name` while `PlanWire.noteJson` writes `note`, so the plan
+section could not read back any note the planner wrote, and it had no reader for the planner's twelfth note, `soFar`
+(fork open_block_segment's `90m so far`) — a wire defect no shipped request reached while the section was unsent, fixed
+at its cause (one spelling).  New laws: `Emit.dueWords_at_every_branch`, `Emit.renderWeekday_is_chronos`,
+`Emit.hotCell_of_no_deadline`, `Emit.hotCell_of_a_deadline`, the five `dueDayOf_of_…` (`Emit.dueDayOf_of_a_point`,
+`Emit.dueDayOf_of_an_interval`, `Emit.dueDayOf_of_an_absolute_window`, `Emit.dueDayOf_of_a_daily_window`,
+`Emit.dueDayOf_of_no_shape`), `Emit.itemEstOf_is_the_written_estimate`, `Emit.itemEstOf_prefers_the_leading_estimate`,
+`Emit.itemEstOf_falls_back_to_the_est_key`, `Emit.noteCell_of_a_hot_row`,
+`Emit.noteCell_of_a_row_neither_underused_nor_hot`, `Emit.noteCell_of_an_underused_row_it_can_name`,
+`Emit.rowsOf_tells_the_planned_day`, `EmitWire.rowsOfReq_tells_the_requests_day`, `EmitWire.rowsJson_length_on_a_day`,
+`EmitWire.readNote_reads_soFar`, `EmitWire.readNote_reads_the_planners_key_and_refuses_the_other`, and the two the
+mutation pass below asked for, `Emit.dueWords_ne_nil` and `Emit.hotCell_ne_nil_of_a_deadline` — twenty-two, each with
+its `Check.lean` line.  **Laws restated (D5):** `Emit.rowsOf_eq` gains the day `rowsOf` passes (its right-hand side is
+`rowOf … (dayPlan r).day`; `rowOf` gained a defaulted argument, and the statement is the same equation over it); every
+`EmitWire` theorem whose literal spelled a note's `name` now spells `note` — the same statements over the planner's key.
+The `PlannerWit` witnesses that pin the cells (`PlannerWit.the_emit_witness_rows_are_these_cells`,
+`PlannerWit.the_day_section_of_the_routine_day_is_these_cells`) build unchanged: their days carry no HOT row and no line
+with both estimates.
+
+**Every new or changed definition, mutated (D40, in a clone).**  `mutate.py --write`, one pass over the twelve the gate
+owed (2026-10-06 07:12-07:32, load 9-15; a scratch clone of this tree, never a tree that commits): the four new ones
+(`Emit.dueDayOf`, the draft's weekday table, `Emit.dueWords`, `Emit.hotCell`) and the eight whose bodies changed
+(`Emit.itemEstOf`, `Emit.noteCell`, `Emit.rowOf`, `Emit.rowsOf`, `EmitWire.readNote`, `EmitWire.rowsOfReq`,
+`EmitWire.rowsJson`, `EmitWire.runRowsP`).  Every one PINNED at every constant, by a second witness or a decided
+statement (`rowOf` by `PlannerWit.the_day_section_of_the_routine_day_is_these_cells`, its statement decided false;
+the weekday table and `dueWords` by `Emit.dueWords_at_every_branch`, the same), but `readNote` (UNFOLDABLE, as it was at
+`HEAD`: no `Inhabited (Except RowRefusal Note)`) and **one that the gate refused: `hotCell := []` came back ALONE** —
+`Emit.hotCell_of_a_deadline`'s proof was all that told it from the constant, and with that proof sorried the package
+built.  The fix is a law the constant falsifies, proved by unfolding `hotCell` rather than through the first:
+`Emit.hotCell_ne_nil_of_a_deadline` (a HOT row whose key has a deadline is never silent) with `Emit.dueWords_ne_nil`
+beside it; re-run (07:41), `hotCell := []` is PINNED by `hotCell_of_a_deadline` also `hotCell_ne_nil_of_a_deadline`,
+and the gate reads 765 rostered, 0 owed, rc 0.  Then the weekday table went (above): its row is deleted with it, and
+`dueWords`, whose body now calls `Field.renderWeekday`, was re-run (07:53, PINNED, its statement decided false at both
+constants); the gate reads **764 rostered, 0 owed, rc 0**.  Eleven rows in `kernel/mutations.txt`: three new
+(`dueDayOf`, `dueWords`, `hotCell`) and eight replacing rows whose bodies moved.
+
+**The comparisons that survive the builder.**  A deletion is exactly when a comparison can quietly become a
+self-comparison, so each one the builder fed was re-anchored, by value, before it went:
+
+* **The frozen cells** (`tm/tests/kernel_row_cells.rs`): the Rust builder's cells for the §4.3 fixture day (13 rows),
+  a batch row fitted at three widths and one row of every kind with and without an item (20 rows), dumped at
+  `49186d7` by the second attempt — and **checked by the third against the builder itself** (2026-10-06 07:21, a
+  scratch test in a clone of `dc5e8ee`, the last commit holding the builder, never committed: the 13 day rows, their 13
+  padded rows, the batch row and its three fitted widths and the 20 kind rows, every cell `emit::row_cells` wrote there
+  equal to the table) — are held here by value, every cell, NO hole:
+  `the_kernel_and_the_fork_write_the_same_cells`, `the_kernels_cells_padded_are_the_day_files_bytes`,
+  `the_kernel_and_the_fork_agree_on_a_batch_row`, `the_kernel_and_the_fork_agree_on_every_kind_of_row` keep their W-24
+  names and lose their two declared holes (`the_two_closed_holes_are_the_specs_own_cells`).
+* **The switch census**, run by the second attempt ONCE, before the deletion, in a clone holding both the builder and
+  the binary's new rows path (planner_invariants' generated days at the multipliers its hash arm draws): every row's
+  cells from the builder against the cells the binary now prints, three runs (2026-10-06 04:01-04:02, load 21-15) —
+  95 cases each and 1,005 / 1,076 / 1,014 rows (3,095), 298 / 329 / 298 with a note, 218 / 238 / 210 HOT rows,
+  245 / 270 / 267 at a multiplier, 90 / 95 / 89 with a parent, 0 / 2 / 0 batch rows.  **128 rows differ (51 / 46 /
+  31), every one the estimate cell at the multiplier 1.125 (`3b×1.12` → `3b×1.13` and its kin), and nothing else** —
+  P109's first clause; 0 differ in a HOT row's note.  The clone is archived at
+  `refs/archive/w47-l/d112-switch-census-probe` (`7e375ba`), whose `planner_invariants.rs` is the probe and whose log
+  lines this paragraph quotes; this attempt read the probe and the log, and did not re-run it (the builder is gone
+  from every tree that commits).
+* **The snapshots**: the four `emit_*` suites moved from `tm-core/tests` to `tm/tests` with their 17 snapshots,
+  because a hand-built day's rows are now the kernel's and `tm-core` does not link the kernel; every snapshot body is
+  byte-identical (only insta's `source:` header line names the new path — checked here file by file against
+  `HEAD`), and the suites ask the kernel for each hand-built day's rows (`emit_fixture::with_rows`, through
+  `rowwire::with_kernel_cells`).  One test went with the function it tested (render_now's default-config variant).
+  No snapshot of `cli_plan`, `cli_day`, `tui_today_render` or any other suite moved.
+* **`planner_invariants.rs`' claim 2** held the kernel's cells to the builder's with two declared holes; it now holds
+  the rows the binary prints (the plan section over the planner's own segments) to the plan section's answer over the
+  day as the host DECODED it and the test encoder wrote it back, cell for cell, so a field `planwire::read_plan` drops
+  or bends is a cell that differs — and on a row whose note the host holds as prose, the binary's note must be that
+  prose (gap 4953).  That is a comparison of the codec, kernel against kernel, and is said so (gap 4957).
+* **`cli_pause_drawn.rs`**' fork comparand for a replayed pause is frozen by value (`paused 50m` / `lost 50m`
+  `interruption`).
+* **The under-used note against fork 4748911's frozen days** (`tm/tests/support/forkclass.rs`, track C's): it compared
+  the builder's derived note with the fork's sentence and now compares the kernel's cell, through gap 4952's reader.
+
+**The guards.**  `one_renderer.rs`' `exactly_one_function_composes_a_plan_row` keeps its name and is restated over
+what is left to guard: the deleted builder's eleven names stay deleted, and `planwire::read_rows`' decoder is the ONLY
+`RowCells` struct literal in the shipped sources (a census, may only shrink; `the_row_builder_census_bites` is its own
+non-vacuity).  `kernel_call_counts.rs` gains a `rows` column, held equal to the `planner` column for every verb (one
+rows call per planned day) and `other` held to 0.  `cli_latency.rs`' T18 times the rows call beside the planner call,
+and T19 a tick's.
+
+**The guards, driven RED on their own class** (2026-10-06 07:14-07:15, load ~15; `r2-plants.py` in `refs/archive/w47-l/d112-scripts`,
+run in a scratch clone of this tree with its own target directory, never a tree that commits; `git status --porcelain` the same 75 paths
+before and after; each plant applied alone, its tests run, the file restored):
+
+| plant | caught by |
+|---|---|
+| P1 a `RowCells { … }` literal in `cli/render.rs` (a second builder under a new name) | `one_renderer.rs` `exactly_one_function_composes_a_plan_row` (the census, line 472) |
+| P2 `fn title_cell(` restored in `emit.rs` | the same test, its deleted-name half (line 458) |
+| P3 `plan_rows` printing the segments (`fmt_clock`) instead of the kernel's cells | `the_one_renderer_is_still_there` (line 655) **and** `kernel_row_cells.rs` `the_kernels_cells_padded_are_the_day_files_bytes` (line 230) |
+| P4 `read_day` asking the rows twice | `kernel_call_counts.rs`, both tests (the `rows == planner` pin, lines 510 and 720) |
+| P5 `read_day` skipping the rows call | `kernel_call_counts.rs`, both tests, **and** `cli_plan.rs` (every planning test: `plan_rows`' one-cell-per-segment assertion) |
+
+The unplanted clone passes all three suites (`one_renderer` 36, `kernel_call_counts` 3, `kernel_row_cells` 40).  The
+first run of this table found one more thing: this step's own new unit test of `read_rows` built a batch segment on a
+line holding both `SegKind::` and a string, which `one_renderer.rs`' `no_second_set_of_row_words` named as a second
+renderer of the title cell — a false positive the test was rewritten around (the member list on its own line, as the
+module's older tests do), never an allow-list entry.
+
+**RULE M.**  No committed expectation of the binary's own output moved: no snapshot, no latency band, no frozen
+comparand (the census's ties fall on no fixture day).  The divergence the binary's users can now see is registered:
+
+**Parity P109 taken**: the binary's plan rows are the kernel's `Emit.Row` cells (the owner's D112) -- every surface (the day file's `tm:plan` block, `tm plan`, `tm plan --json` and `tm now --json`, `tm now`, the TUI's timeline and Now pane, the day bar's and the SVG's hover) prints `emit::render_row` over the cells the `plan` section answers for the day the kernel planned -- so (1) a duration multiplier at an exact two-place tie is written half-up (`Arith.halfUpQ`: `3b×1.13` at 1.125) where fork 4748911's row builder wrote `energy::fmt_multiplier`'s `{:.2}` of an `f64`, half to even (`3b×1.12`), README gap 1103; and (2) a HOT row's deadline note reads §3.2's prep rule ONE step (`effectiveShape`): a shapeless item whose parent is shapeless and whose grandparent is an interval says nothing where the fork's `Tree::effective_shape` walked every shapeless ancestor and wrote `due <the interval's start>`, README gap 4955; every other cell of every row is the fork's (the switch census: 128 of 3,095 generated rows differ, every one clause (1)) (W-47 track L, README gap 4897)
+
+The behaviour rows: `kernel_row_cells.rs`' `a_multiplier_at_a_tie_is_written_half_up_p109` (the kernel's `1b×1.13`
+against `energy::fmt_multiplier`, the formatter the builder called, asked live: `1b×1.12`) and
+`a_hot_rows_deadline_is_read_one_step_down_p109` (the fixture's `^x2`, the interval's prep child, says `due
+2026-10-20`; a shapeless `^x3` under it says nothing, where the host's `Tree::effective_due`, asked live, still walks
+to the interval) — and the drive below, both clauses on the binary.
+
+**The written half's `plan` line, narrowed.**  `written-exempt.txt`'s `plan` line said no function of the program
+builds the section; since this step `planwire::rows_request` does, so its reason was false.  It is not stale — the
+segments and priorities the request carries are the planner answer's own arrays, copied whole, and the written half
+reads `json!` literals, so every key under them is unwritten to it — so it is NARROWED to the two arrays
+(`plan.segments`, `plan.priorities`), which fields.py's ratchet admits (an entry under a key exempt at `HEAD`), and
+`plan.bed` is now held as written (gap 4959 is what the two lines still answer).  Check 13: 6 shallow unwritten
+paths answered by 6 exemptions (5 before).
+
+**Cost — the second call, measured** (every figure capped; this step's own runs).  The rows call is a whole-tree load
+with no log, so its share is the documents', not the log's:
+
+* **T18, before and after, alternated** (2026-10-06 07:17-07:18, load 10.5 -> 9.9; `cli_latency`'s
+  `t18_the_planner_call_on_the_example_three_year_and_far_deadline_trees`, run from this tree and from a clone of
+  `dc5e8ee` with its own target directory, new / old / new / old): **the rows call** 3.1 / 3.0 ms on the example tree,
+  50 / 54 ms on T11's tree (226 files, 2,959 lines, a three-year log), 49 / 50 ms on T14's two far-deadline trees;
+  **`tm plan`**: example tree 127 / 131 / 137 / 127 ms (no difference above the noise), T11's tree 268 / 182 / 238 /
+  187 ms, T14 three years out 203 / 157 / 202 / 147 ms, ten years out 288 / 253 / 288 / 248 ms — **so D112 adds
+  ~3 ms to a day planned on the example tree and ~35-85 ms on the 226-file trees**, every row inside its band.
+  **`tm check`**, which asks the planner too: example 28.5 / 24.3 / 27.5 / 24.4 ms, T11 861 / 781 / 813 / 786 ms.
+* **T19, the minute tick** (07:16:57, load 10.0): T19 timed the planner request alone, which after D112 is half of a
+  tick, so this step extends it to ask the rows request `tm check` traced beside it (`cli_latency.rs`, a
+  measurement, no band): in-process, warm, best / median of 7 — the rows call 2.4 / 2.4 ms on the example tree,
+  42.7 / 46.5 ms on T11's tree, 40.2 / 45.1 and 40.7 / 43.1 ms on T14's; a tick (build + planner call + rows call)
+  10.3 ms on the example tree, 140 / 169 ms on T11's, 136 / 150 and 245 / 259 ms on T14's.  D103's tick runs once a
+  minute; it pays this.
+* **One process, one request** (07:13:21, load 13.7; `oneshot` over the second attempt's saved requests, a generated
+  tree of 227 documents and 3,012 lines, seven runs each, process start included): the planner request 52-100 ms, the
+  rows request 60-103 ms, a trivial request 8-30 ms.  The rows answer is byte-identical to the one the second attempt
+  saved at 03:04.
+* **The rest of `cli_latency`, before and after back to back** (`--include-ignored --test-threads=1`, 07:18:39 and
+  07:19:23, load 8.6 and 12.8): 8 / 8 passed on each; the verbs that do not plan move by the noise (T11's later verb
+  157 / 172 ms, `review week` 542 / 541 ms, the stall row's worst 760 / 679 ms); the two that plan a far-deadline day
+  move by the rows call (167 / 177 ms, 248 / 294 ms).  No band moved; gap 4954 prices the one-call shape that removes
+  the cost.
+
+**Driven — every surface's bytes, before and after** (2026-10-06 07:22:45-07:23:35, load 12.7 -> 8.3, and again with
+the committed binary 09:29:03-09:29:54, load 6.6 -> 4.2, every comparison the same; `r2-drive.sh`,
+archived with this step's other scripts at `refs/archive/w47-l/d112-scripts`, `cdaa4a4`: the binary BEFORE is `dc5e8ee`'s, built in a clone with its own target directory; AFTER is
+this tree's; each world is `tm-core/tests/fixtures/plan-basic` copied twice, every command `--now
+2026-09-07T10:42:00-05:00` capped at 8 GB; the surfaces are `tm plan`, `tm now`, `tm --json plan`, `tm --json now`,
+`tm check`, the day file's `tm:plan` block, and the TUI's first frame through a pty (`script`, 120×40, rendered by a
+small terminal emulator), compared byte for byte):
+
+```
+example  plan.out  now.out  plan.json  now.json  check.out  dayfile-block  tui.frame   all seven byte-identical
+tie      (.tm/model.json {"duration": {"_default": 1.125}}: every block at the tie)
+         plan.out, dayfile-block, plan.json, tui.frame DIFFER, five rows each; now.out, now.json, check.out identical
+         < 13:50  3 p3   Claude Code drafts tests     @m2  1b×1.12
+         > 13:50  3 p3   Claude Code drafts tests     @m2  1b×1.13
+         < 17:00  2 p5   Pick winter courses          @O3  2b×1.12
+         > 17:00  2 p5   Pick winter courses          @O3  2b×1.13          (and 14:50, 18:00, 19:00)
+hot2     (^x1 at:2026-09-07T18:00/20:00, its prep child ^x2 `3 1b`, and under ^x2 a shapeless `- [ ] 3 6b Practice exam @x2 ^x3`)
+         plan.out, dayfile-block, plan.json, tui.frame DIFFER, two rows each; now.out, now.json, check.out identical
+         < 13:50  3 p0 ⚠ Practice exam                @x2  6b     due today
+         > 13:50  3 p0 ⚠ Practice exam                @x2  6b                (and 14:50)
+```
+
+P109's two clauses, on the binary, and nothing else moved: on the example world every surface is byte-identical, the
+TUI's frame included.  The `tm now` surfaces moved in neither world because their window (the current row and the next
+three, 10:42-12:50) holds no tie and no `^x3` row.  The TUI's minute tick was driven too, with its clock running (07:24, load 6.4; the tie world, `--now
+2026-09-07T10:42:50-05:00`, `TM_TUI_CLOCK_RUNS=1`, 25 s in a pty): the last frame's header reads `10:43`, its
+timeline's first row `10:43  1 p0 ⚠ Pick up package` and its divider `19:43  ───  window ends 19:43` (19:42 in the
+frame at 10:42) — the tick planned the day again through the kernel — and the tie rows read `1b×1.13` and
+`2b×1.13`: the tick's rows are the kernel's cells too.
+
+**The decoder exits — NOT taken, and not by choice of order: each one ends in `Planner.lean`, track K's file this run**
+(gap 4956).  `planner.overrides`: PlanWire's decoder is five definitions (`PlanWire.readOverridePair`,
+`PlanWire.readOverrideList`, `PlanWire.readDropIds`, `PlanWire.readOverrides`, `PlanWire.readOptOverrides`) and their
+laws, and its one cap is `Planner.mkOverrides?`, whose ONLY caller is `PlanWire.readOverrides` — so the decoder cannot
+leave without leaving `mkOverrides?` emitted and reached by nothing, a check-12 failure, while `reach-exempt.txt` may
+only shrink.  `RuntimeIn.lastHash`: `inputs-exempt.txt`'s line answers a FIELD of `Planner.RuntimeIn`, unread by the
+day whether or not `PlanWire.readHash` fills it, so the line stands until the field leaves the structure; and
+`PlanWire.readHash` is `Planner.mkHash?`'s one caller outside the theorems, the same check-12 knot.  **`RuntimeIn.yesterday`
+and its two lines (`inputs-exempt.txt`, `written-exempt.txt`) are the owner's D108's, W-48's, as the brief scheduled**,
+and are untouched.  What WAS taken: `reach-exempt.txt`'s `CLASS unsent plan` line, which check 12 failed as STALE the
+moment the binary sent the section (deleted, with the census lines its measurement moved: `Emit.lean` 31 of 33
+reached, `EmitWire.lean` 21 of 37, `Line.lean` 185 of 264, `Planner.lean` 169 of 288, `State.lean` 22 of 38).
+
+**Gap 4952 — `emit::note_cell` survives as a reader of the cells, for one caller in track C's file (C).**  1. *What.*
+`tm/tests/support/forkclass.rs` (track C's this run) compares the under-used note the binary prints with fork
+4748911's sentence through fork note_cell's name and signature, so `emit::note_cell(seg, tree, plan)` stays — a
+READER now: the note cell the kernel wrote for that segment (`plan.cells` at the first segment equal to it), the tree
+argument unused.  2. *Why not here.*  The brief gives track C `forkclass.rs`; editing it is the Land's.  3. *Cost.*
+None silent: the reader decides nothing, and `one_renderer.rs`' census holds `planwire::read_rows` as the only builder
+of a cell.  4. *Clears it.*  The Land: `forkclass` reads `plan.cells` by position and the shim is deleted.
+
+**Gap 4953 — a planner note's WORDS have two writers (B).**  1. *What.*  The row's note cell is the kernel's
+(`Emit.noteText` over the planner's `Note`); `planwire::read_plan` also renders the same `Note` to prose for
+`SegFlags::note`, whose readers since D112 are `Segment::is_pause` (it compares the prose with `paused`) and the
+fork-comparison harnesses.  2. *Why not here.*  `SegFlags::note` is a field every fixture day and many tests write as
+prose; replacing it with the note's name is a type change across `tm-core` and the TUI's tests, past this step's size.
+3. *Cost.*  None silent: `planner_invariants.rs`' claim 2 holds the binary's note cell equal to the host's prose on
+every generated row that carries one (its census line, `prose notes`, printed every run).  4. *Clears it.*  A step that makes the segment carry the
+note's name (or the pause as a bit) and deletes the host's renderer.
+
+**Gap 4954 — the rows ride a second call, a second whole-tree load (C).**  1. *What.*  Every planned day costs the
+planner call AND a rows call over the same documents (measured above) — the TUI's what-if day included, whose rows
+nothing prints.  2. *Why.*  The one-call shape — the planner answer carrying `rows` beside `segments` — is
+`PlanWire.runPlanner`'s, and the brief gave this track `PlanWire.lean`'s decoder exits only.  3. *Cost.*  The figures
+in **Cost**; inside every band, so nothing fails, but the TUI's minute tick pays it too (D103).  4. *Clears it.*  The
+owner or the Land: `runPlanner` appends `EmitWire.rowsJson` of the day it answers (the plan section's own serializer,
+over `Emit.rowsOf`, whose day is `dayPlan`'s own), `read_day` reads it from the one response, and `rows_request`, the
+`plan` lines of `written-exempt.txt` and `trace_kinds`' `rows` go.
+
+**Gap 4955 — a HOT row's mark and its words read two deadlines (B).**  1. *What.*  The `⚠` is the planner's (the
+host's candidates carry `due` from `Tree::effective_due`, the fork's walk through shapeless ancestors); the note's words
+are the kernel's (`effectiveShape`, §3.2's one step, `effectiveShape_does_not_reach_the_grandparent`).  On an item
+two shapeless levels below an interval the row is `⚠` and silent — P109's second clause (the drive's `hot2` world).
+2. *Why.*  The candidates' facts are the host's until D27 (D34); writing a walk into the kernel to match the host would
+be a second effective-shape reading in the kernel, beside the one pinned by a theorem.  3. *Cost.*  0 of 666 HOT rows
+over the switch census; the fixture witness and the drive.  4. *Clears it.*  D27 (the kernel collects the candidates,
+one reading), or the owner rules which reading is §3.2's (the spec says *parent*, `tm-spec-v1.md` §3.2; the fork walks).
+
+**Gap 4956 — the decoder exits gap 4897 names did not land on this track (C).**  1. *What.*  `PlanWire.lean` still
+decodes `planner.overrides` and `planner.state.lastHash`; `written-exempt.txt` (`planner.overrides`,
+`planner.state.lastHash`) and `inputs-exempt.txt` (`RuntimeIn.lastHash`) keep the lines whose EXIT named R3.  2.
+*Why.*  **The decoder exits** above: each also deletes or rewrites a definition of `Planner.lean` (`Planner.mkOverrides?`
+and its two laws, `Planner.mkHash?` and its three, the `RuntimeIn.lastHash` field with `RuntimeIn.empty`'s positional
+constructor), and `PlanDiff.lean`'s `the_extension_moves_only_the_running_estimate_and_the_overrides` names
+`state.lastHash` — and `Planner.lean` is track K's this run.  3. *Cost.*  None silent: no request the binary builds
+carries either key (`written-exempt.txt`'s two lines are check 13's own record of it: decoded, written nowhere), and
+the decoded values reach no definition of the day.  4. *Clears it.*  The Land, or the next step free to edit `Planner.lean`, as one wire step (D19): delete
+`PlanWire`'s five override readers and `readHash` with their laws (the override and hash rows of the module's R10
+table, `readOverrides_refuses_*`, `readHash_*`, `readOptOverrides_*`, and the `hashHex` round trips stated through
+`mkHash?`, which become `hashHex`'s own digits), `readPlannerSection` answering `overrides := none`; delete
+`mkOverrides?` and `mkHash?` with their laws and the field `RuntimeIn.lastHash`; re-prove `PlanDiff`'s extension law
+without its `lastHash` conjunct and `PlannerWit.lean`'s one use of `mkHash?` (line 8861 at `dc5e8ee`, also track K's
+file); the three exemption lines then fail as STALE and go, the deleted names cited by older README blocks (23 lines
+at `dc5e8ee`) join `citations-allow.txt` counted, their roster rows leave `mutations.txt`, and
+`kernel_planner_wire.rs`' override requests move to the `overtime` key the binary sends.  `RuntimeIn.yesterday` is the
+owner's D108's (W-48).
+
+**Gap 4957 — the fork's cells meet a FRESH draw only in this step's switch census (C).**  1. *What.*  The Rust builder
+is deleted, so the generated days the comparison drew each run now compare the binary's rows with the plan section's
+over the host's decoded day (`planner_invariants.rs`' claim 2) — a kernel-against-kernel comparison of the codec; the
+fork's own cells survive as frozen values on the fixture days (`kernel_row_cells.rs`), as the under-used note on
+fork 4748911's frozen class days (`forkclass.rs`), and as the census above, run once.  2. *Why.*  D72's shape for the
+planner (`tm-oracle plan`, fresh draws meeting fork 4748911 out of the tree under `TM_ORACLE`) is the answer, and the
+oracle is track C's this run.  3. *Cost.*  A cell divergence a frozen day does not hold would arrive unseen.  4.
+*Clears it.*  `tm-oracle rows`: fork 4748911's row builder run out of the tree over a generated day, compared under
+`TM_ORACLE` (track C or the next step).
+
+**Gap 4958 — the TUI's Now pane prints §12.1's own words beside the kernel's title cell (B).**  1. *What.*  The pane's
+head is `ci4 p1 <title> @m1 #tag` and its second line `elapsed … est 2b ×1.6`: the title is the row's cell since D112
+(it was the Rust title cell since W-23), and the `ci`, `p`, parent, tags and the estimate with its one-place multiplier
+are read off the host's tree and the App, as before.  2. *Why.*  The pane is §12.1's mock, not a §4.3 row; whether it
+should print the row's cells is a display decision.  3. *Cost.*  The pane's `×1.1` and the row's `×1.13` can differ
+(one place against two).  4. *Clears it.*  The owner: the pane reads the row's cells, or keeps §12.1's words.
+
+**Gap 4959 — the written half of check 13 cannot see a value the host copies whole from a kernel answer (C).**  1.
+*What.*  `planwire::rows_request` sends the planner answer's own `segments` and `priorities` arrays back, untouched;
+`fields.py`'s written half reads the keys a `json!` literal spells, so every key under the two arrays is unwritten to
+it, and `written-exempt.txt` answers them by two lines, `plan.segments` and `plan.priorities` (narrowed this step from
+the section-wide `plan` line, whose reason — no function builds the section — D112 made false).  2. *Why not here.*
+Teaching the half that `plan["segments"].clone()` is `PlanWire.segJson`'s output is a reader of the planner answer's
+shape inside a gate, past this step's size.  3. *Cost.*  The keys under the two arrays are held by
+`planner_invariants.rs`' claim 1 (no day the kernel plans is refused by the section) and the round trip, not by the
+gate.  4. *Clears it.*  Gap 4954's one-call shape (the section's segments leave the request), or the written half
+learns copied values.
+
+**Gap 4960 — check 11 answered a character-for-character duplicate as "compiled apart" (C).**  1. *What.*  The draft's
+weekday table in `EmitDue.lean` and `Field.renderWeekday` had one signature and one body.  `twins.py`'s exact key grouped
+them, and its E2 property answered the group — *the emitted C differs and the export reaches one* — on a clean build
+(this step's `check.sh` over the draft at 07:42: 15 groups, 4 compiled, 0 UNANSWERED), because the code generator built
+the two functions' hoisted list constants differently (the draft's `__closed__2`/`5`/`8` against `renderWeekday`'s
+`1`/`2`/`3`, sharing sub-terms differently), and `closed_resolved` compares a hoisted term by its own text.  In the
+mutation clone, whose IR the last mutant's build had left behind (`hotCell := []`, so — this step's reading of E2's
+`live` half — nothing reached the table), the same script named the pair (`twins.py --audit`, 07:50: `1 UNANSWERED`) — so the verdict on one source pair depended on the
+build the gate read.  2. *Why not here.*  E2 is the property the `@[csimp]` fast/slow shells are answered by, and
+narrowing it — to a pair one of whose members is a `@[csimp]` target, or comparing hoisted constants by the value they
+build — is a change to what check 11 accepts, a gate's semantics, which this track's brief does not give it.  3. *Cost.*
+A duplicate whose two copies compile their constants differently passes check 11 on a clean build; this one was found
+by reading, and deleted.  4. *Clears it.*  The owner or the next step that owns `twins.py`.
+
+**For the W-47 Land — where this track meets the others** (read off the branches at 07:30, `w47-h` at `eb454ea`,
+`w47-c` at `fe0eb83`, `w47-k` with no commit): **track H** changed `render_now_with` (a `running: Option<&Running>`
+argument, D109) where this track removed its `tree` and `cfg` and deleted render_now — the merged signature is
+`render_now_with(plan, now, running)`; H's edits to `tm-core/tests/emit_now.rs` land in `tm/tests/emit_now.rs`, where
+this track moved the file (with `emit_fixture::with_rows` for any day it edits); both tracks edit
+`kernel_capacity::read_day` and `planner_ask_from`, `planning::now`, `planwire.rs` right after `read_plan`, and
+`kernel_call_counts.rs`.  **Track C** calls `emit::note_cell` in `forkclass.rs`, which this track keeps as a reader of
+the cells (gap 4952); C's own changes call none of the functions this track deleted (its branch's other mentions of
+them are `HEAD`'s files, which this track rewrites and C did not touch).  **Track K**: gap 4956's decoder exits are the only work of this
+track's that would enter `Planner.lean`.
+
+**Measured** (every command capped, `uptime` beside each; this attempt's own runs).
+
+* `check.sh`, in a clone of this tree with its changes staged (`git status --porcelain` the same 56 entries before and
+  after), 2026-10-06 09:22:04-09:27:42, load 7.31 -> 5.67, rc 0, all seventeen lines `ok`: the build; totality; the
+  axiom audit (6,441 theorems; `Classical.choice` 3,395, `Quot.sound` 4,956, `propext` 6,018; 420 depend on none);
+  `Negative.lean` rejected; the FFI (96 tests); the corpus (29/37 files, 4/5 whole plans); stage goals (1, stage 6's);
+  prose citations (62,769: 59,123 resolved, 3,646 allowed, 0 allow entries unused); new definitions mutated (764 new or
+  changed since `86c4dc6`, 764 rostered, 0 owed); the parity register (104 registered, P1-P109 with 5 declared holes,
+  next free P110); no two names for one definition (3,414 def bodies, 14 groups — 3 compiled, 11 value — 0
+  unanswered); every emitted definition reached (3,503 definitions, 3,282 emitted, 1,581 reachable over the 11 sections
+  `tm/src` sends, 1,099 exempt, 0 unanswered); the four halves of check 13 (17 fields written; inputs 37, 33 read, 4
+  exempt; sent 172 key paths, 171 decoded, 1 answered by an exemption; written 221 key paths, 171 written, 6 shallow
+  answered by 6 exemptions); the replay (96 modules; 5 replayed this run, 91 remembered).  It ran twice before on this tree's way here:
+  07:54-08:00 (all seventeen `ok`, before the decoder tests were reshaped, the weekday comment corrected and this block
+  finished), and **over the draft** (07:42-07:49, load 13.7 -> 14.2), which failed one line, prose citations (render_now, backticked after its deletion), and passed check 11 with the
+  duplicate weekday table in it — gap 4960.
+* `cargo test --workspace --no-fail-fast`, in the worktree, porcelain unchanged across each: **runs 6, 7 and 8 — the
+  three this commit is accepted on — 2,923 passed / 0 failed / 51 ignored over 155 result lines each**: run 6
+  08:32:21-08:49:17 (load 8.05 -> 7.85), run 7 08:49:17-09:05:36 (7.85 -> 3.15), run 8 09:05:38-09:21:43 (3.15 ->
+  8.98).  The named suites, the same in all three: T5 (`kernel_replay_parity`) 52 / 4 ignored; the door
+  (`kernel_log_door`) 44; `cli_switch_acceptance` 16; `cli_latency` 7 / 1 ignored; `kernel_call_counts` 3; `one_padder`
+  9; `one_renderer` 36; `kernel_row_cells` 40; `kernel_planner_wire` 27; `planner_classes` 70 / 8 ignored;
+  `planner_invariants` 31 / 1 ignored; `cli_conformance` 7; `cli_json_matrix` 8; the moved `emit_day_section` 12,
+  `emit_daybar` 10, `emit_now` 6, `emit_svg` 7; `emit_planner` 33 / 2 ignored; `tui_today_render` 43; `energy_model` 14;
+  `cli_pause_drawn` 34; `kernel_log_grammar` 26 / 2 ignored; `cli_break_place` 21 — 0 failed in every one.  The only
+  file edited during them was this README (prose; no test reads it).  **Run 5** (08:15:32-08:32:21, load 18.08 ->
+  8.05) on the same tree: 2,922 passed / **1 failed** — `cli_latency`'s
+  `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`, its stall row's `tm drop ^z15` still running
+  after its 1 s limit (gap 4901's row, under load), and nothing else.  The stall row, the D112 binary against
+  `dc5e8ee`'s, alternated (09:27:50-09:28:46, load 7.3-9.2): new 668 / 724 / 699 ms, old 679 / 688 / 714 ms — D112 does
+  not move it; no band moved.  **Earlier runs, superseded and reported**: a discovery run of the draft (06:50-07:09,
+  load 31.8 -> 18.1: 2,917 passed / 1 failed, the TUI test above); run 1, stopped part-way for the `hotCell` law (it had
+  failed `cli_latency`'s three-year first verb at its 5 s limit, load ~15); run 2, stopped after it failed
+  `no_second_planner.rs` (this attempt's census slip); runs 3 and 4, stopped while building.
+* `cli_latency --include-ignored --test-threads=1`, alone and back to back with `dc5e8ee`'s (above, **Cost**): 8 / 8
+  passed on each binary.

@@ -39,7 +39,10 @@
 //!   (`actual/est` per tag with the shrunken multiplier and a 7-day trend).
 //! * Duration multipliers: [`duration_multiplier`] (`"<ci>:<tag>"`, then
 //!   `"<tag>"`, then `"_default"`, then 1.0), [`planned_minutes`] and the
-//!   display helpers [`fmt_multiplier`] / [`fmt_planned`] (`2b×1.6`).
+//!   display helper [`fmt_multiplier`] (`1.6`, the model's own tables). The
+//!   §4.3 row's `2b×1.6` is the kernel's cell since the owner's D112
+//!   (`Emit.multCell`); a Rust formatter of that column stood here, called by
+//!   nothing but its own test, and went with the Rust row builder (W-47).
 //!
 //! # Interpretation notes (where the spec needed a decision)
 //!
@@ -91,7 +94,7 @@ use thiserror::Error;
 
 use crate::config::{hhmm, Config};
 use crate::log::{DurationObs, EnergyObs, Replay};
-use crate::model::{Dur, Loc};
+use crate::model::Loc;
 
 /// Number of hours-since-wake buckets in a learned curve (`floor(hsw)`
 /// clamped to `0..=11`, §8.5).
@@ -821,15 +824,6 @@ pub fn fmt_multiplier(multiplier: f64) -> String {
     s.to_string()
 }
 
-/// The §4.3 estimate column: `2b×1.6`, or just `2b` when the multiplier is 1.
-pub fn fmt_planned(est: &Dur, multiplier: f64) -> String {
-    if (multiplier - 1.0).abs() < 0.005 {
-        est.to_string()
-    } else {
-        format!("{}×{}", est, fmt_multiplier(multiplier))
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Fitting (§8.5 v1)
 // ---------------------------------------------------------------------------
@@ -1495,9 +1489,8 @@ mod tests {
         assert_eq!(duration_multiplier(&m, 4, &["admin".to_string()]), 1.3);
         assert_eq!(duration_multiplier(&m, 4, &[]), 1.3);
         assert_eq!(planned_minutes(120, 1.6), 192);
-        let est = Dur::blocks(2, 60);
-        assert_eq!(fmt_planned(&est, 1.6), "2b×1.6");
-        assert_eq!(fmt_planned(&est, 1.0), "2b");
+        assert_eq!(fmt_multiplier(1.6), "1.6");
+        assert_eq!(fmt_multiplier(1.0), "1");
     }
 
     #[test]

@@ -8429,3 +8429,32 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.EmitWire.withPlaces_appends_the_table
 #print axioms Tm.EmitWire.withPlaces_refuses_what_jget_refuses
 #print axioms Tm.EmitWire.the_table_on_the_wire_is_placeWords
+
+/-
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK L — the owner's D112 (README gap 4897; parity P109): the
+   binary's plan rows are the kernel's `Emit.Row` cells, asked through the `plan` section and padded by one
+   Rust function.  README gaps 1101 (the estimate AS WRITTEN) and 1102 (a HOT row's deadline,
+   `EmitDue.lean`) are closed at their cause.
+-/
+#print axioms Tm.Emit.dueWords_at_every_branch
+#print axioms Tm.Emit.renderWeekday_is_chronos
+#print axioms Tm.Emit.hotCell_of_no_deadline
+#print axioms Tm.Emit.hotCell_of_a_deadline
+#print axioms Tm.Emit.dueDayOf_of_a_point
+#print axioms Tm.Emit.dueDayOf_of_an_interval
+#print axioms Tm.Emit.dueDayOf_of_an_absolute_window
+#print axioms Tm.Emit.dueDayOf_of_a_daily_window
+#print axioms Tm.Emit.dueDayOf_of_no_shape
+#print axioms Tm.Emit.dueWords_ne_nil
+#print axioms Tm.Emit.hotCell_ne_nil_of_a_deadline
+#print axioms Tm.Emit.itemEstOf_is_the_written_estimate
+#print axioms Tm.Emit.itemEstOf_prefers_the_leading_estimate
+#print axioms Tm.Emit.itemEstOf_falls_back_to_the_est_key
+#print axioms Tm.Emit.noteCell_of_a_hot_row
+#print axioms Tm.Emit.noteCell_of_a_row_neither_underused_nor_hot
+#print axioms Tm.Emit.noteCell_of_an_underused_row_it_can_name
+#print axioms Tm.Emit.rowsOf_tells_the_planned_day
+#print axioms Tm.EmitWire.rowsOfReq_tells_the_requests_day
+#print axioms Tm.EmitWire.rowsJson_length_on_a_day
+#print axioms Tm.EmitWire.readNote_reads_soFar
+#print axioms Tm.EmitWire.readNote_reads_the_planners_key_and_refuses_the_other

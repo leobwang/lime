@@ -1,9 +1,16 @@
 //! §13 `tm now`, §12.1's diagnostics pane, §7.3's impossible banner, §11's
 //! energy mix (the day bar's legend) and §16's palette.
+//!
+//! Moved from `tm-core/tests/` at W-47 with the fixture it shares: since the
+//! owner's D112 a day's rows are the kernel's cells (`emit_fixture::with_rows`),
+//! and `tm now` prints a window of them. The snapshots are unchanged — the
+//! Rust builder wrote them, the kernel's rows meet them. The test of
+//! render_now, the default-config variant, went with that function: `tm now`
+//! takes no config since its rows stopped needing one.
 
 mod emit_fixture;
 
-use emit_fixture::{at, config, plan, prio, tree};
+use emit_fixture::{at, config, plan, prio, tree, with_rows};
 use tm_core::emit;
 use tm_core::model::{Dep, Id};
 use tm_core::dayplan::{DayPlan, Diagnostics, SegKind};
@@ -11,11 +18,9 @@ use tm_core::priority::PrioClass;
 
 #[test]
 fn now_shows_the_current_block_and_the_next_three() {
-    let cfg = config();
-    let tree = tree(&cfg);
     let day = plan();
     let now = at(10, 42);
-    let out = emit::render_now_with(&day, &tree, &cfg, now);
+    let out = emit::render_now_with(&day, now);
     // 09:20 → 11:20, so at 10:42: 1h22m gone, 38m left.
     assert!(out.contains("▶ Exercises 5.3–5.5"));
     assert!(out.contains("elapsed 1h22m · left 38m"));
@@ -29,7 +34,7 @@ fn now_shows_the_current_block_and_the_next_three() {
     // This assertion used to count lines beginning `"  1"`, which is what a
     // second renderer's indentation looked like; three such lines is a fact
     // about a format string and not about agreement between two surfaces.
-    let rows = emit::plan_rows(&day, &tree, &cfg, &emit::Layout::default());
+    let rows = emit::plan_rows(&day, &emit::Layout::default());
     let (current, next) = emit::now_window(&day, now);
     assert_eq!(next.len(), 3, "§13: the current block and the next three");
     let printed: Vec<&str> = out
@@ -47,30 +52,16 @@ fn now_shows_the_current_block_and_the_next_three() {
 
 #[test]
 fn now_says_so_when_nothing_is_running() {
-    let cfg = config();
-    let tree = tree(&cfg);
     let mut day = plan();
     day.segments.retain(|s| !matches!(s.kind, SegKind::Wall));
-    let out = emit::render_now_with(&day, &tree, &cfg, at(13, 20));
+    let day = with_rows(day);
+    let out = emit::render_now_with(&day, at(13, 20));
     assert!(out.starts_with("— nothing running (13:20)"));
     insta::assert_snapshot!("now_idle", out);
 
     // Past the last segment there is nothing to come either.
-    let out = emit::render_now_with(&day, &tree, &cfg, at(23, 0));
+    let out = emit::render_now_with(&day, at(23, 0));
     assert_eq!(out, "— nothing running (23:00)\nnext   —\n");
-}
-
-#[test]
-fn the_default_config_variant_agrees_with_the_fixture_config() {
-    // `render_now` uses the §16 defaults; the fixture's config only changes
-    // the zone, so both render the same text.
-    let cfg = config();
-    let tree = tree(&cfg);
-    let day = plan();
-    assert_eq!(
-        emit::render_now(&day, &tree, at(10, 42)),
-        emit::render_now_with(&day, &tree, &cfg, at(10, 42))
-    );
 }
 
 #[test]

@@ -313,6 +313,10 @@ struct Counts {
     walls: u32,
     /// `planner` sections — the day R3's `tm plan` asks for (W-41 repair).
     planner: u32,
+    /// `rows` calls — the `plan` section the binary asks right after each day it
+    /// plans, for that day's rows (the owner's **D112**, `planwire::rows_request`):
+    /// a second whole-tree load, and no log.
+    rows: u32,
     /// Any other request shape reaching the FFI.
     other: u32,
     /// **Calls**, not sections: one per `kernel call:` line.
@@ -331,7 +335,7 @@ struct Counts {
 impl Counts {
     /// Sections of every kind — deliberately **not** the call count any more.
     fn sections(&self) -> u32 {
-        self.log + self.apply + self.capacity + self.emit + self.walls + self.planner + self.other
+        self.log + self.apply + self.capacity + self.emit + self.walls + self.planner + self.rows + self.other
     }
 }
 
@@ -367,6 +371,7 @@ fn traced(tm: &Tm, now: &str, args: &[&str]) -> (i32, Counts) {
                     "emit" => c.emit += 1,
                     "walls" => c.walls += 1,
                     "planner" => c.planner += 1,
+                    "rows" => c.rows += 1,
                     _ => c.other += 1,
                 }
             }
@@ -411,13 +416,13 @@ fn every_verb_reads_the_log_through_the_kernel_after_the_switch() {
     // FFI crossings; every other column is **sections** (W-14, gap 278).
     eprintln!("per-verb kernel sections (switched binary)");
     eprintln!(
-        "{:<12} {:>4} {:>5} {:>6} {:>6} {:>9} {:>8} {:>6} {:>6} {:>8}  scopes",
-        "verb", "log", "emit", "walls", "apply", "capacity", "planner", "other", "calls", "replays"
+        "{:<12} {:>4} {:>5} {:>6} {:>6} {:>9} {:>8} {:>5} {:>6} {:>6} {:>8}  scopes",
+        "verb", "log", "emit", "walls", "apply", "capacity", "planner", "rows", "other", "calls", "replays"
     );
     for (name, c) in &table {
         eprintln!(
-            "{:<12} {:>4} {:>5} {:>6} {:>6} {:>9} {:>8} {:>6} {:>6} {:>8}  {}",
-            name, c.log, c.emit, c.walls, c.apply, c.capacity, c.planner, c.other, c.calls, c.replays,
+            "{:<12} {:>4} {:>5} {:>6} {:>6} {:>9} {:>8} {:>5} {:>6} {:>6} {:>8}  {}",
+            name, c.log, c.emit, c.walls, c.apply, c.capacity, c.planner, c.rows, c.other, c.calls, c.replays,
             c.scopes.join(",")
         );
     }
@@ -494,6 +499,21 @@ fn every_verb_reads_the_log_through_the_kernel_after_the_switch() {
              `tm plan` asks for, the costliest call the binary makes (gaps 4142, 4150)",
             c.planner
         );
+    }
+
+    // **The rows column, pinned to the planner column** (the owner's D112, W-47):
+    // every day the binary plans, it asks the kernel for that day's rows once —
+    // `kernel_capacity::read_day`'s second call, a whole-tree load the planner
+    // call already made once. A verb that plans with no rows call prints rows no
+    // kernel wrote; a verb that asks twice pays a third load.
+    for (name, c) in &table {
+        assert_eq!(
+            c.rows, c.planner,
+            "`tm {name}` asked the kernel for {} day's rows over {} planned day(s) — one rows call \
+             per planned day is D112's shape (`planwire::rows_request`)",
+            c.rows, c.planner
+        );
+        assert_eq!(c.other, 0, "`tm {name}` traced a request shape nobody named: {:?}", c.lines);
     }
 
     // **The capacity column, pinned exactly** — new at W-14. Before it, a
@@ -693,6 +713,16 @@ fn every_capacity_verb_replays_the_log_a_second_time_inside_its_capacity_call() 
              trace has stopped naming it (gap 278)",
             c.multi,
             1 + cuts
+        );
+        // D112: the three that plan ask for the day's rows once, in a call of its
+        // own (no log, no capacity); `tm review week` ranks without planning.
+        let want_rows = u32::from(expected_capacity_line(name).ends_with("+planner"));
+        assert_eq!(c.rows, want_rows, "`tm {name}` asked for the day's rows {} time(s): {:?}", c.rows, c.lines);
+        assert_eq!(
+            c.lines.iter().filter(|l| l.as_str() == "rows").count() as u32,
+            want_rows,
+            "`tm {name}`'s rows call carried another section: {:?}",
+            c.lines
         );
         let want_line = expected_capacity_line(name);
         assert!(
