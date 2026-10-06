@@ -117,6 +117,34 @@ pub fn kernel_id() -> &'static str {
     tm_kernel_ffi::KERNEL_ID
 }
 
+/// **The places a break is taken — the kernel's table, asked once per process** (the owner's
+/// **D111**, README gap 4904, parity P108). A logged `break_start`'s place is read through
+/// `Log.placeWords` in the kernel's log grammar, and any other word makes the line malformed, so
+/// the words `tm break --where` accepts and the TUI's `b` chord offers are THAT table, read off the
+/// request's `places` key (`EmitWire.withPlaces`, which `PlanWire.respondPlanner` applies), in the TUI's order. Until D111 the host spelled
+/// them in a table of its own (tm_core::store::BREAK_PLACES, deleted; the campaign's D81 call) held to the
+/// kernel's by a test. The answer is cached: the table is the kernel's, so it cannot change while
+/// the process runs.
+pub fn places() -> Result<&'static [String], String> {
+    static PLACES: std::sync::OnceLock<Result<Vec<String>, String>> = std::sync::OnceLock::new();
+    PLACES
+        .get_or_init(|| {
+            // Built as a value, as every request the binary sends is, so check 13's reader of the
+            // host's requests (`sentkeys.host_sections`) holds its keys to the kernel's readers.
+            let request = serde_json::json!({"docs": [], "places": true}).to_string();
+            let raw = tm_kernel_ffi::call(&request).map_err(|e| format!("the kernel's table of places: {e:?}"))?;
+            let resp: Value =
+                serde_json::from_str(&raw).map_err(|e| format!("the kernel's table of places: {e}"))?;
+            resp["ok"]["places"]
+                .as_array()
+                .and_then(|ws| ws.iter().map(|w| w.as_str().map(str::to_string)).collect::<Option<Vec<_>>>())
+                .ok_or_else(|| format!("the kernel answered no table of places: {raw}"))
+        })
+        .as_ref()
+        .map(Vec::as_slice)
+        .map_err(Clone::clone)
+}
+
 /// FNV-1a-64 (§9.8's prefix digest, and since the owner's D93 each sealed month file's — [`month_digest`]): the
 /// binary's one body, `tm_core::fnv` (the W-44 repair, README gap 4612).
 pub use tm_core::fnv::fnv1a64;

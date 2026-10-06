@@ -1802,17 +1802,22 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     // (`PlanWire.placeOf?`, `badBreak place`), so a typo in `--where` would stop
     // `tm plan` after R3. Read here, ahead of the branch, so the running arm
     // refuses it too — and, as D20 settles for every valid argument, a valid
-    // place does nothing to a running break.
+    // place does nothing to a running break. **The table is the kernel's** since
+    // the owner's D111 (README gap 4904, parity P108): the one the log's grammar
+    // reads a `break_start`'s place through, asked of the kernel
+    // (`kernel_log::places`) only when a place was given.
     let place = match args.place.as_deref() {
-        Some(word) => match tm_core::store::BreakPlace::parse(word) {
-            Some(p) => Some(p.as_str().to_string()),
-            None => {
+        Some(word) => {
+            let table = super::kernel_log::places()
+                .map_err(|e| CliError::Kernel(super::kernel_bridge::fault_issue(&e, "")))?;
+            if !table.iter().any(|w| w == word) {
                 return Err(CliError::msg(format!(
                     "unknown break place {word:?} — `--where` is one of {} (§12.6)",
-                    tm_core::store::BreakPlace::words()
-                )))
+                    table.join(", ")
+                )));
             }
-        },
+            Some(word.to_string())
+        }
         None => None,
     };
     super::kernel_bridge::gate(&ctx, "break")?;

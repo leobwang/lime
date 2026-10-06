@@ -450,14 +450,9 @@ pub fn hint_line(app: &App, width: usize) -> Line<'static> {
     let left = match (&app.mode, &app.message) {
         (Mode::Command, _) => format!(":{}█", app.input),
         (Mode::Input(kind), _) => format!("{}: {}█", kind.label(), app.input),
-        // The prompt reads the ONE table of places (D81, gap 3903).
-        (Mode::BreakWhere, _) => format!(
-            "break where? {}",
-            tm_core::store::BreakPlace::all()
-                .map(|p| format!("{} {}", p.key(), p.as_str()))
-                .collect::<Vec<_>>()
-                .join(" · ")
-        ),
+        // The prompt reads the ONE table of places — the kernel's since the
+        // owner's D111 (README gap 4904), handed to the App (`App::places`).
+        (Mode::BreakWhere, _) => format!("break where? {}", app.places.prompt()),
         (Mode::Energy, _) => "energy now? 0–5".to_string(),
         (_, Some(msg)) => msg.clone(),
         _ => ":".to_string(),
@@ -560,7 +555,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     if let Some(prompt) = &app.prompt {
         prompts::draw(f, area, prompt);
     } else if app.mode == Mode::Help {
-        prompts::draw_help(f, area);
+        prompts::draw_help(f, area, &app.places);
     }
 }
 

@@ -93080,3 +93080,183 @@ kernel step.
   `break_ended` dropped from `tm stop` (§4) — every one FAILED a named test.
 * **Driven** on the repair's binary: §4's three verbs, §5's four instants either side of 1883-11-18 and three after
   2200, §6's two cases with and without the file; §1's reproductions on `357c0f2`'s binary.
+
+<!-- =====================================================================
+     APPENDED 2026-10-06: stage 6 (the planner), run **W-47**, **TRACK L** —
+     the owner's D111 (a logged `break_start`'s place read through one table)
+     and D112 (the binary's rows are the kernel's cells).  Gaps 4950-4969 are
+     this track's; parity `P108`-`P109` allocated by the brief.  Cheats from
+     300 (the highest at `49186d7` is 283; whoever lands renumbers).
+     ===================================================================== -->
+
+## Stage 6 — W-47 track L: a break's place read through one table (D111), the binary's rows the kernel's cells (D112)
+
+**Status.**  Kept current while the work was done, because the run may be cut off.  D111 is §1 and is this block's
+first commit on `w47-l`; D112 follows as §2 in the next.  Every figure is this track's own measurement, with `uptime`.
+**A first attempt at this track was cut off** before it committed anything: it left D111 uncommitted in the track's
+worktree and a D112 draft in a scratch clone that did not compile.  This step read both, re-measured everything it
+kept, and claims nothing it did not run itself.
+
+### 1. D111 — a logged `break_start`'s place has one reader (README gap 4904, CLOSED; parity P108)
+
+**What changed.**  The owner's D111: a logged `break_start`'s place is read through the table of places, in the log
+grammar, and any other word makes the line MALFORMED — D18's warning in `tm check`, no running break, as fork 4748911
+reads it — so a place has one reader.
+
+* **The table is ONE, and it is the kernel's.**  `Log.placeWords` (`walk`, `seat`, `bed`, `phone`, §12.6's order) is
+  the table and `Log.isPlace` asks it.  The log grammar reads a `break_start`'s `where` through it — a field type
+  `FTy.place` (an `Option<String>` whose word must be a place), whose `Log.readF` arm names any other word `badField
+  where` — and the planner's reader of `state.break.place`, `PlanWire.placeOf?`, reads through it too (until this step
+  it spelled the four words a second time).
+* **How the table reaches the host — the brief left it to the step, and this is the design: the host READS the
+  kernel's.**  A request's `places` key appends the table to the `ok` object, last (`EmitWire.withPlaces`, which
+  `PlanWire.respondPlanner` applies to every answer it emits, so the export is still `PlanWire.callPlanner`); the binary
+  asks once per process (`kernel_log::places`, a once-only cell) and only when it needs a
+  place — `tm break --where` validates against it, and the TUI's `b` chord, its prompt and its `?` overlay all read it
+  (`tui::app::Places`, handed to the pure App as data; a place's §12.6 key is its word's first character, derived and
+  never spelled).  The host's own table, tm_core::store::BreakPlace with its BREAK_PLACES (the campaign's D81 call,
+  P75, held to the kernel's by a test; deleted, so not backticked), is DELETED.  **Why kernel→host and not host→kernel:** a table the REQUEST
+  carried would be an input of every record the replay seals — the replay folds `break_start` lines into
+  `Replay.Machine.brkOpen`, which the checkpoint holds — so it would have to join the checkpoint's key, as the zone
+  table's digest did under D104; compiled into the kernel, the kernel id (a digest of the archive) covers it already.
+  **What "the host's table" names now:** the table `tm break --where` validates against is the one the kernel reads, by
+  construction rather than by a test that holds two equal.
+* **`brk` — the line that ENDS a break — keeps its free `where`.**  D111 names the `break_start` line; a fork-written
+  `break` line with any place reads as it did (`Log.a_break_line_keeps_any_place`).
+* **The four words still appear in exactly two pieces of host TEXT**, each held to the kernel's table by a test and
+  neither a reader: clap's `--where` help (`tm/src/cli/mod.rs`, `cli_break_place.rs`'
+  `the_help_lists_the_tables_words`) and `Planner.BreakPlace`'s constructors (gap 4950).  The TUI's `?` overlay, which
+  spelled them too, now builds its break row from the table (`tui::prompts::help_lines`; its snapshots are
+  byte-identical).
+* **The FFI's call trace names the request** (`kernel call: places`, `tm_kernel_ffi`'s `trace_kinds`), so the one
+  extra call a process makes when it needs a place is never counted as `other`.
+
+**The laws, re-proved (D5).**  `Log.the_log_reads_what_it_renders`, `Log.the_log_emits_what_it_reads`,
+`Log.the_log_reads_what_it_emits` and `Log.emitEvent_of_fields` keep their statements over `Event.canonical`, which
+gains ONE clause: a `break_start` is canonical when its place is a word of the table (as an `hsw` is when serde reads it
+finite).  So "every canonical entry" is the same sentence over a smaller set at exactly one kind — and the removed
+entries are exactly the lines D111 makes malformed, about which the old statement would now be FALSE (the writer
+renders `"where":"moon"` and the reader names it `badField`).  `Log.a_known_event_is_never_read_as_unknown`,
+`Log.an_unknown_tag_is_never_a_warning` and `Log.lineTooLong_bounds_every_string` do not mention canonical and are
+unchanged.  P100's laws (`Replay.lean`, track K's file) are untouched: a malformed line is no entry, so the replay never
+sees one, and `Replay.lean` builds unchanged against the new grammar.  **Four lemmas changed statement**, each
+here with its old and new form:
+
+* `Log.readF_renderF` — was at EVERY value; now under `FieldReadable t x`.  The old form is refuted at gap 4904's
+  own word, `Log.readF_renderF_at_every_value_is_refuted`.
+* `Log.readArgs_of_agrees` — gains `ArgsReadable s a` (the old form is false at the same word).
+* `Log.Event.canonical_of_split` — was `ev.canonical = argsFinite k.schema a`; now
+  `ev.canonical = true ↔ (argsFinite k.schema a = true ∧ ArgsReadable k.schema a)` (they differ at `break_start` alone).
+  `Log.FieldReadable` and `Log.ArgsReadable` are `Prop`s, as `Log.Agrees` is: specifications the compiler emits no code
+  for, so check 12 has nothing to reach (as two `Bool` functions they were emitted and reached by nothing).
+* `PlanWire.callPlanner_without_a_planner_section_is_callRows` — gains `jget j "places" = .ok none`: the table rides
+  `respondPlanner`'s answer and `EmitWire.respondRows` does not carry it.  Its W-27 form is refuted one level down
+  (`PlanWire.respondPlanner_is_respondRows_without_a_planner_section_is_refuted`, over the bytes' value so no `String`
+  is evaluated).  `PlanWire.callExport_is_callPlanner` stands unchanged — the export is still `callPlanner`.
+
+**New, both directions at every layer the line crosses (AGENTS §5.8).**  The class-level reader law —
+`Log.a_break_start_read_off_the_disk_is_at_a_place`: an entry the reader returns from ANY line whose event is a
+`break_start` with a place has that place in the table — with its two lifts `Log.readF_readable` and
+`Log.readArgs_readable`; the witnesses at the line (`Log.a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word`,
+`walk` read and `moon` malformed), at the writer D16 made the reader (`Log.a_break_start_is_emitted_only_with_a_place`:
+no verb can append a word the replay would refuse) and at the field (`Log.readF_place`); the table's own facts
+(`Log.isPlace_reads_the_four_and_refuses_any_other_word`, `Log.placeWords_are_places_and_distinct`,
+`Log.every_place_has_its_own_key` — each word has a first character and no two share one, which the TUI's derived keys
+rest on); the planner's reader (`PlanWire.placeOf_reads_exactly_the_table`: it takes exactly `Log.isPlace`'s words, and
+is what stops building if the table gains a word `Planner.BreakPlace` has no constructor for); and the answer (`EmitWire.withPlaces_without_places`, `EmitWire.withPlaces_appends_the_table`,
+`EmitWire.withPlaces_refuses_what_jget_refuses`, `EmitWire.the_table_on_the_wire_is_placeWords`,
+`PlanWire.respondPlanner_without_places`, `PlanWire.respondPlanner_with_places`,
+`PlanWire.respondPlanner_answers_the_table`).  Cheats 300-303.  Every new definition is mutated (D40, in a clone):
+`placeWords`, `isPlace`, `FieldReadable`, `ArgsReadable`, `EmitWire.withPlaces` and the changed
+`FTy.T`, `readF`, `renderF`, `strsOfF`, `Event.canonical`, `fieldFinite`, `placeOf?` and `respondPlanner` are rostered in
+`kernel/mutations.txt` (`readF` UNFOLDABLE: no constant of its dependent type exists).
+
+**The behaviour rows.**  `tm/tests/cli_break_place.rs`' `a_hand_edited_logged_place_is_a_malformed_line_and_the_day_plans`
+(the hand edit gap 4904 names: `tm plan` exits 0 with no `badBreak`, `tm check --json` names the line once, a warning,
+`badField` on the `break_start` it quotes, exit code the tree's), `the_table_is_the_kernels` and
+`the_export_answers_the_table_only_when_asked` (the FFI half of `PlanWire.respondPlanner_without_places` and
+`PlanWire.respondPlanner_with_places`); `tm/tests/kernel_log_grammar.rs`'
+proptest `a_break_start_outside_the_table_is_a_malformed_line` (any word off the table, serde writes it, the kernel
+names it `badField:where`).  **RULE M**: one expectation of the kernel's read moved, `kernel_log_grammar.rs`' `any_event`
+generator — its `break_start` place drew any string and now draws from the table, because a word off it is the new
+proptest's case — named here under P108.  No snapshot moved: `tui_today_prompts`' two help-overlay snapshots are
+byte-identical with the overlay built from the table.
+
+**Parity P108 taken**: a logged `break_start` whose `where` is no word of the kernel's table of places (`Log.placeWords`: walk, seat, bed, phone) is a MALFORMED line to the kernel -- `badField where`, D18's warning in `tm check` at its line, and no running break for it -- and `tm break --where`, the TUI's `b` chord and its `?` overlay read that same table off the request's `places` key; fork 4748911 has no `break_start` and read every one as an unknown event whatever its word (`Replay.unknown` + 1, no warning), and W-46's kernel read any word there and held the break, so a hand-edited `"where": "moon"` stopped `tm plan` on `badBreak place` (the owner's D111, W-47 track L, README gap 4904)
+
+**Driven** (2026-10-06 02:15, load 12.7; the worktree's binary, a copy of `tm-core/tests/fixtures/plan-basic`, every
+command capped at 8 GB):
+
+```
+$ tm --now 2026-09-08T06:05:00-05:00 wake 06:05 --slept 8h            -> wake 06:05 · slept 480m          rc=0
+$ tm --now 2026-09-08T10:00:00-05:00 break 20m --where walk           -> break 20m (walk)                 rc=0
+$ grep break_start .tm/log.jsonl
+{"t":"2026-09-08T10:00:00-05:00","ev":"break_start","planned_min":20,"where":"walk"}
+$ sed -i 's/"where":"walk"/"where":"moon"/' .tm/log.jsonl              (the hand edit, line 4)
+$ tm --now 2026-09-08T10:05:00-05:00 plan                             -> 2026-09-08 · window 10:05–18:05 · budget 6 blocks
+                                                                         10:00  ·      break 20m        walk   (…)  rc=0
+$ tm --now 2026-09-08T10:05:00-05:00 check
+.tm/log.jsonl:4: warning[log-line]: the log reader refused this line: the kernel refused this line: badField ("{\"t\":…)
+0 errors, 1 warning                                                                                        rc=0
+```
+
+`tm plan` plans and `tm check` warns at the line, exit 0: D111 as the owner wrote it.  **And the drive found one
+more thing (gap 4951):** the day still draws the break at `walk` — from `.tm/state.json`, which `tm break` wrote before
+the hand edit, and which `Ctx::reconcile_state` keeps because the log now holds no readable line for it.
+
+**Gap 4951 — a running break whose logged `break_start` is hand-edited off the table is still drawn, from the cache
+(B).**  1. *What.*  The replay holds no running break for a malformed `break_start` (D111), but
+`Ctx::reconcile_state`'s branch for a cached break the log holds no line for — a break a binary before D105 began, kept
+while `.tm/state.json` exists (P73, README gap 4760) — keeps the cache's, so `tm plan` draws `break 20m walk` and the
+day moves when the file is deleted (D42's acceptance).  2. *Why not here.*  Telling a pre-D105 break from a malformed
+line needs the malformed line's `t`, and the kernel names a malformed line by its number and its refusal only; a host
+re-read of the line would be a second reader of the log (§5.3).  `ctx.rs`' reconcile is outside this track's files.  3.
+*Cost.*  Only a hand edit of the log reaches it, and `tm check` names that line in the same run.  4. *Clears it.*  The
+owner: whether a refused `break_start` ends the cache's break (the kernel could carry the refused line's instant beside
+its warning), or the cache's copy stands until a verb ends it.
+
+**The register on this branch.**  `parity.py` holds P1..Pmax contiguous, and P103-P107 are track K's this run, so
+`kernel/parity.txt` carries `hole P103`..`hole P107` lines (W-46 track H's shape for track K's P100): the W-47 Land
+deletes each when K's row lands, or renumbers down into it.  `python3 parity.py`: 103 registered (P1-P108, 5 declared
+holes), next free P109.
+
+**Gap 4950 — `Planner.BreakPlace`'s four constructors are a third spelling of the table (C).**  1. *What.*  The kernel's
+planner holds a running break's place as `Planner.BreakPlace` (`walk | seat | bed | phone`, with `BreakPlace.word`),
+and `PlanWire.placeOf?` maps a word of `Log.placeWords` onto it.  2. *Why not here.*  `Planner.lean` is track K's this
+run (the brief: "for the last goal only"); moving the inductive into `Log.lean`, as W-43 track G moved chrono's
+readers, is an edit of K's file.  3. *Cost.*  None silent: `PlanWire.placeOf_reads_exactly_the_table` and
+`PlanWire.placeOf_reads_the_word` hold the constructors to the table both ways, so a word added to one and not the other
+stops the build.  4. *Clears it.*  The Land, or the next step free to edit `Planner.lean`: `BreakPlace` and its `word`
+move into `Log.lean`, and `placeOf?` becomes the table's own reader.
+
+**Measured** (every command capped, `uptime` beside each; the step's own runs):
+
+* `check.sh`, in a clone of this tree (`git status --porcelain` the same 26 paths before and after), 2026-10-06
+  02:51-03:00, load 35.41 -> 26.99, 484 s, rc 0, all seventeen lines `ok`: the build; totality; the axiom audit
+  (6,419 theorems; `Classical.choice` 3,385, `Quot.sound` 4,935, `propext` 5,996; 420 depend on none); `Negative.lean`
+  rejected; the FFI (96 tests); the corpus (29/37 files, 4/5 whole plans); stage goals (1, stage 6's); prose citations
+  (62,331: 58,688 resolved, 3,643 allowed, 0 allow entries unused); new definitions mutated (761 rostered, 0 owed);
+  the parity register (103 registered, P1-P108 with 5 declared holes, next free P109); no two names for one definition
+  (0 unanswered); every emitted definition reached (1,523 reachable over the 10 sections `tm/src` sends, 1,099 exempt,
+  0 unanswered); the four halves of check 13 (17 fields written; inputs 37 fields, 33 read, 4 exempt; sent 169 key
+  paths, 168 decoded, 1 answered by an exemption; written 220 key paths, 168 written, 7 shallow answered by 5
+  exemptions); the replay (95 modules).
+* `cargo test --workspace --no-fail-fast`, five runs in the worktree, porcelain unchanged across each.  **Runs 3, 4 and
+  5 — the three this commit is accepted on:** 2,914 passed / 0 failed / 51 ignored over 155 result lines in each — run 3 03:31:48-03:46:32 (load 11.11 -> 12.05), run 4 03:46:32-04:03:18 (12.05 -> 14.56), run 5 04:03:18-04:17:57 (14.56 -> 7.02).  **Runs 1 and 2 each failed `cli_latency` and nothing
+  else**, by its kill limit (`tm … was still running after` the limit): `t18_the_planner_call_on_the_example_three_year_and_far_deadline_trees`
+  in both and `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second` in run 1 — 2,912 passed / 2 failed
+  (02:50-03:09, load 43.63 -> 28.57) and 2,913 / 1 (03:11-03:28, load 24.13 -> 20.18).  The machine is shared with the
+  other tracks of this run.  What says it is the machine and not the step: `cli_latency` from this tree and HEAD's own
+  test binary (`49186d7`, the main checkout's), alternated twice at load 9.2-15.5 (03:29-03:31): 7 passed / 0 failed
+  every time, 35.5-39.8 s.
+* The named suites, run 3: T5 (`kernel_replay_parity`) 52 passed / 4 ignored; the door (`kernel_log_door`) 44;
+  `cli_switch_acceptance` 16; `cli_latency` 7 / 1 ignored; `kernel_call_counts` 3; `one_padder` 9; `one_renderer` 35;
+  `kernel_row_cells` 36; `kernel_planner_wire` 27; `planner_classes` 70 / 8 ignored; `planner_invariants` 31 / 1
+  ignored; `cli_conformance` 7; `cli_json_matrix` 8; `cli_break_place` 21; `kernel_log_grammar` 26 / 2 ignored — 0
+  failed in every one.
+* `cli_latency --include-ignored --test-threads=1`, alone (03:10-03:11, load 29.66 -> 24.41): 8 passed.  T11's
+  three-year log: the verb after a windowable hand undo 370 ms, the verb after it 349 ms, a 3-day-old routine 314 ms,
+  `review week` 732 ms, a reseal 385 ms, ten stalled days worst 834 ms; one year: a later verb 144 ms, the gated
+  write 138 ms; three years: a later verb 219 ms, the gated write 187 ms.  T18 (the planner call): example tree
+  9.1 ms, T11's tree 122 ms, a due 3 years out 157 ms, 10 years out 335 ms.  D111 adds one kernel call to a process
+  that needs a place, and none to any verb T11 or T18 times.

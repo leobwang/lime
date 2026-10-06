@@ -2068,7 +2068,9 @@ pub struct BreakState {
     pub started: Option<NaiveTime>,
     /// Planned minutes.
     pub planned_min: u32,
-    /// `walk` / `seat` / `bed` / `phone` — one of [`BreakPlace`]'s words.
+    /// `walk` / `seat` / `bed` / `phone` — a word of the KERNEL's table of
+    /// places (`Log.placeWords`, the owner's D111), which `tm break --where`
+    /// validates against and the log's grammar reads a `break_start` through.
     #[serde(rename = "where")]
     pub place: Option<String>,
 }
@@ -2122,75 +2124,6 @@ impl BreakState {
             Some(b) => Some(b.started.with_timezone(&tz)),
             None => self.started_at(tz, now),
         }
-    }
-}
-
-/// **The places a break is taken** — the ONE host table of them (the
-/// campaign's **D81** call on README gap 3903, parity **P75**, W-41 track T):
-/// §13's `tm break --where <place>` reads its word here and refuses any other
-/// by name (D20's shape), and the TUI's `b` then `w`/`s`/`b`/`p` (§12.6) reads
-/// its key and its word here (`tui::app::BreakPlace` is this type). The
-/// kernel's `PlanWire.placeOf?` reads the same four words off the planner
-/// request and refuses any other (`badBreak place`), so a word the verb wrote
-/// is a word the planner reads. Fork 4748911 kept the four in the TUI alone
-/// and `tm break --where` stored any word it was given.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BreakPlace {
-    /// `w` — a walk.
-    Walk,
-    /// `s` — stayed in the seat.
-    Seat,
-    /// `b` — lay down.
-    Bed,
-    /// `p` — the phone.
-    Phone,
-}
-
-/// [`BreakPlace`]'s table: each place, its `--where` word and its TUI key, in
-/// the order the TUI's prompt lists them.
-const BREAK_PLACES: [(BreakPlace, &str, char); 4] = [
-    (BreakPlace::Walk, "walk", 'w'),
-    (BreakPlace::Seat, "seat", 's'),
-    (BreakPlace::Bed, "bed", 'b'),
-    (BreakPlace::Phone, "phone", 'p'),
-];
-
-impl BreakPlace {
-    /// Every place, in the table's order.
-    pub fn all() -> impl Iterator<Item = BreakPlace> {
-        BREAK_PLACES.iter().map(|(p, _, _)| *p)
-    }
-
-    /// Its row of the table: the rows are in the variants' order
-    /// (`each_place_is_its_own_row_of_the_table`).
-    fn row(self) -> &'static (BreakPlace, &'static str, char) {
-        &BREAK_PLACES[self as usize]
-    }
-
-    /// The `--where` word (§13 `tm break --where walk`), and the `where` the
-    /// `break` log line and `.tm/state.json` carry.
-    pub fn as_str(self) -> &'static str {
-        self.row().1
-    }
-
-    /// The TUI key that picks it (§12.6).
-    pub fn key(self) -> char {
-        self.row().2
-    }
-
-    /// The place a TUI key picks.
-    pub fn from_key(c: char) -> Option<BreakPlace> {
-        BREAK_PLACES.iter().find(|(_, _, k)| *k == c).map(|(p, _, _)| *p)
-    }
-
-    /// The place a `--where` word names, exactly as the table spells it.
-    pub fn parse(word: &str) -> Option<BreakPlace> {
-        BREAK_PLACES.iter().find(|(_, w, _)| *w == word).map(|(p, _, _)| *p)
-    }
-
-    /// The table's words, `walk, seat, bed, phone`, for a message.
-    pub fn words() -> String {
-        BREAK_PLACES.iter().map(|(_, w, _)| *w).collect::<Vec<_>>().join(", ")
     }
 }
 
@@ -2312,26 +2245,6 @@ mod tests {
 
     fn cfg() -> Config {
         Config::default()
-    }
-
-    /// **The break-place table is one table, read both ways** (D81, gap 3903):
-    /// each variant is its own row, every word and every key reads back to its
-    /// place, and nothing else reads as one.
-    #[test]
-    fn each_place_is_its_own_row_of_the_table() {
-        for (i, (p, word, key)) in BREAK_PLACES.iter().enumerate() {
-            assert_eq!(*p as usize, i, "{p:?} is row {i}");
-            assert_eq!(p.as_str(), *word);
-            assert_eq!(p.key(), *key);
-            assert_eq!(BreakPlace::parse(word), Some(*p));
-            assert_eq!(BreakPlace::from_key(*key), Some(*p));
-        }
-        assert_eq!(BreakPlace::all().count(), 4);
-        assert_eq!(BreakPlace::words(), "walk, seat, bed, phone");
-        for unknown in ["hammock", "Walk", " walk", "", "w"] {
-            assert_eq!(BreakPlace::parse(unknown), None, "{unknown:?}");
-        }
-        assert_eq!(BreakPlace::from_key('z'), None);
     }
 
     /// **A running break's start is the latest instant at or before `now` with

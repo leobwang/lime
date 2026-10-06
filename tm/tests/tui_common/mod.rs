@@ -637,6 +637,7 @@ pub fn app_of_world(
         now,
         cfg,
         planner,
+        places: app::Places::new(chokepoint::kernel_places()),
     };
     App::with_plan(data, plan, ghost)
 }

@@ -720,6 +720,12 @@ fn numerals_as_f64(v: Value) -> Value {
     }
 }
 
+/// **The kernel's table of places** (the owner's D111), through the binary's own
+/// reader of it (`kernel_log::places`).
+fn table_of_places() -> Vec<String> {
+    kernel_log::places().expect("the kernel answers its table of places").to_vec()
+}
+
 /// A string serde must escape and the kernel must escape the same way.
 fn any_text() -> impl Strategy<Value = String> {
     prop::collection::vec(any::<char>(), 0..10).prop_map(String::from_iter)
@@ -747,8 +753,11 @@ fn any_event() -> impl Strategy<Value = Event> {
         (s(), any::<u32>()).prop_map(|(id, remaining_min)| Event::Stop { id, remaining_min }),
         (any::<u32>(), any::<Option<u32>>(), prop::option::of(s()))
             .prop_map(|(planned_min, actual_min, r#where)| Event::Break { planned_min, actual_min, r#where }),
-        // The owner's D105 (parity P100): the line `tm break` writes when a break begins.
-        (any::<u32>(), prop::option::of(s()))
+        // The owner's D105 (parity P100): the line `tm break` writes when a break begins — its
+        // place a word of the kernel's table since the owner's D111 (P108), the only word the
+        // kernel's grammar reads there (a `where` outside it is
+        // `a_break_start_outside_the_table_is_a_malformed_line`'s).
+        (any::<u32>(), prop::option::of(prop::sample::select(table_of_places())))
             .prop_map(|(planned_min, r#where)| Event::BreakStart { planned_min, r#where }),
         (any::<u8>(), any::<u8>(), hsw, s()).prop_map(|(pred, rep, hsw, loc)| Event::Energy { pred, rep, hsw, loc }),
         prop::option::of(s()).prop_map(|id| Event::Interrupt { id }),
@@ -800,6 +809,27 @@ proptest! {
         let got = kernel_read(&[Some(&line)], true);
         match &got[0] {
             Kernel::Entry(_, _, rendering, _) => prop_assert_eq!(rendering, &line),
+            other => prop_assert!(false, "{:?} on {}", other, line),
+        }
+    }
+
+    /// **D111** (README gap 4904, parity P108): a `break_start` whose `where` is no word of the
+    /// kernel's table of places is a MALFORMED line to the kernel — `badField where`, D18's
+    /// warning — whatever word the Rust writer was handed; the Rust writer writes any string
+    /// there (serde's `Option<String>`), and fork 4748911 read the line as an unknown event.
+    #[test]
+    fn a_break_start_outside_the_table_is_a_malformed_line(
+        t in any_stamp(),
+        planned_min in any::<u32>(),
+        word in any_text(),
+    ) {
+        prop_assume!(!table_of_places().contains(&word));
+        let line = LogEntry::new(t, Event::BreakStart { planned_min, r#where: Some(word) })
+            .to_json()
+            .expect("serde writes it");
+        let got = kernel_read(&[Some(&line)], true);
+        match &got[0] {
+            Kernel::Warn(class) => prop_assert_eq!(class.as_str(), "badField:where", "{}", line),
             other => prop_assert!(false, "{:?} on {}", other, line),
         }
     }

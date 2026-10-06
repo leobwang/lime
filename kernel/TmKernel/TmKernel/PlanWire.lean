@@ -291,13 +291,13 @@ def readOptActive (v : JVal) : Except PlannerRefusal (Option ActiveBlock) :=
   | .ok none => .ok none
   | .ok (some w) => (readActive w).map some
 
-/-- The four `--where` words of fork 4748911's `BreakPlace` (`tm/src/tui/app.rs`'s; since W-41 track T the host's one table is `tm_core::store::BreakPlace`,
-and `tm/tests/cli_break_place.rs` sends every one of its words through this reader — the W-41 repair, README gap 4145).  An unknown word is refused by name, never defaulted (AGENTS §5.7). -/
+/-- **The planner's reader of a place reads the ONE table** (the owner's D111, README gap 4904): `Log.placeWords` decides
+what a place is, as it does for a logged `break_start`, and the planner's constructor is the one whose word it is — held to
+the table both ways (`placeOf_reads_exactly_the_table`, `placeOf_reads_the_word`).  Until W-47 this spelled the four words a
+second time and the log's grammar read any word, so a hand-edited `"where": "moon"` stopped `tm plan`; `Planner.BreakPlace`'s
+constructors are a third spelling of the table (README gap 4950).  An unknown word is refused by name (AGENTS §5.7). -/
 def placeOf? (s : List Char) : Option BreakPlace :=
-  if s = "walk".toList then some .walk
-  else if s = "seat".toList then some .seat
-  else if s = "bed".toList then some .bed
-  else if s = "phone".toList then some .phone
+  if Log.isPlace s then [BreakPlace.walk, .seat, .bed, .phone].find? (fun p => p.word == s)
   else none
 
 /-- `state.break`, through `Planner.mkBreak?`. -/
@@ -1245,15 +1245,15 @@ def runPlanner (j : JVal) : Except JVal JVal :=
             | .error x => .error (plannerRefusalJson x)
             | .ok ot => .ok (withPlanner r (planJson (Planner.dayPlan req) ++ overtimeJson req ot))
 
-/-- **The response value for a request's bytes**, `EmitWire.respondRows`' shape over
-`runPlanner`. -/
+/-- **The response value for a request's bytes**, `EmitWire.respondRows`' shape over `runPlanner` — and the
+kernel's table of places on an answer to a request with a `places` key (the owner's D111, `EmitWire.withPlaces`). -/
 def respondPlanner (input : List Char) : JVal :=
   match jparse input with
   | .error e => jsonErr s!"bad json: {jerrText e}"
   | .ok j =>
     match runPlanner j with
     | .error e => e
-    | .ok r    => r
+    | .ok r    => EmitWire.withPlaces j r
 
 /-- What the FFI runs. -/
 def callPlanner (input : String) : String := String.ofList (jemit (respondPlanner input.toList))
@@ -1270,12 +1270,12 @@ theorem runPlanner_without_a_planner_section_is_runRows (j : JVal)
     (h : jget j "planner" = .ok none) : runPlanner j = EmitWire.runRows j := by
   simp [runPlanner, h]
 
-/-- And its bytes are `EmitWire.callRows`'. -/
-theorem callPlanner_without_a_planner_section_is_callRows (input : String)
-    (j : JVal) (hp : jparse input.toList = .ok j) (h : jget j "planner" = .ok none) :
+/-- And its bytes are `EmitWire.callRows`' — with no `places` key either (D111: the table rides this answer alone). -/
+theorem callPlanner_without_a_planner_section_is_callRows (input : String) (j : JVal) (hp : jparse input.toList = .ok j)
+    (h : jget j "planner" = .ok none) (hq : jget j "places" = .ok none) :
     callPlanner input = EmitWire.callRows input := by
   simp only [callPlanner, EmitWire.callRows, respondPlanner, EmitWire.respondRows, hp,
-    runPlanner_without_a_planner_section_is_runRows j h]
+    runPlanner_without_a_planner_section_is_runRows j h, EmitWire.withPlaces_without_places hq]
   rfl
 
 /-- **A readable `planner` section ANSWERS THE DAY.**
@@ -2891,6 +2891,85 @@ theorem runPlanner_refuses_a_section_the_decoder_refuses_as_written_fails_where_
   simp only [Except.error.injEq, plannerRefusalJson, jone, JVal.obj.injEq, JVal.str.injEq, List.cons.injEq,
     Prod.mk.injEq, true_and, and_true] at h
   exact (String.toList_inj.mp h).symm
+
+/-! ## `places` — the ONE table of places, read by the host from the kernel (the owner's D111, W-47 track L)
+
+APPENDED 2026-10-06, at the end of the module so that no line above moves (every check 9 pin site in this file stays
+where its row recorded it).  `Log.placeWords` is the table a logged `break_start`'s place is read through (D111, README
+gap 4904) and `placeOf?` reads through it too.  The host needs the same words — `tm break --where` validates against them,
+the TUI's `b` chord, its prompt and its `?` overlay list them — and until W-47 it spelled them in a table of its own (the
+campaign's D81 call; deleted at W-47, so its name is not backticked here), held to the kernel's by a test.  A request's
+`places` key asks for the table and the `ok` object gains it, last: `respondPlanner` hands every answer it emits to
+`EmitWire.withPlaces`, so the export is still `callPlanner` (`callExport_is_callPlanner` stands) and the host's one table
+IS the kernel's, read once per process (`kernel_log::places`).  Why the table travels from the kernel to the host and not
+the other way is `Log.lean`'s D111 section: a table the request carried would be an input to every sealed record, and
+would have to join the checkpoint's key.
+
+A request with no `places` key is answered exactly as before (`respondPlanner_without_places`); one with it gets the same
+answer with the table appended (`respondPlanner_with_places`).  `callPlanner_without_a_planner_section_is_callRows` gained
+the hypothesis "no `places` key", because the table rides this answer alone; the law as W-27 stated it is refuted one
+level down (`respondPlanner_is_respondRows_without_a_planner_section_is_refuted`). -/
+
+/-- **The planner's reader takes exactly the table's words** (D111): a word reads as a place exactly when `Log.isPlace`
+says it is one — so every place the log's grammar accepts on a `break_start` is one the planner's request reads, and no
+other word is.  Gap 4904's two readers are one table; were `Log.placeWords` to gain a word `Planner.BreakPlace` has no
+constructor for, this theorem is what would stop building (README gap 4950). -/
+theorem placeOf_reads_exactly_the_table (s : List Char) : (placeOf? s).isSome = Log.isPlace s := by
+  unfold placeOf?
+  by_cases h : Log.isPlace s = true
+  · rw [if_pos h, h]
+    have hm : s ∈ Log.placeWords := by simpa [Log.isPlace] using h
+    simp only [Log.placeWords, List.mem_cons, List.not_mem_nil, or_false] at hm
+    rcases hm with rfl | rfl | rfl | rfl <;> decide
+  · rw [if_neg h]
+    simp only [Bool.not_eq_true] at h
+    rw [h]; rfl
+
+/-- **Without a `places` key a request's bytes are answered as they were before W-47**, value for value. -/
+theorem respondPlanner_without_places (input : List Char) (j : JVal) (hp : jparse input = .ok j)
+    (h : jget j "places" = .ok none) :
+    respondPlanner input = (match runPlanner j with | .error e => e | .ok r => r) := by
+  simp only [respondPlanner, hp]
+  cases runPlanner j <;> simp [EmitWire.withPlaces_without_places h]
+
+/-- **With one, an answer is the same answer with the table appended to its `ok` object**, and a refusal is
+`runPlanner`'s own, unchanged. -/
+theorem respondPlanner_with_places (input : List Char) (j v : JVal) (hp : jparse input = .ok j)
+    (h : jget j "places" = .ok (some v)) :
+    respondPlanner input = (match runPlanner j with
+      | .error e => e
+      | .ok r => CapWire.intoOk r (fun kvs => kvs ++ [("places".toList, .arr (Log.placeWords.map JVal.str))])) := by
+  simp only [respondPlanner, hp]
+  cases runPlanner j <;> simp [EmitWire.withPlaces_appends_the_table h]
+
+/-- **`respondPlanner` answers the table at a request's bytes**: `{"docs":[],"places":true}`, computed, is an `ok` answer
+whose last key is the table — the definition at one request, so a constant cannot stand in for it (check 9). -/
+theorem respondPlanner_answers_the_table :
+    (match respondPlanner ['{','"','d','o','c','s','"',':','[',']',',','"','p','l','a','c','e','s','"',':','t','r','u','e','}'] with
+     | .obj [(k, .obj kvs)] => k == ['o','k'] && (kvs.getLast?.map (·.1)) == some ['p','l','a','c','e','s']
+     | _ => false) = true := by
+  decide
+
+/-- **`callPlanner_without_a_planner_section_is_callRows` as W-27 stated it — with no `places` hypothesis — is refuted**,
+one level down (D111): the request `{"docs":[],"places":true}` carries no planner section, and `respondPlanner` answers it
+with the table where `EmitWire.respondRows` answers it without.  Stated over the bytes' VALUE, so no `String` is
+evaluated (AGENTS §5.10a: the bytes' round trip was killed at the 8 GB cap, `callPlanner_is_the_emitted_answer`'s note). -/
+theorem respondPlanner_is_respondRows_without_a_planner_section_is_refuted :
+    ¬ ∀ (input : List Char) (j : JVal), jparse input = .ok j → jget j "planner" = .ok none →
+      respondPlanner input = EmitWire.respondRows input := by
+  intro h
+  have hj : jparse ['{','"','d','o','c','s','"',':','[',']',',','"','p','l','a','c','e','s','"',':','t','r','u','e','}']
+      = .ok (.obj [(['d','o','c','s'], .arr []), (['p','l','a','c','e','s'], .bool true)]) := rfl
+  have he := h _ _ hj rfl
+  have h1 : (match respondPlanner ['{','"','d','o','c','s','"',':','[',']',',','"','p','l','a','c','e','s','"',':','t','r','u','e','}'] with
+      | .obj [(_, .obj kvs)] => kvs.any (fun kv => kv.1 == ['p','l','a','c','e','s'])
+      | _ => false) = true := by decide
+  have h2 : (match EmitWire.respondRows ['{','"','d','o','c','s','"',':','[',']',',','"','p','l','a','c','e','s','"',':','t','r','u','e','}'] with
+      | .obj [(_, .obj kvs)] => kvs.any (fun kv => kv.1 == ['p','l','a','c','e','s'])
+      | _ => false) = false := by decide
+  rw [he] at h1
+  rw [h1] at h2
+  exact Bool.noConfusion h2
 
 end PlanWire
 end Tm

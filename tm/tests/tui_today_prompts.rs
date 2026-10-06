@@ -23,6 +23,12 @@ fn key(c: char) -> KeyEvent {
     KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
 }
 
+/// **The kernel's table of places** (the owner's D111) — the help overlay's
+/// break row reads it, as the App's does.
+fn places() -> tui_common::app::Places {
+    tui_common::app::Places::new(tui_common::chokepoint::kernel_places())
+}
+
 /// Draw an overlay over an 80×12 frame.
 fn overlay(draw: impl Fn(&mut ratatui::Frame)) -> String {
     overlay_sized(80, 12, draw)
@@ -282,7 +288,7 @@ fn a_prompt_never_steals_a_character_from_the_command_line() {
 
 #[test]
 fn the_help_overlay() {
-    insta::assert_snapshot!(overlay_sized(84, 18, |f| prompts::draw_help(f, f.area())));
+    insta::assert_snapshot!(overlay_sized(84, 18, |f| prompts::draw_help(f, f.area(), &places())));
 }
 
 #[test]
@@ -290,7 +296,7 @@ fn the_help_overlay_is_clipped_rather_than_lost_on_a_small_terminal() {
     // `centred` clamps the box to the frame it is given instead of drawing
     // nothing (a `TestBackend` always prints `height` rows, so counting them
     // would prove nothing — what matters is that the box is *there*).
-    let small = overlay_sized(30, 5, |f| prompts::draw_help(f, f.area()));
+    let small = overlay_sized(30, 5, |f| prompts::draw_help(f, f.area(), &places()));
     assert!(small.contains('┌') && small.contains('└'), "a box: {small}");
     assert!(small.contains("Keys"), "with its title: {small}");
     assert!(

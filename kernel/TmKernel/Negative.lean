@@ -3053,4 +3053,41 @@ theorem aRunningBreakHoldsNoLedgerDay :
     Seal.machineDays ⟨none, none, none, [], some ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), 20, none, 739865⟩⟩ = [] := by
   decide
 
+/- ===========================================================================
+   APPENDED 2026-10-05: stage 6, run W-47, TRACK L — the owner's D111 (README
+   gap 4904; parity P108): a logged `break_start`'s place is read through the
+   ONE table of places (`Log.placeWords`), in the log grammar, and any other
+   word makes the line malformed; the planner's reader and the host read the
+   same table.  Cheats 300-303 (whoever lands renumbers).
+   =========================================================================== -/
+
+/- CHEAT 300 — gap 4904's hand edit claimed to read as a running break's
+   place: the reader names `"where": "moon"` `badField where`, so the emit
+   (which IS the reader, D16) is an error and `rfl` refuses the entry. -/
+theorem theMoonIsAPlace :
+    Log.emitEvent Log.Kind.brkStart.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['m','o','o','n'])]
+      = .ok (.brkStart 20 (some ['m','o','o','n'])) := rfl
+
+/- CHEAT 301 — the per-field round trip claimed at EVERY value, as stage 5 B3
+   stated it: a `place` the writer writes with a word the table does not hold
+   is `badField`, not read back (`Log.readF_renderF_at_every_value_is_refuted`).
+   `rfl` refuses. -/
+theorem everyPlaceRoundTrips :
+    Log.readF ['w','h','e','r','e'] .place (Log.renderF .place (some ['m','o','o','n']))
+      = .ok (some ['m','o','o','n']) := rfl
+
+/- CHEAT 302 — a `break_start` with an unknown place claimed canonical, so
+   that `the_log_reads_what_it_renders` would read it back: `Event.canonical`
+   asks the table, and `decide` computes `false`. -/
+theorem aMoonBreakStartIsCanonical :
+    (Log.Event.brkStart 20 (some ['m','o','o','n'])).canonical = true := by
+  decide
+
+/- CHEAT 303 — the planner's reader claimed to take a word the log's grammar
+   refuses (gap 4904's two readers): `PlanWire.placeOf?` reads through
+   `Log.isPlace`, and `decide` computes `none`. -/
+theorem thePlannerReadsTheMoon : (PlanWire.placeOf? ['m','o','o','n']).isSome = true := by
+  decide
+
 end Tm

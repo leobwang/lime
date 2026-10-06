@@ -1495,7 +1495,9 @@ fn the_log_op_answers_the_day_facts() {
 
 /// **A running break on the wire** (the owner's D105, parity P100; Replay.lean's
 /// `a_break_start_is_the_running_break` and `a_break_line_ends_the_running_break`):
-/// a `break_start` at 09:00 planning 20 minutes at `cafe`, and nothing after it.
+/// a `break_start` at 09:00 planning 20 minutes at `walk`, and nothing after it — at
+/// `cafe`, no word of the kernel's table of places, the line is MALFORMED by name and no
+/// break runs (the owner's D111, parity P108; until W-47 this test's start was `cafe`).
 /// `open.break` is `[start, planned, where, day]`, the start in the codec's
 /// `[sec, ns, west, offset]` (2026-09-07T09:00:00Z is second 63,924,368,400 and day
 /// 739,865) — what the host rebuilds `.tm/state.json`'s `break` from.  A `break` line
@@ -1505,7 +1507,10 @@ fn the_log_op_answers_the_day_facts() {
 #[test]
 fn the_log_op_answers_a_running_break() {
     let utc = r#"{"key":"UTC","base":"+00:00:00","then":[]}"#;
-    let start = r#""{\"t\":\"2026-09-07T09:00:00Z\",\"ev\":\"break_start\",\"planned_min\":20,\"where\":\"cafe\"}""#;
+    // At a place of the kernel's table (the owner's D111, parity P108): a `break_start` at any
+    // other word is a malformed line and holds no running break (asserted below with `cafe`).
+    let start = r#""{\"t\":\"2026-09-07T09:00:00Z\",\"ev\":\"break_start\",\"planned_min\":20,\"where\":\"walk\"}""#;
+    let off_the_table = r#""{\"t\":\"2026-09-07T09:00:00Z\",\"ev\":\"break_start\",\"planned_min\":20,\"where\":\"cafe\"}""#;
     let ended = r#""{\"t\":\"2026-09-07T09:20:00Z\",\"ev\":\"break\",\"planned_min\":20,\"actual_min\":20,\"where\":\"cafe\"}""#;
     let undone = r#""{\"t\":\"2026-09-07T09:01:00Z\",\"ev\":\"undo\",\"of\":\"break_start\"}""#;
     let ask = |lines: &str| {
@@ -1513,10 +1518,15 @@ fn the_log_op_answers_a_running_break() {
     };
     let running = ask(start);
     assert!(
-        running.contains(r#""open":{"block":null,"interrupt":null,"break":[[63924368400,0,false,0],20,"cafe",739865]},"#),
+        running.contains(r#""open":{"block":null,"interrupt":null,"break":[[63924368400,0,false,0],20,"walk",739865]},"#),
         "{running}"
     );
     assert!(running.contains(r#""entryCount":1,"unknown":0,"#), "{running}");
+    // D111: `cafe` is no place, so the line is malformed by name and no break runs.
+    let malformed = ask(off_the_table);
+    assert!(malformed.contains(r#""open":{"block":null,"interrupt":null,"break":null},"#), "{malformed}");
+    assert!(malformed.contains(r#""entryCount":0,"unknown":0,"#), "{malformed}");
+    assert!(malformed.contains(r#""warnings":[{"line":1,"w":"badField","key":"where"}]"#), "{malformed}");
     let over = ask(&format!("{start},{ended}"));
     assert!(over.contains(r#""open":{"block":null,"interrupt":null,"break":null},"#), "{over}");
     let cancelled = ask(&format!("{start},{undone}"));

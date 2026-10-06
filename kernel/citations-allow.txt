@@ -737,6 +737,14 @@ can_fail
 1 readActive_refuses_a_start_after_now
 1 the_worked_minutes_bound_is_run
 
+# W-47 track L (README gap 4904): the owner's D111 makes the kernel's `Log.placeWords` the ONE table of places, read by
+# the log grammar and by the host off a request's `places` key, so the host's own table -- `tm_core::store::BreakPlace`,
+# its row table and its reverse readers, W-41 track T's (P75) -- is DELETED.  Every citation counted here is W-41 track
+# T's append-only README block naming the table as it stood.
+1 BREAK_PLACES
+1 each_place_is_its_own_row_of_the_table
+1 from_key
+
 # ====================== 4. GRANDFATHERED (README, unadjudicated) ======================
 #
 # 161 names, seeded from `README.md` at W-19 so check 8 could land as a RATCHET on new prose

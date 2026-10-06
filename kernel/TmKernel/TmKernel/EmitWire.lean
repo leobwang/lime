@@ -1100,5 +1100,45 @@ theorem readRowSection_accepts_an_empty_day :
         q.segs.val.length)) = .ok (1320, 0, 0) := by
   rfl
 
+/-! ## D111 — the kernel's table of places, answered at a request's `places` key (stage 6 W-47 track L, README gap 4904)
+
+APPENDED 2026-10-06, at the end of the module so that no line above moves.  The owner's D111 makes the log grammar read a
+`break_start`'s place through ONE table, `Log.placeWords`; the host reads that same table off any answer to a request
+that carries a `places` key — `tm break --where` validates against it and the TUI's `b` chord lists it — so the words
+have one definition and the host spells none (`kernel_log::places`).  `PlanWire.respondPlanner` hands every answer it
+emits to `withPlaces`: the table is appended to the `ok` object, last, through `CapWire.intoOk` — the shape guard every
+section's key goes through, so a refusal passes untouched — and a `places` key carried twice is refused by `jget`'s own
+name, as every key the kernel reads is. -/
+
+/-- **An answer, with the table appended when the request asked for it** — `Log.placeWords`, word for word, in the
+TUI's order.  The table is written here and not in a constant of its own: a closed constant the code generator folds
+into its one caller is a definition nothing reaches (check 12). -/
+def withPlaces (j r : JVal) : JVal :=
+  match jget j "places" with
+  | .error e => jsonErr e
+  | .ok none => r
+  | .ok (some _) => CapWire.intoOk r (fun kvs => kvs ++ [("places".toList, .arr (Log.placeWords.map JVal.str))])
+
+/-- **No `places` key, no change** — so every request the host sent before W-47 is answered as it was. -/
+theorem withPlaces_without_places {j : JVal} (h : jget j "places" = .ok none) (r : JVal) : withPlaces j r = r := by
+  simp [withPlaces, h]
+
+/-- **A `places` key appends the table to the `ok` object**, whatever the key's value. -/
+theorem withPlaces_appends_the_table {j v : JVal} (h : jget j "places" = .ok (some v)) (r : JVal) :
+    withPlaces j r = CapWire.intoOk r (fun kvs => kvs ++ [("places".toList, .arr (Log.placeWords.map JVal.str))]) := by
+  simp [withPlaces, h]
+
+/-- **A `places` key the request carries twice is refused by `jget`'s name**, never answered with or without the table. -/
+theorem withPlaces_refuses_what_jget_refuses {j : JVal} {e : String} (h : jget j "places" = .error e) (r : JVal) :
+    withPlaces j r = jsonErr e := by
+  simp [withPlaces, h]
+
+/-- **The table on the wire is `Log.placeWords`, word for word** — the host's prompt, `tm break --where`'s check and the
+log's grammar read one list. -/
+theorem the_table_on_the_wire_is_placeWords :
+    (JVal.arr (Log.placeWords.map JVal.str)) =
+      .arr [.str ['w','a','l','k'], .str ['s','e','a','t'], .str ['b','e','d'], .str ['p','h','o','n','e']] := by
+  decide
+
 end EmitWire
 end Tm

@@ -8399,3 +8399,33 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
    order fires, so the narrowing is a pair of theorems and not an FFI test alone (D5).
 -/
 #print axioms Tm.PlanWire.runPlanner_refuses_a_section_the_decoder_refuses_as_written_fails_where_the_order_fires
+
+/-
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK L — the owner's D111 (README gap 4904; parity P108): a
+   logged `break_start`'s place is read through the ONE table of places in the log grammar, any other word
+   makes the line malformed, and the planner's reader and the host read the same table (a request's `places`
+   key, answered by `PlanWire.respondPlanner` through `EmitWire.withPlaces`).  The export is still
+   `PlanWire.callPlanner`; `PlanWire.callPlanner_without_a_planner_section_is_callRows` gained a `places`
+   hypothesis and its W-27 form is refuted one level down.
+-/
+#print axioms Tm.Log.readF_renderF_at_every_value_is_refuted
+#print axioms Tm.Log.placeWords_are_places_and_distinct
+#print axioms Tm.Log.isPlace_reads_the_four_and_refuses_any_other_word
+#print axioms Tm.Log.readF_place
+#print axioms Tm.Log.a_break_start_is_emitted_only_with_a_place
+#print axioms Tm.Log.a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word
+#print axioms Tm.Log.a_break_line_keeps_any_place
+#print axioms Tm.Log.fieldFinite_of_a_place
+#print axioms Tm.Log.every_place_has_its_own_key
+#print axioms Tm.Log.readF_readable
+#print axioms Tm.Log.readArgs_readable
+#print axioms Tm.Log.a_break_start_read_off_the_disk_is_at_a_place
+#print axioms Tm.PlanWire.placeOf_reads_exactly_the_table
+#print axioms Tm.PlanWire.respondPlanner_without_places
+#print axioms Tm.PlanWire.respondPlanner_with_places
+#print axioms Tm.PlanWire.respondPlanner_answers_the_table
+#print axioms Tm.PlanWire.respondPlanner_is_respondRows_without_a_planner_section_is_refuted
+#print axioms Tm.EmitWire.withPlaces_without_places
+#print axioms Tm.EmitWire.withPlaces_appends_the_table
+#print axioms Tm.EmitWire.withPlaces_refuses_what_jget_refuses
+#print axioms Tm.EmitWire.the_table_on_the_wire_is_placeWords
