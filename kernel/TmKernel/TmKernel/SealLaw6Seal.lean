@@ -54,7 +54,7 @@ theorem rs_sealable_reachFree (z : Cal.Tz) (T₀ T L : Nat) (a r b : List Log.Li
       (∀ dd ∈ (Replay.effectsWith z (dayOf z kw) sl
           (pre.foldl (Replay.stepWith z (dayOf z kw) sl) (restore (ckptOf z T₀ L a r) n)) e).filterMap
           (fun x => x.key.date?), sealDayOf z T (ckptOf z T₀ L a r) p run j ≤ Nat.max L dd) ∧
-      (∀ q ∈ stepQueries (pre.foldl (Replay.stepWith z (dayOf z kw) sl) (restore (ckptOf z T₀ L a r) n)).machine e,
+      (∀ q ∈ stepQueries (dayOf z kw) (pre.foldl (Replay.stepWith z (dayOf z kw) sl) (restore (ckptOf z T₀ L a r) n)).machine e,
         sealDayOf z T (ckptOf z T₀ L a r) p run j ≤ Nat.max L (q.sec / 86400 + 1)) := by
     intro pre e post hs hl
     have hP : (fun e : Entry => decide ((ckptOf z T₀ L a r).cut + j < e.line)) e = true := by
@@ -266,6 +266,8 @@ theorem rs_sealable_reachFree (z : Cal.Tz) (T₀ T L : Nat) (a r b : List Log.Li
       obtain ⟨hm, -⟩ := hRS (svj ++ pre) e post hsv'
       refine ⟨fun q hq => ?_, fun x hx => hkeysAt pre e post hs' x hx⟩
       rw [hm] at hq
+      have hhe := hhb e (by rw [hsplit]; exact List.mem_append_right _ heB)
+      rw [stepQueries_congr (dayOf z KW) (dayOf z kw) _ e (hI2 _ hhe.1)] at hq
       have hc1 := (stepCheck_none z (dayOf z kw) sl _ _ e (hsteps (svj ++ pre) e post hsv')).1 q hq
       rw [hKL] at hc1
       exact headSec_later L L' q.sec hc1 ((hlowStep (svj ++ pre) e post hsv' (hBrestc e heB)).2 q hq)

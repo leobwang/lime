@@ -8214,8 +8214,8 @@ theorem the_open_day_is_the_worked_stretch_the_wall_and_the_reservation :
           SegKind.sleep, none)] := by
   decide
 
-/-- **A run the decoder does not build since D94** (`Replay.openOf` reads past the break): its open block as D92 read it. -/
-def openAcrossBreakRun : Seal.Run := { openBreakRun with answer := { openBreakRun.answer with openBlock := openRun.answer.openBlock } }
+/-- **A run the decoder does not build since D94** (`Replay.openOf` reads past the break): its open block as D92 read it, and — since the owner's D99 drew the banked piece `[12:00, 12:05]` at once (README gap 4525) — its day as D94 drew it, with no `Block` segment of `m1`'s. -/
+def openAcrossBreakRun : Seal.Run := { openBreakRun with answer := { openBreakRun.answer with openBlock := openRun.answer.openBlock, days := openBreakRun.answer.days.map (fun d => { d with record := d.record.map (fun a => { a with segments := a.segments.filter (fun g => g.kind != .block ['m','1']) }) }) } }
 def theOpenAcrossBreakRequest : PlanReq := { theOpenRequest with run := openAcrossBreakRun }
 set_option maxRecDepth 400000 in
 /-- **The fork's marks**: the open row is `open`, carries no slot energy and says `120m so far`
@@ -12306,21 +12306,21 @@ def theDoneRequest : PlanReq := atNow theRequest 630
 
 set_option maxRecDepth 400000 in
 /-- **The extension holds over a real `tm done`, and L25 fires** (AGENTS §7.4 item 2): the later record holds every
-segment and every closed id of the earlier one; `^m1`'s 07:05-08:05 block, closed before 09:30, is a row of both
-days, done in both; and `^m2`'s row is OPEN at 09:30 (the running block, 09:05 to `now`), outside the law. -/
+segment and every closed id of the earlier one; `^m1`'s 07:05-08:05 block, closed before 09:30, is a row of both days, done in both; and `^m2`'s row is OPEN at 09:30 (the running block, 09:05 to `now`), outside the law.
+The fourth conjunct is the restated L25's own conclusion (`PlanStable.plan_is_stable_across_a_replan_after_a_logged_verb`): `decide` computed it until D99's replay outgrew the default heartbeats (W-47 track K; never a raised budget, §5.10a). -/
 theorem the_morning_is_extended_by_tm_done :
-    recordExtends theMorningRequest theDoneRequest = true ∧
-    ((dayPlan theMorningRequest).segments.filter (fun s => s.val.flags.isOpen)).map
-        (fun s => (s.val.start, s.val.stop, s.val.item))
-      = [((Cal.instantOf Cal.chicago 739867 545).sec, (Cal.instantOf Cal.chicago 739867 570).sec,
-          some ['m','2'])] ∧
-    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) &&
-        !s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item, s.val.flags.done))
-      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec,
-          some ['m','1'], true)] ∧
-    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) &&
-        !s.val.flags.isOpen)).all (fun s => decide (s ∈ (dayPlan theDoneRequest).segments)) = true := by
-  refine ⟨by decide, by decide, by decide, by decide⟩
+    recordExtends theMorningRequest theDoneRequest = true ∧ ((dayPlan theMorningRequest).segments.filter (fun s => s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item)) = [((Cal.instantOf Cal.chicago 739867 545).sec, (Cal.instantOf Cal.chicago 739867 570).sec, some ['m','2'])] ∧
+    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) && !s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item, s.val.flags.done)) = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec, some ['m','1'], true)] ∧
+    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) && !s.val.flags.isOpen)).all (fun s => decide (s ∈ (dayPlan theDoneRequest).segments)) = true := by
+  have h1 : recordExtends theMorningRequest theDoneRequest = true := by decide
+  have h3 : ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) && !s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item, s.val.flags.done)) = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec, some ['m','1'], true)] := by decide
+  refine ⟨h1, by decide, h3, List.all_eq_true.2 fun s hs => ?_⟩
+  have hdone : s.val.flags.done = true := by have hm := List.mem_map_of_mem (f := fun s : WfSeg => (s.val.start, s.val.stop, s.val.item, s.val.flags.done)) hs; rw [h3, List.mem_singleton] at hm; exact congrArg (fun x => x.2.2.2) hm
+  obtain ⟨hs, hc⟩ := List.mem_filter.1 hs; simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true'] at hc
+  obtain ⟨s', hs', heq, hd⟩ := PlanStable.plan_is_stable_across_a_replan_after_a_logged_verb theMorningRequest theDoneRequest (recordExtends_spec h1) rfl rfl (fun _ => rfl) (by decide) (by decide) s hs hc.1 hc.2
+  have key : ∀ x : Seg, x.flags.done = true → { x with flags := { x.flags with done := true } } = x := fun x hx => by cases x with | mk a b c d e f g h i j => cases g; simp_all
+  have h' := heq; rw [hdone, key _ (hd hdone)] at h'
+  exact decide_eq_true ((Subtype.ext h' : s' = s) ▸ hs')
 
 /-- **A stop and, after `now`, a done**: `^m1` started at 07:05 and STOPPED at 08:05 with thirty minutes left; then,
 after the 08:30 plan, `tm done ^m1` at 09:00. -/
@@ -12757,7 +12757,7 @@ README gap 4241, parity P85.  A `break` logged before a block's `start` and last
 when the replay stepped it, so the block's clock ran from its `start` across the break's tail: credited when a
 `stop` or the next `start` cut it, and drawn across it, while the host's `Replay::idle_min_since` netted it.  The
 machine now remembers the last break's span (`Replay.Machine.brk`) and every clock starts at its end when it falls
-inside (`Replay.restartAt`).  The two days below are the ones sections 14 and 26 laid a Block across a Break with
+inside (Replay.restartAt then; `Replay.settle` since D99).  The two days below are the ones sections 14 and 26 laid a Block across a Break with
 until D92 — each now keeps its Block rows off its Break.  Section 14's refutation of
 `Goals.plan_places_no_block_over_a_break` stood on the first, and fell with it (README gap 4362). -/
 
@@ -12861,8 +12861,8 @@ theorem the_open_row_begun_inside_a_break_starts_at_its_end :
 README gaps 4361 and 4506, parity P92.  D92's machine remembered the last `break` it stepped and read it where a clock
 starts; the host's `Replay::idle_min_since` unions every break of the block's ledger days, wherever the clock meets it.
 The machine now holds every break within `maxKeepDays` ledger days of the newest (`Replay.Machine.brks`), and every
-clock read nets the ones on the block's ledger days: where the clock (re)starts (`Replay.restartAt`), where a stretch is
-closed (`Replay.closeSub`, cut around them by `Replay.pieces`), and the open block read at the end of the log
+clock read nets the ones on the block's ledger days: where the clock (re)starts (Replay.restartAt then), where a stretch is
+closed (Replay.closeSub then, cut around them by `Replay.pieces`; both `Replay.settle` since D99), and the open block read at the end of the log
 (`Replay.openOf`).  The two days below are the ones sections 14 and 26 laid a Block across a Break with from W-43 to
 W-44 — a `break` logged ahead of a `start` but begun after it, which only a clock behind the log writes (gap 4361) —
 and each now keeps its Block rows off its Break.  Section 14 moved on to a break logged after `m1` was closed, a world
@@ -12924,12 +12924,12 @@ set_option maxRecDepth 400000 in
 `m1` open since 12:00 with a fifteen-minute `break` at 12:05 logged ahead of its `start`.  The log's open block has
 banked the five minutes before the break and runs from its end, 12:20, so the open row is `[12:20, 14:00)` reading
 `105m so far` — the host's union at 14:00 (120 less the break's 15) — and the reservation owes 75 of the three-hour
-estimate.  No row lies across the Break; `oneBlockAtATime` and `noBlockOverAWall` still bite on the open row (`^g1` at
-12:50).  The five banked minutes are not drawn while the block runs (they are the stretch's first piece when it is
-closed).  D92 and fork 4748911 read 120 minutes and a row from 12:00, across the Break (parity P92). -/
+estimate.  No row lies across the Break; `oneBlockAtATime` and `noBlockOverAWall` still bite on the open row (`^g1` at 12:50).
+Since the owner's D99 the five banked minutes are DRAWN while the block runs (`Replay.settle`, README gap 4525 closed): the past row `[12:00, 12:05]`, before the Break; D94 drew nothing of them until the block closed.  D92 and fork 4748911 read 120 minutes and a row from 12:00, across the Break (parity P92). -/
 theorem the_open_row_is_read_past_a_break_held_ahead_of_its_clock :
     (dayPlan theOpenBreakRequest).segments.map (fun s => (s.val.start, s.val.stop, s.val.kind, s.val.note))
-      = [((Cal.instantOf Cal.chicago 739867 725).sec, (Cal.instantOf Cal.chicago 739867 740).sec,
+      = [((Cal.instantOf Cal.chicago 739867 720).sec, (Cal.instantOf Cal.chicago 739867 725).sec, SegKind.block, none),
+         ((Cal.instantOf Cal.chicago 739867 725).sec, (Cal.instantOf Cal.chicago 739867 740).sec,
           SegKind.brk, none),
          ((Cal.instantOf Cal.chicago 739867 740).sec, (Cal.instantOf Cal.chicago 739867 840).sec,
           SegKind.block, some (Note.soFar 105)),

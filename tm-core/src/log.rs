@@ -1313,15 +1313,30 @@ pub enum IdleMark {
 /// `pause` 09:10, `interrupt` 09:20, `resume` 09:30, `stop` 10:00 — driven,
 /// `tm stop` said "after 40m" and `tm now` drew the block running while `tm
 /// review day` credited 10 and `tm plan` drew 09:30-10:00 as the pause.
+///
+/// **An interruption still open at the block's `start` holds it from the
+/// `start`** (the owner's **D99**, README gap **4619**, parity **P103**):
+/// `interrupted_at_start` is the interruption the log holds open there
+/// ([`Replay::interrupted_before`]), so one begun on an EARLIER ledger day —
+/// whose `interrupt` mark sits under that day's seam, outside `marks` — is
+/// netted until its `resume`, as the kernel's machine nets it. Until W-47 the
+/// pairing began with none open: driven, an interruption at 21:00, the next
+/// morning's `tm wake` refused over it, `start` 08:00, `resume` 08:30, `done`
+/// 09:10 — `tm done` logged 70 while the replay's clock ran from the `resume`.
 pub fn idle_spans(
     marks: &[IdleMark],
     breaks: &[&BreakRecord],
     started: DateTime<FixedOffset>,
     running_break: Option<DateTime<FixedOffset>>,
+    interrupted_at_start: Option<DateTime<FixedOffset>>,
 ) -> Vec<(DateTime<FixedOffset>, Option<DateTime<FixedOffset>>)> {
     let mut out = Vec::new();
     let mut paused: Option<DateTime<FixedOffset>> = None;
-    let mut interrupted: Option<DateTime<FixedOffset>> = None;
+    // **The interruption the log holds open at the block's `start`** (the owner's **D99**, README gap
+    // **4619**, parity **P103**): one begun on an earlier ledger day has no mark among `marks` (they are the
+    // block's own days'), and the kernel's machine holds the block from its `start` until the `resume`
+    // (`Replay.Machine.interrupt`, P60) — so the pairing begins with it open, as the machine's does.
+    let mut interrupted: Option<DateTime<FixedOffset>> = interrupted_at_start;
     for mark in marks {
         match *mark {
             IdleMark::Pause(t) if t < started => {}
@@ -1843,6 +1858,38 @@ impl Replay {
         self.start_row(None, started).map(|i| self.rows[i].day)
     }
 
+    /// **The interruption the log holds open just before row `at`** — the
+    /// instant of the last surviving `interrupt` row before it when no `resume`
+    /// row follows that one there, as the kernel's machine pairs them in file
+    /// order (an `interrupt` opens one when none is open, a `resume` closes it;
+    /// `Replay.Machine.interrupt`). The ONE reading of it (the owner's **D99**,
+    /// README gap **4619**): the host's worked minutes ([`Replay::idle_min_since`])
+    /// begin the pairing with it, and the rebuild (`ctx::logged_stops`) holds a
+    /// block begun inside it paused (P60). `at` is a row index of
+    /// [`Replay::view`], normally the block's own `start` row
+    /// ([`Replay::start_row`]).
+    pub fn interrupted_before(&self, at: usize) -> Option<DateTime<FixedOffset>> {
+        // The tags are asked of `Event` rather than spelled a second time (§5.3).
+        let interrupt = Event::Interrupt { id: None };
+        let resume = Event::Resume { lost_min: 0, dropped: Vec::new() };
+        let (interrupt, resume) = (interrupt.name(), resume.name());
+        self.rows
+            .iter()
+            .take(at)
+            .rev()
+            .filter(|r| !r.cancelled)
+            .find_map(|r| {
+                if r.tag == interrupt {
+                    Some(Some(r.t))
+                } else if r.tag == resume {
+                    Some(None)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+    }
+
     /// **The interruption the log holds open** — [`Replay::open_interrupt`] not
     /// yet resumed: the one reading of it the host's rebuild, `tm start`, `tm
     /// resume` and the planner request's codec take (README gap 3951, the W-40
@@ -1904,8 +1951,11 @@ impl Replay {
         // subtracted the break's minutes twice: driven, `start` 09:00, `pause`
         // 09:20, a twenty-minute break at 09:30, `stop` 10:10 printed "after
         // 0m" while `tm review day` credited the twenty minutes worked.
+        // The interruption the log holds open at the block's `start` (D99, gap 4619, P103), read off the
+        // rows before the start row, as the rebuild reads it (`ctx::logged_stops`).
+        let open_at_start = self.start_row(None, started).and_then(|at| self.interrupted_before(at));
         let mut spans: Vec<(DateTime<FixedOffset>, DateTime<FixedOffset>)> =
-            idle_spans(&marks, &breaks, started, running_break)
+            idle_spans(&marks, &breaks, started, running_break, open_at_start)
                 .into_iter()
                 .map(|(a, b)| (a.max(started), b.unwrap_or(now).min(now)))
                 .filter(|(a, b)| b > a)

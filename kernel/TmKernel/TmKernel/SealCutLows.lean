@@ -19,7 +19,7 @@ def lowsStep (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
     (acc : State × List Nat) (e : Entry) : State × List Nat :=
   let fx := Replay.effectsWith z dy sl acc.1 e
   (Replay.applyEffects acc.1 fx,
-   if P e then fx.filterMap (fun x => x.key.date?) ++ (stepQueries acc.1.machine e).map (fun q => q.sec / 86400 + 1)
+   if P e then fx.filterMap (fun x => x.key.date?) ++ (stepQueries dy acc.1.machine e).map (fun q => q.sec / 86400 + 1)
      ++ acc.2 else acc.2)
 
 theorem stepLows_eq (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (P : Entry → Bool) (st : State)
@@ -42,7 +42,7 @@ theorem mem_lows (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Na
     ∀ (pre : List Entry) (acc : State × List Nat) (e : Entry) (post : List Entry), P e = true →
     (∀ x ∈ (Replay.effectsWith z dy sl (pre.foldl (Replay.stepWith z dy sl) acc.1) e).filterMap (fun x => x.key.date?),
       x ∈ ((pre ++ e :: post).foldl (lowsStep z dy sl P) acc).2) ∧
-    (∀ q ∈ stepQueries (pre.foldl (Replay.stepWith z dy sl) acc.1).machine e,
+    (∀ q ∈ stepQueries dy (pre.foldl (Replay.stepWith z dy sl) acc.1).machine e,
       q.sec / 86400 + 1 ∈ ((pre ++ e :: post).foldl (lowsStep z dy sl P) acc).2)
   | [], acc, e, post, hP => by
     rw [List.nil_append, List.foldl_cons]
@@ -183,6 +183,16 @@ theorem lineWarnings_take : ∀ (k : Nat) (b : List Log.Line) (j : Nat), Log.con
       simp only
       have hwl : w.1 = l.n := Line.warning_line l w hw
       rw [List.filter_cons_of_pos (by simp only [decide_eq_true_eq]; omega), ih]
+
+/-- **`stepLows`, run** (D40; the cut's lower bounds, §9.4's (vi)): `start a` 08:00 and `stop` 09:00 on day 739865, the
+`stop` alone selected — its effects' keys name day 739865, and every instant its step reads the day index at gives the
+day after it (739866); the `start`, folded but not selected, adds nothing.  Since the owner's D99 the step reads the
+index where it draws a new piece (`stepQueries dy`), and these are those reads. -/
+theorem stepLows_run :
+    stepLows Replay.utcZone (fun _ => 739865) (fun _ => none) (fun e => decide (2 ≤ e.line)) (Replay.State.init 4)
+      [Replay.bE 1 63924364800 (Replay.bStart ['a']), Replay.bE 2 63924368400 (.stop ['a'] 0)]
+      = [739865, 739865, 739865, 739865, 739865, 739865, 739866, 739866] := by
+  decide
 
 end Seal
 end Tm

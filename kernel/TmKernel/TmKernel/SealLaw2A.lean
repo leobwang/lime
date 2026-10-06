@@ -47,7 +47,7 @@ theorem mem_wakeInstants {sv : List Entry} {w : Cal.Instant} (h : w ∈ wakeInst
 
 theorem mem_foldQueries (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) :
     ∀ (sv : List Entry) (st : State) (q : Cal.Instant), q ∈ foldQueries z dy sl st sv →
-      ∃ pre e post, sv = pre ++ e :: post ∧ q ∈ stepQueries (pre.foldl (Replay.stepWith z dy sl) st).machine e
+      ∃ pre e post, sv = pre ++ e :: post ∧ q ∈ stepQueries dy (pre.foldl (Replay.stepWith z dy sl) st).machine e
   | [], _, _, h => by simp [foldQueries] at h
   | e :: sv, st, q, h => by
     unfold foldQueries at h

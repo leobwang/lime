@@ -26,53 +26,80 @@ open Log (Entry)
 two instants on one local date are less than three days apart under any zone table (offsets are under a day). -/
 def fenceSec : Nat := 259200
 
-/-- The open block's running sub-segment start, if any. -/
-def blockSince (m : Machine) : List Cal.Instant := ((m.block.bind (·.since)).map (·.1)).toList
-
 /-- The open block's pause start, if any. -/
 def blockPaused (m : Machine) : List Cal.Instant := ((m.block.bind (·.pausedAt)).map (·.1)).toList
 
-/-- **The instants `Replay.closeSub` reads the day index at** (the owner's D94): the open block's sub-segment start
-(`blockSince`, as before D94 — a stretch closed at or before it reads nothing, and is listed all the same), and the
-start of every piece of the stretch it closes: the clock's start, and the end of each break of the block's ledger days
-it holds that the stretch runs past — never an instant before the clock's start, so the new ledger day these bound
-from below (`stepLows`) stays where the clock's start put it. -/
-def closeReads (m : Machine) (t : Replay.At) : List Cal.Instant :=
-  blockSince m ++
-    match m.block with
-    | some b =>
-      match b.since with
-      | some s => (Replay.pieces (Replay.spansFor m.brks b.day) s t).map (·.1.1)
-      | none => []
-    | none => []
+/-- **The instants a re-draw reads the index at** (the owner's D99, README gap 4520a): the start of every span of `P`
+not drawn before — the day a new piece is filed under (`Replay.redraw`).  A piece drawn before keeps the day it was
+filed under and is read nowhere. -/
+def redrawReads (old : List Replay.Piece) (P : List (Replay.At × Replay.At)) : List Cal.Instant :=
+  (P.filter (fun q => !old.any (fun p => Replay.samePiece p q))).map (·.1.1)
 
-/-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), and the open block's sub-segment
-and pause starts when the step closes them (`closeSub`, `closePause`; a `break`'s `Replay.brkFx` closes the running
-sub-segment, D87) — since the owner's D94 the sub-segment's pieces' starts (`closeReads`): a closed stretch is cut
-around the breaks the machine holds, and a piece after one begins at its end. -/
-def stepQueries (m : Machine) (e : Entry) : List Cal.Instant :=
+/-- **The instants settling the open block reads the index at** (D99): its new pieces' starts. -/
+def settleReads (m : Machine) : List Cal.Instant :=
+  match m.block with
+  | some b => redrawReads b.drawn (Replay.openPieces b m)
+  | none => []
+
+/-- **The instants cutting the open block at `t` reads the index at** (D99): its new pieces' starts. -/
+def cutReads (m : Machine) (t : Replay.At) : List Cal.Instant :=
+  match m.block with
+  | some b => redrawReads b.drawn (Replay.cutPieces b m t)
+  | none => []
+
+/-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), the open block's pause start
+when the step closes it (`closePause`), and — since the owner's D99 (README gap 4520a) — the start of every piece the
+step draws for the open block that was not drawn before (`settleReads`, `cutReads`): a piece drawn before is moved by
+un-drawing it from the day it was filed under, which is read nowhere.  The day index `dy` is read here only at the
+entry's own stamp (the ledger day a `start` opens its block on, and a `break` is held with). -/
+def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.Instant :=
   entryInstants e ++
     match e.ev with
-    | .start .. => closeReads m (e.t.val, e.off.val) ++ blockPaused m
+    | .start id pred rep hsw sleptMin loc _ _ =>
+      cutReads m (e.t.val, e.off.val) ++ blockPaused m ++
+        settleReads (Replay.startedMachine m id (e.t.val, e.off.val) (dy e.t.val)
+          (rep.map (fun rp => ⟨e.line, (e.t.val, e.off.val), dy e.t.val, pred, rp, hsw, loc, some sleptMin.val, none,
+            some id, true⟩)))
     | .pause id =>
       match m.block with
-      | some b => if b.id = id ∧ b.paused = false then closeReads m (e.t.val, e.off.val) else []
+      | some b =>
+        if b.id = id ∧ b.paused = false ∧ b.started.1 ≤ e.t.val then
+          settleReads { m with block := some { b with paused := true, pausedAt := some (e.t.val, e.off.val) } }
+        else []
       | none => []
     | .unpause id =>
       match m.block with
-      | some b => if b.id = id ∧ b.paused = true then blockPaused m else []
+      | some b =>
+        if b.id = id ∧ b.paused = true then
+          blockPaused m ++ settleReads { Replay.closePauseM m (e.t.val, e.off.val) with
+            block := (Replay.closePauseM m (e.t.val, e.off.val)).block.map (fun b => { b with paused := false }) }
+        else []
       | none => []
-    | .interrupt _ => closeReads m (e.t.val, e.off.val) ++ blockPaused m
+    | .interrupt id =>
+      blockPaused m ++ settleReads (Replay.interruptMachine m (e.t.val, e.off.val) (dy e.t.val) id)
+    | .resume _ _ =>
+      match m.interrupt with
+      | some (s, _, _) =>
+        settleReads { m with block := m.block.map (fun b => Replay.resumeBlock b (some (s, (e.t.val, e.off.val)))
+          (e.t.val, e.off.val)), interrupt := none }
+      | none => settleReads { m with block := m.block.map (fun b => Replay.resumeBlock b none (e.t.val, e.off.val)) }
     | .stop id _ =>
       match m.block with
-      | some b => if b.id = id then closeReads m (e.t.val, e.off.val) ++ blockPaused m else []
+      | some b => if b.id = id then cutReads m (e.t.val, e.off.val) ++ blockPaused m else []
       | none => []
     | .done id .. =>
       match m.block with
-      | some b => if b.id = id then closeReads m (e.t.val, e.off.val) ++ blockPaused m else []
+      | some b => if b.id = id then cutReads m (e.t.val, e.off.val) ++ blockPaused m else []
       | none => []
-    | .brk .. => closeReads m (e.t.val, e.off.val)
+    | .brk planned actual _ =>
+      settleReads { m with brks := Replay.pruneBrks (⟨(e.t.val, e.off.val),
+        Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)), dy e.t.val⟩ :: m.brks), brkOpen := none }
     | _ => []
+
+/-- **A step's queries read the index only at its own stamp** (D99): two indexes agreeing there give one list. -/
+theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e : Entry) (h : dy₁ e.t.val = dy₂ e.t.val) :
+    stepQueries dy₁ m e = stepQueries dy₂ m e := by
+  unfold stepQueries; rw [h]
 
 /-- **The tail without its settled undos** (§7.4): a settled undo cancels nothing after the cut. -/
 def unsettled (settled : List Nat) (bs : List Entry) : List Entry :=
@@ -110,7 +137,7 @@ def keyRefusal (line : Nat) : Replay.Key → Refusal
 def stepCheck (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (K : Ckpt) (st : State) (e : Entry) :
     List Effect × Option Refusal :=
   let fx := Replay.effectsWith z dy sl st e
-  (fx, (((stepQueries st.machine e).find? (fun q => decide (q.sec < headSec K.ledgerDay))).map
+  (fx, (((stepQueries dy st.machine e).find? (fun q => decide (q.sec < headSec K.ledgerDay))).map
           (fun _ => Refusal.sealedDay e.line (K.ledgerDay - 1)))
     <|> (if Replay.isWake e && !(K.maxT.all (· < e.t.val) && K.futureFloor.all (fun f => decide (e.t.val.sec + fenceSec < f.sec)))
          then some (.wakeBehindCut e.line e.t.val) else none)
@@ -324,7 +351,7 @@ def stepLows (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
   (sv.foldl (fun (acc : State × List Nat) e =>
     let fx := Replay.effectsWith z dy sl acc.1 e
     (Replay.applyEffects acc.1 fx,
-     if P e then fx.filterMap (fun x => x.key.date?) ++ (stepQueries acc.1.machine e).map (fun q => q.sec / 86400 + 1)
+     if P e then fx.filterMap (fun x => x.key.date?) ++ (stepQueries dy acc.1.machine e).map (fun q => q.sec / 86400 + 1)
        ++ acc.2 else acc.2)) (st, [])).2
 
 /-- **A valid cut** (§9.4's conditions (i)–(v), and (vi)). -/

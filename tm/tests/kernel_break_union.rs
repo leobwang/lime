@@ -13,10 +13,12 @@
 //! before the block's.  This file draws them all, with a pause or an interruption on top, and holds the two readings
 //! to one number on every day it draws.
 //!
-//! **What it leaves out, by a stated rule** ([`retroactive`]): a break logged after a clock-stopping mark of the same
-//! open block whose instant is after the break began — it can overlap a stretch the replay already closed and drew
-//! (README gap 4520, the residual D94's build did not take), and the host's union would net it at the next reading.
-//! It is counted, never silently dropped.
+//! **It leaves nothing out** (the owner's **D99**, README gap 4520a, W-47 track K, parity P104).  Until W-47 a stated
+//! rule (`retroactive`) left out every day whose in-block lines were not in their stamps' order — a break, a `pause` or
+//! an `interrupt` logged after the replay had closed a stretch it lies across, which the host's union netted at its
+//! next reading and the replay never did (79-85 of 257 days a run).  The replay now settles the open block over every
+//! span it nets at every mark (`Replay.settle`), so those days read one number too, and they are compared — with a
+//! floor of their own, so the class cannot pass by drawing none of it ([`out_of_order`]).
 
 #[allow(dead_code)]
 #[path = "support/replay.rs"]
@@ -187,14 +189,13 @@ fn lines_spelled(d: &Day, spells: &[Spell]) -> (Vec<String>, String) {
     (out, line(d.t(d.stop), "\"ev\":\"stop\",\"id\":\"a\",\"remaining_min\":0"))
 }
 
-/// **The residual this file leaves out** (README gap 4520): a day whose lines logged inside the block are not in the
-/// order of their stamps — a break, a `pause` or an `interrupt` logged after the replay may already have closed a
-/// stretch it lies across (the replay closes the running stretch at every clock-stopping mark and, D87's `brkFx`, at
-/// every break it steps while the clock runs), which the host's union nets at its next reading and the replay credited
-/// and drew at the close.  Over-approximated: such a day may still read one way, and is left out all the same.  The
-/// breaks logged AHEAD of the `start`, in any order — gaps 4361 and 4506, the class D94 nets — are not touched by it,
-/// nor the break of the day before, which no reading counts.
-fn retroactive(d: &Day) -> bool {
+/// **A day whose lines logged inside the block are not in the order of their stamps** (README gap 4520a): a break, a
+/// `pause` or an `interrupt` logged after the replay may already have closed a stretch it lies across.  Until the owner's
+/// D99 the replay credited and drew such a stretch at its close and the host's union netted the late mark at its next
+/// reading, so this file left these days out by rule; since D99 the replay settles the open block over every span it
+/// nets at every mark, and these days are compared like any other — this predicate now only COUNTS them, for the floor
+/// that keeps the class from passing vacuously.  Over-approximated: such a day may hold no stretch a late mark reaches.
+fn out_of_order(d: &Day) -> bool {
     // (log position, stamp in the block's frame) of every line logged between the `start` and the `stop`.
     let mut in_block: Vec<((u8, usize), i64)> = d
         .breaks
@@ -225,19 +226,21 @@ proptest! {
     })]
 
     /// **The host and the replay read a block one way, whatever breaks the log holds on its ledger days and in
-    /// whatever order** — the owner's D94.  The `stop`'s credit (the replay's, `items.a.minutes`) is the host's
-    /// `running_worked_min` at the `stop`'s instant over the log before it; and the open block the replay reads at
-    /// the end of that log (`OpenBlock::worked_min_at`, `Replay.openOf`) is the host's number too wherever every break
-    /// it holds ended by then.
+    /// whatever order its marks are logged** — the owner's D94 and D99.  The `stop`'s credit (the replay's,
+    /// `items.a.minutes`) is the host's `running_worked_min` at the `stop`'s instant over the log before it; and the
+    /// open block the replay reads at the end of that log (`OpenBlock::worked_min_at`, `Replay.openOf`) is the host's
+    /// number too wherever every break it holds ended by then.  Every drawn day is compared (D99 retired the rule that
+    /// left out a day whose in-block lines were not in their stamps' order, README gap 4520a).
     #[test]
     fn the_host_and_the_replay_net_every_break_on_a_blocks_ledger_days_once(d in day_strategy()) {
-        /// `[cases, compared, left out (gap 4520), gap 4361 (a break the clock met after it started, logged ahead),
-        /// gap 4506 (a start inside a break that is not the last one stepped), gap 4363 (a break of the day before,
-        /// overlapping the block), open readings compared, open readings over a break held ahead of the clock]`.
+        /// `[cases, compared, out of their stamps' order (gap 4520a, compared since D99), gap 4361 (a break the clock
+        /// met after it started, logged ahead), gap 4506 (a start inside a break that is not the last one stepped), gap
+        /// 4363 (a break of the day before, overlapping the block), open readings compared, open readings over a break
+        /// held ahead of the clock]`.
         static CENSUS: Mutex<[u64; 8]> = Mutex::new([0; 8]);
         let tz = chrono_tz::America::Chicago;
         let (prefix, stop) = lines(&d);
-        let held = !retroactive(&d);
+        let late = out_of_order(&d);
         let ahead: Vec<&Brk> = d.breaks.iter().filter(|b| matches!(b.when, When::Ahead)).collect();
         let meets_after_start = ahead.iter().any(|b| b.from > d.start && b.from < d.stop);
         let covering: Vec<&&Brk> = ahead.iter().filter(|b| b.from <= d.start && d.start < b.from + b.len).collect();
@@ -245,29 +248,27 @@ proptest! {
         let day_before = d.day_before.is_some() && d.base() + d.start < -100;
         let all_end_by_stop = d.breaks.iter().all(|b| b.from + b.len <= d.stop);
         let mut open_ahead = false;
-        if held {
-            let text = prefix.join("\n") + "\n";
-            let running = replay::replay_of_text(&text, tz);
-            let host = running.running_worked_min("a", today(), d.t(d.stop), None);
-            let whole = replay::replay_of_text(&(text.clone() + &stop + "\n"), tz);
-            let credit = whole.items.get("a").map(|i| i.minutes);
-            prop_assert!(host.is_some(), "the host reads no running block before the stop:\n{text}");
-            prop_assert_eq!(host, credit, "D94: the stop's credit is not the host's union (P92); the log:\n{}{}", text, stop);
-            if all_end_by_stop {
-                let open = running.open_block.as_ref().filter(|b| b.id == "a").map(|b| replay::open_worked_min_at(b, d.t(d.stop)));
-                prop_assert_eq!(host, open, "D94: the open block read at the end of the log is not the host's union (P92); the log:\n{}", text);
-                open_ahead = meets_after_start;
-            }
+        let text = prefix.join("\n") + "\n";
+        let running = replay::replay_of_text(&text, tz);
+        let host = running.running_worked_min("a", today(), d.t(d.stop), None);
+        let whole = replay::replay_of_text(&(text.clone() + &stop + "\n"), tz);
+        let credit = whole.items.get("a").map(|i| i.minutes);
+        prop_assert!(host.is_some(), "the host reads no running block before the stop:\n{text}");
+        prop_assert_eq!(host, credit, "D94 + D99: the stop's credit is not the host's union (P92, P104); the log:\n{}{}", text, stop);
+        if all_end_by_stop {
+            let open = running.open_block.as_ref().filter(|b| b.id == "a").map(|b| replay::open_worked_min_at(b, d.t(d.stop)));
+            prop_assert_eq!(host, open, "D94 + D99: the open block read at the end of the log is not the host's union (P92, P104); the log:\n{}", text);
+            open_ahead = meets_after_start;
         }
         let r = {
             let mut r = CENSUS.lock().expect("census");
             r[0] += 1;
-            r[1] += u64::from(held);
-            r[2] += u64::from(!held);
-            r[3] += u64::from(held && meets_after_start);
-            r[4] += u64::from(held && not_last);
-            r[5] += u64::from(held && day_before);
-            r[6] += u64::from(held && all_end_by_stop);
+            r[1] += 1;
+            r[2] += u64::from(late);
+            r[3] += u64::from(meets_after_start);
+            r[4] += u64::from(not_last);
+            r[5] += u64::from(day_before);
+            r[6] += u64::from(all_end_by_stop);
             r[7] += u64::from(open_ahead);
             *r
         };
@@ -275,16 +276,16 @@ proptest! {
         if r[0] >= generated {
             // **Floors** (AGENTS §9.2): a class compared on no day compares nothing.  Red is a finding about the draw,
             // re-run and reported (D46), never reverted.
-            prop_assert!(r[1] * 2 > r[0], "fewer than half the days drawn were compared: {r:?}");
+            prop_assert!(r[2] * 5 > r[0], "fewer than a fifth of the days drawn held a mark out of its stamp's order (gap 4520a): {r:?}");
             prop_assert!(r[3] > 0, "no compared day held a break logged ahead of the start that the clock met after it started (gap 4361): {r:?}");
             prop_assert!(r[4] > 0, "no compared day started inside a break that was not the last one stepped (gap 4506): {r:?}");
             prop_assert!(r[5] > 0, "no compared day held a break of the ledger day before overlapping the block (gap 4363): {r:?}");
             prop_assert!(r[7] > 0, "no open reading held a break ahead of the clock (gap 4361, the block running): {r:?}");
         }
         eprintln!(
-            "kernel_break_union census (D94): {} cases, {} compared, {} left out (gap 4520), {} with a break met after the start \
-             (gap 4361), {} starting inside a break not the last stepped (gap 4506), {} with a break of the day before (gap 4363), \
-             {} open readings compared ({} over a break ahead of the clock)",
+            "kernel_break_union census (D94 + D99): {} cases, {} compared, {} out of their stamps' order (gap 4520a), {} with a \
+             break met after the start (gap 4361), {} starting inside a break not the last stepped (gap 4506), {} with a \
+             break of the day before (gap 4363), {} open readings compared ({} over a break ahead of the clock)",
             r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]
         );
     }
@@ -302,7 +303,7 @@ fn the_drawn_class_holds_the_driven_gap_4506_day() {
         marks: None,
         day_before: None,
     };
-    assert!(!retroactive(&d));
+    assert!(!out_of_order(&d));
     let tz = chrono_tz::America::Chicago;
     let (prefix, stop) = lines(&d);
     let text = prefix.join("\n") + "\n";
@@ -322,16 +323,15 @@ fn the_two_readings(d: &Day) -> (Option<u32>, Option<u32>) {
     (host, whole.items.get("a").map(|i| i.minutes))
 }
 
-/// **The residual the arm leaves out is real, and these are its witnesses** (README gap 4520) — the two shapes the
-/// arm's draw found before its rule named them (the first is the seed in `kernel_break_union.proptest-regressions`).
-/// Each is a line logged inside the block after the replay closed a stretch it lies across: two breaks logged out of
-/// order while the block runs (the replay closed `[09:00, 09:01]` at the 09:01 break, then stepped the 09:00 one —
-/// 29 credited, the host's union 28), and a `pause` stamped 09:01 logged after a break at 09:17 (the replay had
-/// banked `[09:00, 09:17]` at the break and banks `[09:02, 09:17]` again after the `unpause` — 44 credited, the host's
-/// 28; it credited 45 at `ed72e36`, so this is the machine's order and not D94's).  Both are left out by
-/// [`retroactive`]; when gap 4520 closes these readings meet, this test fails, and the rule can go.
+/// **The residual the arm left out reads one way now, and these are its witnesses** (README gap 4520a, closed by the
+/// owner's D99) — the two shapes the arm's draw found before W-44's rule named them (the first is the seed in
+/// `kernel_break_union.proptest-regressions`).  Each is a line logged inside the block after the replay had closed a
+/// stretch it lies across: two breaks logged out of order while the block runs (the replay closed `[09:00, 09:01]` at
+/// the 09:01 break, then stepped the 09:00 one — D94 credited 29 against the host's 28), and a `pause` stamped 09:01
+/// logged after a break at 09:17 (D94 banked `[09:00, 09:17]` at the break and `[09:02, 09:17]` again after the
+/// `unpause` — 44 against the host's 28).  Both are out of their stamps' order and both read 28 both ways.
 #[test]
-fn the_residual_the_arm_leaves_out_reads_two_ways_by_its_witnesses() {
+fn the_residual_the_arm_left_out_reads_one_way_by_its_witnesses() {
     let breaks_out_of_order = Day {
         start: 0,
         stop: 30,
@@ -346,9 +346,9 @@ fn the_residual_the_arm_leaves_out_reads_two_ways_by_its_witnesses() {
         marks: Some(Marks { interrupt: false, on: 1, off: 2 }),
         day_before: None,
     };
-    for (d, want) in [(&breaks_out_of_order, (Some(28), Some(29))), (&pause_behind_a_break, (Some(28), Some(44)))] {
-        assert!(retroactive(d), "the arm's rule no longer leaves out {d:?}");
-        assert_eq!(the_two_readings(d), want, "gap 4520's witness moved: {d:?}");
+    for d in [&breaks_out_of_order, &pause_behind_a_break] {
+        assert!(out_of_order(d), "the witness is no longer out of its stamps' order: {d:?}");
+        assert_eq!(the_two_readings(d), (Some(28), Some(28)), "gap 4520a's witness reads two ways: {d:?}");
     }
 }
 
@@ -380,30 +380,27 @@ proptest! {
         static CENSUS: Mutex<[u64; 5]> = Mutex::new([0; 5]);
         let tz = chrono_tz::America::Chicago;
         let (prefix, stop) = lines_spelled(&d, &spells);
-        let held = !retroactive(&d);
         let overlaps = |b: &Brk| b.from < d.stop && d.start < b.from + b.len;
         let spelled = |s: Spell| d.breaks.iter().zip(&spells).any(|(b, &x)| x == s && overlaps(b));
         let planned_ahead = d.breaks.iter().zip(&spells).any(|(b, &x)| x == Spell::PlannedOnly && overlaps(b) && matches!(b.when, When::Ahead));
-        if held {
-            let text = prefix.join("\n") + "\n";
-            let running = replay::replay_of_text(&text, tz);
-            let host = running.running_worked_min("a", today(), d.t(d.stop), None);
-            let whole = replay::replay_of_text(&(text.clone() + &stop + "\n"), tz);
-            let credit = whole.items.get("a").map(|i| i.minutes);
-            prop_assert!(host.is_some(), "the host reads no running block before the stop:\n{text}");
-            prop_assert_eq!(host, credit, "D94 + D95: the stop's credit is not the host's union (P92, P93); the log:\n{}{}", text, stop);
-            if d.breaks.iter().all(|b| b.from + b.len <= d.stop) {
-                let open = running.open_block.as_ref().filter(|b| b.id == "a").map(|b| replay::open_worked_min_at(b, d.t(d.stop)));
-                prop_assert_eq!(host, open, "D94 + D95: the open block is not the host's union (P92, P93); the log:\n{}", text);
-            }
+        let text = prefix.join("\n") + "\n";
+        let running = replay::replay_of_text(&text, tz);
+        let host = running.running_worked_min("a", today(), d.t(d.stop), None);
+        let whole = replay::replay_of_text(&(text.clone() + &stop + "\n"), tz);
+        let credit = whole.items.get("a").map(|i| i.minutes);
+        prop_assert!(host.is_some(), "the host reads no running block before the stop:\n{text}");
+        prop_assert_eq!(host, credit, "D94 + D95 + D99: the stop's credit is not the host's union (P92, P93, P104); the log:\n{}{}", text, stop);
+        if d.breaks.iter().all(|b| b.from + b.len <= d.stop) {
+            let open = running.open_block.as_ref().filter(|b| b.id == "a").map(|b| replay::open_worked_min_at(b, d.t(d.stop)));
+            prop_assert_eq!(host, open, "D94 + D95 + D99: the open block is not the host's union (P92, P93, P104); the log:\n{}", text);
         }
         let r = {
             let mut r = CENSUS.lock().expect("census");
             r[0] += 1;
-            r[1] += u64::from(held);
-            r[2] += u64::from(held && spelled(Spell::PlannedOnly));
-            r[3] += u64::from(held && spelled(Spell::EndedEarly));
-            r[4] += u64::from(held && planned_ahead);
+            r[1] += 1;
+            r[2] += u64::from(spelled(Spell::PlannedOnly));
+            r[3] += u64::from(spelled(Spell::EndedEarly));
+            r[4] += u64::from(planned_ahead);
             *r
         };
         let generated: u64 = std::env::var("TM_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256);

@@ -2854,7 +2854,7 @@ theorem aStoppedBlockIsDrawnAcrossItsBreak :
 theorem aBreaksArmIsItsDayArm :
     Replay.arm (fun _ => 739865) (fun _ => none)
         ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none,
-          739865⟩, none, none, []⟩
+          739865, [], []⟩, none, none, [], none⟩
         (Replay.bE 2 63924370200 (.brk 20 (some 20) none)) (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865
       = Replay.dayArm (fun _ => 739865) (fun _ => none) (Replay.bE 2 63924370200 (.brk 20 (some 20) none))
           (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865 := by
@@ -2871,8 +2871,8 @@ theorem aBreaksArmIsItsDayArm :
 
 /- CHEAT 266 — the fork's credit for a break logged before a block's `start`:
    a ten-minute `break` at 08:55, `start a` 09:00, `stop a` 10:00, credited
-   the block's whole sixty-minute span.  D92's `Replay.restartAt` starts the
-   clock at the break's end, so `decide` computes 55 and refuses 60. -/
+   the block's whole sixty-minute span.  D92's Replay.restartAt started the
+   clock at the break's end (`Replay.settle` since D99), so `decide` computes 55 and refuses 60. -/
 theorem aBlockBegunInsideABreakIsCreditedItsSpan :
     ((Replay.replay Replay.utcZone [Replay.bE 1 63924368100 (.brk 10 (some 10) none),
         Replay.bE 2 63924368400 (Replay.bStart ['a']), Replay.bE 3 63924372000 (.stop ['a'] 0)]).items.get
@@ -2954,8 +2954,8 @@ theorem aYearPast9999IsEdited :
 /- CHEAT 274 — D92's credit for a clock started inside an EARLIER break with a
    later one stepped between (README gap 4506): a thirty-minute `break` at
    09:00, a five-minute one at 09:40, `start a` 09:10, `stop a` 10:00,
-   credited the clock's whole 50 minutes.  D94's `Replay.restartAt` starts it
-   past the first break and `Replay.closeSub` cuts it around the second, so
+   credited the clock's whole 50 minutes.  D94's Replay.restartAt started it
+   past the first break and Replay.closeSub cut it around the second (one `Replay.settle` since D99), so
    `decide` computes 25 — the host's union — and refuses 50. -/
 theorem aStartInsideAnEarlierBreakIsCreditedTheStretch :
     ((Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (.brk 30 (some 30) none),
@@ -2965,7 +2965,7 @@ theorem aStartInsideAnEarlierBreakIsCreditedTheStretch :
 
 /- CHEAT 275 — D92's credit for a break logged ahead of a `start` but begun
    after it (README gap 4361): a ten-minute `break` at 09:05 logged before
-   `start a` 09:00, `stop a` 10:00, credited 60.  D94's `Replay.closeSub` cuts
+   `start a` 09:00, `stop a` 10:00, credited 60.  D94's Replay.closeSub (`Replay.settle` since D99) cuts
    the stretch where the clock meets the break, so `decide` computes 50 and
    refuses 60. -/
 theorem aBreakAheadOfItsClockIsNotNetted :
@@ -3051,6 +3051,50 @@ theorem aBreakStartIsAnUnknownEvent :
    computes `[739865]` and refuses `[]`. -/
 theorem aRunningBreakHoldsNoLedgerDay :
     Seal.machineDays ⟨none, none, none, [], some ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), 20, none, 739865⟩⟩ = [] := by
+  decide
+
+/- ===========================================================================
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK K — the owner's D99 (README
+   "Stage 6 — W-47 track K", gap 4520a; parity P104): a mark logged out of its
+   stamp's order is netted where it lies, and the open block is re-drawn at
+   every mark (`Replay.settle`).  Cheats 284-286, numbered from the highest in
+   the checkout (283); whoever lands renumbers (AGENTS 6.2).  CHEAT 248's
+   literal (`Replay.Machine` gained `brkOpen` at D105 and `Replay.Block` gained
+   `idle` and `drawn` here) was edited so it fails for the reason it states:
+   it failed on the literal's arity from D105 until this step.
+   =========================================================================== -/
+
+/- CHEAT 284 — the class table's M1 (S7) credited as D94 read it: `start a`
+   08:00, `pause` 09:00, `unpause` 09:10, then a twenty-minute `break` at 08:30
+   logged after them, `stop` 10:00, credited 110 — the stretch the pause closed
+   kept whole.  `Replay.settle` nets the break from that stretch where it lies:
+   `decide` computes 90, the host's union, and refuses 110. -/
+theorem aBreakLoggedBehindAClosedStretchIsNotNetted :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924368400 (.pause ['a']), Replay.bE 3 63924369000 (.unpause ['a']),
+        Replay.bE 4 63924366600 (.brk 20 (some 20) none), Replay.bE 5 63924372000 (.stop ['a'] 0)]).items.get
+        ['a']).map (·.minutes) = some 110 := by
+  decide
+
+/- CHEAT 285 — the open block's banked piece claimed undrawn while it runs
+   (README gap 4525, as D94 left it): a fifteen-minute `break` at 10:00 logged
+   ahead of `start a` 09:50 — the day claimed to hold no `Block` of `a`'s.
+   `Replay.settle` draws `[09:50, 10:00]` at once: `decide` refuses. -/
+theorem theOpenBlocksBankedPieceIsUndrawn :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924372000 (.brk 15 (some 15) none),
+        Replay.bE 2 63924371400 (Replay.bStart ['a'])]).days.get 739865).map
+        (fun a => a.segments.filter (fun g => g.kind == .block ['a'])) = some [] := by
+  decide
+
+/- CHEAT 286 — the class table's M7: a `pause` stamped BEFORE the block's
+   `start` (logged inside it) claimed to idle the block, as D94 credited it:
+   `start a` 09:00, `pause` 08:50, `unpause` 09:30, `stop` 10:00, credited 30.
+   The host's pairing passes over a pause stamped before the block it would
+   pause, and so does the replay since D99: `decide` computes 60 and refuses. -/
+theorem aPauseStampedBeforeTheStartIdlesTheBlock :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (Replay.bStart ['a']),
+        Replay.bE 2 63924367800 (.pause ['a']), Replay.bE 3 63924370200 (.unpause ['a']),
+        Replay.bE 4 63924372000 (.stop ['a'] 0)]).items.get ['a']).map (·.minutes) = some 30 := by
   decide
 
 end Tm

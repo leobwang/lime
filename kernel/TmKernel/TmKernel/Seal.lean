@@ -485,12 +485,21 @@ def cItemAcc : Codec ItemAcc :=
 theorem cItemAcc_nonnull : cItemAcc.NonNull := fun _ => nofun
 
 /-- The open block (fork `Block`), and since the owner's D94 its `start`'s ledger day (`Replay.Block.day`), whose
-breaks its clock nets. -/
+breaks its clock nets — and since the owner's D99 (README gap 4520a) its own closed idle spans (`Replay.Block.idle`,
+each `[from, until]`) and the pieces it has drawn (`Replay.Block.drawn`), each list of at most `maxList` (§10.4's
+"every length"), so a resumed fold re-draws a piece a later mark moves exactly where a whole replay does.  A piece
+(`Replay.Piece`) is `[start, end, day]`, its codec written in place: a codec of its own was a definition the
+compiled checkpoint never named (check 12), the compiler having folded it into this one. -/
 def cBlock : Codec Block :=
   cIso (cTuple <| tCons cStr <| tCons cAt <| tCons cOptAt <| tCons cBool <| tCons cOptAt <| tCons cNat
-      <| tCons (cOpt cEnergyObs cEnergyObs_nonnull) <| tCons cNat <| tNil)
-    (fun b => (b.id, b.started, b.since, b.paused, b.pausedAt, b.workedMin, b.obs, b.day, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1⟩)
+      <| tCons (cOpt cEnergyObs cEnergyObs_nonnull) <| tCons cNat
+      <| tCons (cList maxList (cPair cAt cAt))
+      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
+          (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
+      <| tNil)
+    (fun b => (b.id, b.started, b.since, b.paused, b.pausedAt, b.workedMin, b.obs, b.day, b.idle, b.drawn, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
+      p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1⟩)
     (fun _ => rfl)
 theorem cBlock_nonnull : cBlock.NonNull := fun _ => nofun
 
@@ -508,8 +517,8 @@ theorem cOpenInt_nonnull : cOpenInt.NonNull := fun _ => nofun
 /-- The machine (fork `Machine`): the open block, **the last cut** (carried note 2: no Rust field reads it, so the
 view omits it, and only the checkpoint carries it), the open interruption, and — since the owner's D94 (README gaps
 4361 and 4506; D92's last span before it) — every break it holds (`Replay.Machine.brks`, at most `maxKeepDays + 1`
-ledger days of them, each `[start, end, ledger day]`), which a later step's clock reads (`Replay.restartAt`,
-`Replay.closeSub`), so a resumed fold nets a break where a whole replay does. -/
+ledger days of them, each `[start, end, ledger day]`), which a later step's clock reads (`Replay.settle`,
+`Replay.cut`), so a resumed fold nets a break where a whole replay does. -/
 def cMachine : Codec Machine :=
   cIso (cTuple <| tCons (cOpt cBlock cBlock_nonnull) <| tCons (cOpt cCut cCut_nonnull)
       <| tCons (cOpt cOpenInt cOpenInt_nonnull)

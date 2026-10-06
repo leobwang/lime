@@ -1064,22 +1064,24 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
   unfold Replay.arm
   cases hev : e.ev <;> simp only
   case done id est actual went tags ci isPartial => exact absurd hev (h _ _ _ _ _ _ _)
-  case start => simp [List.filterMap_append, (Replay.cut_obs dy m t).2.1, Effect.durationOf?]
+  case start => simp [List.filterMap_append, List.filterMap_cons, (Replay.cut_obs dy m t).2.1, Replay.settle_duration,
+    Effect.durationOf?]
   case pause id =>
     split
     · split
-      · simp [List.filterMap_append, (Replay.closeSub_obs dy m t).2.1, Effect.durationOf?]
+      · simp [List.filterMap_append, Replay.settle_duration, Effect.durationOf?]
       · rfl
     · rfl
   case unpause id =>
     split
     · split
-      · simp [List.filterMap_append, (Replay.closePause_obs dy m t).2.1, Effect.durationOf?]
+      · simp [List.filterMap_append, (Replay.closePause_obs dy m t).2.1, Replay.settle_duration, Effect.durationOf?]
       · rfl
     · rfl
   case interrupt id =>
-    simp [List.filterMap_append, (Replay.closeSub_obs dy m t).2.1, (Replay.closePause_obs dy _ t).2.1, Effect.durationOf?]
-  case resume lost dropped => split <;> simp [Effect.durationOf?]
+    simp [List.filterMap_append, (Replay.closePause_obs dy m t).2.1, Replay.settle_duration, Effect.durationOf?]
+  case resume lost dropped =>
+    split <;> simp [List.filterMap_append, List.filterMap_cons, Replay.settle_duration, Effect.durationOf?]
   case stop id rem =>
     split
     · split

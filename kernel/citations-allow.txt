@@ -737,6 +737,32 @@ can_fail
 1 readActive_refuses_a_start_after_now
 1 the_worked_minutes_bound_is_run
 
+# W-47 track K (the owner's D99, README gap 4520a): closeSub, restartAt, lastEndAfter and the old resumeBlock are
+# DELETED with D99's re-draw (`Replay.settle`), and with them the theorems that were about them; the one law that
+# became false, brkFx_of_stopped, is refuted and renamed (`Replay.brkFx_of_stopped_as_d92_stated_it_is_refuted`).
+# Every citation counted here is an append-only README block naming the thing as it stood, the refutation's own
+# doc comment naming what it refutes, or (the last) a Rust test the same track renamed
+# (`the_residual_the_arm_left_out_reads_one_way_by_its_witnesses`).  The README block's §3.1 table is the record.
+5 brkFx_cases
+1 brkFx_cases_as_d92_stated_it_is_refuted
+3 brkFx_cases_on_the_blocks_days
+4 brkFx_of_stopped
+1 closePause_mi
+1 closeReads_mi
+2 closeSub_avoids_the_breaks_held
+2 closeSub_brk
+1 closeSub_brkOpen
+1 closeSub_mi
+2 mi_of_eq
+2 openOf_restarts_outside_the_breaks_held
+2 restartAt_avoids_the_breaks_held
+5 restartAt_cases
+1 restartAt_mi
+1 resumeBlock_pausedAt
+1 resumeBlock_since
+1 the_residual_the_arm_leaves_out_reads_two_ways_by_its_witnesses
+1 Replay.brkFx_cases
+
 # ====================== 4. GRANDFATHERED (README, unadjudicated) ======================
 #
 # 161 names, seeded from `README.md` at W-19 so check 8 could land as a RATCHET on new prose
@@ -1019,6 +1045,19 @@ unknownIdentifier
 2 tzObj
 1 windowStart
 1 witCaps
+
+# W-47 track K (the owner's D99, README gap 4520a): closeSub, restartAt, lastEndAfter and Seal's closeReads are
+# DELETED with D99's re-draw (`Replay.settle`, `Seal.settleReads`), and Seal's blockSince with them (read by nothing
+# once closeReads went; check 12 found it); every citation counted here is an append-only README block naming the
+# definition as it stood.
+6 Replay.closeSub
+3 blockSince
+18 Replay.restartAt
+3 Seal.closeReads
+3 closeReads
+17 closeSub
+2 lastEndAfter
+9 restartAt
 
 # ======== 7. BINDERS AND HYPOTHESIS NAMES (counted) -- D41, W-20 ========
 #

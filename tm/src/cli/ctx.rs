@@ -439,20 +439,9 @@ pub(crate) fn logged_stops(replay: &Replay, open: &tm_core::log::OpenBlock) -> O
     let mine = |r: &tm_core::log::ViewRow| r.id.as_deref() == Some(open.id.as_str());
     // The block's own `start` row: the replay's one finder of it (README gap 3950).
     let at = replay.start_row(Some(open.id.as_str()), open.started)?;
-    let interrupted = rows[..at]
-        .iter()
-        .rev()
-        .filter(|r| !r.cancelled)
-        .find_map(|r| {
-            if r.tag == interrupt {
-                Some(true)
-            } else if r.tag == resume {
-                Some(false)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(false);
+    // The interruption the log holds open at the `start`: the replay's one reading of it (README gap 4619),
+    // which the host's worked minutes begin their pairing with too.
+    let interrupted = replay.interrupted_before(at).is_some();
     let mut stops = LoggedStops { paused: false, interrupted };
     for r in rows[at + 1..].iter().filter(|r| !r.cancelled) {
         if r.tag == pause && mine(r) {

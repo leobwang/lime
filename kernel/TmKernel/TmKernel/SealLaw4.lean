@@ -293,7 +293,7 @@ theorem resume_below (z : Cal.Tz) (T₀ L cut : Nat) (As Rs B' : List Entry) (ws
       dayOf z KW q = dayOf z (foldedIndex z As Rs) q := by
     intro q hq
     rcases foldQueries_sub z _ _ _ _ q hq with h | h
-    · simp [machineInstants, blockSince, blockPaused, State.init] at h
+    · simp [machineInstants, State.init] at h
     · obtain ⟨e, he, hqe⟩ := List.mem_flatMap.1 h
       exact hI1 q (List.mem_flatMap.2 ⟨e, (foldedSurvivors_sublist As Rs).subset he, hqe⟩)
   obtain ⟨X, hXdef⟩ : ∃ X, X = (foldedSurvivors As Rs).foldl (Replay.stepWith z (dayOf z (foldedIndex z As Rs))
@@ -367,7 +367,7 @@ theorem resume_below (z : Cal.Tz) (T₀ L cut : Nat) (As Rs B' : List Entry) (ws
         (pre.foldl (Replay.stepWith z (dayOf z kw) sl) (restore (ckptOfEntries z T₀ L cut As Rs ws) n)) e).map
           Replay.Effect.key := List.mem_map.2 ⟨x, hx, rfl⟩
     rw [effectsWith_keys z (dayOf z KW) sl SL _ e (pendingStart_foldl z _ _ pre _ hPS),
-      effectsWith_congr (dayOf z KW) (dayOf z kw) z sl _ e (fun q hq => hI2 q (hhq q hq))] at hmem
+      (effectsWith_congr (dayOf z kw) (dayOf z KW) z sl _ e (fun q hq => (hI2 q (hhq q hq)).symm)).symm] at hmem
     obtain ⟨y, hy, hyk⟩ := List.mem_map.1 hmem
     rw [← hyk]; exact hck y hy
   have hbelowF := foldl_below z (dayOf z KW) SL L (horizonOf L) sv G hkeys

@@ -34,12 +34,12 @@ theorem head_of_contiguousFrom (k : Nat) (b : List Log.Line) (h : Log.contiguous
 
 theorem stepCheck_eq_none (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (K : Ckpt) (st : State)
     (e : Entry)
-    (h1 : ∀ q ∈ stepQueries st.machine e, headSec K.ledgerDay ≤ q.sec)
+    (h1 : ∀ q ∈ stepQueries dy st.machine e, headSec K.ledgerDay ≤ q.sec)
     (h2 : isWake e = true → (∀ m, K.maxT = some m → m < e.t.val) ∧
       (∀ f, K.futureFloor = some f → e.t.val.sec + fenceSec < f.sec))
     (h3 : ∀ x ∈ Replay.effectsWith z dy sl st e, keyAtOrAbove K.ledgerDay (horizonOf K.ledgerDay) x.key = true) :
     (stepCheck z dy sl K st e).2 = none := by
-  have e1 : (stepQueries st.machine e).find? (fun q => decide (q.sec < headSec K.ledgerDay)) = none :=
+  have e1 : (stepQueries dy st.machine e).find? (fun q => decide (q.sec < headSec K.ledgerDay)) = none :=
     List.find?_eq_none.2 (fun q hq => by have := h1 q hq; simp; omega)
   have e3 : (Replay.effectsWith z dy sl st e).find?
       (fun x => !keyAtOrAbove K.ledgerDay (horizonOf K.ledgerDay) x.key) = none :=
@@ -159,7 +159,7 @@ theorem folded_part_agrees (z : Cal.Tz) (T₀ L cut : Nat) (As Rs : List Entry) 
       dayOf z KW q = dayOf z (foldedIndex z As Rs) q := by
     intro q hq
     rcases foldQueries_sub z _ _ _ _ q hq with h | h
-    · simp [machineInstants, blockSince, blockPaused, State.init] at h
+    · simp [machineInstants, State.init] at h
     · obtain ⟨e, he, hqe⟩ := List.mem_flatMap.1 h
       exact hI1 q (List.mem_flatMap.2 ⟨e, (foldedSurvivors_sublist As Rs).subset he, hqe⟩)
   have hGX : (foldedSurvivors As Rs).foldl (Replay.stepWith z (dayOf z KW) SL) (State.init N)
@@ -193,7 +193,7 @@ theorem steps_agree (z : Cal.Tz) (T₀ L cut : Nat) (As Rs : List Entry) (ws : L
       (pre.foldl (Replay.stepWith z dy sl) (restore (ckptOfEntries z T₀ L cut As Rs ws) n)).machine
         = (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine) ∧
     (∀ pre e post, sv = pre ++ e :: post →
-      (∀ q ∈ stepQueries (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec) →
+      (∀ q ∈ stepQueries (dayOf z KW) (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec) →
       (Replay.effectsWith z dy sl (pre.foldl (Replay.stepWith z dy sl) (restore (ckptOfEntries z T₀ L cut As Rs ws) n))
           e).map Replay.Effect.key
         = (Replay.effectsWith z (dayOf z KW) SL (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G) e).map
@@ -219,7 +219,7 @@ theorem congr_of_spec (z : Cal.Tz) (T₀ L cut : Nat) (As Rs : List Entry) (ws :
     (hG : AgreeAbove L (horizonOf L) G (rebindState SL (restore (ckptOfEntries z T₀ L cut As Rs ws) n)))
     (hI2 : ∀ q, headSec L ≤ q.sec → dayOf z KW q = dy q)
     (hQ : ∀ pre e post, sv = pre ++ e :: post →
-      ∀ q ∈ stepQueries (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec) :
+      ∀ q ∈ stepQueries (dayOf z KW) (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec) :
     ∀ pre post, sv = pre ++ post →
       pre.foldl (Replay.stepWith z dy sl) (restore (ckptOfEntries z T₀ L cut As Rs ws) n)
         = pre.foldl (Replay.stepWith z (dayOf z KW) sl) (restore (ckptOfEntries z T₀ L cut As Rs ws) n) := by

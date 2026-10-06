@@ -77,6 +77,12 @@ mod p81;
 #[path = "support/p85.rs"]
 mod p85;
 
+// Parity P104 (the owner's D99, README gap 4520a): the one frozen input P104 moves, carried leaf by named leaf after
+// P81's and P85's carries (`support/p104.rs`).
+#[allow(dead_code)]
+#[path = "support/p104.rs"]
+mod p104;
+
 #[allow(dead_code)]
 #[path = "../src/cli/kernel_log.rs"]
 mod kernel_log;
@@ -3363,6 +3369,12 @@ fn compare_with_fork(
     if t85.starts > 0 {
         p85_tally().lock().expect("the P85 tally").push((name.to_string(), t85.starts, t85.minutes));
     }
+    // **Parity P104, carried by value** (D99), after P85's: the leaves a mark logged out of its stamp's order, or an
+    // empty stop, moves on the one frozen input P104 moves (`support/p104.rs`), each named with the fork's value.
+    let (fork_answer, _t104) = match p104::carry(name, &fork_answer) {
+        Ok(moved) => moved,
+        Err(why) => return vec![format!("{name}: {why}")],
+    };
     fork::compare_replay_with_fork(name, &kernel_replay(answer, tz), kf.counts.0, &kf.warnings, &fork_answer, t)
 }
 
@@ -3636,9 +3648,11 @@ fn p81_is_carried_by_value_and_a_corrupted_kernel_answer_fails_by_name() {
     // Since the owner's D92 the month's 22 clock starts inside a break move too (`p85_is_carried_by_value_…`, below):
     // P85's rule is applied after P81's, so this comparison is P81's with P85 carried and nothing else.
     let (moved, _) = p85::carry(&moved).expect("P85 moves the generated month");
+    // And P104's two named places (D99), which are not this test's either.
+    let (moved, _) = p104::carry(GENERATED_MONTH, &moved).expect("P104 moves the generated month");
     let mut t = fork::ForkTally::default();
     let carried = fork::compare_replay_with_fork(GENERATED_MONTH, &kr, kf.counts.0, &kf.warnings, &moved, &mut t);
-    assert!(carried.is_empty(), "the kernel disagrees with the fork moved by P81 and P85:\n  {}", carried.join("\n  "));
+    assert!(carried.is_empty(), "the kernel disagrees with the fork moved by P81, P85 and P104:\n  {}", carried.join("\n  "));
 
     // The fork's answer moved by P85 alone (D92's starts, which are not this test's), so what still differs is P81's.
     let (p85_only, _) = p85::carry(fork_answer).expect("P85 moves the generated month");
@@ -3693,10 +3707,15 @@ fn p85_is_carried_by_value_and_a_corrupted_kernel_answer_fails_by_name() {
         (22, 15),
         "P85 moved a different amount than the month's 22 clock starts inside a break (15 credited minutes)"
     );
+    // P104's two named places (D99), which are not this test's.
+    let (moved, _) = p104::carry(GENERATED_MONTH, &moved).expect("P104 moves the generated month");
     let mut t = fork::ForkTally::default();
     let carried = fork::compare_replay_with_fork(GENERATED_MONTH, &kr, kf.counts.0, &kf.warnings, &moved, &mut t);
-    assert!(carried.is_empty(), "the kernel disagrees with the fork moved by P81 and P85:\n  {}", carried.join("\n  "));
+    assert!(carried.is_empty(), "the kernel disagrees with the fork moved by P81, P85 and P104:\n  {}", carried.join("\n  "));
 
+    // The fork's answer moved by P81 and P104 and NOT by P85 (P104's named leaves are carried here too, so the
+    // comparison's printed leaves are P85's own and not crowded out by P104's earlier dates).
+    let (after81, _) = p104::carry(GENERATED_MONTH, &after81).expect("P104 moves the generated month without P85");
     let mut t = fork::ForkTally::default();
     let unmoved = fork::compare_replay_with_fork(GENERATED_MONTH, &kr, kf.counts.0, &kf.warnings, &after81, &mut t);
     let joined = unmoved.join("\n");
@@ -3722,6 +3741,61 @@ fn p85_is_carried_by_value_and_a_corrupted_kernel_answer_fails_by_name() {
     eprintln!(
         "P85 by value: 22 clock starts inside a break, 15 minutes netted off cut credits; the fork without P85 disagrees at \
          {} leaf group(s); a one-minute corruption is caught by name",
+        unmoved.len()
+    );
+}
+
+/// **Parity P104 is carried by value, and it bites** (the owner's D99, README gap 4520a; W-47 track K).
+///
+/// The generated month holds one interruption logged after the stretch it lies across was closed (`^667` on
+/// 2026-01-01: `interrupt` stamped 07:22 logged after the 07:30 `pause` and the 07:35 `unpause`) and one empty stop
+/// (`^255` on 2026-01-06: `pause` and `unpause` both at 11:59).  Three things are asserted, each by value:
+///
+/// 1. the kernel's answer agrees with the fork's answer moved by P81's, P85's and P104's carries, and P104 moved
+///    exactly its seven named leaves — the carry is not vacuous;
+/// 2. the fork's answer moved by P81 and P85 alone disagrees at P104's leaves — the carry is not the identity;
+/// 3. a kernel answer corrupted by one minute on `^667` fails against the moved answer, naming the leaf.
+#[test]
+fn p104_is_carried_by_value_and_a_corrupted_kernel_answer_fails_by_name() {
+    let tz = chrono_tz::America::Chicago;
+    let text = loggen::text(&loggen::log(loggen::Rate::Forty, 30));
+    let fork_answer = fork::frozen_fork_answers().get(GENERATED_MONTH).expect("the frozen month");
+    let answer = kernel_answer(&text, tz);
+    let kf = kernel_view(&answer);
+    let kr = kernel_replay(&answer, tz);
+
+    let (after81, _) = p81::carry(fork_answer).expect("P81 moves the generated month");
+    let (after85, _) = p85::carry(&after81).expect("P85 moves the generated month");
+    let (moved, t104) = p104::carry(GENERATED_MONTH, &after85).expect("P104 moves the generated month");
+    assert_eq!(t104.moves, 7, "P104 moved a different number of leaves than its seven named ones");
+    let mut t = fork::ForkTally::default();
+    let carried = fork::compare_replay_with_fork(GENERATED_MONTH, &kr, kf.counts.0, &kf.warnings, &moved, &mut t);
+    assert!(carried.is_empty(), "the kernel disagrees with the fork moved by P81, P85 and P104:\n  {}", carried.join("\n  "));
+
+    let mut t = fork::ForkTally::default();
+    let unmoved = fork::compare_replay_with_fork(GENERATED_MONTH, &kr, kf.counts.0, &kf.warnings, &after85, &mut t);
+    let joined = unmoved.join("\n");
+    for leaf in [
+        "days.2026-01-01.block_min",
+        "days.2026-01-01.ci_unknown.667",
+        "days.2026-01-01.segments[0].end",
+        "items.667.minutes",
+        "days.2026-01-06.segments",
+    ] {
+        assert!(joined.contains(leaf), "the fork answer without P104 agrees at `{leaf}` — P104 would be vacuous there:\n{joined}");
+    }
+
+    let mut bent = kr.clone();
+    bent.items.get_mut("667").expect("^667").minutes += 1;
+    let mut t = fork::ForkTally::default();
+    let caught = fork::compare_replay_with_fork(GENERATED_MONTH, &bent, kf.counts.0, &kf.warnings, &moved, &mut t);
+    assert!(
+        caught.iter().any(|f| f.contains("items.667.minutes")),
+        "a kernel answer one minute off on ^667 passed the P104 comparison: {caught:?}"
+    );
+    eprintln!(
+        "P104 by value: 7 leaves on the generated month (an interruption logged behind a closed stretch, an empty stop); \
+         the fork without P104 disagrees at {} leaf group(s); a one-minute corruption is caught by name",
         unmoved.len()
     );
 }

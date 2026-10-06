@@ -1249,7 +1249,9 @@ and a break are read one way on every log") reaches and the kernel does not yet 
 not a discharge (the campaign's lesson 4), so the refutation was withdrawn and the goal returned, as W-43 did.
 
 **The debt.**  Close gap 4520 — net a late mark into the stretches the replay already closed, open block and closed —
-and then prove the law over the runs the decoder builds or refute it on a world with one reading.
+and then prove the law over the runs the decoder builds or refute it on a world with one reading.  **W-47 track K closed
+the open half** (gap 4520a, the owner's D99: `Replay.settle` re-draws an open block at every mark; README "Stage 6 —
+W-47 track K"); the closed half (gap 4520b, the owner's D100) is still owed, and so is this goal.
 `PlanCheck.plan_places_no_block_over_a_break`, the law over the Block rows that start at or after `now`, stays proved
 beside it. -/
 theorem plan_places_no_block_over_a_break (r : PlanReq) (b k : WfSeg)

@@ -182,6 +182,15 @@ proptest! {
     /// pause kept (P96), the log WITHOUT the `resume` line — and from the same request after the append are equal in
     /// their future halves, and the past half after the append is the one before it plus exactly the interruption's
     /// `lost` row, `[start, now)`, noted `interruption` and carrying what it interrupted.
+    ///
+    /// **An interruption that has not begun before `now` is no stop once it is resumed** (the owner's D99, parity
+    /// P104: an empty stop leaves the block one piece; README "Stage 6 — W-47 track K", §5).  Its `resume`, at
+    /// `now`, closes it empty, so the open block runs on from where its clock last ran and its stretch up to `now` is
+    /// the running row's past part, noted as the run so far (`<worked>m so far`, the open block's minutes at `now`),
+    /// where before the append the interruption's start had closed that stretch and drawn it as a piece with no note.
+    /// That re-noting of the open block's rows ending at `now` is the one thing the append moves on such a day, and
+    /// the law says so exactly rather than leaving the row out: a fresh draw found the class at W-47 (the seed in
+    /// `cli_resume_replan.proptest-regressions`, D46).
     #[test]
     fn the_append_adds_exactly_the_interruptions_lost_row_to_the_past_half(case in plangen::case_strategy()) {
         let case = plangen::Case { interrupt: case.interrupt.or(Some(20)), ..case };
@@ -208,8 +217,31 @@ proptest! {
         let (before, now) = day(&w.log, &w.replay);
         let (after, _) = day(&post_log, &post_replay);
         prop_assert_eq!(rows(&before, |s| s.start >= now), rows(&after, |s| s.start >= now), "the future halves");
-        let mut expected = rows(&before, |s| s.end <= now);
         let began = intr.at < now;
+        let mut expected = match post_replay.open_block.as_ref().filter(|_| !began) {
+            None => rows(&before, |s| s.end <= now),
+            // P104: the open block's stretch up to `now` is its running row's past part after the append.
+            Some(ob) => {
+                let so_far = ob.worked_min as i64 + ob.since.map(|t| (now.fixed_offset() - t).num_minutes().max(0)).unwrap_or(0);
+                before
+                    .segments
+                    .iter()
+                    .filter(|s| s.end <= now)
+                    .map(|s| {
+                        let note = if s.kind == SegKind::Block
+                            && s.item.as_ref().map(|i| i.as_str()) == Some(ob.id.as_str())
+                            && s.end == now
+                            && s.flags.note.is_none()
+                        {
+                            Some(format!("{so_far}m so far"))
+                        } else {
+                            s.flags.note.clone()
+                        };
+                        format!("{} {} {:?} {:?} {:?}", s.start.to_rfc3339(), s.end.to_rfc3339(), s.kind, s.item, note)
+                    })
+                    .collect()
+            }
+        };
         if began {
             let start = intr.at;
             let lost_row = after

@@ -30,7 +30,8 @@ def tailStepsOk (z : Cal.Tz) (L : Nat) (Bs E : List Entry) : Bool :=
   foldAll (Replay.stepWith z (dayOf z (keptWakes z (wakeInstants (survivors E))))
       (Replay.KMap.get (Replay.sleptByDay z (keptWakes z (wakeInstants (survivors E))) (survivors E))))
     (fun st e => !Bs.contains e ||
-      ((stepQueries st.machine e).all (fun q => decide (headSec L ≤ q.sec)) &&
+      ((stepQueries (dayOf z (keptWakes z (wakeInstants (survivors E))))
+          st.machine e).all (fun q => decide (headSec L ≤ q.sec)) &&
        (Replay.effectsWith z (dayOf z (keptWakes z (wakeInstants (survivors E))))
           (Replay.KMap.get (Replay.sleptByDay z (keptWakes z (wakeInstants (survivors E))) (survivors E))) st e).all
          (fun x => keyAtOrAbove L (horizonOf L) x.key)))
