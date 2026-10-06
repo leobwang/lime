@@ -93513,3 +93513,34 @@ this track's own.  2. *Why.*  The brief's split did not foresee a frozen compara
 If track C's branch also rewrote the file, the land's merge conflicts on those lines.  4. *Clears it.*  The land
 re-blesses the merged binary's grid by §5's recipe (a fresh `build-oracle.sh` at 4748911, `TM_GRID_BLESS=1`,
 `TM_GRID_BLESS_REDRAW` naming D64(b) and P103), and checks that the lines it changes are P103's sixteen and track C's.
+
+### 10. Archived for the Land: the second commit, D110 and the wall rule's days — `refs/archive/w47-k/d110`
+
+The owner's D110 (gap 4748: a block started inside a calendar wall is paused from its start until the wall ends,
+parity `P105`) and D99's wall-rule days (gaps 4616 and 4619's wall half: the rule reads the open block's marks from
+its own ledger day on, and the interruption the replay holds open from before it, parity `P106`) are BUILT and
+archived as one snapshot, `refs/archive/w47-k/d110` (`7ffd91c`, a snapshot and not a step's commit), whose README
+holds this track's §10 whole: the Lean (written by the session that was cut off, in its scratch clone, ported after the
+first commit and checked line by line), the audit (twelve theorems; the renamed D61 law's line removed), cheats 287 and
+288 (each failing on its `decide`), the 26 mutation rows (22 drifted re-verified, 4 owed, every one PINNED but the
+checkpoint codec, UNFOLDABLE and pinned by nothing as the block codec is), the drives (M17: `tm stop` 15 where 65; gap
+4616: HEAD's binary un-pauses a block the user paused two ledger days before at a meeting, this one writes nothing;
+gap 4619's wall half: HEAD's counts a block worked inside an open interruption and sets it running at the meeting's
+end) and `check.sh` — every line ok on the snapshot.
+
+**It is not on this branch** because `P105` moves three frozen comparands in files the brief gives track C this run
+(`tm/tests/fixtures/*`, `tm/tests/planner_classes.rs` and the class worlds): `fork_week_grid` (16 worlds),
+`planner_classes`' frozen class worlds (7) and its seeded batch (6 draws) — the binary's housekeeping now writes D110's
+pause at a block's start inside a wall on each.  The brief says such a file is recorded for the Land and not edited,
+and an unedited one leaves the commit red; so the snapshot waits for the Land, with the recipe in its §10.3 (merge it;
+re-bless the three under D64(b) with fork 4748911 asked again, naming `P105` and `P106`; three workspace runs).  The fifth
+failure of its first workspace run (`cli_latency`'s three-year row) was measured as load: the first commit's own tree
+failed the same suite once on another row under the same load (§10.3 of the snapshot).  README gap 4916.
+
+**Gap 4916 — the second commit is archived, not committed: `P105` moves frozen worlds another track owns.**  1. *What.*
+D110, `P105` and `P106` are not on `w47-k`; they are a snapshot ref.  2. *Why.*  Committing them green needs three of
+track C's comparands re-blessed, and the brief says to record another track's file for the Land rather than edit it —
+track C rewrote the class-world generator and `planner_classes.rs` this run.  (The first commit re-blessed the week
+grid itself, gap 4915; this commit does not, the rule being explicit and the class worlds being in active change.)
+3. *Cost.*  Until the Land merges the snapshot, a block begun inside a meeting is counted as worked through it, and the
+wall rule reads only the day before and the day of a mark.  4. *Clears it.*  The Land, by the snapshot's §10.3 recipe.
