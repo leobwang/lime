@@ -93101,7 +93101,7 @@ kernel step.
 ## Stage 6 — W-47 track C: a learned model's tables meet the fork — the oracle reads `.tm/model.json` with the fork's own loader, and 96 learned-model days are frozen, 48 of them with no wake logged
 
 **Status (kept current; a cut is recoverable from this block and the branch `w47-c`).**  **Three sessions of this
-track, three commits.**  The FIRST session wrote §§1-8, measured them (§9's first-session runs) and was cut off during
+track, four commits.**  The FIRST session wrote §§1-8, measured them (§9's first-session runs) and was cut off during
 its fourth workspace run (2026-10-06 00:29), before any commit; the snapshot `refs/archive/w47/c-wip` (`20dafb3`,
 2026-10-05 23:30 — not a step's commit) holds its working files, and every file the second session found in the
 worktree was byte-identical to that snapshot but this block (`git show refs/archive/w47/c-wip:<file> | cmp - <file>`,
@@ -93119,7 +93119,8 @@ recorded from its log (exit 0, every set, set 7's loop run by the script itself)
 census (gap 4998 CLOSED: `support/forkcap.rs`' store writes what it asked, `capacity-census.py` reads it against the
 class of frozen capacity files, `run-oracle.sh`'s set 7 fails a file whose binary asked the oracle nothing), with its
 three bites; and §14, the hash arm's multiplier handed to the binary as `.tm/model.json` (gap 4992 CLOSED); §15 is what
-it measured.  Nothing is owed by this track after it but the open gaps of §8 (4990, 4993-4995).
+it measured.  Its second commit — the track's fourth — corrects one count in §15 (its earlier runs) and nothing else.
+Nothing is owed by this track after it but the open gaps of §8 (4990, 4993-4995).
 
 Rust tests, the oracle and fixtures only: no `.lean` file, nothing under `tm/src` or `tm-core/src`.  The files: the
 oracle (`kernel/tm-kernel-ffi/examples/oracle/src/main.rs`, `build-oracle.sh`'s and `run-oracle.sh`'s comments and set 6,
@@ -93898,11 +93899,16 @@ session's Lean and Dafny work: load 7-50.
   run 1 (07:37-07:53, load 7.4 → 38) **2,902 passed, 0 failed, 53 ignored**;
   run 2 (07:53-08:08, load 38 → 16) **2,902 passed, 0 failed, 53 ignored**;
   run 3 (08:08-08:23, load 16 → 13) **2,902 passed, 0 failed, 53 ignored**.
-  Against the second commit's 2,901 / 53: +1 passed, §14's witness.  Two earlier runs are NOT counted: they were of
-  the census and the model file before the witness existed (`r3/ws-pre-witness-run1.log`: 2,901 / 0 / 53; and a run
-  stopped at 106 of 155 result lines when the witness was written, whose `cli_latency` had missed two three-year rows
-  at load ≈ 18 — `tm drop ^z2` and `tm drop ^a1` each `still running after 5s`, a Lean build at 1,600% CPU beside it:
-  gap 4901's rows, no binary code in this commit).
+  Against the second commit's 2,901 / 53: +1 passed, §14's witness.  Three earlier runs are NOT counted, each of an
+  earlier state of the files: one of the census alone, started 06:57 and stopped about two minutes in when §14's model
+  file was folded into the step (its log not kept); then two of the census and the model file before the witness
+  existed — `r3/ws-pre-witness-run1.log`, **2,901 / 0 / 53** over 155 result lines (07:12-07:27), and a run stopped at
+  **72** of 155 result lines when the witness was written (`r3/ws-pre-witness-run2-partial.log`), whose `cli_latency`
+  had missed two three-year rows at load ≈ 18 — `tm drop ^z2` and `tm drop ^a1` each `still running after 5s`, a Lean
+  build at 1,600% CPU beside it: gap 4901's rows, no binary code in this step.  (The track's third commit, `2cdfe19`,
+  said the stopped run reached 106 result lines and counted two earlier runs, not three: 106 was the first counted
+  run's count at its thirteenth minute, misread, and the 06:57 run was left out.  Corrected by the track's fourth
+  commit, which changes this paragraph and the status line alone.)
 * **The suites the brief names**, the same in all three runs: T5 (`kernel_replay_parity`) 52 passed (4 ignored); the
   door (`kernel_log_door`) 44; `cli_switch_acceptance` 16; `cli_latency` 7 (1 ignored); `kernel_call_counts` 3;
   `one_padder` 9; `one_renderer` 35; `kernel_row_cells` 36; `kernel_planner_wire` 27; `planner_classes` **75** (10
