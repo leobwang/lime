@@ -147,13 +147,23 @@ echo "############ input set 7: every other arm that asks the oracle, read off t
 # arm that is not `#[ignore]`d asks the oracle live — and then every `#[ignore]`d arm the
 # sets above do not name, as `arms.py` reads them off the test sources (no list: a new arm is
 # run by being written).  Blesses do not run (AGENTS §7.2).
-( cd "$repo" && TM_ORACLE="$oracle" cargo test --quiet --workspace --no-fail-fast )
+#
+# A failure here is RECORDED and the set runs on (W-47 track C, README gap 4997): the workspace
+# carries timing rows (`cli_latency`) that a loaded box can miss, and under `set -e` one such miss
+# ended the script before a single arm below it ran -- the sweep reported a latency row and
+# compared nothing.  Every arm now runs, every failure is printed by name, and the script exits
+# non-zero at the end when any failed.
+set7=0
+( cd "$repo" && TM_ORACLE="$oracle" cargo test --quiet --workspace --no-fail-fast ) \
+  || { echo "FAILED: the whole workspace under TM_ORACLE (its failing tests are named above)"; set7=1; }
 self="$ffi/examples/oracle/run-oracle.sh"
-python3 "$ffi/examples/oracle/arms.py" | while read -r package target name; do
+while read -r package target name; do
   if grep -q "^    ${name}\( \|$\)" "$self"; then
     continue  # run above, by its set
   fi
   echo "-- ${package} ${target} ${name}"
+  # Its stdin is /dev/null: the loop's is the arm list, which nothing the arm runs may read.
   ( cd "$repo" && TM_ORACLE="$oracle" cargo test --quiet -p "$package" --test "$target" \
-      -- --ignored --exact --nocapture "$name" ) || echo "FAILED: ${package} ${target} ${name}"
-done
+      -- --ignored --exact --nocapture "$name" ) < /dev/null || { echo "FAILED: ${package} ${target} ${name}"; set7=1; }
+done < <(python3 "$ffi/examples/oracle/arms.py")
+exit "$set7"

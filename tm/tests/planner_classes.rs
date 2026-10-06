@@ -550,14 +550,25 @@ fn the_kernel_plans_every_frozen_model_day_the_fork_planned() {
         findings.join("\n  ")
     );
     // The floors (AGENTS §9.2): every line was compared, every line carries a model file, and
-    // the draws reached the days that read a model differently — a short night, a running break.
+    // the draws reached the days that read a model differently — a short night, a running break,
+    // a day with no wake logged (README gap 4991), which is a primary line's world, unwoken.
     assert_eq!(t.day.days + t.p45, lines.len(), "every learned-model line was compared: {t:?}");
-    assert!(lines.len() >= forkclass::MODEL_DRAWS / 2, "the file holds {} of {} draws", lines.len(), forkclass::MODEL_DRAWS);
+    let primary: Vec<&Value> = lines.iter().filter(|l| l["secondary"].is_null()).collect();
+    assert!(primary.len() >= forkclass::MODEL_DRAWS / 2, "the file holds {} of {} draws", primary.len(), forkclass::MODEL_DRAWS);
     let files = lines.iter().filter(|l| l["world"]["model"].is_string() && l["world"]["mult"].is_null()).count();
     assert_eq!(files, lines.len(), "a learned-model line without `.tm/model.json`'s text");
     let short = lines.iter().filter(|l| !l["world"]["log"].as_str().unwrap_or_default().contains("\"slept_min\":480")).count();
     assert!(short > 0 && short < lines.len(), "short nights on {short} of {} lines", lines.len());
     assert!(t.day.hashes_equal == t.day.days, "a learned-model day hashes otherwise than the fork's: {t:?}");
+    let unwoken: Vec<&Value> = lines.iter().filter(|l| l["secondary"] == forkclass::NO_WAKE).collect();
+    assert!(unwoken.len() >= primary.len() / 2, "{} line(s) with no wake logged, of {} primary", unwoken.len(), primary.len());
+    for l in &unwoken {
+        let who = l["name"].as_str().unwrap_or("?");
+        let w = ClassWorld::of_json(&l["world"], tz()).unwrap_or_else(|e| panic!("{who}: {e}"));
+        assert!(w.state.wake.is_none() && !w.log.contains("\"ev\":\"wake\""), "{who}: a wake is logged or cached");
+        let parent = primary.iter().find(|p| p["draw"] == l["draw"]).unwrap_or_else(|| panic!("{who}: no primary line"));
+        assert_eq!(l["world"]["model"], parent["world"]["model"], "{who}: not its primary's model");
+    }
 }
 
 /// **The learned-model file is exactly the model draws the shipped binary holds** (W-47 track C,
@@ -566,42 +577,76 @@ fn the_kernel_plans_every_frozen_model_day_the_fork_planned() {
 /// class draw and its model, from the tree — and a line the file holds must carry that draw's world
 /// byte for byte (`.tm/model.json` included) and its provenance, and be one
 /// `forkclass::binary_holds` accepts with the model written beside it; an index it does not hold
-/// must be one `binary_holds` refuses.
+/// must be one `binary_holds` refuses. **And the same of each held draw's world with no wake
+/// logged** (`forkclass::without_wake`, README gap 4991): its `NO_WAKE` line is there, byte for byte,
+/// exactly when the binary holds that world too.
 #[test]
 fn the_frozen_models_are_every_draw_the_binary_holds() {
     let tz = tz();
-    let held: std::collections::BTreeMap<u64, &Value> =
-        forkclass::model_lines().iter().map(|l| (l["draw"].as_u64().expect("a draw"), l)).collect();
+    let held: std::collections::BTreeMap<(u64, Option<&str>), &Value> = forkclass::model_lines()
+        .iter()
+        .map(|l| ((l["draw"].as_u64().expect("a draw"), l["secondary"].as_str()), l))
+        .collect();
     let mut bad = Vec::new();
-    let (mut holds, mut refused) = (0usize, Vec::new());
-    for (index, (draw, m)) in forkclass::model_draws(forkclass::MODEL_SEED).take(forkclass::MODEL_DRAWS).enumerate() {
-        let world = forkclass::model_world_of(&draw, &m);
-        let verdict = forkclass::binary_holds(&Built::of(world.clone()));
-        match (held.get(&(index as u64)), verdict) {
+    let (mut holds, mut refused, mut unwoken) = (0usize, Vec::new(), 0usize);
+    // One kind of line, held to the re-drawn world: its world, its provenance, the binary's verdict.
+    let mut hold = |index: usize, kind: Option<&str>, line: Option<&&Value>, want: Value, world: &ClassWorld| -> bool {
+        let who = want["name"].as_str().unwrap_or("?").to_string();
+        match (line, forkclass::binary_holds(&Built::of(world.clone()))) {
             (Some(line), Ok(())) => {
-                holds += 1;
-                let stored = ClassWorld::of_json(&line["world"], tz).unwrap_or_else(|e| panic!("model draw {index}: {e}"));
-                if stored != world {
-                    bad.push(format!("model draw {index}: the stored world is not the model draw's"));
+                let stored = ClassWorld::of_json(&line["world"], tz).unwrap_or_else(|e| panic!("{who}: {e}"));
+                if stored != *world {
+                    bad.push(format!("{who}: the stored world is not the model draw's"));
                 }
-                let class = class_of(&Built::of(world.clone())).key();
-                let want = forkclass::model_line(index, &draw, &world, &class);
-                for key in ["name", "class", "arm", "case", "seed", "draw", "world"] {
+                for key in ["name", "class", "arm", "case", "seed", "draw", "world", "secondary"] {
                     if want[key] != line[key] {
-                        bad.push(format!("model draw {index}: its recorded `{key}` is not its draw's provenance"));
+                        bad.push(format!("{who}: its recorded `{key}` is not its draw's provenance"));
                     }
                 }
+                true
             }
-            (Some(_), Err(e)) => bad.push(format!("model draw {index}: frozen, and a world the binary cannot hold: {}", e.join("; "))),
-            (None, Ok(())) => bad.push(format!("model draw {index}: a world the binary holds, left out of the file")),
-            (None, Err(e)) => refused.push(format!("{index}: {}", e.join("; "))),
+            (Some(_), Err(e)) => {
+                bad.push(format!("{who}: frozen, and a world the binary cannot hold: {}", e.join("; ")));
+                false
+            }
+            (None, Ok(())) => {
+                bad.push(format!("{who}: a world the binary holds, left out of the file ({kind:?}, draw {index})"));
+                false
+            }
+            (None, Err(e)) => {
+                refused.push(format!("{who}: {}", e.join("; ")));
+                false
+            }
         }
+    };
+    for (index, (draw, m)) in forkclass::model_draws(forkclass::MODEL_SEED).take(forkclass::MODEL_DRAWS).enumerate() {
+        let world = forkclass::model_world_of(&draw, &m);
+        let class = class_of(&Built::of(world.clone())).key();
+        let want = forkclass::model_line(index, &draw, &world, &class);
+        if !hold(index, None, held.get(&(index as u64, None)), want, &world) {
+            continue;
+        }
+        holds += 1;
+        // The held draw's world with no wake logged: a line of its own when the binary holds it.
+        let nw = forkclass::without_wake(&world);
+        let class = class_of(&Built::of(nw.clone())).key();
+        let want = forkclass::model_line_without_wake(index, &draw, &nw, &class);
+        unwoken += usize::from(hold(index, Some(forkclass::NO_WAKE), held.get(&(index as u64, Some(forkclass::NO_WAKE))), want, &nw));
     }
-    let beyond: Vec<u64> = held.keys().copied().filter(|d| *d as usize >= forkclass::MODEL_DRAWS).collect();
+    let beyond: Vec<(u64, Option<&str>)> = held.keys().copied().filter(|(d, _)| *d as usize >= forkclass::MODEL_DRAWS).collect();
     if !beyond.is_empty() {
         bad.push(format!("model lines for draws past MODEL_DRAWS: {beyond:?}"));
     }
-    println!("learned-model days: {holds} draw(s) held, {} refused by the binary, of {}:\n  {}", refused.len(), forkclass::MODEL_DRAWS, refused.join("\n  "));
+    let orphans: Vec<u64> = held.keys().filter(|(d, k)| k.is_some() && !held.contains_key(&(*d, None))).map(|(d, _)| *d).collect();
+    if !orphans.is_empty() {
+        bad.push(format!("no-wake lines with no primary line: draws {orphans:?}"));
+    }
+    println!(
+        "learned-model days: {holds} draw(s) held and {unwoken} of them without a wake, {} refused by the binary, of {}:\n  {}",
+        refused.len(),
+        forkclass::MODEL_DRAWS,
+        refused.join("\n  ")
+    );
     assert!(bad.is_empty(), "the learned-model file is not the draws the binary holds:\n  {}", bad.join("\n  "));
 }
 
@@ -615,7 +660,10 @@ fn the_frozen_models_are_every_draw_the_binary_holds() {
 /// could tell from its absence. Counted: the lines whose ROWS move (what the fork's own planner
 /// read — the curves, the shift, the multipliers) and whose GRANTS alone move (what reaches the
 /// fork's day only through the kernel's ranking, D53 — the weights and the arrivals, read by the
-/// fork in T13, `kernel_lookahead_parity.rs`).
+/// fork in T13, `kernel_lookahead_parity.rs`). **On a line with no wake logged** (`NO_WAKE`, README
+/// gap 4991) only the expected arrivals are taken out — its other tables are its primary line's,
+/// counted there — and they must move some such line's ROWS: day 0's wake is the weekday's
+/// expected arrival there, on both sides, and nowhere else.
 #[test]
 fn every_learned_table_moves_a_frozen_model_day() {
     use tm_core::energy::WeekdayMap;
@@ -638,7 +686,11 @@ fn every_learned_table_moves_a_frozen_model_day() {
         let whole = forkclass::kernel_answer(&Built::of(world.clone())).unwrap_or_else(|e| panic!("{who}: {e}"));
         let whole = serde_json::to_value(&whole.day).expect("a day serialises");
         let learned = forkclass::host_model(&text).unwrap_or_else(|e| panic!("{who}: {e}"));
+        let unwoken = line["secondary"] == forkclass::NO_WAKE;
         for (name, ablate) in tables {
+            if unwoken && name != "expected_arrival" {
+                continue;
+            }
             let mut m = learned.clone();
             ablate(&mut m);
             if m == learned {
@@ -648,6 +700,7 @@ fn every_learned_table_moves_a_frozen_model_day() {
             let w = ClassWorld { mult: Some(forkclass::Learned::ModelJson(m.to_json())), ..world.clone() };
             let k = forkclass::kernel_answer(&Built::of(w)).unwrap_or_else(|e| panic!("{who} without `{name}`: {e}"));
             let k = serde_json::to_value(&k.day).expect("a day serialises");
+            let name = if unwoken { "expected_arrival, no wake" } else { name };
             if k["segments"] != whole["segments"] {
                 *rows.entry(name).or_default() += 1;
             } else if k["priorities"] != whole["priorities"] {
@@ -659,7 +712,7 @@ fn every_learned_table_moves_a_frozen_model_day() {
         "learned-model days ({}): taking one table out of .tm/model.json moves the kernel's ROWS on {rows:?} and its GRANTS alone on {grants:?}",
         lines.len()
     );
-    for name in ["energy", "sleep_debt_shift", "duration"] {
+    for name in ["energy", "sleep_debt_shift", "duration", "expected_arrival, no wake"] {
         assert!(rows.get(name).copied().unwrap_or(0) > 0, "`{name}` moves no learned-model day's rows: {rows:?}");
     }
     for name in ["p_lounge", "expected_arrival"] {
@@ -689,7 +742,8 @@ fn every_frozen_model_is_the_hosts_writing_and_the_binarys_literals() {
         chrono::Weekday::Sun,
     ];
     let (mut weights, mut shifts) = (0usize, 0usize);
-    for line in forkclass::model_lines() {
+    // The primary lines: a no-wake line (README gap 4991) carries its primary line's file.
+    for line in forkclass::model_lines().iter().filter(|l| l["secondary"].is_null()) {
         let who = line["name"].as_str().unwrap_or("?");
         let text = line["world"]["model"].as_str().unwrap_or_else(|| panic!("{who}: no model file"));
         let m = forkclass::host_model(text).unwrap_or_else(|e| panic!("{who}: {e}"));
@@ -2800,7 +2854,10 @@ fn the_frozen_batch_is_blessed() {
 /// is refused by name, never re-drawn here. **What a line is held against is the file's COMMITTED
 /// history** (`frozenhist::held`), never the working copy — so the first bless, which INTRODUCES
 /// every line (the owner's D70), is the one with no committed line to hold. `TM_PLANNER_BLESS_MODELS_OUT`
-/// writes elsewhere, for a dry run.
+/// writes elsewhere, for a dry run. **Each held draw's world with no wake logged follows its line**
+/// (`forkclass::without_wake`, `forkclass::model_line_without_wake`; README gap 4991), held to the
+/// binary and to D64 the same way; on the bless that brought them, their names were new to the
+/// committed file and the primary lines' were not — an addition of lines, every old one unchanged.
 #[test]
 #[ignore]
 fn the_frozen_model_days_are_blessed() {
@@ -2820,36 +2877,47 @@ fn the_frozen_model_days_are_blessed() {
     let (mut out, mut added, mut changed, mut refused, mut not_held) = (String::new(), 0usize, Vec::new(), Vec::new(), Vec::new());
     for (index, (draw, m)) in forkclass::model_draws(forkclass::MODEL_SEED).take(forkclass::MODEL_DRAWS).enumerate() {
         let world = forkclass::model_world_of(&draw, &m);
-        let b = Built::of(world.clone());
-        if let Err(e) = forkclass::binary_holds(&b) {
-            not_held.push(format!("draw {index}: {}", e.join("; ")));
-            continue;
-        }
-        let prios = forkclass::kernel_answer_with_grants(&b).unwrap_or_else(|e| panic!("model draw {index}: the kernel refused: {e}")).1;
-        let answers = forkplan::comparand_answers(&b, &prios, &oracle).unwrap_or_else(|e| panic!("model draw {index}: the oracle: {e}"));
-        let mut line = forkclass::model_line(index, &draw, &world, &class_of(&b).key());
-        for key in forkclass::ANSWERS {
-            forkclass::set_answer(&mut line, key, answers[key].clone());
-        }
-        let name = line["name"].as_str().expect("a named line").to_string();
-        match held.get(&name) {
-            None => added += 1,
-            Some(old) if old["world"] != line["world"] => {
-                refused.push(format!("{name}: the model draw writes another world now — a re-draw, which D64(b) must decide"))
+        // The draw's line, then the same world with no wake logged (README gap 4991): each held to
+        // the binary, answered by the oracle, and held to D64 against the committed file.
+        for unwoken in [false, true] {
+            let world = if unwoken { forkclass::without_wake(&world) } else { world.clone() };
+            let b = Built::of(world.clone());
+            if let Err(e) = forkclass::binary_holds(&b) {
+                // No primary line, no line without its wake: the second is the first's world.
+                not_held.push(format!("draw {index}{}: {}", if unwoken { " without a wake" } else { "" }, e.join("; ")));
+                break;
             }
-            Some(old) => {
-                let ask = forkplan::ForkAsk { state: &b.world.state, now: b.world.now, d60: false, p64: false, prios: &prios, extend: None, log_line: None };
-                let shipped_day = forkplan::ForkPlan::plan(&oracle, &b, &ask).unwrap_or_else(|e| panic!("{name}: the oracle: {e}")).fork_day;
-                match forkclass::d64_allows(old, &line, &shipped_day, &because, harness.as_deref(), &registered) {
-                    Err(e) => refused.push(e),
-                    Ok(keys) if !keys.is_empty() => changed.push(format!("{name} `{}`", keys.join("`, `"))),
-                    Ok(_) => {}
+            let prios = forkclass::kernel_answer_with_grants(&b).unwrap_or_else(|e| panic!("model draw {index}: the kernel refused: {e}")).1;
+            let answers = forkplan::comparand_answers(&b, &prios, &oracle).unwrap_or_else(|e| panic!("model draw {index}: the oracle: {e}"));
+            let class = class_of(&b).key();
+            let mut line = if unwoken {
+                forkclass::model_line_without_wake(index, &draw, &world, &class)
+            } else {
+                forkclass::model_line(index, &draw, &world, &class)
+            };
+            for key in forkclass::ANSWERS {
+                forkclass::set_answer(&mut line, key, answers[key].clone());
+            }
+            let name = line["name"].as_str().expect("a named line").to_string();
+            match held.get(&name) {
+                None => added += 1,
+                Some(old) if old["world"] != line["world"] => {
+                    refused.push(format!("{name}: the model draw writes another world now — a re-draw, which D64(b) must decide"))
+                }
+                Some(old) => {
+                    let ask = forkplan::ForkAsk { state: &b.world.state, now: b.world.now, d60: false, p64: false, prios: &prios, extend: None, log_line: None };
+                    let shipped_day = forkplan::ForkPlan::plan(&oracle, &b, &ask).unwrap_or_else(|e| panic!("{name}: the oracle: {e}")).fork_day;
+                    match forkclass::d64_allows(old, &line, &shipped_day, &because, harness.as_deref(), &registered) {
+                        Err(e) => refused.push(e),
+                        Ok(keys) if !keys.is_empty() => changed.push(format!("{name} `{}`", keys.join("`, `"))),
+                        Ok(_) => {}
+                    }
                 }
             }
+            written.push(name);
+            out.push_str(&serde_json::to_string(&line).expect("a line serialises"));
+            out.push('\n');
         }
-        written.push(name);
-        out.push_str(&serde_json::to_string(&line).expect("a line serialises"));
-        out.push('\n');
     }
     refused.extend(held.head.iter().filter(|n| !written.contains(n)).map(|n| format!("{n}: a frozen line the model draw no longer writes")));
     eprintln!(
@@ -3282,11 +3350,10 @@ fn the_overrun_lines_witness_p45s_reset_out_of_the_tree() {
     assert!(!witnessed.is_empty(), "no frozen overrun line witnesses P45's reset ({lines} line(s))");
 }
 
-
-/// **The learned-model oracle arm's census** (W-47 track C, README gap 4891): `[cases, drawn
-/// worlds the binary refuses, lines compared, short nights compared, lines with a learned curve,
-/// with a fitted shift, P45 days, oracle requests]`.
-static MODEL_ORACLE_CENSUS: std::sync::Mutex<[u64; 8]> = std::sync::Mutex::new([0; 8]);
+/// **The learned-model oracle arm's census** (W-47 track C, README gaps 4891 and 4991): `[cases,
+/// drawn worlds the binary refuses, lines compared, short nights compared, lines with a learned
+/// curve, with a fitted shift, P45 days, oracle requests, worlds with no wake compared]`.
+static MODEL_ORACLE_CENSUS: std::sync::Mutex<[u64; 9]> = std::sync::Mutex::new([0; 9]);
 
 /// The fork oracle at `TM_ORACLE`, running once for the arm below — `None`, and the arm inert,
 /// when it is not set; its `plan` mode refused by name if the binary lacks it (README gap 196).
@@ -3309,7 +3376,9 @@ proptest::proptest! {
     /// (D64(b)), and otherwise answered by `tm-oracle plan`, which reads the model with fork
     /// 4748911's own loader (and is refused as stale when it does not say so), through
     /// `forkplan::comparand_answers`, the frozen lines' one definition, and held to the kernel by
-    /// `forkclass::compare_line`, their one comparison. Inert without `TM_ORACLE`.
+    /// `forkclass::compare_line`, their one comparison — and then the same world with no wake
+    /// logged (`forkclass::without_wake`, README gap 4991), where the binary holds it. Inert without
+    /// `TM_ORACLE`.
     #[test]
     #[ignore]
     fn the_kernel_plans_every_fresh_model_draw_as_the_forks_oracle_plans_it(bytes in proptest::prelude::any::<[u8; 12]>()) {
@@ -3318,17 +3387,16 @@ proptest::proptest! {
         let (draw, m) = forkclass::model_draws(&seed).next().expect("a model draw");
         let world = forkclass::model_world_of(&draw, &m);
         let b = Built::of(world.clone());
-        let mut c = [0u64; 8];
+        let mut c = [0u64; 9];
         c[0] = 1;
-        if forkclass::binary_holds(&b).is_err() {
-            c[1] = 1;
-        } else {
-            let prios = forkclass::kernel_answer_with_grants(&b)
-                .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("seed {seed}: the kernel did not plan the day: {e}")))?
+        // One world against the fork: the oracle's comparand and the frozen lines' one comparison.
+        let against_the_fork = |b: &Built, what: &str| -> Result<ClassTally, proptest::test_runner::TestCaseError> {
+            let prios = forkclass::kernel_answer_with_grants(b)
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("seed {seed}{what}: the kernel did not plan the day: {e}")))?
                 .1;
-            let answers = forkplan::comparand_answers(&b, &prios, oracle)
-                .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("seed {seed}: the fork oracle did not answer: {e}")))?;
-            let mut line = forkclass::drawn_line(format!("fresh model seed {seed}"), &seed, 0, &draw, &world, &class_of(&b).key());
+            let answers = forkplan::comparand_answers(b, &prios, oracle)
+                .map_err(|e| proptest::test_runner::TestCaseError::fail(format!("seed {seed}{what}: the fork oracle did not answer: {e}")))?;
+            let mut line = forkclass::drawn_line(format!("fresh model seed {seed}{what}"), &seed, 0, &draw, &b.world, &class_of(b).key());
             for key in forkclass::ANSWERS {
                 forkclass::set_answer(&mut line, key, answers[key].clone());
             }
@@ -3336,18 +3404,30 @@ proptest::proptest! {
             let findings = compare_line(&line, &mut t);
             proptest::prop_assert!(
                 findings.is_empty(),
-                "{} disagreement(s) with fork 4748911 on a fresh learned-model draw (repeat it: model_draws({seed:?}).next()):\n  {}",
+                "{} disagreement(s) with fork 4748911 on a fresh learned-model draw{what} (repeat it: model_draws({seed:?}).next()):\n  {}",
                 findings.len(),
                 findings.join("\n  ")
             );
+            Ok(t)
+        };
+        if forkclass::binary_holds(&b).is_err() {
+            c[1] = 1;
+        } else {
+            let t = against_the_fork(&b, "")?;
             c[2] = 1;
             c[3] = u64::from(m.slept.is_some_and(|s| f64::from(s) / 60.0 < b.cfg.energy.sleep_debt.under_hours));
             c[4] = u64::from(!b.model.energy.is_empty());
             c[5] = u64::from(b.model.sleep_debt_shift.is_some());
             c[6] = t.p45 as u64;
+            // The same world with no wake logged (README gap 4991), where the binary holds it.
+            let unwoken = Built::of(forkclass::without_wake(&world));
+            if forkclass::binary_holds(&unwoken).is_ok() {
+                against_the_fork(&unwoken, " without a wake")?;
+                c[8] = 1;
+            }
         }
         let asked = *oracle.asked.lock().expect("census");
-        let [cases, refused, compared, short, curves, shifts, p45, requests] = {
+        let [cases, refused, compared, short, curves, shifts, p45, requests, unwoken] = {
             let mut g = MODEL_ORACLE_CENSUS.lock().expect("census");
             for (a, x) in g.iter_mut().zip(c) {
                 *a += x;
@@ -3360,11 +3440,12 @@ proptest::proptest! {
             // THE FLOORS (AGENTS §9.2): the comparison ran, on short nights, learned curves and shifts.
             proptest::prop_assert!(compared > generated / 2, "only {compared} of {cases} fresh model draws were compared with the oracle");
             proptest::prop_assert!(short > 0 && curves > 0 && shifts > 0, "short nights {short}, learned curves {curves}, fitted shifts {shifts}");
+            proptest::prop_assert!(unwoken > compared / 2, "only {unwoken} of {compared} compared draws were compared with no wake logged");
         }
         eprintln!(
             "planner_classes learned-model oracle census: {cases} fresh draws, {refused} the binary cannot hold, {compared} compared \
-             with fork 4748911's planner out of the tree ({requests} oracle requests): short nights {short}, learned curves {curves}, \
-             fitted shifts {shifts}, P45 days {p45}"
+             with fork 4748911's planner out of the tree and {unwoken} of them again with no wake logged ({requests} oracle \
+             requests): short nights {short}, learned curves {curves}, fitted shifts {shifts}, P45 days {p45}"
         );
     }
 }

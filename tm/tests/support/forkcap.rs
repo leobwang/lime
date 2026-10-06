@@ -441,7 +441,6 @@ pub fn model_wire(m: &Model) -> Value {
     json!(text)
 }
 
-
 /// An instant on the wire (RFC 3339, its offset, sub-seconds when there are any).
 pub fn instant_wire(t: &DateTime<Tz>) -> Value {
     json!(t.to_rfc3339())

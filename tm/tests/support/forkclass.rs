@@ -1004,7 +1004,10 @@ pub fn batch_line(index: usize, draw: &Draw, world: &ClassWorld, class: &str) ->
 /// **The learned-model days**: the model draw's first [`MODEL_DRAWS`] draws from [`MODEL_SEED`]
 /// whose world the shipped binary holds ([`binary_holds`], `.tm/model.json` written beside the
 /// world, so a model the binary refuses is refused here), each frozen with the fork's answers by
-/// value — one line per draw, the batch's line shape, named `model draw <index>`.
+/// value — one line per draw, the batch's line shape, named `model draw <index>` — and, closing
+/// README gap 4991, beside each the same world with no wake logged ([`without_wake`], `model draw
+/// <index> without a wake`, `"secondary": NO_WAKE`) when the binary holds it too: the one day a
+/// learned expected arrival reaches the fork's rows.
 ///
 /// **Why** (README gap 4891, the W-46 audit's repair): the class worlds carried one table of a
 /// learned model, the `_default` duration multiplier, and `tm-oracle plan` planned every world at
@@ -1020,7 +1023,8 @@ pub fn batch_line(index: usize, draw: &Draw, world: &ClassWorld, class: &str) ->
 /// not assumed: `planner::plan` ranked by the KERNEL's grants (D53's seam, `plan-seam.patch`) reads
 /// the energy curves and the shift (day 0's slots, `EnergyCtx`/`predict`), the duration multipliers
 /// (`collect_candidates`' planned minutes) and the expected arrival only for a day with no logged
-/// wake (`Model::wake_or_expected`; every class world logs one). The lounge weights and the
+/// wake (`Model::wake_or_expected`; every class world logs one, so only the [`NO_WAKE`] lines read
+/// it). The lounge weights and the
 /// arrivals of later days feed the fork's OWN lookahead, which the seam replaces with the kernel's
 /// grants — so on these lines they reach the comparison only through the kernel's grants, which
 /// each frozen `day` holds as the kernel answered them at the bless (a regression against the
@@ -1039,7 +1043,8 @@ pub fn models_path() -> std::path::PathBuf {
     forkday::frozen_path().with_file_name(FROZEN_MODELS)
 }
 
-/// The learned-model lines, read once, in file order; a draw carried twice FAILS.
+/// The learned-model lines, read once, in file order; a draw carried twice in one kind (a primary
+/// line, or a [`NO_WAKE`] line) FAILS, and so does a kind this file does not write.
 pub fn model_lines() -> &'static Vec<Value> {
     static MODELS: OnceLock<Vec<Value>> = OnceLock::new();
     MODELS.get_or_init(|| {
@@ -1052,7 +1057,9 @@ pub fn model_lines() -> &'static Vec<Value> {
             .map(|l| {
                 let v: Value = serde_json::from_str(l).expect("a frozen model line is JSON");
                 let d = v["draw"].as_u64().expect("a model line names its draw");
-                assert!(seen.insert(d), "two model lines for draw {d}");
+                let kind = v["secondary"].as_str().map(str::to_string);
+                assert!(kind.is_none() || kind.as_deref() == Some(NO_WAKE), "draw {d}: a model line of kind {kind:?}");
+                assert!(seen.insert((d, kind.clone())), "two model lines for draw {d} ({kind:?})");
                 v
             })
             .collect()
@@ -1172,6 +1179,45 @@ pub fn model_world_of(draw: &Draw, m: &ModelDraw) -> ClassWorld {
 /// **A learned-model line** — [`drawn_line`] at [`MODEL_SEED`], named by its draw.
 pub fn model_line(index: usize, draw: &Draw, world: &ClassWorld, class: &str) -> Value {
     drawn_line(format!("model draw {index}"), MODEL_SEED, index, draw, world, class)
+}
+
+/// **The secondary kind of a learned-model line whose world logs no `tm wake`** — the line's
+/// `secondary` key ([`model_line_without_wake`]; README gap 4991).
+pub const NO_WAKE: &str = "no wake";
+
+/// **A world with no `tm wake` logged** (W-47 track C, README gap 4991): the world's log without
+/// its `wake` line, and `.tm/state.json` without `wake` — the two go together, because the binary
+/// rebuilds the cache from the log (D42), so a world that dropped one alone is one it does not hold.
+///
+/// **Why it exists.** Every class world logs a wake, and on such a day neither planner reads the
+/// expected arrival for day 0: fork 4748911's `Planner::new` takes the stored wake, else the
+/// replay's, and only then `Model::wake_or_expected` — the weekday's learned arrival, else the
+/// configuration's — and the kernel's `Look.wakeOf` reads the same three in the same order. So
+/// the learned arrival reached the frozen days only through the later days' grants, which the
+/// fork's day takes from the kernel (D53), and the fallback itself was compared on no day at all.
+/// Without a wake, it sets day 0's hours since waking (each slot's energy, through the learned
+/// curve or the prior) and the `pref:wake+…` routines, on both sides. The night's `slept_min`
+/// goes with the line it is written on: neither planner reads a night without a wake (fork
+/// `slept_min = runtime.wake.and(…)`), so on these days a fitted shift is read by neither.
+pub fn without_wake(world: &ClassWorld) -> ClassWorld {
+    let mut w = world.clone();
+    w.state.wake = None;
+    w.log = world
+        .log
+        .lines()
+        .filter(|l| serde_json::from_str::<Value>(l).map_or(true, |v| v["ev"] != "wake"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    w
+}
+
+/// **A learned-model line whose world logs no wake** — [`model_line`]'s shape over
+/// [`without_wake`]'s world, named `model draw <index> without a wake` and marked
+/// `"secondary": NO_WAKE`; its draw is its primary line's.
+pub fn model_line_without_wake(index: usize, draw: &Draw, world: &ClassWorld, class: &str) -> Value {
+    let mut line = drawn_line(format!("model draw {index} without a wake"), MODEL_SEED, index, draw, world, class);
+    line["secondary"] = json!(NO_WAKE);
+    line
 }
 
 // ---------------------------------------------------------------------------

@@ -107,5 +107,9 @@ if ! grep -q '"tm-oracle"' "$out/Cargo.toml"; then
   mv "$out/Cargo.toml.new" "$out/Cargo.toml"
 fi
 
-( cd "$out" && cargo build --quiet -p tm-oracle )
+# The target directory is named, never inherited (W-47 track C, README gap 4996): with the
+# caller's CARGO_TARGET_DIR set, cargo built the binary THERE -- beside this repository's own
+# tm and tm-core, under the same package names -- while the line below printed a path that did
+# not exist, and run-oracle.sh's first set failed with "No such file or directory".
+( cd "$out" && cargo build --quiet -p tm-oracle --target-dir "$out/target" )
 echo "$out/target/debug/tm-oracle"
