@@ -93532,7 +93532,9 @@ tomorrow's first candidates or the week's deadline health.  4. *Clears it.*  One
   are re-measured), the TUI's Review screen driven (gap 4978).
 * 02:54-03:33 — runs 4 and 5 (latency rows again, load 12-39); `cli_latency` alone, HEAD and this branch alternated;
   `check.sh` (03:16, green); T19's first verb, HEAD and this branch alone.
-* 03:33-03:48 — run 6, the machine quieter: green.  03:48 — the prices (§10.3).  Then this commit.
+* 03:33-03:48 — run 6, the machine quieter: green.  03:48 — the prices (§10.3).  03:49 — `check.sh` again, green;
+  the commit, `925033b`.
+* 03:50-03:58 — the thirteen plants in the copy (§10.4); then this block's second commit, documentation only.
 
 ### 10. The second session: what it checked, and this commit's acceptance
 
@@ -93620,4 +93622,34 @@ binaries alternated, fifteen rounds, 03:48:37-03:48:42, load 18.0 → 21.5): `tm
 `tm review week` at 10:00 — HEAD best 37.2 ms, median 44.4 ms; this branch best 43.2 ms, median 48.1 ms (+6 ms, +4
 ms: §3.3's planner section).  The first session's absolute figures (245 and 27 ms) were taken another way and are
 not comparable to these; its differences (+14 to +26 ms, about +5 ms) are what these find.
+
+**10.4 Plants, after the commit** (`scratchpad/w47-h/r2/plant2.py`, 03:50-03:58: the first session's copy
+`scratchpad/w47-h/plant`, its own `target/`, brought to `925033b`'s code and tests — base commit `base3`, every
+source and test file `cmp`-equal to the commit's, only the README and the register's anchors behind — one plant at a
+time, `cargo test -p <pkg> --test <t>` capped at 16 GB, the file restored with `git checkout` after each; the clone's
+porcelain empty before and after every plant, and this worktree's untouched — 0 lines):
+
+| plant | what it breaks | failed |
+|---|---|---|
+| P-a | D107's continuation removed (a re-start logs a second `start` again) | `cli_start_continues` **6 of 6** |
+| P-b | `Running::is_the_row_of` answers `false` | `cli_now_annotation` **2 of 3**, `emit_now` **1** (`the_line_under_the_running_row_reads_the_block`) |
+| P-c | `Running::minutes_left` ignores the minutes worked | `cli_now_annotation` **2 of 3**, `emit_now` **1** |
+| P-l | `tm now` hands `render_now_with` no running block | `cli_now_annotation` **2 of 3** |
+| P-d | `served_order` answers the collect order | `cli_review_rank` **2 of 3** (the three-impossible list and the example tree's) |
+| P-e | "tomorrow" sorted by fork `priority::sorted_candidates` again | `cli_review_rank` **1** (the three-impossible list) |
+| P-m | the week's deadline health over no priorities | `cli_review_rank` **1** (`the_weeks_deadline_health_reads_the_days_ranking`) |
+| P-f | `Ctx::arrival_window` the host formula again | `cli_arrive_window` **3 of 4** (the overnight shift, the rebuild, the refused rebuild) |
+| P-g | the rebuild does not recompute the window | `cli_arrive_window` **2 of 4** |
+| P-i | the refused rebuild prints no `NOT recomputed` line | `cli_arrive_window` **1** (`a_refused_day_recomputes_no_window_and_names_the_refusal`) |
+| P-j | the refused rebuild still says `RECOMPUTED rather than restored` | `cli_arrive_window` **1** (the same) |
+| P-h | the scan stops at the first `#[cfg(test)]` again | `kernel_call_counts` **2** (the scan's own test, and the class test: `arrival_window` STALE) |
+| P-k | the first session's rule (any `#[cfg(test)]` item taken for a test function) | `kernel_call_counts` **1** (`the_scan_reads_the_item_a_cfg_test_attribute_stands_on`) |
+
+Every plant was caught, each by the test written for it; none compiled out (no `could not compile` in any).
+
+This subsection's commit is documentation only (the README, nothing else): `check.sh`, capped, 03:52:41-03:53:15
+(load 33.8 → 26.7), seventeen lines, all ok; `cargo test --workspace --no-fail-fast` ONCE, as AGENTS §7.5 allows a
+documentation-only commit and says out loud here — run 7, 03:53-04:09 (load 24.4 → 19.7): 2,915 passed / 0 failed /
+51 ignored over 159 result lines, exit 0, porcelain unchanged.  With it the workspace has passed whole four times on
+this code (runs 1, 2, 6 and 7).
 
