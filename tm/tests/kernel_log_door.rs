@@ -51,6 +51,12 @@ mod p81;
 #[path = "support/p85.rs"]
 mod p85;
 
+// Parity P104 (the owner's D99, README gap 4520a): the one frozen input P104 moves, carried leaf by named leaf after
+// P85's (`support/p104.rs`).
+#[allow(dead_code)]
+#[path = "support/p104.rs"]
+mod p104;
+
 #[allow(dead_code)]
 #[path = "support/loggen.rs"]
 mod loggen;
@@ -153,7 +159,11 @@ fn the_door_is_the_reader_it_replaces() {
                     let refused: Vec<u64> = swept.iter().map(|w| w.line as u64).collect();
                     // Parity P81 and P85 by value: the fork's answer moved by P81's rule (`support/p81.rs`) and then
                     // P85's (`support/p85.rs`, the owner's D92), and by nothing else.
-                    match p81::carry(f).and_then(|(f81, t81)| p85::carry(&f81).map(|(f85, t85)| (f85, t81, t85))) {
+                    // And P104's named leaves (D99, `support/p104.rs`), after P85's.
+                    match p81::carry(f)
+                        .and_then(|(f81, t81)| p85::carry(&f81).map(|(f85, t85)| (f85, t81, t85)))
+                        .and_then(|(f85, t81, t85)| p104::carry(name, &f85).map(|(f104, _)| (f104, t81, t85)))
+                    {
                         Ok((f85, t81, t85)) => {
                             p81_breaks += t81.breaks;
                             p81_minutes += t81.minutes;

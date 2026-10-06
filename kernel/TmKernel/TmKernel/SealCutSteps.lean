@@ -53,7 +53,8 @@ theorem resume_steps (z : Cal.Tz) (T₀ L cut : Nat) (As Rs B' : List Entry) (ws
   have hc := stepCheck_none z (dayOf z kw) sl _ _ e (hsteps pre e post hs)
   rw [hKL] at hc
   refine ⟨hmm.symm, (hkeys pre e post hs ?_).symm⟩
-  rw [← hmm]; exact hc.1
+  have hte : headSec L ≤ e.t.val.sec := hc.1 _ (List.mem_append_left _ (by simp [entryInstants]))
+  rw [← hmm, stepQueries_congr (dayOf z KW) (dayOf z kw) _ e (hI2 _ hte)]; exact hc.1
 
 /-- **An accepted key stays accepted at a later ledger day bounded by its date.** -/
 theorem keyAtOrAbove_later (L L' : Nat) (k : Replay.Key) (hLL : L ≤ L') (hk : keyAtOrAbove L (horizonOf L) k = true)

@@ -3371,7 +3371,6 @@ open Tm
 #print axioms Tm.Replay.HMap.get_empty
 #print axioms Tm.Replay.valueAt_applyEffect
 #print axioms Tm.Replay.applyEffects_touches_only_named_keys
-#print axioms Tm.Replay.closeSub_plain
 #print axioms Tm.Replay.closePause_plain
 #print axioms Tm.Replay.creditFx_plain
 #print axioms Tm.Replay.obsFx_plain
@@ -3394,13 +3393,11 @@ open Tm
 #print axioms Tm.Replay.machine_apply
 #print axioms Tm.Replay.conserves_safe
 #print axioms Tm.Replay.conserves_safe_then_machine
-#print axioms Tm.Replay.closeSub_lastCut
 #print axioms Tm.Replay.closePause_lastCut
 #print axioms Tm.Replay.all_safe_of_plain
 #print axioms Tm.Replay.unk_credit_none
 #print axioms Tm.Replay.conserves_cut
 #print axioms Tm.Replay.bal_apply_uncredit
-#print axioms Tm.Replay.conserves_doneClose
 #print axioms Tm.Replay.conserves_arm
 #print axioms Tm.Replay.conserves_init
 #print axioms Tm.Replay.conserves_step
@@ -3526,9 +3523,7 @@ open Tm
 #print axioms Tm.Replay.dayArm_safe
 #print axioms Tm.Replay.sleptInv_apply
 #print axioms Tm.Replay.sleptInv_applyEffects
-#print axioms Tm.Replay.closeSub_pending
 #print axioms Tm.Replay.closePause_pending
-#print axioms Tm.Replay.closeSub_sleptOk
 #print axioms Tm.Replay.closePause_sleptOk
 #print axioms Tm.Replay.creditFx_sleptOk
 #print axioms Tm.Replay.uncreditFx_sleptOk
@@ -3612,7 +3607,6 @@ open Tm
 #print axioms Tm.Replay.every_dated_output_names_its_day_key
 #print axioms Tm.Replay.every_leak_is_on_a_day_its_idle_record_names
 #print axioms Tm.Replay.applyEffects_obs
-#print axioms Tm.Replay.closeSub_obs
 #print axioms Tm.Replay.closePause_obs
 #print axioms Tm.Replay.creditFx_obs
 #print axioms Tm.Replay.uncreditFx_obs
@@ -3883,21 +3877,15 @@ open Tm
 -- (SealRebind), a common effect keeps two states agreeing above the horizons (SealAgree), the restored state agrees
 -- with the folded one (SealRestore), and the grouped answer is the whole log's (SealGroup, SealAgg, SealAgg2,
 -- SealHeaders, SealLaw2A–2D).
-#print axioms Tm.Seal.closeSub_congr
 #print axioms Tm.Seal.closePause_congr
-#print axioms Tm.Seal.closeSub_blockPaused
 #print axioms Tm.Seal.cut_congr
 #print axioms Tm.Seal.doneClose_congr
 #print axioms Tm.Seal.arm_congr
 #print axioms Tm.Seal.effectsWith_congr
 #print axioms Tm.Seal.foldl_stepWith_congr
 #print axioms Tm.Seal.stepQueries_sub
-#print axioms Tm.Seal.closeSub_mi
-#print axioms Tm.Seal.closePause_mi
 #print axioms Tm.Seal.cut_mi
 #print axioms Tm.Seal.doneFx_machines
-#print axioms Tm.Seal.resumeBlock_since
-#print axioms Tm.Seal.resumeBlock_pausedAt
 #print axioms Tm.Seal.arm_mi
 #print axioms Tm.Seal.stepWith_mi
 #print axioms Tm.Seal.foldQueries_sub
@@ -4332,7 +4320,6 @@ open Tm
 #print axioms Tm.Seal.cut_index_agrees
 #print axioms Tm.Seal.restore_fold_mi
 #print axioms Tm.Seal.cut_state_agrees
-#print axioms Tm.Seal.closeSub_keeps
 #print axioms Tm.Seal.closePause_keeps
 #print axioms Tm.Seal.cut_keeps
 #print axioms Tm.Seal.arm_lastCut
@@ -5629,7 +5616,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlannerWit.the_census_request_is_plain
 #print axioms Tm.PlannerWit.the_lift_applies_at_the_census_request
 #print axioms Tm.PlannerWit.midBreakRun_resumes_ok
-#print axioms Tm.PlannerWit.the_mid_break_day_lays_a_block_across_a_break
 #print axioms Tm.PlannerWit.the_break_law_applies_at_the_census_request
 
 -- ===========================================================================
@@ -7302,7 +7288,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.WallTimer.lastIsPauseAt_append
 #print axioms Tm.WallTimer.step_of_running
 #print axioms Tm.WallTimer.a_wall_that_starts_while_a_block_runs_stops_its_timer
-#print axioms Tm.WallTimer.a_block_started_inside_a_wall_is_not_paused_by_it
 #print axioms Tm.WallTimer.a_wall_that_has_not_begun_writes_nothing
 #print axioms Tm.WallTimer.a_timer_already_stopped_at_the_wall_is_left_alone
 #print axioms Tm.WallTimer.a_timer_mark_after_the_walls_start_stands
@@ -8107,7 +8092,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
    `arm_mi`/`stepWith_mi` restated with their old statements refuted by
    name, the replay's break witnesses, and PlannerWit's section 31.
    =================================================================== -/
-#print axioms Tm.Replay.brkFx_cases
 #print axioms Tm.Replay.arm_split_of_not_brk
 #print axioms Tm.Replay.brkFx_blockOnly
 #print axioms Tm.Replay.brkFx_machine
@@ -8151,11 +8135,8 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
    `…_is_not_netted_is_refuted` and `…_is_netted` below).
 -/
 #print axioms Tm.Replay.brkFx_brk
-#print axioms Tm.Replay.brkFx_of_stopped
-#print axioms Tm.Replay.closeSub_brk
 #print axioms Tm.Replay.closePause_brk
 #print axioms Tm.Replay.cut_brk
-#print axioms Tm.Replay.restartAt_cases
 #print axioms Tm.Replay.a_break_logged_before_its_blocks_start_is_not_netted_is_refuted
 #print axioms Tm.Replay.a_break_logged_before_its_blocks_start_is_netted
 #print axioms Tm.Replay.an_open_block_begun_inside_a_break_runs_from_its_end
@@ -8163,8 +8144,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.Replay.an_unpause_inside_a_break_restarts_the_clock_at_its_end
 #print axioms Tm.Replay.a_resume_inside_a_break_restarts_the_clock_at_its_end
 #print axioms Tm.Replay.a_break_the_start_ended_nets_nothing
-#print axioms Tm.Seal.mi_of_eq
-#print axioms Tm.Seal.restartAt_mi
 #print axioms Tm.Seal.a_machine_holds_its_last_breaks_end
 #print axioms Tm.PlannerWit.intoBreakRun_resumes_ok
 #print axioms Tm.PlannerWit.the_into_break_day_keeps_its_block_off_the_break
@@ -8239,8 +8218,8 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 
 -- =====================================================================
 -- APPENDED 2026-10-03: stage 6 (the planner), run W-44, TRACK K — the owner's D94 (README gaps 4361, 4506 and
--- 4362; parity P92): every break on a block's ledger days is netted (`Replay.Machine.brks`, `Replay.restartAt`,
--- `Replay.closeSub`, `Replay.openOf`), D94's bound (`Replay.pruneBrks`), and the last goal refuted on a world with one
+-- 4362; parity P92): every break on a block's ledger days is netted (`Replay.Machine.brks`, Replay.restartAt,
+-- Replay.closeSub, `Replay.openOf`; the middle two deleted at W-47 for `Replay.settle`), D94's bound (`Replay.pruneBrks`), and the last goal refuted on a world with one
 -- reading.  One line removed: Replay.a_break_logged_before_a_start_but_begun_after_it_is_not_netted, refuted and
 -- renamed `…_is_not_netted_is_refuted` (D5).
 -- =====================================================================
@@ -8255,10 +8234,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.Replay.a_resume_inside_an_earlier_break_nets_every_break_held
 #print axioms Tm.Replay.a_start_inside_an_earlier_break_nets_every_break_held
 #print axioms Tm.Replay.a_start_inside_overlapping_breaks_runs_from_their_union_end
-#print axioms Tm.Replay.brkFx_cases_as_d92_stated_it_is_refuted
-#print axioms Tm.Replay.brkFx_cases_on_the_blocks_days
-#print axioms Tm.Replay.brkFx_fx_obs
-#print axioms Tm.Replay.closeSub_avoids_the_breaks_held
 #print axioms Tm.Replay.countP_lt_of_witness
 #print axioms Tm.Replay.liftGo_cases
 #print axioms Tm.Replay.liftGo_uncovered
@@ -8267,11 +8242,9 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.Replay.mem_spansFor
 #print axioms Tm.Replay.nextStart_covers
 #print axioms Tm.Replay.nextStart_spec
-#print axioms Tm.Replay.openOf_restarts_outside_the_breaks_held
 #print axioms Tm.Replay.piecesGo_avoids
 #print axioms Tm.Replay.piecesGo_starts
 #print axioms Tm.Replay.pruneBrks_drops_a_break_past_the_bound
-#print axioms Tm.Replay.restartAt_avoids_the_breaks_held
 #print axioms Tm.Replay.spansFor_end
 #print axioms Tm.Replay.the_open_block_is_read_past_a_break_held_ahead_of_its_clock
 #print axioms Tm.Replay.worked_minutes_floor_each_subsegment_as_c3_stated_it_is_refuted
@@ -8284,7 +8257,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.Seal.le_foldl_maxDay
 #print axioms Tm.Seal.pruneBrks_within
 #print axioms Tm.Seal.stepWith_brks_within
-#print axioms Tm.Seal.closeReads_mi
 #print axioms Tm.Seal.pruneBrks_is_bounded_by_maxKeepDays
 #print axioms Tm.Seal.the_compiled_resume_reads_its_open_block_through_openOf
 
@@ -8324,7 +8296,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
    (`Replay.Machine.brkOpen`) until a `break` line ends it, the facts and the checkpoint carry it, and its day
    holds the ledger day.
 -/
-#print axioms Tm.Replay.closeSub_brkOpen
 #print axioms Tm.Replay.closePause_brkOpen
 #print axioms Tm.Replay.cut_brkOpen
 #print axioms Tm.Replay.doneClose_brkOpen
@@ -8399,3 +8370,244 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
    order fires, so the narrowing is a pair of theorems and not an FFI test alone (D5).
 -/
 #print axioms Tm.PlanWire.runPlanner_refuses_a_section_the_decoder_refuses_as_written_fails_where_the_order_fires
+
+/-
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK K — the owner's D99 (README "Stage 6 — W-47 track K", gap 4520a;
+   parity P104): the open block holds its own idle spans and the pieces it drew, and `Replay.settle` re-draws it at
+   every mark that moves what its clock nets (`Replay.redraw`, `DayOp.unsegment`), so a `break`, `pause` or
+   `interrupt` logged out of its stamp's order is netted where it lies; a cut credits the pieces it is left with
+   (`Replay.cutPieces`).  The window machinery reads the index at the new pieces' starts (`Seal.settleReads`,
+   `Seal.cutReads`).  Twenty-six lines removed, each theorem's subject deleted with D99 (closeSub, restartAt,
+   lastEndAfter, the old resumeBlock) and its successor appended here — the table is the README block's §3;
+   brkFx_of_stopped is refuted and renamed with its narrowing beside it (D5).
+-/
+#print axioms Tm.Replay.a_break_logged_behind_a_closed_stretch_is_netted
+#print axioms Tm.Replay.an_interruption_logged_behind_a_closed_stretch_is_netted
+#print axioms Tm.Replay.an_unpause_stamped_before_its_pause_idles_nothing
+#print axioms Tm.Replay.a_pause_logged_behind_a_closed_stretch_is_netted
+#print axioms Tm.Replay.a_pause_stamped_before_the_start_is_not_the_blocks
+#print axioms Tm.Replay.a_stop_stamped_before_a_logged_pause_credits_to_the_stop
+#print axioms Tm.Replay.atEq_iff
+#print axioms Tm.Replay.closePauseM_keeps
+#print axioms Tm.Replay.closePauseM_pending
+#print axioms Tm.Replay.cut_avoids_every_span_it_nets
+#print axioms Tm.Replay.redraw_draws_its_spans
+#print axioms Tm.Replay.redraw_obs
+#print axioms Tm.Replay.redraw_plain
+#print axioms Tm.Replay.redraw_sleptOk
+#print axioms Tm.Replay.runFrom_step_ge
+#print axioms Tm.Replay.runFrom_uncovered
+#print axioms Tm.Replay.settle_avoids_every_span_it_nets
+#print axioms Tm.Replay.settle_block_isSome
+#print axioms Tm.Replay.settle_duration
+#print axioms Tm.Replay.settle_energy
+#print axioms Tm.Replay.settle_fx_obs
+#print axioms Tm.Replay.settle_keeps
+#print axioms Tm.Replay.settle_machines
+#print axioms Tm.Replay.settle_obs
+#print axioms Tm.Replay.settle_pendLines
+#print axioms Tm.Replay.settle_plain
+#print axioms Tm.Replay.settle_runs_outside_every_span_it_nets
+#print axioms Tm.Replay.settle_sleptOk
+#print axioms Tm.Replay.settle_then_machine_obs
+#print axioms Tm.Replay.the_open_blocks_banked_piece_is_drawn
+#print axioms Tm.Replay.a_paused_stretch_is_drawn_between_the_blocks_pieces
+#print axioms Tm.Replay.an_open_block_a_pause_or_an_interruption_stopped_is_not_running
+#print axioms Tm.Replay.redraw_of_its_own_pieces_writes_nothing
+#print axioms Tm.Replay.redraw_of_its_own_pieces_writes_nothing_run
+#print axioms Tm.Replay.atEq_run
+#print axioms Tm.Seal.stepLows_run
+#print axioms Tm.Replay.two_breaks_logged_out_of_order_are_each_netted
+#print axioms Tm.Replay.worked_minutes_of_the_open_block_floor_each_piece
+#print axioms Tm.Seal.arm_settled_brkOpen
+#print axioms Tm.Seal.arm_settled_interrupt
+#print axioms Tm.Seal.arm_settled_lastCut
+#print axioms Tm.Seal.blockPaused_mi
+#print axioms Tm.Seal.closePauseM_brks
+#print axioms Tm.Seal.closePauseM_interrupt
+#print axioms Tm.Seal.closePauseM_mi
+#print axioms Tm.Seal.cutReads_mi
+#print axioms Tm.Seal.heldBrk_mi
+#print axioms Tm.Seal.interruptMachine_mi
+#print axioms Tm.Seal.mem_machineInstants
+#print axioms Tm.Seal.mi_of_block
+#print axioms Tm.Seal.piece_start_mi
+#print axioms Tm.Seal.redraw_congr
+#print axioms Tm.Seal.redrawReads_mi
+#print axioms Tm.Seal.resumed_mi
+#print axioms Tm.Seal.runFrom_cases
+#print axioms Tm.Seal.settle_congr
+#print axioms Tm.Seal.settle_mi
+#print axioms Tm.Seal.settleReads_mi
+#print axioms Tm.Seal.startedMachine_mi
+#print axioms Tm.Seal.stepQueries_congr
+#print axioms Tm.Seal.unpaused_mi
+#print axioms Tm.Replay.brkFx_with_no_block_open
+#print axioms Tm.Replay.brkFx_of_stopped_as_d92_stated_it_is_refuted
+
+/-
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK K — the owner's D100 (README "Stage 6 — W-47 track K" §11, gap 4520b;
+   parity P105): the machine holds the blocks it closed (`Replay.Closed`, `Replay.pruneClosed`), and a `break` logged
+   after one closed, stamped inside it, nets it (`Replay.netClosed`): its pieces re-drawn around the break, and what the
+   break took off its credit, its item's minutes and its `done`'s duration observation (`DayOp.net`, `Replay.netDur`).
+   The conservation invariant carries the held blocks (`Replay.Conserves`, `Replay.HeadOk`); the window
+   reads the index where a late break re-draws a held block (`Seal.closedReads`) and the checkpoint codec carries the
+   held blocks and the duration nets (`Seal.cMachine`, `Seal.cDayAcc`).  Two lines removed: Replay.conserves_doneClose,
+   restated over the held blocks as `Replay.conserves_doneClosed`, and
+   PlannerWit.the_mid_break_day_lays_a_block_across_a_break, false since D100 at the decoder's own day and restated
+   as `PlannerWit.the_mid_break_day_cuts_its_block_around_the_break`, its old statement kept at a run the decoder no
+   longer builds (`PlannerWit.the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`).
+-/
+#print axioms Tm.PlannerWit.the_core_seven_hold_on_the_mid_break_day_by_the_lift
+#print axioms Tm.PlannerWit.the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break
+#print axioms Tm.PlannerWit.the_mid_break_day_cuts_its_block_around_the_break
+#print axioms Tm.PlannerWit.the_paying_past_at_the_mid_break_request
+#print axioms Tm.Replay.bal_apply_net
+#print axioms Tm.Replay.brkFx_with_no_block_open_as_d99_stated_it_is_refuted
+#print axioms Tm.Replay.brkFx_with_nothing_open_or_held
+#print axioms Tm.Replay.Ci6.fifths_ge
+#print axioms Tm.Replay.Ci6.fifths_sub
+#print axioms Tm.Replay.Ci6.get_le_sum
+#print axioms Tm.Replay.Ci6.sum_sub
+#print axioms Tm.Replay.closePauseM_closed
+#print axioms Tm.Replay.conserves_after
+#print axioms Tm.Replay.conserves_doneClosed
+#print axioms Tm.Replay.conserves_machine_kept
+#print axioms Tm.Replay.conserves_netClosed
+#print axioms Tm.Replay.conserves_safe_then_kept
+#print axioms Tm.Replay.cut_headOk
+#print axioms Tm.Replay.cutOut_starts
+#print axioms Tm.Replay.DayAcc.bal_net
+#print axioms Tm.Replay.filter_map_netDur
+#print axioms Tm.Replay.heldOf_cons
+#print axioms Tm.Replay.heldOf_filter_le
+#print axioms Tm.Replay.interruptMachine_closed
+#print axioms Tm.Replay.lastCut_le_unk
+#print axioms Tm.Replay.map_line_netDur
+#print axioms Tm.Replay.mem_pruneClosed
+#print axioms Tm.Replay.netAll_conserves
+#print axioms Tm.Replay.netClosed_blockOnly
+#print axioms Tm.Replay.netClosed_keeps
+#print axioms Tm.Replay.netClosed_mem
+#print axioms Tm.Replay.netClosed_obs
+#print axioms Tm.Replay.netClosed_pendLines
+#print axioms Tm.Replay.netClosed_sleptOk
+#print axioms Tm.Replay.netDur_day
+#print axioms Tm.Replay.netOne_conserves
+#print axioms Tm.Replay.netOne_keeps
+#print axioms Tm.Replay.netOne_mem
+#print axioms Tm.Replay.pruneClosed_cons
+#print axioms Tm.Replay.pruneClosed_held
+#print axioms Tm.Replay.redraw_fst_starts
+#print axioms Tm.Replay.settle_closed
+#print axioms Tm.Replay.unk_credit_none_eq
+#print axioms Tm.Replay.unk_net
+#print axioms Tm.Replay.unk_uncredit_eq
+#print axioms Tm.Seal.closedReads_mi
+#print axioms Tm.Seal.cut_interrupt
+#print axioms Tm.Seal.cutPieces_mi
+#print axioms Tm.Seal.doneClosed_congr
+#print axioms Tm.Seal.doneClosed_mi
+#print axioms Tm.Seal.doneClose_keeps
+#print axioms Tm.Seal.netClosed_congr
+#print axioms Tm.Seal.netClosed_mi
+#print axioms Tm.Seal.netOne_congr
+#print axioms Tm.Seal.settleReads_startedMachine
+#print axioms Tm.Replay.a_break_logged_after_a_done_is_netted_from_the_block
+#print axioms Tm.Replay.a_break_logged_after_a_stop_is_netted_from_the_block
+#print axioms Tm.Replay.a_late_break_nets_the_block_it_crosses_and_not_the_next
+#print axioms Tm.Replay.a_late_break_nets_a_done_that_replaced_a_stop
+#print axioms Tm.Replay.a_late_break_past_the_blocks_end_takes_what_it_covers
+#print axioms Tm.Replay.a_late_break_takes_no_more_than_the_blocks_credit
+#print axioms Tm.Replay.a_late_break_nets_a_block_held_and_not_one_pruned
+#print axioms Tm.Replay.a_late_break_filed_the_day_before_nets_nothing
+#print axioms Tm.Replay.two_late_breaks_net_their_union_once
+#print axioms Tm.Replay.a_break_netted_while_open_is_not_netted_again_after_the_done
+#print axioms Tm.Replay.a_done_after_a_stop_and_a_late_break_credits_its_own_minutes
+#print axioms Tm.Replay.redraw_fst_spans
+#print axioms Tm.Replay.cutOut_avoids
+#print axioms Tm.Replay.netOne_avoids_the_break
+#print axioms Tm.Replay.netOne_leaves_no_piece_across_the_break
+#print axioms Tm.Replay.netClosed_avoids_the_break
+#print axioms Tm.Replay.netClosed_leaves_no_piece_across_the_break
+#print axioms Tm.Replay.the_unsafe_effects_are_the_machine_an_uncredit_and_a_net
+#print axioms Tm.Replay.the_held_credit_counts_a_cut_and_not_a_done
+-- ===========================================================================
+-- APPENDED 2026-10-06: stage 6, run W-47, TRACK K, second commit -- the owner's
+-- D110 (README gap 4748: a block started inside a wall is paused from its
+-- start until the wall ends) and D99's wall-rule days (gaps 4616 and 4619).
+-- Every theorem the step declares.  One line removed above: the renamed
+-- a_block_started_inside_a_wall_is_not_paused_by_it, refuted under its new
+-- name (with _as_d61_wrote_it_is_refuted), which is audited here.
+-- ===========================================================================
+#print axioms Tm.WallTimer.a_block_open_since_an_earlier_day_reads_its_own_pause
+#print axioms Tm.WallTimer.a_block_started_inside_a_wall_is_not_paused_by_it_as_d61_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_block_started_inside_a_wall_is_paused_from_its_start
+#print axioms Tm.WallTimer.an_interruption_open_since_before_the_block_holds_it_at_a_wall
+#print axioms Tm.WallTimer.a_span_whose_pause_second_has_come_is_paused
+#print axioms Tm.WallTimer.a_timer_already_stopped_at_the_wall_is_left_alone_as_d61_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_timer_mark_after_the_walls_start_stands_as_d61_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_user_who_resumed_during_the_meeting_keeps_their_timer_as_d61_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_wall_that_ended_before_the_block_began_writes_nothing
+#print axioms Tm.WallTimer.mem_writes_as_d61_wrote_it_is_refuted
+#print axioms Tm.WallTimer.pauseSec_ge
+#print axioms Tm.WallTimer.pauseSec_of_lt
+
+/-
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK L — the owner's D111 (README gap 4904; parity P108): a
+   logged `break_start`'s place is read through the ONE table of places in the log grammar, any other word
+   makes the line malformed, and the planner's reader and the host read the same table (a request's `places`
+   key, answered by `PlanWire.respondPlanner` through `EmitWire.withPlaces`).  The export is still
+   `PlanWire.callPlanner`; `PlanWire.callPlanner_without_a_planner_section_is_callRows` gained a `places`
+   hypothesis and its W-27 form is refuted one level down.
+-/
+#print axioms Tm.Log.readF_renderF_at_every_value_is_refuted
+#print axioms Tm.Log.placeWords_are_places_and_distinct
+#print axioms Tm.Log.isPlace_reads_the_four_and_refuses_any_other_word
+#print axioms Tm.Log.readF_place
+#print axioms Tm.Log.a_break_start_is_emitted_only_with_a_place
+#print axioms Tm.Log.a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word
+#print axioms Tm.Log.a_break_line_keeps_any_place
+#print axioms Tm.Log.fieldFinite_of_a_place
+#print axioms Tm.Log.every_place_has_its_own_key
+#print axioms Tm.Log.readF_readable
+#print axioms Tm.Log.readArgs_readable
+#print axioms Tm.Log.a_break_start_read_off_the_disk_is_at_a_place
+#print axioms Tm.PlanWire.placeOf_reads_exactly_the_table
+#print axioms Tm.PlanWire.respondPlanner_without_places
+#print axioms Tm.PlanWire.respondPlanner_with_places
+#print axioms Tm.PlanWire.respondPlanner_answers_the_table
+#print axioms Tm.PlanWire.respondPlanner_is_respondRows_without_a_planner_section_is_refuted
+#print axioms Tm.EmitWire.withPlaces_without_places
+#print axioms Tm.EmitWire.withPlaces_appends_the_table
+#print axioms Tm.EmitWire.withPlaces_refuses_what_jget_refuses
+#print axioms Tm.EmitWire.the_table_on_the_wire_is_placeWords
+
+/-
+   APPENDED 2026-10-06: stage 6, run W-47, TRACK L — the owner's D112 (README gap 4897; parity P109): the
+   binary's plan rows are the kernel's `Emit.Row` cells, asked through the `plan` section and padded by one
+   Rust function.  README gaps 1101 (the estimate AS WRITTEN) and 1102 (a HOT row's deadline,
+   `EmitDue.lean`) are closed at their cause.
+-/
+#print axioms Tm.Emit.dueWords_at_every_branch
+#print axioms Tm.Emit.renderWeekday_is_chronos
+#print axioms Tm.Emit.hotCell_of_no_deadline
+#print axioms Tm.Emit.hotCell_of_a_deadline
+#print axioms Tm.Emit.dueDayOf_of_a_point
+#print axioms Tm.Emit.dueDayOf_of_an_interval
+#print axioms Tm.Emit.dueDayOf_of_an_absolute_window
+#print axioms Tm.Emit.dueDayOf_of_a_daily_window
+#print axioms Tm.Emit.dueDayOf_of_no_shape
+#print axioms Tm.Emit.dueWords_ne_nil
+#print axioms Tm.Emit.hotCell_ne_nil_of_a_deadline
+#print axioms Tm.Emit.itemEstOf_is_the_written_estimate
+#print axioms Tm.Emit.itemEstOf_prefers_the_leading_estimate
+#print axioms Tm.Emit.itemEstOf_falls_back_to_the_est_key
+#print axioms Tm.Emit.noteCell_of_a_hot_row
+#print axioms Tm.Emit.noteCell_of_a_row_neither_underused_nor_hot
+#print axioms Tm.Emit.noteCell_of_an_underused_row_it_can_name
+#print axioms Tm.Emit.rowsOf_tells_the_planned_day
+#print axioms Tm.EmitWire.rowsOfReq_tells_the_requests_day
+#print axioms Tm.EmitWire.rowsJson_length_on_a_day
+#print axioms Tm.EmitWire.readNote_reads_soFar
+#print axioms Tm.EmitWire.readNote_reads_the_planners_key_and_refuses_the_other

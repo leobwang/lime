@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_day_section.rs
+source: tm/tests/emit_day_section.rs
 expression: body
 ---
 07:00  5 p1 ✓ Read ch.6 §…  @m3  1b  (67m)

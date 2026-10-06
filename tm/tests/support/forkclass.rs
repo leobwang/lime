@@ -188,27 +188,67 @@ pub struct ClassWorld {
     pub state: RuntimeState,
     /// The instant planned at.
     pub now: DateTime<Tz>,
-    /// The learned `_default` duration multiplier, when the arm drew one
-    /// (`the_kernel_hashes_the_day_the_fork_hashes`); `Model::default()` else.
-    /// Kept as its shortest decimal text so the double is read back exactly.
-    pub mult: Option<String>,
+    /// **The world's learned model, `.tm/model.json`** — `None` for `Model::default()`, which is
+    /// a plan with no model file; else [`Learned`]: the hash arm's `_default` duration multiplier
+    /// alone (`the_kernel_hashes_the_day_the_fork_hashes`; every line frozen before W-47), or the
+    /// file's whole text (W-47 track C, README gap 4891). The field keeps its old name so every
+    /// `mult: None` a suite writes still names "no model".
+    pub mult: Option<Learned>,
     /// The configured `budget_ratio`, when the step-8 arm's spent budget set one
     /// (`plangen::spent_ratio`, README gap 3340): a spent budget is one `tm arrive`
     /// computed from the configuration. `Config::default()`'s else. Its decimal text.
     pub ratio: Option<String>,
 }
 
+/// **A world's learned model, as a frozen line spells it** (W-47 track C, README gap 4891).
+///
+/// Until W-47 a class world carried one table of `.tm/model.json` — the `_default` duration
+/// multiplier the hash arm draws — and the oracle planned every world at `Model::default()` but
+/// for it, so the lounge weights, the expected arrivals, the energy curves and the fitted sleep
+/// shift reached the kernel through the binary's request (the W-46 audit's gap 3901) and the
+/// fork's day was never asked of them. A [`Learned::ModelJson`] world carries the whole file, and both
+/// sides read it with their own loaders: the host's, the binary's own expression
+/// ([`host_model`]: `tm/src/cli/ctx.rs`' `store.read_json::<Model>(MODEL_PATH)`), and fork
+/// 4748911's, the same expression over the fork's store (`tm-oracle plan`'s `fork_model`).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Learned {
+    /// The `_default` duration multiplier alone, its shortest decimal text — the model
+    /// `Model::default()` with `duration._default` set, spelled `mult` on the line, as every line
+    /// frozen before W-47 spells it.
+    Mult(String),
+    /// `.tm/model.json`'s whole text, as the host's writer writes it (`Model::to_json`, what `tm
+    /// model --fit` writes), spelled `model` on the line.
+    ModelJson(String),
+}
+
 impl ClassWorld {
-    /// The world as a frozen line carries it.
+    /// The world as a frozen line carries it. A world with no model file carries no `model`
+    /// key, so every line frozen before W-47 reads back as the bytes it was written from.
     pub fn to_json(&self) -> Value {
-        json!({
+        let mult = match &self.mult {
+            Some(Learned::Mult(m)) => Some(m.as_str()),
+            _ => None,
+        };
+        let mut v = json!({
             "docs": self.docs.iter().map(|(p, t)| json!([p, t])).collect::<Vec<_>>(),
             "log": self.log,
             "state": serde_json::to_value(&self.state).expect("a state serialises"),
             "now": self.now.to_rfc3339(),
-            "mult": self.mult,
+            "mult": mult,
             "ratio": self.ratio,
-        })
+        });
+        if let Some(Learned::ModelJson(text)) = &self.mult {
+            v["model"] = json!(text);
+        }
+        v
+    }
+
+    /// `.tm/model.json`'s text, when the world carries the whole file.
+    pub fn model_file(&self) -> Option<&str> {
+        match &self.mult {
+            Some(Learned::ModelJson(text)) => Some(text),
+            _ => None,
+        }
     }
 
     /// The world a frozen line carries, or why it cannot be read.
@@ -228,10 +268,13 @@ impl ClassWorld {
         let now = DateTime::parse_from_rfc3339(v["now"].as_str().ok_or("world.now is not a string")?)
             .map_err(|e| format!("world.now: {e}"))?
             .with_timezone(&tz);
-        let mult = match &v["mult"] {
-            Value::Null => None,
-            Value::String(s) => Some(s.clone()),
-            other => return Err(format!("world.mult is {other}, not a decimal's text")),
+        let mult = match (&v["mult"], &v["model"]) {
+            (Value::Null, Value::Null) => None,
+            (Value::String(s), Value::Null) => Some(Learned::Mult(s.clone())),
+            (Value::Null, Value::String(t)) => Some(Learned::ModelJson(t.clone())),
+            (Value::Null, other) => return Err(format!("world.model is {other}, not `.tm/model.json`'s text")),
+            (Value::String(_), _) => return Err("world.mult and world.model are both set: a world carries one model".to_string()),
+            (other, _) => return Err(format!("world.mult is {other}, not a decimal's text")),
         };
         let ratio = match &v["ratio"] {
             Value::Null => None,
@@ -239,6 +282,42 @@ impl ClassWorld {
             other => return Err(format!("world.ratio is {other}, not a decimal's text")),
         };
         Ok(ClassWorld { docs, log, state, now, mult, ratio })
+    }
+}
+
+/// **The model a [`Learned::Mult`] world plans at**: `Model::default()` with the `_default`
+/// duration multiplier set to the line's decimal — what [`Built::of`] collects the candidates at,
+/// and, as the host's writer writes it, the `.tm/model.json` [`binary_rebuilds`] hands the binary
+/// (README gap 4992).
+pub fn mult_model(m: &str) -> Model {
+    let mut model = Model::default();
+    let m: f64 = m.parse().expect("a stored multiplier is a decimal");
+    model.duration.insert(DEFAULT_TAG.to_string(), m);
+    model
+}
+
+/// **The `.tm/model.json` the shipped binary is handed for a world** — [`binary_rebuilds`]' and
+/// [`drive`]'s one reading (README gap 4992): the file's text for a [`Learned::ModelJson`] world;
+/// for a [`Learned::Mult`] world the host writer's text (`Model::to_json`, what `tm model --fit`
+/// writes) of [`mult_model`], the model [`Built::of`] plans it at, held to read back as THAT model
+/// through the binary's own loader ([`host_model`]) or refused by name; `None` for a world with no
+/// model.  Until the gap closed only a `Learned::ModelJson` world's file was written, so whether the
+/// binary accepts the hash arm's multiplier was asked of the harness's codec alone, never of the
+/// binary.
+pub fn binary_model_file(world: &ClassWorld) -> Result<Option<String>, String> {
+    match &world.mult {
+        None => Ok(None),
+        Some(Learned::ModelJson(text)) => Ok(Some(text.clone())),
+        Some(Learned::Mult(m)) => {
+            let model = mult_model(m);
+            let text = model.to_json();
+            match host_model(&text) {
+                Ok(back) if back == model => Ok(Some(text)),
+                other => Err(format!(
+                    "the multiplier {m}'s .tm/model.json does not read back as the model the harness plans at: {other:?}"
+                )),
+            }
+        }
     }
 }
 
@@ -252,10 +331,25 @@ pub struct Built {
     pub cands: Vec<Candidate>,
 }
 
+/// **`.tm/model.json`'s text, read as the shipped binary reads it** (W-47 track C, README gap
+/// 4891): `tm/src/cli/ctx.rs`' `store.read_json::<Model>(MODEL_PATH)?.unwrap_or_default()`, the
+/// host's one loader, over a memory store holding the text at that path — never a parse of its
+/// own. The fork's twin of this line is `tm-oracle plan`'s `fork_model`.
+pub fn host_model(text: &str) -> Result<Model, String> {
+    use tm_core::store::{MemStore, StoreExt, MODEL_PATH};
+    MemStore::new()
+        .with_file(MODEL_PATH, text)
+        .read_json::<Model>(MODEL_PATH)
+        .map(Option::unwrap_or_default)
+        .map_err(|e| format!("{MODEL_PATH}: {e}"))
+}
+
 impl Built {
     /// Rebuild: the tree the host parses from the same documents, the replay the
-    /// kernel derives from the same log (`support/replay.rs`), the model with the
-    /// drawn multiplier, and `priority::collect_candidates` over all of it.
+    /// kernel derives from the same log (`support/replay.rs`), the world's learned
+    /// model ([`Learned`]: the drawn multiplier on the default model, or `.tm/model.json`
+    /// read by the binary's own loader, [`host_model`]), and `priority::collect_candidates`
+    /// over all of it.
     pub fn of(world: ClassWorld) -> Built {
         let mut cfg = Config::default();
         if let Some(r) = &world.ratio {
@@ -265,11 +359,11 @@ impl Built {
             world.docs.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
         let tree = Tree::from_texts(&files, &cfg);
         let replay = chokepoint::replay_of_text(&world.log, cfg.tz);
-        let mut model = Model::default();
-        if let Some(m) = &world.mult {
-            let m: f64 = m.parse().expect("a stored multiplier is a decimal");
-            model.duration.insert(DEFAULT_TAG.to_string(), m);
-        }
+        let model = match &world.mult {
+            None => Model::default(),
+            Some(Learned::Mult(m)) => mult_model(m),
+            Some(Learned::ModelJson(text)) => host_model(text).unwrap_or_else(|e| panic!("a stored model the binary reads: {e}")),
+        };
         let date = planwire::plan_date(&world.state, world.now);
         let cands = priority::collect_candidates(&tree, &replay, &cfg, &model, date, world.now);
         Built { world, cfg, tree, replay, model, cands }
@@ -720,6 +814,12 @@ pub fn host_only_state() -> Vec<String> {
 pub fn binary_rebuilds(world: &ClassWorld) -> Vec<String> {
     let host_only = host_only_state();
     let mut bad = Vec::new();
+    // The world's `.tm/model.json` (W-47 track C, README gaps 4891 and 4992): the binary plans the
+    // world it reads, and a model it refuses (§13.2's P26) fails clause 6 here by name.
+    let model_file = binary_model_file(world).unwrap_or_else(|e| {
+        bad.push(format!("6: {e}"));
+        None
+    });
     // The world's files, and `.tm/state.json` holding `state` when there is one.
     let write = |state: Option<&Value>| -> Result<tempfile::TempDir, String> {
         let dir = tempfile::TempDir::new().map_err(|e| format!("tempdir: {e}"))?;
@@ -733,6 +833,10 @@ pub fn binary_rebuilds(world: &ClassWorld) -> Vec<String> {
             std::fs::write(&f, t).map_err(|e| e.to_string())?;
         }
         std::fs::write(root.join(".tm/log.jsonl"), &world.log).map_err(|e| e.to_string())?;
+        // The world's `.tm/model.json`, both kinds (above).
+        if let Some(text) = &model_file {
+            std::fs::write(root.join(".tm/model.json"), text).map_err(|e| e.to_string())?;
+        }
         let cfg = world.ratio.as_ref().map(|r| format!("[day]\nbudget_ratio = {r}\n")).unwrap_or_default();
         std::fs::write(root.join("config.toml"), cfg).map_err(|e| e.to_string())?;
         if let Some(st) = state {
@@ -930,6 +1034,229 @@ pub fn batch_line(index: usize, draw: &Draw, world: &ClassWorld, class: &str) ->
 }
 
 // ---------------------------------------------------------------------------
+// The learned models (W-47 track C, README gap 4891)
+// ---------------------------------------------------------------------------
+
+/// **The learned-model days**: the model draw's first [`MODEL_DRAWS`] draws from [`MODEL_SEED`]
+/// whose world the shipped binary holds ([`binary_holds`], `.tm/model.json` written beside the
+/// world, so a model the binary refuses is refused here), each frozen with the fork's answers by
+/// value — one line per draw, the batch's line shape, named `model draw <index>` — and, closing
+/// README gap 4991, beside each the same world with no wake logged ([`without_wake`], `model draw
+/// <index> without a wake`, `"secondary": NO_WAKE`) when the binary holds it too: the one day a
+/// learned expected arrival reaches the fork's rows.
+///
+/// **Why** (README gap 4891, the W-46 audit's repair): the class worlds carried one table of a
+/// learned model, the `_default` duration multiplier, and `tm-oracle plan` planned every world at
+/// `Model::default()` but for it — so the lounge weights, the expected arrivals, the energy curves
+/// and the fitted sleep shift reached the kernel through the binary's request (gap 3901 closed
+/// that request's equality) and fork 4748911's day was never asked of them: a divergence of the
+/// kernel's reading of a learned curve or of the fitted shift from the fork's was found by no test.
+/// Each line's world carries the whole file ([`Learned::ModelJson`]) and the fork reads it with its own
+/// loader (`tm-oracle plan`'s `fork_model`, fork `Ctx::load`'s expression); the kernel is asked as
+/// the binary asks it, the capacity section at the world's model ([`kernel_answer_with_grants`]).
+///
+/// **What the fork's day reads of a model, and what it does not** — measured on the fork's code,
+/// not assumed: `planner::plan` ranked by the KERNEL's grants (D53's seam, `plan-seam.patch`) reads
+/// the energy curves and the shift (day 0's slots, `EnergyCtx`/`predict`), the duration multipliers
+/// (`collect_candidates`' planned minutes) and the expected arrival only for a day with no logged
+/// wake (`Model::wake_or_expected`; every class world logs one, so only the [`NO_WAKE`] lines read
+/// it). The lounge weights and the
+/// arrivals of later days feed the fork's OWN lookahead, which the seam replaces with the kernel's
+/// grants — so on these lines they reach the comparison only through the kernel's grants, which
+/// each frozen `day` holds as the kernel answered them at the bless (a regression against the
+/// kernel's own earlier answer, never a fork reading). Fork 4748911 reads them in T13
+/// (`kernel_lookahead_parity.rs`), through `tm-oracle capacity`'s `lookahead`.
+pub const FROZEN_MODELS: &str = "fork-4748911-planner-models.jsonl";
+
+/// The model draw's ChaCha seed text (the class draw's convention, [`class_draws`]).
+pub const MODEL_SEED: &str = "W-47 track C models, gap 4891";
+
+/// How many draws of [`MODEL_SEED`] the learned-model file considers.
+pub const MODEL_DRAWS: usize = 48;
+
+/// Where the learned-model days live.
+pub fn models_path() -> std::path::PathBuf {
+    forkday::frozen_path().with_file_name(FROZEN_MODELS)
+}
+
+/// The learned-model lines, read once, in file order; a draw carried twice in one kind (a primary
+/// line, or a [`NO_WAKE`] line) FAILS, and so does a kind this file does not write.
+pub fn model_lines() -> &'static Vec<Value> {
+    static MODELS: OnceLock<Vec<Value>> = OnceLock::new();
+    MODELS.get_or_init(|| {
+        let path = models_path();
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{}: {e} — see support/forkclass.rs' FROZEN_MODELS", path.display()));
+        let mut seen = BTreeSet::new();
+        text.lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| {
+                let v: Value = serde_json::from_str(l).expect("a frozen model line is JSON");
+                let d = v["draw"].as_u64().expect("a model line names its draw");
+                let kind = v["secondary"].as_str().map(str::to_string);
+                assert!(kind.is_none() || kind.as_deref() == Some(NO_WAKE), "draw {d}: a model line of kind {kind:?}");
+                assert!(seen.insert((d, kind.clone())), "two model lines for draw {d} ({kind:?})");
+                v
+            })
+            .collect()
+    })
+}
+
+/// **A learned model and the night its shift reads** — the model draw's widening of one class
+/// draw (README gap 4891). `model` is what the host's writer writes as `.tm/model.json` (its
+/// `_default` multiplier replaced by the class draw's own where the hash arm drew one: one table,
+/// one reading); `slept` is the night's minutes when the draw shortens it ([`plangen::with_slept`]):
+/// the generator logs eight hours, past §8.5's `under_hours`, so without it a fitted
+/// `sleep_debt_shift` would be compared on no day at all (AGENTS §9.2: a check no input can fail).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelDraw {
+    pub model: Model,
+    pub slept: Option<u32>,
+}
+
+/// **The model draw's values**, each a value fork 4748911's own fit writes (`round2`: two places)
+/// or a hand edit the binary accepts, and the edges each reader has: a weight at the fork's `p ≥
+/// 0.5` threshold and beside it (P1's twin), a shift at each rounding of site R10 (`roundAway`:
+/// `±0.5`, `1.5`, `2.5`, and `0.49`, which rounds to none), a level above 5 (the clamp comes after
+/// the shift, `Look.predictShift`), a night a minute short of `under_hours` and one exactly at it.
+/// The curves are twelve buckets, as the fit writes them and the kernel's `energyOk` reads them; a
+/// tag multiplier no generated item carries rides along as the fit's file has one.
+pub fn model_strategy() -> impl Strategy<Value = ModelDraw> {
+    use chrono::Weekday;
+    use tm_core::energy::{Hhmm, WeekdayMap};
+    let level = prop_oneof![12 => 0u8..=5, 1 => prop::sample::select(vec![6u8, 7])];
+    let curve = || prop::option::of(prop::collection::vec(level.clone(), 12));
+    let weight = prop::sample::select(vec![0.0, 0.31, 0.4, 0.49, 0.5, 0.51, 0.81, 0.84, 0.92, 1.0]);
+    let clock = prop::sample::select(vec!["06:30", "07:00", "07:01", "07:11", "08:45", "10:06", "10:16", "12:00"]);
+    let shift = prop::option::of(prop::sample::select(vec![-1.0, -0.5, 0.0, 0.49, 0.5, 1.01, 1.5, 2.0, 2.5, 3.0]));
+    let mult = prop::option::of(prop::sample::select(vec![0.5, 0.87, 1.1, 1.25, 1.37, 2.0]));
+    let tag = prop::option::of(prop::sample::select(vec![0.87, 1.05, 1.37]));
+    let fitted = prop::option::of(Just(()));
+    let n_obs = prop::sample::select(vec![0u32, 12, 61]);
+    let slept = prop_oneof![1 => Just(None), 2 => prop::sample::select(vec![300u32, 330, 360, 400, 419, 420]).prop_map(Some)];
+    (
+        (curve(), curve()),
+        prop::collection::vec(prop::option::of(weight), 7),
+        prop::collection::vec(prop::option::of(clock), 7),
+        (shift, mult, tag),
+        (fitted, n_obs, slept),
+    )
+        .prop_map(|((lounge, home), weights, clocks, (shift, mult, tag), (fitted, n_obs, slept))| {
+            const WEEK: [Weekday; 7] =
+                [Weekday::Mon, Weekday::Tue, Weekday::Wed, Weekday::Thu, Weekday::Fri, Weekday::Sat, Weekday::Sun];
+            let mut model = Model::default();
+            for (name, c) in [("lounge", lounge), ("home", home)] {
+                if let Some(c) = c {
+                    model.energy.insert(name.to_string(), c);
+                }
+            }
+            let mut p = WeekdayMap::new();
+            let mut a = WeekdayMap::new();
+            for (i, wd) in WEEK.iter().enumerate() {
+                if let Some(w) = weights[i] {
+                    p.set(*wd, w);
+                }
+                if let Some(t) = clocks[i] {
+                    a.set(*wd, Hhmm(NaiveTime::parse_from_str(t, "%H:%M").expect("a drawn clock")));
+                }
+            }
+            model.p_lounge = p;
+            model.expected_arrival = a;
+            model.sleep_debt_shift = shift;
+            if let Some(m) = mult {
+                model.duration.insert(DEFAULT_TAG.to_string(), m);
+            }
+            if let Some(m) = tag {
+                model.duration.insert("admin".to_string(), m);
+            }
+            model.fitted = fitted.map(|()| plangen::date());
+            model.n_obs = n_obs;
+            ModelDraw { model, slept }
+        })
+}
+
+/// **The model draw from `seed`**: the class draw's own sequence ([`class_draws`]`(seed, None)`),
+/// each paired with a [`ModelDraw`] from a stream of its OWN — the seed's 32 bytes with the high
+/// bit of every byte set — so a model line's class world is exactly the class draw at its index,
+/// and drawing the model moves no class draw.
+pub fn model_draws(seed: &str) -> impl Iterator<Item = (Draw, ModelDraw)> {
+    let mut bytes = [b' '; 32];
+    for (d, s) in bytes.iter_mut().zip(seed.bytes()) {
+        *d = s;
+    }
+    let mut runner = TestRunner::new_with_rng(
+        ProptestConfig::default(),
+        TestRng::from_seed(RngAlgorithm::ChaCha, &bytes.map(|b| b ^ 0x80)),
+    );
+    let model_s = model_strategy();
+    class_draws(seed, None).map(move |draw| {
+        let m = model_s.new_tree(&mut runner).expect("a model").current();
+        (draw, m)
+    })
+}
+
+/// **The world a model draw builds**: the class draw's world ([`world_of`]), its multiplier folded
+/// into the drawn model's `_default` (the hash arm's draw wins: it is the class draw's value), the
+/// night shortened when the draw says so ([`plangen::with_slept`]), and `.tm/model.json` as the
+/// host's writer writes it (`Model::to_json`).
+pub fn model_world_of(draw: &Draw, m: &ModelDraw) -> ClassWorld {
+    let mut w = world_of(draw);
+    let mut model = m.model.clone();
+    if let Some(Learned::Mult(x)) = w.mult.take() {
+        model.duration.insert(DEFAULT_TAG.to_string(), x.parse().expect("a drawn multiplier is a decimal"));
+    }
+    if let Some(s) = m.slept {
+        w.log = plangen::with_slept(&w.log, s);
+    }
+    w.mult = Some(Learned::ModelJson(model.to_json()));
+    w
+}
+
+/// **A learned-model line** — [`drawn_line`] at [`MODEL_SEED`], named by its draw.
+pub fn model_line(index: usize, draw: &Draw, world: &ClassWorld, class: &str) -> Value {
+    drawn_line(format!("model draw {index}"), MODEL_SEED, index, draw, world, class)
+}
+
+/// **The secondary kind of a learned-model line whose world logs no `tm wake`** — the line's
+/// `secondary` key ([`model_line_without_wake`]; README gap 4991).
+pub const NO_WAKE: &str = "no wake";
+
+/// **A world with no `tm wake` logged** (W-47 track C, README gap 4991): the world's log without
+/// its `wake` line, and `.tm/state.json` without `wake` — the two go together, because the binary
+/// rebuilds the cache from the log (D42), so a world that dropped one alone is one it does not hold.
+///
+/// **Why it exists.** Every class world logs a wake, and on such a day neither planner reads the
+/// expected arrival for day 0: fork 4748911's `Planner::new` takes the stored wake, else the
+/// replay's, and only then `Model::wake_or_expected` — the weekday's learned arrival, else the
+/// configuration's — and the kernel's `Look.wakeOf` reads the same three in the same order. So
+/// the learned arrival reached the frozen days only through the later days' grants, which the
+/// fork's day takes from the kernel (D53), and the fallback itself was compared on no day at all.
+/// Without a wake, it sets day 0's hours since waking (each slot's energy, through the learned
+/// curve or the prior) and the `pref:wake+…` routines, on both sides. The night's `slept_min`
+/// goes with the line it is written on: neither planner reads a night without a wake (fork
+/// `slept_min = runtime.wake.and(…)`), so on these days a fitted shift is read by neither.
+pub fn without_wake(world: &ClassWorld) -> ClassWorld {
+    let mut w = world.clone();
+    w.state.wake = None;
+    w.log = world
+        .log
+        .lines()
+        .filter(|l| serde_json::from_str::<Value>(l).map_or(true, |v| v["ev"] != "wake"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+    w
+}
+
+/// **A learned-model line whose world logs no wake** — [`model_line`]'s shape over
+/// [`without_wake`]'s world, named `model draw <index> without a wake` and marked
+/// `"secondary": NO_WAKE`; its draw is its primary line's.
+pub fn model_line_without_wake(index: usize, draw: &Draw, world: &ClassWorld, class: &str) -> Value {
+    let mut line = drawn_line(format!("model draw {index} without a wake"), MODEL_SEED, index, draw, world, class);
+    line["secondary"] = json!(NO_WAKE);
+    line
+}
+
+// ---------------------------------------------------------------------------
 // Worlds the shipped binary WROTE (README gaps 3390 and 3398)
 // ---------------------------------------------------------------------------
 
@@ -1018,6 +1345,9 @@ pub fn drive(parent: &ClassWorld, d: &Drive) -> Result<ClassWorld, String> {
         std::fs::write(&f, t).map_err(|e| e.to_string())?;
     }
     std::fs::write(root.join(".tm/log.jsonl"), &parent.log).map_err(|e| e.to_string())?;
+    if let Some(text) = binary_model_file(parent)? {
+        std::fs::write(root.join(".tm/model.json"), text).map_err(|e| e.to_string())?;
+    }
     let cfg = parent.ratio.as_ref().map(|r| format!("[day]\nbudget_ratio = {r}\n")).unwrap_or_default();
     std::fs::write(root.join("config.toml"), cfg).map_err(|e| e.to_string())?;
     std::fs::write(root.join(".tm/state.json"), serde_json::to_string(&parent.state).map_err(|e| e.to_string())?)
@@ -1171,7 +1501,7 @@ pub fn world_of(draw: &Draw) -> ClassWorld {
         Widening::Base => {}
         Widening::Hash { mult: m, brk } => {
             w.set_multiplier(*m);
-            mult = m.map(|m| format!("{m}"));
+            mult = m.map(|m| Learned::Mult(format!("{m}")));
             w.log_a_break(&draw.case, *brk);
         }
         Widening::W35 { brk, over } => {
@@ -2228,7 +2558,12 @@ pub fn kernel_answer_with_grants(b: &Built) -> Result<(KernelDay, Vec<priority::
     let w = &b.world;
     let extend = whatif_item(&w.state).map(|id| (id, 1));
     let planner = tm_core::plansection::planner_section(&w.state, &b.replay, w.now, b.cfg.tz, &b.tree, &b.cands, &b.cfg, extend);
-    let (req, order) = planreq::request_with_section(&pw, planner);
+    // The capacity section at the world's own model (W-47 track C, README gap 4891): the lounge
+    // weights, the expected arrivals, the energy curves and the fitted shift of `.tm/model.json`,
+    // as the binary's encoder writes them — `Model::default()` and the drawn multiplier alone, on
+    // every line frozen before W-47, whose section is byte for byte what it was (the multiplier
+    // crosses on the candidates, which `b.cands` were collected with).
+    let (req, order) = planreq::request_with_model(&pw, &b.model, planner);
     let resp = planreq::call(&req);
     planreq::kernel_day_of(&resp, &pw, &order).map(|(k, ans)| (k, ans.prios))
 }

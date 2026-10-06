@@ -171,16 +171,54 @@ fn a_timer_mark_already_inside_the_meeting_is_left_to_stand() {
     );
 }
 
-/// **A block started inside a wall is not paused by it** — the wall did not
-/// start while the block ran.
+/// **A block started inside a wall is paused from its start until the wall
+/// ends** — the owner's **D110** (README gap 4748, W-47 track K, parity
+/// **P106**), through the marks D61 writes.  Until W-47 this test pinned the
+/// opposite ("the wall did not start while the block ran": `elapsed_min` 60
+/// at 14:00 and no mark) — the line P106 moves, named here.  The first verb
+/// after the start writes the `pause` stamped at the block's own start, the
+/// first after the wall ended the `unpause` at its end, once each.
 #[test]
-fn a_block_started_inside_the_wall_is_not_paused_by_it() {
+fn a_block_started_inside_the_wall_is_paused_from_its_start() {
     let tm = Tm::new();
     tm.ok(&["wake", "06:05", "--slept", "8h10m"]);
     tm.ok_at("2026-09-07T13:00:00-05:00", &["start", "^t4", "--energy", "4"]);
+    let during = active(&tm, "2026-09-07T13:30:00-05:00");
+    assert_eq!(during["elapsed_min"], 0, "the meeting is not worked: {during}");
+    assert_eq!(during["paused"], true, "{during}");
+    assert_eq!(
+        timer_marks(&tm),
+        vec![("pause".to_string(), "2026-09-07T13:00:00-05:00".to_string())],
+        "the pause is stamped at the block's start, not at the wall's"
+    );
     let after = active(&tm, "2026-09-07T14:00:00-05:00");
-    assert_eq!(after["elapsed_min"], 60, "{after}");
-    assert!(timer_marks(&tm).is_empty());
+    assert_eq!(after["elapsed_min"], 10, "the ten minutes since the meeting ended: {after}");
+    assert_eq!(after["paused"], false, "{after}");
+    assert_eq!(
+        timer_marks(&tm),
+        vec![
+            ("pause".to_string(), "2026-09-07T13:00:00-05:00".to_string()),
+            ("unpause".to_string(), WALL_END.to_string())
+        ],
+        "the unpause at the wall's end, written once"
+    );
+    let stop = tm.ok_at("2026-09-07T14:05:00-05:00", &["stop"]);
+    assert!(stop.stdout.contains("after 15m"), "{}", stop.stdout);
+    let review = tm.json_at("2026-09-07T14:06:00-05:00", &["review", "day"]);
+    assert_eq!(review["review"]["block_min"].as_u64(), Some(15), "{review}");
+    assert_eq!(timer_marks(&tm).len(), 2, "nothing was written twice");
+}
+
+/// **A block started after the wall ended is not the wall's**: nothing is
+/// written (D110's boundary).
+#[test]
+fn a_block_started_after_the_wall_is_not_paused_by_it() {
+    let tm = Tm::new();
+    tm.ok(&["wake", "06:05", "--slept", "8h10m"]);
+    tm.ok_at("2026-09-07T13:55:00-05:00", &["start", "^t4", "--energy", "4"]);
+    let after = active(&tm, "2026-09-07T14:25:00-05:00");
+    assert_eq!(after["elapsed_min"], 30, "{after}");
+    assert!(timer_marks(&tm).is_empty(), "{:?}", timer_marks(&tm));
 }
 
 /// **A block that ends inside the meeting leaves its wall pause open, and the

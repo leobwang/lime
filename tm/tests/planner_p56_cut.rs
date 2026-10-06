@@ -121,15 +121,28 @@ fn p56_cut_is_the_in_tree_cut_on_every_frozen_p56_day() {
 /// **Every frozen P56 world is its seed's draw** — `forkp56::p56_days` re-run from
 /// `forkp56::P56_SEED`: the line at each position is the draw at that index, its `typed` coin,
 /// and its world byte for byte. A generator change that moves one fails here by name.
+///
+/// **Less the days the file cannot hold** (W-47 land, README gap 5017): the seed's P56 days the owner's
+/// D110 made after R3 deleted the in-tree cut are `forkp56::P56_UNFROZEN`, and the seed's days up to the
+/// file's last line that the file skips must be exactly that list.
 #[test]
 fn every_frozen_p56_day_is_its_seeds_draw() {
     let lines = forkp56::p56_lines();
-    for (l, (d, w)) in lines.iter().zip(forkp56::p56_days(forkp56::P56_SEED)) {
+    for (l, (d, w)) in lines.iter().zip(forkp56::p56_frozen_days(forkp56::P56_SEED)) {
         let who = l["name"].as_str().unwrap_or("?");
         assert_eq!(l["draw"].as_u64(), Some(d.index as u64), "{who}: the seed's next P56 day is another draw");
         assert_eq!(l["typed"].as_bool(), Some(d.typed), "{who}: the typed coin");
         assert_eq!(ClassWorld::of_json(&l["world"], tz()).expect("a stored world"), w, "{who}: the draw builds another world");
     }
+    let last = lines.iter().filter_map(|l| l["draw"].as_u64()).max().expect("a frozen line") as usize;
+    let frozen: Vec<usize> = lines.iter().filter_map(|l| l["draw"].as_u64()).map(|d| d as usize).collect();
+    let skipped: Vec<usize> = forkp56::p56_days(forkp56::P56_SEED)
+        .map(|(d, _)| d.index)
+        .take_while(|i| *i <= last)
+        .filter(|i| !frozen.contains(i))
+        .collect();
+    println!("seeded P56 days the frozen file skips up to draw {last}: {skipped:?}");
+    assert_eq!(skipped, forkp56::P56_UNFROZEN.to_vec(), "the seed's P56 days the file skips are not the declared list");
 }
 
 /// **A seeded day cannot be shadowed** (AGENTS §5.8): a frozen P56 file carrying one draw twice
@@ -281,7 +294,7 @@ fn shipped_ask<'a>(b: &'a Built, prios: &'a [tm_core::priority::Prio]) -> forkpl
 }
 
 /// **Freeze the seeded P56 days** — inert without both `TM_P56_BLESS` and `TM_ORACLE`. The
-/// first `forkp56::P56_FROZEN` seeded P56 days, each a class line (`forkp56::p56_line`) whose
+/// first `forkp56::P56_FROZEN` seeded P56 days (`forkp56::p56_frozen_days`: less the days D110 made after R3), each a class line (`forkp56::p56_line`) whose
 /// answers are `forkplan::comparand_answers` over `tm-oracle plan` — fork 4748911 out of the tree,
 /// P56 by `p56_cut` — and whose `cut` is the in-tree fork's shipped day as the committed line holds
 /// it. A line it already holds is held to the owner's D64 (`forkclass::d64_allows`,
@@ -317,7 +330,7 @@ fn the_seeded_p56_days_are_blessed() {
     let held = frozenhist::held(&forkp56::p56_path(), frozenhist::key_of("draw")).unwrap_or_else(|e| panic!("{e}"));
     eprintln!("{}", held.census(forkp56::FROZEN_P56));
     let (mut out, mut refused, mut changed, mut drawn) = (String::new(), Vec::new(), Vec::new(), Vec::new());
-    for (d, w) in forkp56::p56_days(forkp56::P56_SEED).take(forkp56::P56_FROZEN) {
+    for (d, w) in forkp56::p56_frozen_days(forkp56::P56_SEED).take(forkp56::P56_FROZEN) {
         let b = Built::of(w.clone());
         let prios = grants(&b);
         let answers = forkplan::comparand_answers(&b, &prios, &oracle).unwrap_or_else(|e| panic!("p56 draw {}: the oracle: {e}", d.index));

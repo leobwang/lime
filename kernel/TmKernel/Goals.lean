@@ -1241,15 +1241,30 @@ top of one.
 **Its history.**  It left at W-18 refuted on a break logged inside `m1`'s running block (D87 netted that one), at W-42
 on one logged before `m1`'s `start` and lasting into it (D92, gap 4241), and at W-44 track K on one logged AFTER `m1`'s
 `done` but stamped inside it (`PlannerWit.theMidBreakRequest`), which track K called a world with one reading because
-the block's MINUTES are the `done`'s `actual_min`.  Its SPAN is read two ways there: the heat grid's hour holds the
+the block's MINUTES are the `done`'s `actual_min`.  Its SPAN was read two ways there: the heat grid's hour held the
 Block's sixty minutes and the Break's twenty (driven at the W-44 repair, `[60, 20]`), the reading the owner's D87
-declined by name, and the day draws one across the other (`PlannerWit.the_mid_break_day_lays_a_block_across_a_break`).
-That is gap 4520's mechanism — a mark logged after the replay closed the stretch it lies across — which D94 ("a block
-and a break are read one way on every log") reaches and the kernel does not yet net.  A refutation standing on it is
-not a discharge (the campaign's lesson 4), so the refutation was withdrawn and the goal returned, as W-43 did.
+declined by name, and the day drew one across the other (PlannerWit.the_mid_break_day_lays_a_block_across_a_break; that
+day is `PlannerWit.thePreD100MidBreakRequest`'s since D100).  That was gap 4520's mechanism — a mark logged after the
+replay closed the stretch it lies across — which D94 ("a block and a break are read one way on every log") reached and
+the kernel did not net until D99 and D100.  A refutation standing on it is not a discharge (the campaign's lesson 4), so
+the refutation was withdrawn and the goal returned, as W-43 did.
 
 **The debt.**  Close gap 4520 — net a late mark into the stretches the replay already closed, open block and closed —
-and then prove the law over the runs the decoder builds or refute it on a world with one reading.
+and then prove the law over the runs the decoder builds or refute it on a world with one reading.  **W-47 track K closed
+both halves** (README "Stage 6 — W-47 track K"): the open one (gap 4520a, the owner's D99: `Replay.settle` re-draws an
+open block at every mark) and the closed one (gap 4520b, the owner's D100: `Replay.netClosed` re-draws a held closed
+block around a break logged after it), and the day this goal stood on now cuts its block around the break
+(`PlannerWit.the_mid_break_day_cuts_its_block_around_the_break`).  **What is owed is the proof, and it was not
+written.**  Over every `PlanReq` the statement is false — `PlannerWit.theOpenAcrossBreakRequest` and
+`PlannerWit.thePreD100MidBreakRequest` lay a Block across a Break — but both stand on runs the decoder does not build,
+so neither is a discharge (the campaign's lesson 4).  Over the logs the replay reads — and the window answers what the
+replay answers — two bounds still draw a Block across a Break, and each reads that span two ways, so neither is a
+refutation with one reading either (README gaps 4914 and 4917): a break held more than `Seal.maxKeepDays` ledger days
+behind the newest is dropped while its block is open, and a closed block more than that behind the newest closed is
+dropped before a late break reaches it (`Replay.a_late_break_nets_a_block_held_and_not_one_pruned`); each needs a log
+written with a clock a month behind it.  The goal therefore needs a statement of which runs the
+decoder builds (an invariant over `Seal.resumeRun`'s fold that no day record draws a Block piece across a Break piece,
+and the same of the open block's row) and those bounds named in it, or the bounds removed.  README gap 4918.
 `PlanCheck.plan_places_no_block_over_a_break`, the law over the Block rows that start at or after `now`, stays proved
 beside it. -/
 theorem plan_places_no_block_over_a_break (r : PlanReq) (b k : WfSeg)

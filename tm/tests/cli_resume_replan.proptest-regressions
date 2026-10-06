@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc e2f9a192d0d74a1c1f122034b91eadb91dd739954d1df54319dc699e6ccaf6cc # shrinks to case = Case { items: [Spec { ci: 0, k: 1, est_b: 1, small: None, due_in: Some(0), dep: None, loc_home: false, atomic: false, waiting: false, hot: false, floor: None, parent: None }], walls: [], now_idx: 0, done_blocks: 0, report: None, routines: 0, optionals: false, home: false, active: Some((0, 5, 30)), interrupt: None, late: false }
+cc 9b7cd956cc11dc20a5533c57be935e8a7ed7e3a62b81448d8a4ed9f34b89fa4a # shrinks to case = Case { items: [Spec { ci: 0, k: 1, est_b: 1, small: None, due_in: Some(0), dep: None, loc_home: false, atomic: false, waiting: false, hot: false, floor: None, parent: None }], walls: [], now_idx: 0, done_blocks: 0, report: None, routines: 0, optionals: false, home: false, active: None, interrupt: None, late: false }

@@ -46,6 +46,21 @@ pub const P56_SEED: &str = "W-40 track H P56 days, gap 3719";
 /// How many seeded P56 days the frozen file holds.
 pub const P56_FROZEN: usize = 24;
 
+/// **The seeded P56 days the frozen file cannot hold** (W-47 land, README gap 5017): draws the
+/// owner's D110 (parity P106) made P56 days after R3 — the binary now logs a pause at a block's own
+/// start inside a wall, and the generator writes it (`plangen::timer_marks`), so these days hold a
+/// Pause a wall covers. A frozen line's `cut` is the in-tree fork's own drawing, which R3 deleted and
+/// no backend draws since (the bless refuses a draw no committed version holds), so they are named
+/// here and skipped, in seed order, by [`p56_frozen_days`]; `every_frozen_p56_day_is_its_seeds_draw`
+/// holds this list to exactly the days the seed draws and the file skips — it can neither grow
+/// silently nor keep a draw the seed no longer makes.
+pub const P56_UNFROZEN: [usize; 9] = [39, 43, 54, 89, 100, 102, 103, 114, 115];
+
+/// **The seeded P56 days the frozen file holds**: [`p56_days`] less [`P56_UNFROZEN`].
+pub fn p56_frozen_days(seed: &str) -> impl Iterator<Item = (P56Draw, ClassWorld)> {
+    p56_days(seed).filter(|(d, _)| !P56_UNFROZEN.contains(&d.index))
+}
+
 /// How many the live cross-check walks while the in-tree fork is here.
 pub const P56_LIVE: usize = 64;
 

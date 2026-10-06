@@ -176,22 +176,30 @@ fn a_hand_refiled_line_is_refused_and_a_licensed_one_passes_over_history() {
 }
 
 /// **Every frozen fork comparand file is found by its property** (README gap 4461): a
-/// `fork-4748911-*.jsonl` whose every line carries a fork day — the twelve planner and grid
-/// comparands, W-43's separator days and the W-43 repair's P85 days among them — and none of the D21 family, whose lines carry a
-/// replay or a verdict; each held by `name`, but the classes file by its class key.
+/// `fork-4748911-*.jsonl` whose every line carries a fork day — the thirteen planner and grid
+/// comparands, W-43's separator days, the W-43 repair's P85 days and W-47 track C's learned-model days among them — and none of
+/// the D21 family, whose lines carry a replay or a verdict; each held by `name`, but the classes file by its class key.
 #[test]
 fn every_frozen_comparand_file_is_found_by_its_property() {
     let files = frozenhist::frozen_files().unwrap_or_else(|e| panic!("{e}"));
     let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
     println!("frozen comparand files by their property: {names:?}");
-    for want in ["fork-4748911-planner-classes.jsonl", "fork-4748911-planner-separators.jsonl", "fork-4748911-week-grid.jsonl", "fork-4748911-planner-tui.jsonl", "fork-4748911-planner-p85.jsonl"] {
+    for want in [
+        "fork-4748911-planner-classes.jsonl",
+        "fork-4748911-planner-separators.jsonl",
+        "fork-4748911-week-grid.jsonl",
+        "fork-4748911-planner-tui.jsonl",
+        "fork-4748911-planner-p85.jsonl",
+        "fork-4748911-planner-models.jsonl",
+    ] {
         assert!(names.contains(&want), "{want} is not found by the property");
     }
     for d21 in ["fork-4748911-classes-replay.jsonl", "fork-4748911-corpus-replay.jsonl", "fork-4748911-log-lines.jsonl"] {
         assert!(!names.contains(&d21), "{d21}, a D21 fixture, was taken for a planner comparand");
     }
-    // Twelve since the W-43 repair: P85's planner days (README gap 4367) joined the eleven.
-    assert_eq!(names.len(), 12, "the property finds {} files: {names:?}", names.len());
+    // Twelve since the W-43 repair: P85's planner days (README gap 4367) joined the eleven; thirteen since W-47
+    // track C, the learned-model days (README gap 4891).
+    assert_eq!(names.len(), 13, "the property finds {} files: {names:?}", names.len());
     let classes = &files.iter().find(|(n, _)| n == "fork-4748911-planner-classes.jsonl").expect("the classes file").1;
     assert!(classes(&before()).is_some_and(|k| k.starts_with("overtime/home | ")), "the classes file is not held by its class key");
     assert!(!frozenhist::carries_a_fork_day(&json!({"name": "x", "replay": {}})), "a replay line carries a fork day");
@@ -214,11 +222,37 @@ fn the_classes_files_refiled_lines_carry_their_licence() {
         .collect();
     let gone: BTreeMap<String, Value> = held.ever.iter().filter(|(k, _)| !now.contains_key(*k)).map(|(k, c)| (k.clone(), c.line.clone())).collect();
     let (paired, unpaired) = frozenhist::refiles(&gone, &now);
+    // **A derived line that left with its re-drawn parent is not a re-file** (W-47 land, README gap
+    // 5011): the one deletion `fork_rebless_history.rs` lets through (`frozenhist::left_with_a_redrawn_parent`),
+    // asked of the last committed version that held the line and the version after it (the working copy
+    // after the last) — the owner's D110 re-drew three class parents and five of their derived lines left.
+    let versions = frozenhist::versions(&path, frozenhist::class_key).unwrap_or_else(|e| panic!("{e}"));
+    let left_with_parent = |k: &str| {
+        versions.iter().rposition(|(_, m)| m.contains_key(k)).is_some_and(|i| {
+            let next = versions.get(i + 1).map_or(&now, |(_, m)| m);
+            frozenhist::left_with_a_redrawn_parent(k, &versions[i].1, next)
+        })
+    };
+    let (dropped, unpaired): (Vec<_>, Vec<_>) = unpaired.into_iter().partition(|(k, _)| left_with_parent(k));
+    println!("{} committed derived line(s) left with a re-drawn parent: {:?}", dropped.len(), dropped.iter().map(|(k, _)| k).collect::<Vec<_>>());
+    // A line re-filed once and whose new key then left with its re-drawn parent (W-42's `overtime/home`
+    // `worked` line, re-filed under P81 to `running/home`, which D110's re-draw dropped): paired by its
+    // world with that departed line, and held to the same licence.
+    let departed: BTreeMap<String, Value> = dropped.iter().map(|(k, _)| (k.clone(), gone[k].clone())).collect();
+    let rest: BTreeMap<String, Value> = unpaired.iter().map(|(k, _)| (k.clone(), gone[k].clone())).collect();
+    let (chained, unpaired) = frozenhist::refiles(&rest, &departed);
     assert!(unpaired.is_empty(), "a committed classes line left with no line holding its world: {unpaired:?}");
+    for (k, k2) in &chained {
+        let licence = frozenhist::refiled_allows(&gone[k], &departed[k2]).unwrap_or_else(|e| panic!("`{k}` → `{k2}`: {e}"));
+        println!("`{k}` → `{k2}` (since departed with its re-drawn parent): licensed by {licence:?}");
+        assert!(licence.contains(&81), "`{k}` → `{k2}` is licensed by {licence:?}, not P81's");
+    }
     for (k, k2) in &paired {
         let licence = frozenhist::refiled_allows(&gone[k], &now[k2]).unwrap_or_else(|e| panic!("`{k}` → `{k2}`: {e}"));
         println!("`{k}` → `{k2}`: licensed by {licence:?}");
         assert!(licence.contains(&81), "`{k}` → `{k2}` is licensed by {licence:?}, not P81's");
     }
-    assert_eq!(paired.len(), 2, "the classes file's history holds {} re-filed line(s): {paired:?}", paired.len());
+    // Two re-filed lines since W-43: one still paired with a line the file holds, and since the W-47 land
+    // one whose new key departed with its re-drawn parent (above).
+    assert_eq!(paired.len() + chained.len(), 2, "the classes file's history holds {} re-filed line(s): {paired:?} {chained:?}", paired.len() + chained.len());
 }

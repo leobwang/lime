@@ -737,6 +737,61 @@ can_fail
 1 readActive_refuses_a_start_after_now
 1 the_worked_minutes_bound_is_run
 
+# W-47 track K (the owner's D99, README gap 4520a): closeSub, restartAt, lastEndAfter and the old resumeBlock are
+# DELETED with D99's re-draw (`Replay.settle`), and with them the theorems that were about them; the one law that
+# became false, brkFx_of_stopped, is refuted and renamed (`Replay.brkFx_of_stopped_as_d92_stated_it_is_refuted`).
+# Every citation counted here is an append-only README block naming the thing as it stood, the refutation's own
+# doc comment naming what it refutes, or (the last) a Rust test the same track renamed
+# (`the_residual_the_arm_left_out_reads_one_way_by_its_witnesses`).  The README block's §3.1 table is the record.
+5 brkFx_cases
+1 brkFx_cases_as_d92_stated_it_is_refuted
+3 brkFx_cases_on_the_blocks_days
+4 brkFx_of_stopped
+1 closePause_mi
+1 closeReads_mi
+2 closeSub_avoids_the_breaks_held
+2 closeSub_brk
+1 closeSub_brkOpen
+1 closeSub_mi
+2 mi_of_eq
+2 openOf_restarts_outside_the_breaks_held
+2 restartAt_avoids_the_breaks_held
+5 restartAt_cases
+1 restartAt_mi
+1 resumeBlock_pausedAt
+1 resumeBlock_since
+1 the_residual_the_arm_leaves_out_reads_two_ways_by_its_witnesses
+1 Replay.brkFx_cases
+
+# W-47 track K (the owner's D100, README gap 4520b): the mid-break day's witness is false since D100 cut that day's block
+# around its break, and it is restated as what the day now is (`PlannerWit.the_mid_break_day_cuts_its_block_around_the_break`),
+# its old statement kept at a run the decoder no longer builds
+# (`PlannerWit.the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`).  The citation counted here is an
+# append-only README block (W-44's) naming it as it stood; conserves_doneClose, restated over the held blocks as
+# `Replay.conserves_doneClosed`, is named by the stage-5 block that proved it.
+1 conserves_doneClose
+2 PlannerWit.the_mid_break_day_lays_a_block_across_a_break
+4 the_mid_break_day_lays_a_block_across_a_break
+# W-47 track K, second commit (the owner's D110, README gap 4748): D61's law that a block started inside a wall is
+# not paused by it is REFUTED and renamed (`WallTimer.a_block_started_inside_a_wall_is_not_paused_by_it_as_d61_wrote_it_is_refuted`),
+# its true part `WallTimer.a_wall_that_ended_before_the_block_began_writes_nothing`; the citation counted here is the
+# W-37 README block naming the law as it stood.
+1 a_block_started_inside_a_wall_is_not_paused_by_it
+# W-47 track L (README gap 4904): the owner's D111 makes the kernel's `Log.placeWords` the ONE table of places, read by
+# the log grammar and by the host off a request's `places` key, so the host's own table -- `tm_core::store::BreakPlace`,
+# its row table and its reverse readers, W-41 track T's (P75) -- is DELETED.  Every citation counted here is W-41 track
+# T's append-only README block naming the table as it stood.
+1 BREAK_PLACES
+1 each_place_is_its_own_row_of_the_table
+1 from_key
+# W-47 track L (README gap 4897): the owner's D112 makes the binary's plan rows the kernel's cells and DELETES the Rust
+# builder those cells were compared with, so the two harness tables of declared holes (`kernel_row_cells.rs`' and
+# `planner_invariants.rs`') and the encoder's fork-cells helper (`support/rowwire.rs`) went with it.  Every citation
+# counted here is an append-only README block of W-24 or W-25 naming them as they stood.
+2 CELL_HOLES
+3 DECLARED_HOLES
+1 fork_cells
+
 # ====================== 4. GRANDFATHERED (README, unadjudicated) ======================
 #
 # 161 names, seeded from `README.md` at W-19 so check 8 could land as a RATCHET on new prose
@@ -1019,6 +1074,19 @@ unknownIdentifier
 2 tzObj
 1 windowStart
 1 witCaps
+
+# W-47 track K (the owner's D99, README gap 4520a): closeSub, restartAt, lastEndAfter and Seal's closeReads are
+# DELETED with D99's re-draw (`Replay.settle`, `Seal.settleReads`), and Seal's blockSince with them (read by nothing
+# once closeReads went; check 12 found it); every citation counted here is an append-only README block naming the
+# definition as it stood.
+6 Replay.closeSub
+3 blockSince
+18 Replay.restartAt
+3 Seal.closeReads
+3 closeReads
+17 closeSub
+2 lastEndAfter
+9 restartAt
 
 # ======== 7. BINDERS AND HYPOTHESIS NAMES (counted) -- D41, W-20 ========
 #
@@ -1436,7 +1504,7 @@ with_minute
 1 day_start
 1 diff_reports_what_moved_and_the_drift
 5 earliest_free
-86 emit_segments
+85 emit_segments
 1 extending_a_block_names_what_it_drops
 7 fork_answers
 2 fork_assigned
@@ -1504,7 +1572,7 @@ with_minute
 6 the_kernel_keeps_the_break_the_overtime_block_and_the_wall_pause
 12 the_kernel_plans_the_day_the_fork_plans
 4 the_kernel_plans_the_nbsp_box_day_as_the_fork_does
-9 the_kernel_reads_every_day_the_fork_planned
+8 the_kernel_reads_every_day_the_fork_planned
 11 the_kernel_reads_the_hosts_worked_minutes
 4 the_kernel_serves_impossible_ties_by_due_date
 7 the_kernel_writes_the_rest_of_step_8_as_the_fork_does
@@ -1601,3 +1669,9 @@ with_minute
 1 wake_default
 1 with_allow_home
 1 zero_capacity_is_infinite_utilization
+
+# W-47 TRACK C (README gap 4891): the oracle's hand reader of a capacity request's model is DELETED -- `tm-oracle
+# capacity` reads a model as `.tm/model.json`'s text through fork 4748911's own loader (`fork_model`), as `tm-oracle
+# plan` reads a world's.  The one citation counted here names it as it stood, in the append-only README block of W-46
+# track C (gap 4817's paragraph); every sentence since writes the dead name unbackticked.
+1 cap_model

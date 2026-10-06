@@ -20,7 +20,9 @@
 #   <binary> parse < lines.jsonstrings     one JSON string per line
 #   <binary> replay <tz> < log.jsonstrings the fork's `log::replay`, as JSON
 #   <binary> plan < requests.jsonl         the fork's planner, ranked as the
-#                                          shipped binary ranks it (owner D72)
+#                                          shipped binary ranks it (owner D72);
+#                                          a world's `.tm/model.json` read by the
+#                                          fork's own loader (README gap 4891)
 #   <binary> review < requests.jsonl       the fork's week grid, review::week_review's
 #                                          heat over a world (README gap 3718)
 #   <binary> capacity < requests.jsonl     the fork's lookahead, day-0 slots, slot cut,
@@ -105,5 +107,9 @@ if ! grep -q '"tm-oracle"' "$out/Cargo.toml"; then
   mv "$out/Cargo.toml.new" "$out/Cargo.toml"
 fi
 
-( cd "$out" && cargo build --quiet -p tm-oracle )
+# The target directory is named, never inherited (W-47 track C, README gap 4996): with the
+# caller's CARGO_TARGET_DIR set, cargo built the binary THERE -- beside this repository's own
+# tm and tm-core, under the same package names -- while the line below printed a path that did
+# not exist, and run-oracle.sh's first set failed with "No such file or directory".
+( cd "$out" && cargo build --quiet -p tm-oracle --target-dir "$out/target" )
 echo "$out/target/debug/tm-oracle"

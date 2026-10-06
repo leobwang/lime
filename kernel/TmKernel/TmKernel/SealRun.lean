@@ -55,7 +55,7 @@ theorem orElse_none {α : Type} {a b : Option α} (h : (a <|> b) = none) : a = n
 after the folded instants and inside the fence; every key it writes is at or above the horizons. -/
 theorem stepCheck_none (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (K : Ckpt) (st : State) (e : Entry)
     (h : (stepCheck z dy sl K st e).2 = none) :
-    (∀ q ∈ stepQueries st.machine e, headSec K.ledgerDay ≤ q.sec) ∧
+    (∀ q ∈ stepQueries dy st.machine e, headSec K.ledgerDay ≤ q.sec) ∧
     (Replay.isWake e = true → (∀ m, K.maxT = some m → m < e.t.val) ∧
       (∀ f, K.futureFloor = some f → e.t.val.sec + fenceSec < f.sec)) ∧
     (∀ x ∈ Replay.effectsWith z dy sl st e, keyAtOrAbove K.ledgerDay (horizonOf K.ledgerDay) x.key = true) := by

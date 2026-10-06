@@ -1,10 +1,14 @@
 //! §17.2: `day/<date>.svg`, written by hand — one `<rect>` per segment with a
 //! `<title>` child, hatched patterns for lost and interrupted time, a dotted
 //! stroke on optionals, hour ticks, the cursor and the ghost row.
+//!
+//! Moved from `tm-core/tests/` at W-47 with `emit_fixture` (the owner's D112:
+//! the fixture's days carry the kernel's rows, which a `<title>` reads for a row
+//! whose item has no title of its own). The snapshots are unchanged.
 
 mod emit_fixture;
 
-use emit_fixture::{at, config, ghost_plan, plan, tree};
+use emit_fixture::{at, config, ghost_plan, plan, tree, with_rows};
 use tm_core::emit;
 use tm_core::model::Id;
 use tm_core::dayplan::{DayPlan, SegFlags, SegKind, Segment};
@@ -91,6 +95,7 @@ fn lost_and_interrupted_time_are_hatched_and_optionals_dotted() {
         },
     });
     day.segments.sort_by_key(|s| s.start);
+    let day = with_rows(day);
     let out = svg(&day, None, 960, 48);
     assert!(out.contains("<pattern id=\"tm-lost\""));
     assert!(out.contains("<pattern id=\"tm-interrupt\""));
@@ -172,6 +177,7 @@ fn every_segment_keeps_its_title_and_its_hue() {
     planned.item = Some(Id::new("t5"));
     planned.energy = Some(3);
     day.segments.insert(1, planned);
+    let day = with_rows(day);
     let out = svg(&day, None, 960, 48);
     assert_eq!(out.matches("<title>").count(), day.segments.len());
     assert!(
@@ -192,6 +198,7 @@ fn every_segment_keeps_its_title_and_its_hue() {
         flags: SegFlags::default(),
     });
     day.segments.sort_by_key(|s| s.start);
+    let day = with_rows(day);
     let out = svg(&day, None, 960, 48);
     assert_eq!(out.matches("<title>").count(), day.segments.len());
     assert!(!out.contains("fill=\"#888888\""));
@@ -221,6 +228,7 @@ fn segments_outside_the_bars_span_are_skipped() {
         instance: None,
         flags: SegFlags::default(),
     });
+    let day = with_rows(day);
     let before = svg(&plan(), None, 400, 40);
     let after = svg(&day, None, 400, 40);
     assert_eq!(

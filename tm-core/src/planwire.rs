@@ -112,6 +112,7 @@ use serde_json::{json, Map, Value};
 use crate::capacity::{self, local_dt, Exact, UnitCapacity, CAP_DEN};
 use crate::config::Config;
 use crate::dayplan::{fmt_clock, kind_label, DayPlan, Diagnostics, NoPlace, PlanDiff, SegFlags, SegKind, Segment};
+use crate::emit::RowCells;
 use crate::energy::{self, Model};
 use crate::model::{fmt_time, Id, InstanceKey, Loc, Shape, WindowRange};
 use crate::priority::{self, Candidate, Ineligible, Prio, PrioClass};
@@ -2022,6 +2023,9 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
         segments,
         diagnostics,
         priorities: ctx.cands.iter().zip(ctx.prios).map(|(c, p)| (c.id.clone(), p.clone())).collect(),
+        // The rows are asked of the kernel in a second call over this very day
+        // (`rows_request`, `read_rows`; the owner's D112).
+        cells: Vec::new(),
     };
     let hash = text(&plan["hash"], "plan.hash")?.to_string();
     let ours = day.hash();
@@ -2035,6 +2039,119 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
         o => Some(diff_of(o, ctx.tz)?),
     };
     Ok(KernelDay { day, hash, overtime })
+}
+
+// ---------------------------------------------------------------------------
+// The day's rows (the owner's D112): the kernel's cells, asked through the `plan` section
+// ---------------------------------------------------------------------------
+
+/// **The request that asks the kernel for the rows of the day it planned** (the owner's
+/// **D112**: D30 Q6 (a) built — "the kernel emits cells; one Rust function pads"). `plan` is the
+/// planner answer's `plan` object, and its `segments` and `priorities` go back EXACTLY as the
+/// kernel wrote them — `PlanWire.segJson` and `PlanWire.planJson` are shaped for this round
+/// trip (W-27), so no field of a segment is re-encoded on this side. The request carries the
+/// planner request's own documents, zone and block length, and `now` is the planned day, the
+/// day a HOT row's deadline is told against (`EmitDue.hotCell`, fork `hot_note`'s
+/// `plan.date`). `bed` is §16's, the wind-down row's clock.
+pub fn rows_request(docs: &Value, tz: &Value, block_min: u32, date: NaiveDate, bed: NaiveTime, plan: &Value) -> String {
+    json!({
+        "docs": docs,
+        "now": date.to_string(),
+        "blockMin": block_min,
+        "tz": tz,
+        "plan": {
+            "bed": fmt_time(bed),
+            "priorities": plan["priorities"].clone(),
+            "segments": plan["segments"].clone(),
+        },
+    })
+    .to_string()
+}
+
+/// **The kernel's cells for a day**, one per segment and in its order (`EmitWire.rowJson`: §4.3's
+/// nine and a batch's members) — the ONE decoder of a row's cells on this side of the wire. A
+/// refusal, a row count that is not the segments', or members on a row that is not a batch's is
+/// a defect, never a row printed beside the wrong segment.
+pub fn read_rows(resp: &Value, segments: &[Segment]) -> W<Vec<RowCells>> {
+    if let Some(e) = resp.get("err") {
+        return Err(WireDefect::at(format!("plan rows: the kernel refused the day it planned: {e}")));
+    }
+    let rows = array(&resp["ok"]["plan"]["rows"], "plan.rows")?;
+    if rows.len() != segments.len() {
+        return Err(WireDefect::at(format!("plan.rows: {} rows for {} segments", rows.len(), segments.len())));
+    }
+    rows.iter()
+        .zip(segments)
+        .enumerate()
+        .map(|(i, (r, seg))| row_cells_of(r, seg, &format!("plan.rows[{i}]")))
+        .collect()
+}
+
+/// One row's cells (`EmitWire.rowJson`).
+fn row_cells_of(v: &Value, seg: &Segment, what: &str) -> W<RowCells> {
+    let cell = |k: &str| text(&v[k], &format!("{what}.{k}")).map(str::to_string);
+    let names = array(&v["batchNames"], &format!("{what}.batchNames"))?
+        .iter()
+        .enumerate()
+        .map(|(i, n)| text(n, &format!("{what}.batchNames[{i}]")).map(str::to_string))
+        .collect::<W<Vec<String>>>()?;
+    let batch_names = match &seg.kind {
+        SegKind::Batch(_) => Some(names),
+        _ if names.is_empty() => None,
+        _ => return Err(WireDefect::at(format!("{what}: members on a row that is not a batch's"))),
+    };
+    Ok(RowCells {
+        time: cell("time")?,
+        ci: cell("ci")?,
+        p: cell("p")?,
+        mark: cell("mark")?,
+        title: cell("title")?,
+        parent: cell("parent")?,
+        est: cell("est")?,
+        actual: cell("actual")?,
+        note: cell("note")?,
+        batch_names,
+    })
+}
+
+/// **§8.2 step 5's served order, read off the kernel's `diagnostics.served`** (W-47 track H, README
+/// gaps 4880 and 4755, parity P112): one `{ix, id, ci}` per ranked answer in the walk's order
+/// (`PlanWire.the_served_key_is_the_walks_order` — `Planner.PlanReq.rankedCands`, D60/D63's p0 rule
+/// and §7.4's key), each `ix` the position the candidate was SENT at (`send_order`), answered here
+/// as the position into `cands` (`collect_candidates` order) that `order[ix]` names.
+///
+/// **The host's one reading of the kernel's rank.** Fork 4748911's surfaces ordered items by
+/// `priority::sorted`'s `(p, root line, own line)`, which since R3 is not the order the day is
+/// served in: the kernel serves two p0 IMPOSSIBLE items by due date (P51, D60) and every p0
+/// impossible item before every other p0 item (D63). A defect of the answer is named, never
+/// guessed: an `ix` the request did not send, an entry naming another candidate's id or `ci`, or a
+/// candidate served twice.
+pub fn served_order(diagnostics: &Value, order: &[usize], cands: &[Candidate]) -> W<Vec<usize>> {
+    let served = array(&diagnostics["served"], "plan.diagnostics.served")?;
+    let mut seen = vec![false; cands.len()];
+    served
+        .iter()
+        .enumerate()
+        .map(|(k, e)| {
+            let what = format!("plan.diagnostics.served[{k}]");
+            let ix = usize::try_from(nat(&e["ix"], &format!("{what}.ix"))?)
+                .map_err(|_| WireDefect::at(format!("{what}.ix is past usize")))?;
+            let i = *order
+                .get(ix)
+                .ok_or_else(|| WireDefect::at(format!("{what}.ix {ix} names no candidate the request sent")))?;
+            let c = cands.get(i).ok_or_else(|| WireDefect::at(format!("{what}: no candidate at {i}")))?;
+            if text(&e["id"], &format!("{what}.id"))? != c.id.as_str() {
+                return Err(WireDefect::at(format!("{what} names another id than the candidate sent at {ix}")));
+            }
+            if nat(&e["ci"], &format!("{what}.ci"))? != u64::from(c.ci) {
+                return Err(WireDefect::at(format!("{what} carries another `ci` than the one sent at {ix}")));
+            }
+            if std::mem::replace(&mut seen[i], true) {
+                return Err(WireDefect::at(format!("{what}: `{}` is served twice", c.id.as_str())));
+            }
+            Ok(i)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -2287,6 +2404,28 @@ mod tests {
         }
     }
 
+    /// **The four rows the decoder tests share**: two blocks (one under-used at a multiplier, one the running block
+    /// with the planner's `soFar` note), a mandatory routine instance and a two-member batch.  One helper and not a
+    /// copy per test: `no_second_planner.rs`' census counts every `Segment` literal in this file and may only shrink.
+    fn sample_segments() -> Vec<Segment> {
+        let batch = vec![Id::new("x1"), Id::new("x2")];
+        vec![
+            Segment { start: at(7, 0), end: at(8, 0), kind: SegKind::Block, energy: Some(5),
+                      item: Some(Id::new("m1")), instance: None,
+                      flags: SegFlags { underused: true, planned_min: Some(60), multiplier: Some(1.6), ..SegFlags::default() } },
+            Segment { start: at(8, 0), end: at(8, 12), kind: SegKind::Block, energy: None,
+                      item: Some(Id::new("d1")), instance: None,
+                      flags: SegFlags { open: true, current: true, note: Some("12m so far".to_string()), ..SegFlags::default() } },
+            Segment { start: at(11, 30), end: at(12, 0), kind: SegKind::Routine, energy: None,
+                      item: Some(Id::new("lunch")),
+                      instance: Some(InstanceKey::Date(NaiveDate::from_ymd_opt(2026, 9, 7).expect("date"))),
+                      flags: SegFlags { mandatory: true, planned_min: Some(30), ..SegFlags::default() } },
+            Segment { start: at(12, 0), end: at(13, 0), kind: SegKind::Batch(batch),
+                      energy: Some(3), item: None, instance: None,
+                      flags: SegFlags { planned_min: Some(40), multiplier: Some(1.0), ..SegFlags::default() } },
+        ]
+    }
+
     #[test]
     fn a_day_the_kernel_writes_reads_back_whole_and_its_hash_is_checked() {
         let mut d1 = cand("d1", "Report");
@@ -2302,22 +2441,7 @@ mod tests {
         let ctx = DayCtx { tz: tz(), cands: &cands, prios: &prios };
 
         let mut day = DayPlan::empty(NaiveDate::from_ymd_opt(2026, 9, 7).expect("date"), (at(7, 0), at(16, 0)), 6);
-        let batch = vec![Id::new("x1"), Id::new("x2")];
-        day.segments = vec![
-            Segment { start: at(7, 0), end: at(8, 0), kind: SegKind::Block, energy: Some(5),
-                      item: Some(Id::new("m1")), instance: None,
-                      flags: SegFlags { underused: true, planned_min: Some(60), multiplier: Some(1.6), ..SegFlags::default() } },
-            Segment { start: at(8, 0), end: at(8, 12), kind: SegKind::Block, energy: None,
-                      item: Some(Id::new("d1")), instance: None,
-                      flags: SegFlags { open: true, current: true, note: Some("12m so far".to_string()), ..SegFlags::default() } },
-            Segment { start: at(11, 30), end: at(12, 0), kind: SegKind::Routine, energy: None,
-                      item: Some(Id::new("lunch")),
-                      instance: Some(InstanceKey::Date(NaiveDate::from_ymd_opt(2026, 9, 7).expect("date"))),
-                      flags: SegFlags { mandatory: true, planned_min: Some(30), ..SegFlags::default() } },
-            Segment { start: at(12, 0), end: at(13, 0), kind: SegKind::Batch(batch),
-                      energy: Some(3), item: None, instance: None,
-                      flags: SegFlags { planned_min: Some(40), multiplier: Some(1.0), ..SegFlags::default() } },
-        ];
+        day.segments = sample_segments();
         day.diagnostics = Diagnostics {
             underused: vec![(Id::new("m1"), 5, 2)],
             a_capacity_lost: 0,
@@ -2407,6 +2531,85 @@ mod tests {
         let mut at_edge = v.clone();
         at_edge["diagnostics"]["planHonesty"] = json!({"planned": u32::MAX, "total": 360});
         assert_eq!(read_plan(&at_edge, &ctx).expect("reads").day.diagnostics.plan_honesty, read, "past the edge is the edge");
+    }
+
+    /// One row of the `plan` section's answer, in `EmitWire.rowJson`'s shape: §4.3's nine
+    /// cells and a batch's members.
+    fn row_json(title: &str, members: &[&str]) -> Value {
+        json!({"time": "07:00", "ci": "5", "p": "p1", "mark": " ", "title": title, "parent": "@m1",
+               "est": "1b", "actual": "", "note": "", "batchNames": members})
+    }
+
+    /// The four shared rows' answer, in order: a row per segment, the batch's members on the fourth alone.
+    fn four_rows() -> Vec<Value> {
+        vec![row_json("Read ch.6", &[]), row_json("Report", &[]), row_json("lunch 30m", &[]),
+             row_json("batch: X1 · X2 (2)", &["X1", "X2"])]
+    }
+
+    /// **The rows decoder reads one row per segment, in the segments' order, with the
+    /// members on a batch row and on no other** (the owner's D112: `read_rows` is the one
+    /// decoder of the kernel's cells).
+    #[test]
+    fn the_rows_read_back_one_per_segment() {
+        let resp = json!({"ok": {"plan": {"rows": four_rows()}}});
+        let rows = read_rows(&resp, &sample_segments()).expect("one row per segment reads");
+        assert_eq!(rows.len(), 4);
+        assert_eq!((rows[0].time.as_str(), rows[0].title.as_str(), rows[0].parent.as_str()), ("07:00", "Read ch.6", "@m1"));
+        assert_eq!(rows[2].title, "lunch 30m", "the rows keep the segments' order");
+        assert!(rows[..3].iter().all(|r| r.batch_names.is_none()), "no member on a row that is not a batch's");
+        assert_eq!(rows[3].batch_names, Some(vec!["X1".to_string(), "X2".to_string()]), "a batch row carries its own");
+    }
+
+    /// **…and refuses a row count that is not the segments'**, either way: a row printed
+    /// beside the wrong segment is a fault, never a drawing.
+    #[test]
+    fn the_rows_decoder_refuses_a_count_that_is_not_the_segments() {
+        let mut short = four_rows();
+        short.pop();
+        assert!(read_rows(&json!({"ok": {"plan": {"rows": short}}}), &sample_segments()).is_err(), "three rows for four segments");
+        let mut long = four_rows();
+        long.push(row_json("extra", &[]));
+        assert!(read_rows(&json!({"ok": {"plan": {"rows": long}}}), &sample_segments()).is_err(), "five rows for four segments");
+    }
+
+    /// **…members on a row whose segment is not a batch**, and a cell that is missing.
+    #[test]
+    fn the_rows_decoder_refuses_members_on_a_row_that_is_not_a_batch() {
+        let mut rows = four_rows();
+        rows[0] = row_json("Read ch.6", &["X1"]);
+        let e = read_rows(&json!({"ok": {"plan": {"rows": rows}}}), &sample_segments()).expect_err("members on a block row");
+        assert!(e.to_string().contains("not a batch"), "{e}");
+        let mut rows = four_rows();
+        rows[1].as_object_mut().expect("an object").remove("note");
+        assert!(read_rows(&json!({"ok": {"plan": {"rows": rows}}}), &sample_segments()).is_err(), "a row with no note cell");
+    }
+
+    /// **…and the kernel refusing the day it planned**: a fault, never an empty day.
+    #[test]
+    fn the_rows_decoder_refuses_a_kernel_refusal() {
+        let resp = json!({"err": {"plan": "segmentRefused 0 inverted"}});
+        let e = read_rows(&resp, &sample_segments()).expect_err("a refusal");
+        assert!(e.to_string().contains("refused"), "{e}");
+    }
+
+    /// **The rows request sends the planned day back as the kernel wrote it** — the planner
+    /// answer's own `segments` and `priorities`, untouched, over the request's documents and
+    /// zone, with the planned date as `now` and §16's `bed` as `HH:MM`.
+    #[test]
+    fn the_rows_request_sends_the_planned_day_back_as_the_kernel_wrote_it() {
+        let plan = json!({"segments": [{"start": 1, "stop": 2, "kind": "block"}], "priorities": [{"id": "m1", "p": 3}],
+                          "hash": "00000000000000ff"});
+        let docs = json!([{"path": "backlog.md", "lines": ["# Untied"]}]);
+        let tzw = json!({"key": "America/Chicago"});
+        let date = NaiveDate::from_ymd_opt(2026, 9, 7).expect("date");
+        let bed = NaiveTime::from_hms_opt(22, 0, 0).expect("bed");
+        let req: Value = serde_json::from_str(&rows_request(&docs, &tzw, 50, date, bed, &plan)).expect("json");
+        assert_eq!(req["plan"]["segments"], plan["segments"], "the segments go back as written");
+        assert_eq!(req["plan"]["priorities"], plan["priorities"], "the priorities go back as written");
+        assert_eq!(req["plan"]["bed"], json!("22:00"));
+        assert_eq!((req["now"].clone(), req["blockMin"].clone()), (json!("2026-09-07"), json!(50)));
+        assert_eq!((req["docs"].clone(), req["tz"].clone()), (docs, tzw));
+        assert!(req["plan"].get("hash").is_none(), "only the two arrays and `bed` ride the section");
     }
 
     #[test]

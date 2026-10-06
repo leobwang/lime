@@ -1,4 +1,4 @@
-import TmKernel.Planner
+import TmKernel.EmitDue
 /-!
 # `Emit.lean` — the day section is CELLS, never padded text (stage 6, step P8)
 
@@ -37,13 +37,13 @@ paid off at the far end: the kernel holds the *name*, this module holds the *wor
 
 * **The plan hash** — it is not text a row prints, and since W-34 it is `Planner.planDigest`
   (the FNV-1a digest `Planner.dayPlan` carries; README gap 1100's P0 placeholder is refuted).
-* **`est_cell`'s first choice.**  The fork reads `est_original` before `est:`; this kernel has
-  one estimate view, `Core.est` (`Field.viewRemainingDur`), which is `est:` **then** the
-  leading estimate — the other order.  `estCell` here reads `Core.est`, and README gap 1101
-  records the disagreement rather than inventing a second view of the same field.
-* **`hot_note`'s deadline text.**  `note_cell`'s `⚠` branch needs the fork's `effective_due`,
-  which this kernel does not have a view of; `noteCell` answers `[]` there where the fork says
-  `due today` (README gap 1102).
+* ~~`est_cell`'s first choice~~ and ~~`hot_note`'s deadline text~~ — **here since W-47** (the owner's
+  D112; README gaps 1101 and 1102, closed at their cause).  They were declared holes while the
+  binary's rows were Rust's: `estCell` read `Core.est` (`est:` first) where the fork reads the
+  leading estimate first, and `noteCell` answered `[]` on a HOT row where the fork says `due
+  today`.  D112 makes these cells the rows every surface prints, and §4.3's own day shows both
+  (`2b×1.6` on a line carrying `est:1b`; `due today` on the window task): `itemEstOf` reads the
+  written estimate in the fork's order and `EmitDue.lean`'s `hotCell` tells the deadline.
 * **Rounding at an exact half.**  `blocksCell` and `multCell` round with `Arith.halfUpQ`, the
   kernel's one rounding; the fork's `{:.1}` and `{:.2}` round half-to-even on an `f64`, so the
   two disagree exactly at a tie (README gap 1103).  Rounding half-up is *this kernel's*
@@ -203,7 +203,7 @@ def multCell (m : Arith.Pos) : List Char :=
   else if f % 10 = 0 then whole ++ '.' :: [digitChar (f / 10)]
   else whole ++ '.' :: [digitChar (f / 10), digitChar (f % 10)]
 
-/-- Fork `fmt_planned`'s guard, exact.  `|m − 1| ≥ 1/200` on a rational is
+/-- The fork row builder's multiplier guard, `|m − 1| ≥ 0.005`, exact.  `|m − 1| ≥ 1/200` on a rational is
 `den ≤ 200 × |num − den|`, and no `f64` is involved. -/
 def multShown (m : Arith.Pos) : Bool :=
   decide (m.val.den ≤ 200 * (if m.val.den ≤ m.val.num then m.val.num - m.val.den
@@ -224,10 +224,10 @@ def titleText (p : PlanCore) (i : Id) : Option (List Char) :=
 def itemCiOf (p : PlanCore) (i : Id) : Option (Fin 6) :=
   (p.store.get i).bind (fun e => Core.ci e.val)
 
-/-- The estimate the item carries, through `Core.est` — `est:` then the leading estimate
-(C1).  **The fork's `est_cell` reads `est_original` first**; see the header and gap 1101. -/
-def itemEstOf (p : PlanCore) (i : Id) : Option Dur :=
-  (p.store.get i).bind (fun e => Core.est e.val)
+/-- **The estimate the row shows, as WRITTEN** — the fork's `est_original.or(est).or(dur)`: the leading estimate, else
+`Core.est` (the one estimate view; with no leading slot, its `est:`), else `dur:` (D112, gap 1101 closed; module's end). -/
+def itemEstOf (p : PlanCore) (i : Id) : Option Dur := (p.store.get i).bind (fun e =>
+  (Field.estLeadOf e.val.line).orElse (fun _ => (Core.est e.val).orElse (fun _ => Field.viewDur e.val.line)))
 
 /-- Fork `title_cell`'s `name(fallback)`. -/
 def nameOr (p : PlanCore) (s : Seg) (fallback : List Char) : List Char :=
@@ -353,23 +353,23 @@ def underusedCell (p : PlanCore) (s : Seg) : List Char :=
       | none => []
   | _, _ => []
 
-/-- Fork `note_cell`: an explicit note wins — but D68's pause says it in its title — then the `↓`
-derivation.  The `⚠` branch needs `effective_due` and is gap 1102. -/
-def noteCell (p : PlanCore) (z : Cal.Tz) (bm : Nat) (s : Seg) : List Char :=
+/-- Fork `note_cell`: an explicit note wins — but D68's pause says it in its title — then the `↓` derivation, then a
+HOT row's deadline (`hotCell`, D112; a `↓` the row cannot name falls through to it, as the fork's does), told on `today`. -/
+def noteCell (p : PlanCore) (z : Cal.Tz) (bm : Nat) (s : Seg) (today : Nat := Cal.localSec z ⟨s.start, 0⟩ / 86400) : List Char :=
   match s.note with
   | some n => if pausedRow s then [] else noteText p z bm n
-  | none   => if s.flags.underused then underusedCell p s else []
+  | none   => (fun u => if u.isEmpty && s.flags.hot then hotCell p today (keyId s) else u) (if s.flags.underused then underusedCell p s else [])
 
 /-! ## The row, and the day -/
 
 /-- **One row of §4.3, as cells.**  Everything a surface prints comes from here; what any one
 surface does with the nine cells is that surface's layout and not the kernel's.
 
-It takes a `Planner.Seg` and not a `Planner.WfSeg` because **no cell reads the well-formedness bit**: a row
-is a projection of a segment's fields and `Seg.wf` bounds when the segment ends, which nothing here asks
-about.  The subtype would be a hypothesis the emitter does not use; `rowsOf` supplies the `.val`. -/
+It takes a `Planner.Seg`, not a `Planner.WfSeg`: **no cell reads the well-formedness bit**.  `today` is the day
+being planned, which a HOT row's deadline is told against (D112): `rowsOf` passes `DayPlan.day`, the `plan` section the
+request's `now`, and a row asked of a lone segment defaults to the local day it starts on. -/
 def rowOf (p : PlanCore) (z : Cal.Tz) (bm : Nat) (bed : Clock)
-    (prios : List (Id × Fin 8)) (s : Seg) : Row :=
+    (prios : List (Id × Fin 8)) (s : Seg) (today : Nat := Cal.localSec z ⟨s.start, 0⟩ / 86400) : Row :=
   { time   := timeCell z s.start
     ci     := ciCell s (s.item.bind (itemCiOf p))
     p      := pCell prios s
@@ -378,7 +378,7 @@ def rowOf (p : PlanCore) (z : Cal.Tz) (bm : Nat) (bed : Clock)
     parent := parentCell p s
     est    := estCell p bm s
     actual := actualCell s
-    note   := noteCell p z bm s }
+    note   := noteCell p z bm s today }
 
 /-- **The day's rows, in the day's order.**  One row per segment and no other row: `tm now`
 selects a window of this list, `tm plan --json` numbers it, and the day file writes it — which
@@ -386,7 +386,7 @@ is D30 Q5 (a)'s "one row renderer, and every surface's rows are its output", sta
 half of it the kernel can hold. -/
 def rowsOf (r : PlanReq) : List Row :=
   let d := dayPlan r
-  d.segments.map (fun s => rowOf r.plan.val r.tz r.blockMin r.look.day.bed d.priorities.val s.val)
+  d.segments.map (fun s => rowOf r.plan.val r.tz r.blockMin r.look.day.bed d.priorities.val s.val d.day)
 
 /-! ## The laws -/
 
@@ -460,7 +460,7 @@ theorem rowsOf_length (r : PlanReq) : (rowsOf r).length = (dayPlan r).segments.l
 /-- And the rows are that list's image, pointwise. -/
 theorem rowsOf_eq (r : PlanReq) :
     rowsOf r = (dayPlan r).segments.map
-      (fun s => rowOf r.plan.val r.tz r.blockMin r.look.day.bed (dayPlan r).priorities.val s.val)
+      (fun s => rowOf r.plan.val r.tz r.blockMin r.look.day.bed (dayPlan r).priorities.val s.val (dayPlan r).day)
       := rfl
 
 /-! ### The cells built from numbers hold no newline
@@ -604,6 +604,81 @@ theorem a_lost_row_that_is_not_a_pause_is_drawn_lost (r : PlanReq) (p : PlanCore
   obtain ⟨d, hd, g, hg, q, hq, rfl⟩ := mem_pastRows.1 ht
   refine ⟨d, hd, g, hg, ?_, q, hq, rfl⟩
   cases hg' : g.kind <;> simp [pastRowOf, pastKind, pausedRow, hg'] at hk h ⊢
+
+/-! ## D112 — the kernel's cells are the rows every surface prints (stage 6 W-47 track L, README gap 4897)
+
+APPENDED 2026-10-06, at the end of the module so that no check 9 pin above moves.  The owner's **D112**: *"the binary's
+plan rows come from the kernel's `Emit.Row` cells, and one Rust function pads them"* — D30 Q6 (a), built.  The binary
+sends the day the planner answered back through the `plan` section (`EmitWire.rowsJson`, W-27's `PlanWire.segJson` is
+shaped for exactly that round trip), pads the cells in `emit::render_row`, and the Rust builder of the same cells is
+deleted.  Two cells the fork wrote and this module did not were declared holes while the binary's rows were Rust's;
+with the rows the kernel's, a hole is a moved byte on every surface, so both are fixed at their cause:
+
+* **`est` is the estimate AS WRITTEN** (README gap 1101).  Fork `est_cell` reads `est_original.or(est).or(dur)` —
+  §3.1's leading estimate first, then `est:`, then `dur:` — and §4.3's own day prints `- [>] 4 2b Exercises 5.3–5.5
+  @m1 est:1b ^t3` as `2b×1.6`.  `itemEstOf` read `Core.est` (`est:` first, the remaining minutes the planner plans
+  with) and printed `1b×1.6`.  It now reads the leading slot (`Field.estLeadOf`) first, then `Core.est` — the one
+  estimate view, which on a line with no leading slot is its `est:` — then `dur:` (`Field.viewDur`): the fork's order,
+  through the views the kernel already has, so the estimate gains no second reader and `Core.est` keeps its caller.
+* **`note` tells a HOT row's deadline** (README gap 1102), through `EmitDue.lean`'s `hotCell`, which reads the plan's
+  own effective shape.  A `↓` the row cannot name falls through to it, as fork `note_cell`'s `underused_note`
+  returning `None` does.  The kernel's §3.2 prep rule is one step (`Plan.effectiveShape`) where fork
+  `Tree::effective_shape` walks every shapeless ancestor, so a HOT row whose deadline is a grandparent interval's start
+  is silent here where the fork names it: parity P109's second clause.
+
+**Not changed: README gap 1103**, rounding at an exact half (`blocksCell`, `multCell` round half-up, the fork's `{:.1}`
+and `{:.2}` half-to-even): the kernel's bytes are the rows' now (D112), and the tie is P109's first clause. -/
+
+/-- **The written estimate, in the fork's order** — the leading slot, then `est:`, then `dur:`: `Core.est` in the middle
+is `est:` exactly when the line has no leading slot, which is the only case it is asked. -/
+theorem itemEstOf_is_the_written_estimate (p : PlanCore) (i : Id) :
+    itemEstOf p i = (p.store.get i).bind (fun e =>
+      (Field.estLeadOf e.val.line).orElse (fun _ =>
+        (Field.viewEstKey e.val.line).orElse (fun _ => Field.viewDur e.val.line))) := by
+  unfold itemEstOf
+  cases p.store.get i with
+  | none => rfl
+  | some e =>
+    simp only [Option.bind]
+    cases hl : Field.estLeadOf e.val.line with
+    | some d => rfl
+    | none =>
+      cases hk : Field.viewEstKey e.val.line <;>
+        simp [Option.orElse, Core.est, Field.viewRemainingDur, hk, hl]
+
+/-- **A line carrying a leading estimate shows IT, whatever `est:` says** — §4.3's `2b×1.6` on `est:1b`. -/
+theorem itemEstOf_prefers_the_leading_estimate (p : PlanCore) (i : Id) (e : Entity) (d : Dur)
+    (hg : p.store.get i = some e) (hl : Field.estLeadOf e.val.line = some d) : itemEstOf p i = some d := by
+  simp [itemEstOf, hg, hl]
+
+/-- **…and a line with no leading estimate shows its `est:`**, the remaining estimate a tool wrote. -/
+theorem itemEstOf_falls_back_to_the_est_key (p : PlanCore) (i : Id) (e : Entity) (d : Dur)
+    (hg : p.store.get i = some e) (hl : Field.estLeadOf e.val.line = none) (hk : Field.viewEstKey e.val.line = some d) :
+    itemEstOf p i = some d := by
+  simp [itemEstOf, hg, hl, hk, Core.est, Field.viewRemainingDur]
+
+/-- **A HOT row with no note of its own and no `↓` tells its deadline.** -/
+theorem noteCell_of_a_hot_row (p : PlanCore) (z : Cal.Tz) (bm today : Nat) (s : Seg)
+    (hn : s.note = none) (hu : s.flags.underused = false) (hh : s.flags.hot = true) :
+    noteCell p z bm s today = hotCell p today (keyId s) := by
+  simp [noteCell, hn, hu, hh]
+
+/-- **…and a row that is neither under-used nor HOT says nothing**, so the deadline never reaches another row. -/
+theorem noteCell_of_a_row_neither_underused_nor_hot (p : PlanCore) (z : Cal.Tz) (bm today : Nat) (s : Seg)
+    (hn : s.note = none) (hu : s.flags.underused = false) (hh : s.flags.hot = false) :
+    noteCell p z bm s today = [] := by
+  simp [noteCell, hn, hu, hh]
+
+/-- **A `↓` the row CAN name wins over the deadline**, as fork `note_cell` returns the under-use first. -/
+theorem noteCell_of_an_underused_row_it_can_name (p : PlanCore) (z : Cal.Tz) (bm today : Nat) (s : Seg)
+    (hn : s.note = none) (hu : s.flags.underused = true) (hc : (underusedCell p s).isEmpty = false) :
+    noteCell p z bm s today = underusedCell p s := by
+  simp [noteCell, hn, hu, hc]
+
+/-- **A planned day's rows are told against the day's own date**, row by row (`rowsOf_eq`'s right-hand side). -/
+theorem rowsOf_tells_the_planned_day (r : PlanReq) :
+    rowsOf r = (dayPlan r).segments.map (fun s =>
+      rowOf r.plan.val r.tz r.blockMin r.look.day.bed (dayPlan r).priorities.val s.val (dayPlan r).day) := rfl
 
 end Emit
 end Tm

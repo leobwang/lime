@@ -304,6 +304,13 @@ fn data_with(
         week_cut,
         now: ctx.now_tz,
         planner: kernel_planner(ctx),
+        // The kernel's table of places (the owner's D111), asked once per
+        // process. A kernel that cannot answer it leaves the `b` chord nothing to
+        // offer — and the App's own planner, which asks the same kernel, then
+        // ends the TUI loudly.
+        places: app::Places::new(
+            crate::cli::kernel_log::places().map(<[String]>::to_vec).unwrap_or_default(),
+        ),
     }
 }
 

@@ -161,10 +161,18 @@ pub fn timeline_lines(app: &App, width: usize, height: usize) -> Vec<Line<'stati
 /// This used to take the first segment carrying `flags.current` *anywhere in the
 /// day* — with no `start <= now < end` guard at all, so a `▶` the planner left
 /// on a finished row kept the pane on it.
-fn current_segment(app: &App) -> Option<&Segment> {
+fn current_segment(app: &App) -> Option<(usize, &Segment)> {
     emit::now_window(&app.plan, app.now)
         .0
-        .map(|i| &app.plan.segments[i])
+        .map(|i| (i, &app.plan.segments[i]))
+}
+
+/// **A segment's title cell — the kernel's** (the owner's D112): the row at
+/// position `i` of the day the App holds. It was the Rust `title_cell` until
+/// W-47, the second builder of a cell the kernel already wrote; a day nobody
+/// asked rows for answers `—`, what that cell says of a row with no item.
+fn title_of(app: &App, i: usize) -> String {
+    app.plan.cells.get(i).map(|c| c.title.clone()).unwrap_or_else(|| "—".to_string())
 }
 
 /// `▐████████░░░░░░░▌` — elapsed against the planned minutes (§12.1).
@@ -184,7 +192,7 @@ fn elapsed_bar(elapsed_min: u32, planned_min: u32, width: usize) -> String {
 pub fn now_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = Vec::new();
     match current_segment(app) {
-        Some(seg) => {
+        Some((at, seg)) => {
             let id = seg.item.clone();
             let mut head = String::new();
             if let Some(ci) = seg
@@ -199,7 +207,7 @@ pub fn now_lines(app: &App, width: usize) -> Vec<Line<'static>> {
             if let Some(p) = id.as_ref().and_then(|i| app.priority_of(i)) {
                 head.push_str(&format!("p{p} "));
             }
-            head.push_str(&emit::title_cell(seg, &app.tree, &app.cfg));
+            head.push_str(&title_of(app, at));
             if let Some(item) = id.as_ref().and_then(|i| app.tree.get(i)) {
                 if let Some(parent) = &item.parent {
                     head.push_str(&format!("  {}", parent.token()));
@@ -278,7 +286,7 @@ pub fn now_lines(app: &App, width: usize) -> Vec<Line<'static>> {
             format!(
                 "{} {}",
                 s.start.format("%H:%M"),
-                emit::title_cell(s, &app.tree, &app.cfg)
+                title_of(app, i)
             )
         })
         .collect();
@@ -450,14 +458,9 @@ pub fn hint_line(app: &App, width: usize) -> Line<'static> {
     let left = match (&app.mode, &app.message) {
         (Mode::Command, _) => format!(":{}█", app.input),
         (Mode::Input(kind), _) => format!("{}: {}█", kind.label(), app.input),
-        // The prompt reads the ONE table of places (D81, gap 3903).
-        (Mode::BreakWhere, _) => format!(
-            "break where? {}",
-            tm_core::store::BreakPlace::all()
-                .map(|p| format!("{} {}", p.key(), p.as_str()))
-                .collect::<Vec<_>>()
-                .join(" · ")
-        ),
+        // The prompt reads the ONE table of places — the kernel's since the
+        // owner's D111 (README gap 4904), handed to the App (`App::places`).
+        (Mode::BreakWhere, _) => format!("break where? {}", app.places.prompt()),
         (Mode::Energy, _) => "energy now? 0–5".to_string(),
         (_, Some(msg)) => msg.clone(),
         _ => ":".to_string(),
@@ -560,7 +563,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     if let Some(prompt) = &app.prompt {
         prompts::draw(f, area, prompt);
     } else if app.mode == Mode::Help {
-        prompts::draw_help(f, area);
+        prompts::draw_help(f, area, &app.places);
     }
 }
 

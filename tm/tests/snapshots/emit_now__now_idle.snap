@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_now.rs
+source: tm/tests/emit_now.rs
 expression: out
 ---
 — nothing running (13:20)

@@ -49,7 +49,6 @@ use super::kernel_log;
 use super::ghost;
 use super::items::id_gen;
 use super::out::{emit, CliError};
-use super::planning;
 use super::undo as undo_stack;
 
 /// `tm close --json`.
@@ -325,23 +324,33 @@ fn day_extras(ctx: &Ctx, date: NaiveDate) -> Result<core_review::DayExtras, CliE
             ))
         })
         .collect();
-    let (plan, cands, prios) = planning::build_ranked(ctx, false)?;
+    let planned_day = super::kernel_capacity::plan_day(ctx, false, None)?;
+    let plan = &planned_day.day;
     extras.underused = plan.diagnostics.underused.len();
-    extras.optional = Some(optional_quota(&plan, &ctx.tree));
+    extras.optional = Some(optional_quota(plan, &ctx.tree));
     // §12.4's `tomorrow  first candidate t5 (after t4) · d1 p1 u=0.6`: the
     // top-ranked candidates the day did not get to, with the reason each is
-    // where it is.
+    // where it is — **in the order the kernel's day SERVES them** (README gap
+    // 4880, parity P112): `diagnostics.served`, §8.2 step 5's walk with D60/D63's
+    // p0 rule, from the same answer the day came from, so no second request.
+    // Fork 4748911 sorted by `priority::sorted`'s `(p, root line, own line)`,
+    // which after R3 is a second definition of rank beside the day's: two p0
+    // impossible items came out in file order where the day serves them by
+    // due date. Each note is its own candidate's grant (the index pairing
+    // `read_day` checked), never another instance's found by id.
     let planned: Vec<&Id> = plan.segments.iter().filter_map(|s| s.item.as_ref()).collect();
-    extras.tomorrow_first = priority::sorted(&prios, &cands)
-        .into_iter()
-        .filter(|id| !planned.contains(&id) && !ctx.replay.is_done(id.as_str()))
+    extras.tomorrow_first = planned_day
+        .served
+        .iter()
+        .map(|&i| (&planned_day.cands[i], &planned_day.prios[i]))
+        .filter(|(c, _)| !planned.contains(&&c.id) && !ctx.replay.is_done(c.id.as_str()))
         .take(3)
-        .map(|id| {
-            let note = prios.iter().find(|p| p.id == id).map(|p| match p.u {
+        .map(|(c, p)| {
+            let note = match p.u {
                 Some(u) => format!("p{} u={u:.2}", p.p),
                 None => format!("p{}", p.p),
-            });
-            core_review::TomorrowCandidate::new(id, note.as_deref())
+            };
+            core_review::TomorrowCandidate::new(c.id.clone(), Some(note.as_str()))
         })
         .collect();
     Ok(extras)
@@ -391,8 +400,8 @@ pub fn review(g: &Globals, args: &super::ReviewArgs) -> Result<i32, CliError> {
     // **The write gate goes FIRST, not beside the write** (README gap 1080).
     // It is the same one call it always was — `--write` has always paid it —
     // moved ahead of the body that computes the review. It has to be: on a
-    // tree the kernel refuses, `day_extras` (and the week's
-    // `Ctx::priorities`) reaches the kernel first and the user got the
+    // tree the kernel refuses, `day_extras` (and the week's deadline
+    // health) reaches the kernel first and the user got the
     // kernel's sentence with no word about whether their `--write` happened,
     // which is the one thing D35 bought. A read that refuses ahead of a
     // pre-write check is a pre-write check in the wrong place.
@@ -428,10 +437,15 @@ pub fn review(g: &Globals, args: &super::ReviewArgs) -> Result<i32, CliError> {
                 None => IsoWeek::from_date(ctx.today),
             };
             let extras = core_review::WeekExtras {
+                // **Ranked by the request every planning verb sends** (README gap
+                // 4755): the day's own request over `.tm/state.json` as `tm plan`'s
+                // roll leaves it (`kernel_capacity::plan_day`), so the week's
+                // deadline health reads the `p`, `u` and class the day was planned
+                // by — one ranking in the binary, never a second, capacity-only one.
                 deadline_health: match week.contains(ctx.today) {
                     true => {
-                        let (cands, prios, _) = ctx.priorities(false)?;
-                        Some(priority::deadline_health(&prios, &cands, ctx.today))
+                        let planned = super::kernel_capacity::plan_day(&ctx, false, None)?;
+                        Some(priority::deadline_health(&planned.prios, &planned.cands, ctx.today))
                     }
                     false => None,
                 },

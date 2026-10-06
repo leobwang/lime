@@ -10,7 +10,7 @@ mod tui_common;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use tui_common::app::{
-    resolve, Action, Answer, BreakPlace, Effect, InputKind, Mode, PromptKind, Screen,
+    resolve, Action, Answer, Effect, InputKind, Mode, Places, PromptKind, Screen,
 };
 use tui_common::{app, app_at, review};
 
@@ -77,20 +77,24 @@ fn every_key_of_the_today_rows_maps_to_its_action() {
     insta::assert_snapshot!(table);
 }
 
+/// **The break chord covers every place of the kernel's table** (the owner's
+/// D111): each place's key is its word's first character, the keymap hands the
+/// key on, and the App's table names the place — `w`/`s`/`b`/`p`, as §12.6 has
+/// them.
 #[test]
 fn the_break_chord_covers_all_four_places() {
-    let places = [
-        ('w', BreakPlace::Walk),
-        ('s', BreakPlace::Seat),
-        ('b', BreakPlace::Bed),
-        ('p', BreakPlace::Phone),
-    ];
-    for (key, place) in places {
+    let app = app();
+    let mut keys = Vec::new();
+    for word in app.places.words() {
+        let key = Places::key_of(word).expect("a place has a key");
         assert_eq!(
             resolve(Screen::Today, Mode::BreakWhere, None, c(key)),
-            Action::BreakWhere(place)
+            Action::BreakWhere(key)
         );
+        assert_eq!(app.places.word_of_key(key), Some(word.as_str()));
+        keys.push(key);
     }
+    assert_eq!(keys, vec!['w', 's', 'b', 'p'], "§12.6's four keys, in the table's order");
 }
 
 #[test]

@@ -442,13 +442,20 @@ pub fn refiles(old: &BTreeMap<String, Value>, new: &BTreeMap<String, Value>) -> 
 /// **A derived line that left with its parent re-drawn** — the one deletion a history gate lets
 /// through: the classes' re-draw (the owner's D64(b)) drops a derived line its re-drawn parent's rule
 /// no longer derives. `k` names a line of `old` carrying a `derived`, and its parent — the primary
-/// line of the same `seed` and `draw` — carries a new D64(b) reason in `new` ([`redrawn`]).
+/// line of the same `seed` and `draw` — carries a new D64(b) reason in `new` ([`redrawn`]). Since the
+/// W-47 land (README gap 5011) a primary line may be re-drawn at ANOTHER index of its seed
+/// (`TM_PLANNER_DRAW_AT`), keeping its class: its parent in `new` is then the primary line of the
+/// same seed and the old parent's class (one primary line per class), held to the same reason.
 pub fn left_with_a_redrawn_parent(k: &str, old: &BTreeMap<String, Value>, new: &BTreeMap<String, Value>) -> bool {
     let Some(line) = old.get(k).filter(|l| !l["derived"].is_null()) else { return false };
-    let parent = |m: &BTreeMap<String, Value>| {
-        m.values().find(|p| p["secondary"].is_null() && p["derived"].is_null() && p["seed"] == line["seed"] && p["draw"] == line["draw"]).cloned()
-    };
-    matches!((parent(old), parent(new)), (Some(a), Some(b)) if redrawn(&a, &b))
+    let primary = |p: &&Value| p["secondary"].is_null() && p["derived"].is_null() && p["seed"] == line["seed"];
+    let Some(a) = old.values().find(|p| primary(p) && p["draw"] == line["draw"]).cloned() else { return false };
+    let b = new
+        .values()
+        .find(|p| primary(p) && p["draw"] == line["draw"])
+        .or_else(|| new.values().find(|p| primary(p) && p["class"] == a["class"]))
+        .cloned();
+    matches!(b, Some(b) if redrawn(&a, &b))
 }
 
 /// **May a line move from `old` to `new`, a new key?** (W-43 track C, README gap 4320.) Held as an

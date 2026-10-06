@@ -55,7 +55,7 @@ theorem reachFree_iff (z : Cal.Tz) (T₀ L : Nat) (a r t : List Log.Line) (sv : 
         ((fun q => !isFuture T₀ q) q = true → q < w) ∧ ((fun q => !isFuture T₀ q) q = false → w.sec + fenceSec < q.sec)) ∧
       (∀ e ∈ Log.lineEntries r ++ Log.lineEntries t, headSec L ≤ e.t.val.sec ∧ L ≤ dayOf z KW e.t.val) ∧
       (∀ pre e post, sv = pre ++ e :: post →
-        (∀ q ∈ stepQueries (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec) ∧
+        (∀ q ∈ stepQueries (dayOf z KW) (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec) ∧
         (∀ x ∈ Replay.effectsWith z (dayOf z KW) SL (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G) e,
           keyAtOrAbove L (horizonOf L) x.key = true)) := by
   have hLE : Log.lineEntries (r ++ t) = Log.lineEntries r ++ Log.lineEntries t := List.filterMap_append
@@ -177,8 +177,9 @@ theorem reachFree_of_accepted (z : Cal.Tz) (T₀ T L : Nat) (a r t : List Log.Li
     rw [hKL] at hc
     obtain ⟨hq, -, hk⟩ := hc
     have hmm := hmach pre (e :: post) hs
-    have hQ : ∀ q ∈ stepQueries (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec := by
-      rw [← hmm]; exact hq
+    have hte : headSec L ≤ e.t.val.sec := hq _ (List.mem_append_left _ (by simp [entryInstants]))
+    have hQ : ∀ q ∈ stepQueries (dayOf z KW) (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G).machine e, headSec L ≤ q.sec := by
+      rw [← hmm, stepQueries_congr (dayOf z KW) (dayOf z kw) _ e (hI2 _ hte)]; exact hq
     refine ⟨hQ, fun x hx => ?_⟩
     have hmem : x.key ∈ (Replay.effectsWith z (dayOf z KW) SL (pre.foldl (Replay.stepWith z (dayOf z KW) SL) G) e).map
         Replay.Effect.key := List.mem_map.2 ⟨x, hx, rfl⟩
@@ -247,7 +248,9 @@ theorem accepted_of_reachFree (z : Cal.Tz) (T₀ T L : Nat) (a r t : List Log.Li
             Replay.Effect.key := hkeys pre e post hs ((hC pre e post hs).1)
     apply stepCheck_eq_none
     · intro q hq
-      rw [hKL]; rw [hmm] at hq; exact (hC pre e post hs).1 q hq
+      have hte : headSec L ≤ e.t.val.sec := (hC pre e post hs).1 _ (List.mem_append_left _ (by simp [entryInstants]))
+      rw [hKL]; rw [hmm, stepQueries_congr (dayOf z kw) (dayOf z KW) _ e (hI2 _ hte).symm] at hq
+      exact (hC pre e post hs).1 q hq
     · intro hw
       have hwi : e.t.val ∈ wakeInstants sv := List.mem_map.2 ⟨e, List.mem_filter.2 ⟨by rw [hs]; simp, hw⟩, rfl⟩
       refine ⟨fun m hm => ?_, fun f hf => ?_⟩

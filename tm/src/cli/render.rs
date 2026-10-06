@@ -41,11 +41,12 @@ const SVG_COLS: usize = 96;
 /// One rendered row of the timeline.
 #[derive(Clone, Debug, Serialize)]
 pub struct Row {
-    /// `HH:MM`.
+    /// `HH:MM` — the row's time cell, the kernel's (D112).
     pub time: String,
     /// Predicted slot energy, when the segment has one.
     pub energy: Option<u8>,
-    /// The §4.3 mark (`✓`, `▶`, `⚠`), or empty.
+    /// The §4.3 mark (`✓`, `▶`, `⚠`), or empty — the row's mark cell, the
+    /// kernel's (D112), trimmed.
     pub mark: String,
     /// The whole §4.3 row, exactly as the day file has it.
     pub text: String,
@@ -55,10 +56,6 @@ pub struct Row {
     /// `pause` for a replayed pause (D68, P59) and `kind_label`'s otherwise.
     pub kind: String,
 }
-
-/// `HH:MM` — `tm_core::dayplan::fmt_clock` under this file's own name (AGENTS
-/// §5.3, W-23: a byte-for-byte copy of it stood here).
-use tm_core::dayplan::fmt_clock as hhmm;
 
 /// The rows of a plan, in start order — one per segment, each carrying the
 /// §4.3 row `emit` writes into the day file.
@@ -70,14 +67,20 @@ use tm_core::dayplan::fmt_clock as hhmm;
 /// lookup here would have more than one witness. This used to call
 /// emit::render_segment_row(seg, …), which rebuilt the priority map once per
 /// row and was the by-value form; `plan_rows` replaced it and it is gone.
-pub fn rows(plan: &DayPlan, tree: &Tree, cfg: &Config) -> Vec<Row> {
+///
+/// **`time` and `mark` are the row's own cells** (the owner's **D112**, W-47):
+/// the kernel's, the cells `text` is padded from, read at the same position.
+/// They were the segment's start through `fmt_clock` and the Rust mark_of
+/// until the Rust builder was deleted — the same bytes, from a second reader.
+pub fn rows(plan: &DayPlan) -> Vec<Row> {
     plan.segments
         .iter()
-        .zip(emit::plan_rows(plan, tree, cfg, &emit::Layout::default()))
-        .map(|(seg, text)| Row {
-            time: hhmm(seg.start),
+        .zip(&plan.cells)
+        .zip(emit::plan_rows(plan, &emit::Layout::default()))
+        .map(|((seg, cells), text)| Row {
+            time: cells.time.clone(),
             energy: seg.energy,
-            mark: emit::mark_of(seg).to_string().trim().to_string(),
+            mark: cells.mark.trim().to_string(),
             text,
             item: seg.item.clone(),
             kind: emit::row_kind(seg).to_string(),
@@ -88,8 +91,8 @@ pub fn rows(plan: &DayPlan, tree: &Tree, cfg: &Config) -> Vec<Row> {
 /// The body of the day file's `tm:plan` section (§4.3) — the timeline, and
 /// only the timeline. §8.2 step 8's diagnostics and §11's warnings go to
 /// `tm plan`'s own output ([`diagnostics`]), not into the file.
-pub fn timeline(plan: &DayPlan, tree: &Tree, cfg: &Config, now: DateTime<Tz>) -> String {
-    emit::render_plan_section(plan, tree, cfg, now).1
+pub fn timeline(plan: &DayPlan, cfg: &Config, now: DateTime<Tz>) -> String {
+    emit::render_plan_section(plan, cfg, now).1
 }
 
 /// §8.2 step 8's diagnostics and §11's warnings — the "plan honesty {h} —

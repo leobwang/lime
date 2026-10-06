@@ -624,10 +624,10 @@ impl Tree {
     /// `Tree` — and `Ctx::walls_on` is now this, called. One definition, and it
     /// is the host's. README gap 3432 named this its exit "at R3"; it closed at
     /// W-39 track T, the week grid reading the kernel's walls (`Look.wallIxOn`),
-    /// and what still calls this is `Ctx::arrival_window` — the window `tm arrive`
-    /// stores (`capacity::window_and_budget`), which the kernel's day reads when
-    /// `.tm/state.json` holds one: a host reading of the walls beside the
-    /// kernel's, README gap 4746 (the W-45 repair).
+    /// and its last shipped caller, `Ctx::arrival_window`'s host formula for the
+    /// window `tm arrive` stores (README gap 4746), went at W-47 track H: that
+    /// window is the kernel's day's now (`kernel_capacity::arrival_window`). What
+    /// calls this is the fork comparands and the harness (README gap 4973).
     pub fn walls_on(&self, tz: chrono_tz::Tz, date: NaiveDate) -> Vec<crate::capacity::Wall> {
         let mut out = Vec::new();
         for item in self.iter() {

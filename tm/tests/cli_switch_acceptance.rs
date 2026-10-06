@@ -48,6 +48,8 @@ use cli_common::Tm;
 const LATER: &str = "2026-09-10T09:00:00-05:00";
 /// Inside the log's own last day: a command dated here is three days behind [`LATER`].
 const INSIDE: &str = "2026-09-07T13:00:00-05:00";
+/// After the example tree's meeting (`^g1`, 12:50-13:50): a block begun here meets no wall (D110).
+const AFTER_THE_MEETING: &str = "2026-09-07T14:00:00-05:00";
 /// `tm log`'s corpus bytes are taken at one pinned instant, because `--since` is relative to it.
 const CORPUS_NOW: &str = "2026-09-15T09:00:00-05:00";
 /// T12's instant: `model.json`'s `fitted` field is a date, so it is pinned rather than floating.
@@ -954,8 +956,13 @@ fn the_rebuild_notice_names_only_what_did_not_come_back() {
     // byte-equality below fails for a reason that is not the defect.
     tm.ok_at(INSIDE, &["wake", "06:05"]);
     tm.ok_at(INSIDE, &["arrive", "lounge"]);
-    tm.ok_at(INSIDE, &["start", "^p1"]);
-    tm.ok_at(INSIDE, &["pause"]);
+    // After the meeting (12:50-13:50), not inside it: since the owner's D110 (parity P106, README
+    // "Stage 6 — W-47 track K" §10) a block begun inside a wall is paused from its start by the
+    // wall's own mark, and `tm pause` there TOGGLES it running again (D66's correction for a
+    // skipped meeting) — so a block "paused by `tm pause`", this test's subject, begins after it.
+    // Until W-47 the block began at 13:00, inside the meeting, and `tm pause` paused it.
+    tm.ok_at(AFTER_THE_MEETING, &["start", "^p1"]);
+    tm.ok_at(AFTER_THE_MEETING, &["pause"]);
 
     let before_bytes = fs::read_to_string(state_path(&tm)).expect("read .tm/state.json");
     let before_state: serde_json::Value =
@@ -971,7 +978,7 @@ fn the_rebuild_notice_names_only_what_did_not_come_back() {
     );
 
     fs::remove_file(state_path(&tm)).expect("delete the runtime state");
-    let first = tm.run_at(INSIDE, &["--json", "now"]);
+    let first = tm.run_at(AFTER_THE_MEETING, &["--json", "now"]);
     assert_eq!(first.code, 0, "the first verb after the deletion failed: {}{}", first.stdout, first.stderr);
 
     let after_bytes = fs::read_to_string(state_path(&tm)).expect("rebuilt state");

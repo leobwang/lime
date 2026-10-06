@@ -718,6 +718,10 @@ struct Traced {
     wall: Duration,
     calls: Vec<String>,
     planner: Vec<Duration>,
+    /// The rows call each planned day is followed by (the owner's D112,
+    /// `planwire::rows_request`), timed as the planner call is: from its trace
+    /// line to the next one, or to the end of stderr.
+    rows: Vec<Duration>,
 }
 
 /// Run the binary at `now` with `TM_TRACE_KERNEL_CALLS` set and its stderr read
@@ -767,14 +771,17 @@ fn traced_at(tm: &Tm, now: &str, args: &[&str], limit: Duration) -> Traced {
         .into_iter()
         .filter_map(|(t, l)| l.strip_prefix("kernel call: ").map(|k| (t, k.to_string())))
         .collect();
-    let planner = calls
-        .iter()
-        .enumerate()
-        .filter(|(_, (_, k))| k.split('+').any(|s| s == "planner"))
-        .map(|(i, (t, _))| calls.get(i + 1).map_or(eof, |(next, _)| *next).duration_since(*t))
-        .collect();
+    let timed = |name: &str| -> Vec<Duration> {
+        calls
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, k))| k.split('+').any(|s| s == name))
+            .map(|(i, (t, _))| calls.get(i + 1).map_or(eof, |(next, _)| *next).duration_since(*t))
+            .collect()
+    };
+    let (planner, rows) = (timed("planner"), timed("rows"));
     let out = fs::read_to_string(&log).unwrap_or_default();
-    Traced { code, out, wall, calls: calls.into_iter().map(|(_, k)| k).collect(), planner }
+    Traced { code, out, wall, calls: calls.into_iter().map(|(_, k)| k).collect(), planner, rows }
 }
 
 /// One tree's T18 figures: `tm check` (which carries the planner call) and
@@ -799,8 +806,13 @@ fn t18_row(tm: &Tm, now: &str, label: &str) -> (Duration, Duration, Duration) {
         check.calls
     );
     let planner = check.planner[0];
+    // **And the day's rows, asked right after it** (the owner's D112): one rows
+    // call per planned day, a second whole-tree load with no log. `tm check` and
+    // `tm plan` above each pay it inside their walls; this is its own share.
+    assert_eq!(check.rows.len(), 1, "{label}: one rows call after the planner call: {:?}", check.calls);
+    let rows = check.rows[0];
     eprintln!(
-        "T18 {label}: the planner call {planner:?}; `tm check` {:?} over {} kernel call(s); `tm plan` {plan:?}",
+        "T18 {label}: the planner call {planner:?}; the rows call {rows:?}; `tm check` {:?} over {} kernel call(s); `tm plan` {plan:?}",
         check.wall,
         check.calls.len()
     );
@@ -945,6 +957,14 @@ fn t18_the_planner_call_on_the_example_three_year_and_far_deadline_trees() {
 // main-thread stack, as T18's what-if does. A tick that holds its reload's
 // read pays build + call; one that re-reads pays read + build + call.
 //
+// **And since the owner's D112 (W-47) a tick is TWO calls**: the planner call,
+// then the day's rows asked back through the `plan` section
+// (`kernel_capacity::read_day`'s second call, `planwire::rows_request`). Until
+// W-47 this row timed the first alone, which after D112 would have been a
+// tick's figure that leaves out half of what a tick costs; the rows request
+// `tm check` traced is asked `k` times beside it, and a tick is build + planner
+// call + rows call.
+//
 // These are MEASUREMENTS: no band is set here and none is moved. The machine's
 // load average is printed beside each row (README gap 1333).
 
@@ -993,7 +1013,12 @@ fn t19_row(tm: &Tm, now: &str, label: &str) {
     let request = planners.next().unwrap_or_else(|| panic!("{label}: `tm check` traced no planner request")).to_string();
     assert!(planners.next().is_none(), "{label}: `tm check` traced two planner requests");
     let bytes = request.len();
-    let calls: Vec<Duration> = std::thread::Builder::new()
+    // The day's rows, asked right after the planner call (D112): `plan`'s first key is `bed`.
+    let mut row_reqs = err.lines().filter_map(|l| l.strip_prefix("kernel request: ")).filter(|r| r.contains("\"plan\":{\"bed\":"));
+    let rows_request = row_reqs.next().unwrap_or_else(|| panic!("{label}: `tm check` traced no rows request")).to_string();
+    assert!(row_reqs.next().is_none(), "{label}: `tm check` traced two rows requests");
+    let rows_bytes = rows_request.len();
+    let (calls, rows): (Vec<Duration>, Vec<Duration>) = std::thread::Builder::new()
         .stack_size(8 << 20)
         .spawn(move || {
             (0..T19_K)
@@ -1003,21 +1028,28 @@ fn t19_row(tm: &Tm, now: &str, label: &str) {
                     let took = t.elapsed();
                     let v: serde_json::Value = serde_json::from_str(&resp).expect("the response parses");
                     assert!(v["ok"]["plan"]["day"].is_string(), "the tick's day: {resp:.300}");
-                    took
+                    let t = Instant::now();
+                    let resp = tm_kernel_ffi::call(&rows_request).expect("the kernel answers the rows");
+                    let rows_took = t.elapsed();
+                    let v: serde_json::Value = serde_json::from_str(&resp).expect("the rows response parses");
+                    assert!(v["ok"]["plan"]["rows"].is_array(), "the tick's rows: {resp:.300}");
+                    (took, rows_took)
                 })
-                .collect()
+                .unzip()
         })
         .expect("a thread")
         .join()
         .expect("the in-process kernel calls");
     let (bb, bm) = best_median(&builds);
     let (cb, cm) = best_median(&calls);
-    let ticks: Vec<Duration> = builds.iter().zip(&calls).map(|(b, c)| *b + *c).collect();
+    let (rb, rm) = best_median(&rows);
+    let ticks: Vec<Duration> = builds.iter().zip(&calls).zip(&rows).map(|((b, c), r)| *b + *c + *r).collect();
     let (tb, tmed) = best_median(&ticks);
     eprintln!(
         "T19 {label}: the request {bytes} bytes; its read {read:?}; built best {bb:?} median {bm:?}; called best {cb:?} \
-         median {cm:?}; a tick from its reload's read (build + call) best {tb:?} median {tmed:?}; one that re-reads adds \
-         {read:?}; load {load_before} -> {}",
+         median {cm:?}; the rows request {rows_bytes} bytes, called best {rb:?} median {rm:?} (D112); a tick from its \
+         reload's read (build + call + rows) best {tb:?} median {tmed:?}; one that re-reads adds {read:?}; load \
+         {load_before} -> {}",
         load_average()
     );
 }

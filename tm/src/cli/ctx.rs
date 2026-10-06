@@ -25,14 +25,19 @@
 //! * Helpers the verbs share: [`Ctx::append_event`] (§10.1),
 //!   [`Ctx::save_state`] (§10.2), [`Ctx::item`] / [`Ctx::line`] /
 //!   [`Ctx::write_line`] (byte-faithful edits through
-//!   [`tm_core::grammar::ItemLine`]), [`Ctx::hz`] (a [`horizon::Ctx`]),
-//!   [`Ctx::walls_today`] (§8.1) and [`Ctx::priorities`] (§7 and the §8.4
-//!   lookahead, the kernel's since stage 5 D10 L8).  **`Ctx::window` and
+//!   [`tm_core::grammar::ItemLine`]), [`Ctx::hz`] (a [`horizon::Ctx`]) and
+//!   [`Ctx::arrival_window`] (§8.1, the kernel's since W-47 track H, README gap
+//!   4746).  §7's priorities and the §8.4 lookahead are the kernel's (stage 5
+//!   D10 L8), and every surface reads them off the day's own request
+//!   (`kernel_capacity::plan_day`; `Ctx::priorities`, a second, capacity-only
+//!   request, went with its last caller at W-47 track H, README gap 4755).
+//!   **`Ctx::window` and
 //!   `Ctx::today_slots` are gone** (stage 6 step L9, gap 93): §8.1's window and
 //!   §8.2 step 3's slots for **today** are the kernel's now, derived from its
 //!   own replay, and a second definition here would be the bug AGENTS §5.3
 //!   names.  The fork's versions live on as the parity harness's comparand
-//!   (`tm/tests/kernel_lookahead_parity.rs`), as `Ctx::walls_on`'s copy does.
+//!   (`tm/tests/kernel_lookahead_parity.rs`), as the fork's walls do
+//!   (`Tree::walls_on`, no verb's since W-47 track H, README gap 4973).
 //! * Sidecars `.tm/` grew for state §10.2 does not model:
 //!   [`LAST_PLAN_PATH`] (`tm plan --diff` and the hysteresis roll),
 //!   [`ARRIVAL_PLAN_PATH`] (§9's ghost row: the plan as it stood at arrival)
@@ -48,14 +53,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::Value;
 
-use tm_core::capacity::{self, UnitCapacity, Wall};
+use tm_core::capacity;
 use tm_core::config::Config;
 use tm_core::energy::{self, Model};
 use tm_core::grammar::ItemLine;
 use tm_core::horizon;
 use tm_core::log::{DayReplay, Event, LogEntry, Replay};
 use tm_core::model::{Id, Item, Loc, State};
-use tm_core::priority::{self, Candidate, Prio};
 use tm_core::store::{
     self, ActiveBlock, BreakState, Closed, FsStore, InterruptState, PlanFiles, RuntimeState, Store, StoreExt,
     LOG_PATH, MODEL_PATH,
@@ -439,20 +443,9 @@ pub(crate) fn logged_stops(replay: &Replay, open: &tm_core::log::OpenBlock) -> O
     let mine = |r: &tm_core::log::ViewRow| r.id.as_deref() == Some(open.id.as_str());
     // The block's own `start` row: the replay's one finder of it (README gap 3950).
     let at = replay.start_row(Some(open.id.as_str()), open.started)?;
-    let interrupted = rows[..at]
-        .iter()
-        .rev()
-        .filter(|r| !r.cancelled)
-        .find_map(|r| {
-            if r.tag == interrupt {
-                Some(true)
-            } else if r.tag == resume {
-                Some(false)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(false);
+    // The interruption the log holds open at the `start`: the replay's one reading of it (README gap 4619),
+    // which the host's worked minutes begin their pairing with too.
+    let interrupted = replay.interrupted_before(at).is_some();
     let mut stops = LoggedStops { paused: false, interrupted };
     for r in rows[at + 1..].iter().filter(|r| !r.cancelled) {
         if r.tag == pause && mine(r) {
@@ -1118,20 +1111,6 @@ impl Ctx {
             self.today,
             self.state.break_.is_some(),
         );
-        // **D45: the window and the budget are the LAST arrival's.**
-        // `derived_state` has already read them back from the arrival record
-        // whenever the log carries that record's payload; this fills the one
-        // case it cannot — a day with two or more arrivals, whose later
-        // payloads are no fact — from the one function `tm arrive` writes them
-        // from, and [`Ctx::rebuild_notice`] names it. Same shape as
-        // `active.est_min` two blocks below, and it is a fallback and not a
-        // second definition: it never overwrites a value the log answered for.
-        if let (Some(at), None) = (derived.arrival, derived.window) {
-            let (window, budget) = self.arrival_window(at);
-            derived.window = Some(window);
-            derived.budget = Some(budget);
-        }
-
         if cached {
             // **The cache exists, so it is STALE only where the log contradicts
             // it about what is OPEN.** That is one comparison, on identity, and
@@ -1219,6 +1198,30 @@ impl Ctx {
             return;
         }
 
+        // **D45: the window and the budget are the LAST arrival's.**
+        // `derived_state` has already read them back from the arrival record
+        // whenever the log carries that record's payload; this fills the one
+        // case it cannot — a day with two or more arrivals, whose later
+        // payloads are no fact — from the one function `tm arrive` writes them
+        // from, and [`Ctx::rebuild_notice`] names it. Same shape as
+        // `active.est_min` two blocks below, and it is a fallback and not a
+        // second definition: it never overwrites a value the log answered for.
+        // **Here, after the cached branch, and only here** (W-47 track H, README
+        // gap 4746): since the window is the KERNEL's it costs a planner call, and
+        // only a rebuild reads it — a cached state never did. A tree the kernel
+        // refuses gets no window back, and the notice says so by the refusal's name
+        // rather than store a number nothing computed.
+        let mut unwindowed = None;
+        if let (Some(at), None) = (derived.arrival, derived.window) {
+            match self.arrival_window(at) {
+                Ok((window, budget)) => {
+                    derived.window = Some(window);
+                    derived.budget = Some(budget);
+                }
+                Err(e) => unwindowed = Some(e.to_string()),
+            }
+        }
+
         let before = self.state.clone();
         self.state = RuntimeState {
             // The running break is the log's since D105 (`derived.break_`, from
@@ -1280,6 +1283,12 @@ impl Ctx {
             );
             for line in self.rebuild_notice() {
                 eprintln!("tm: {line}");
+            }
+            if let Some(why) = &unwindowed {
+                eprintln!(
+                    "tm: NOT recomputed: `window` and `budget` — the kernel refused the day's \
+                     request ({why}), so nothing stands for them until it accepts the tree"
+                );
             }
         }
     }
@@ -1377,18 +1386,19 @@ impl Ctx {
         // moves the answer, and the user is the only one who can tell whether
         // it should have.
         // Only when the rebuild DID recompute them: a wake after the last
-        // arrival cleared both, and nothing was recomputed (gap 3710).
+        // arrival cleared both, and nothing was recomputed (gap 3710) — and,
+        // since the window is the kernel's (W-47 track H, README gap 4746), a
+        // tree whose day the kernel refused got none back, which the rebuild's
+        // own `NOT recomputed` line names by the refusal instead.
         let arrivals = arrivals_today(&self.replay, self.today);
-        if arrivals > 1 && self.state.arrival.is_some() {
+        if let (true, Some((a, b))) = (arrivals > 1 && self.state.arrival.is_some(), self.state.window) {
             out.push(format!(
                 "RECOMPUTED rather than restored: `window` and `budget` — the day has \
                  {arrivals} arrivals and the log's facts carry only the first one's payload, \
-                 so these are {} recomputed from TODAY's walls and config; a calendar item \
+                 so these are {}–{} recomputed from TODAY's walls and config; a calendar item \
                  added since the arrival moves them.",
-                self.state
-                    .window
-                    .map(|(a, b)| format!("{}–{}", a.format("%H:%M"), b.format("%H:%M")))
-                    .unwrap_or_else(|| "absent,".to_string())
+                a.format("%H:%M"),
+                b.format("%H:%M")
             ));
         }
         out.push(format!(
@@ -2060,10 +2070,9 @@ impl Ctx {
     /// It is not a resurrection of the `Ctx::window` this module's header says
     /// is gone. That one answered "what is today's window?" beside the
     /// kernel's own answer, which is the two-definitions bug; this answers
-    /// "what does `tm arrive` write at `at`?", it is the only wrapper around
-    /// [`capacity::window_and_budget`] in `tm/src`, and its two callers are
-    /// `tm arrive` and the rebuild — the writer and the derivation, agreeing
-    /// by construction rather than by inspection.
+    /// "what does `tm arrive` write at `at`?", and its two callers are `tm
+    /// arrive` and the rebuild — the writer and the derivation, agreeing by
+    /// construction rather than by inspection.
     ///
     /// **What it reads that the log does not carry.** The walls and the config
     /// are **today's**, not the ones standing when the arrival was logged, so
@@ -2074,22 +2083,22 @@ impl Ctx {
     /// reading `Event::Arrive`'s own `window` back, can only answer for the
     /// **first** arrival of the day (`DayReplay::window`), which is the defect
     /// D45 exists to close.
-    pub fn arrival_window(&self, at: NaiveTime) -> ((NaiveTime, NaiveTime), u32) {
-        let (end, budget) = capacity::window_and_budget(self.at(at), &self.walls_today(), &self.cfg);
-        ((at, end.time()), budget)
+    ///
+    /// **The kernel's since W-47 track H** (README gap 4746, parity P113):
+    /// [`kernel_capacity::arrival_window`], the day's own request over the state
+    /// the arrival would store, and the window and budget the kernel plans that
+    /// day by. Until then it was `capacity::window_and_budget` over
+    /// `Ctx::walls_today` (deleted with it) — the host's reading of the walls
+    /// beside the kernel's, which the kernel's day then read back as the stored
+    /// window.
+    pub fn arrival_window(&self, at: NaiveTime) -> Result<((NaiveTime, NaiveTime), u32), CliError> {
+        kernel_capacity::arrival_window(self, at)
     }
 
-    /// Today's walls: every open Interval item that overlaps the day, with
-    /// its `buffer:` in front (§8.2 step 1).
-    pub fn walls_today(&self) -> Vec<Wall> {
-        self.walls_on(self.today)
-    }
-
-    /// The walls of one date — [`Tree::walls_on`], the one definition (moved
-    /// there at W-38 so the week review reads it without a `Ctx`).
-    pub fn walls_on(&self, date: NaiveDate) -> Vec<Wall> {
-        self.tree.walls_on(self.cfg.tz, date)
-    }
+    // **`Ctx::walls_today` and `Ctx::walls_on` went with their last caller at W-47 track H**
+    // (README gap 4746): the window `tm arrive` stores is the kernel's, over the kernel's walls
+    // (`Look.wallsClippedOn`), so no verb reads the host's `Tree::walls_on` any more; that function
+    // lives on in `tm-core` as the comparand of the fork's walls.
 
     // **`Ctx::window` and `Ctx::today_slots` were deleted at stage 6 step L9** (gap 93).
     // §8.1's window and §8.2 step 3's slots for today are the kernel's now: the capacity request
@@ -2097,27 +2106,7 @@ impl Ctx {
     // energy reports off its own replay through D24's seam, and `Look.day0Hist` is the answer
     // (`Look.day_zero_is_the_spec_day_energised`).  Keeping a second definition here is exactly
     // the bug AGENTS §5.3 names; the fork's two functions live on as the comparand of
-    // `tm/tests/kernel_lookahead_parity.rs`, the way `Ctx::walls_on` already does.
-
-    /// §7: the candidates, their priorities and the first days of the capacity
-    /// lookahead they were computed against — **the kernel's** since stage 5 D10
-    /// L8 ([`kernel_capacity::rank`]: the exact mixture, step 3's EDF pass, the
-    /// floor pass, §7.1–§7.4), in exact units. The candidates' facts are the
-    /// host's (kernel/README.md gap 113). A configured value the kernel cannot
-    /// read fails the verb by file and key (parity P26).
-    pub fn priorities(&self, allow_home: bool) -> Result<(Vec<Candidate>, Vec<Prio>, Vec<UnitCapacity>), CliError> {
-        let cands = priority::collect_candidates(
-            &self.tree,
-            &self.replay,
-            &self.cfg,
-            &self.model,
-            self.today,
-            self.now_tz,
-        );
-        let yesterday = self.hysteresis_input();
-        let answer = kernel_capacity::rank(self, &cands, &yesterday, allow_home)?;
-        Ok((cands, answer.prios, answer.days))
-    }
+    // `tm/tests/kernel_lookahead_parity.rs`, the way the fork's walls (`Tree::walls_on`) do.
 
     /// Yesterday's `p` per item (§7.4). `state.priorities_yesterday` holds it
     /// once the day has rolled; before the first plan of a new day the last

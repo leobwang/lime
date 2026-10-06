@@ -13,75 +13,78 @@ namespace Seal
 open Replay (State Machine Effect)
 open Log (Entry)
 
-theorem closeSub_keeps (dy : Cal.Instant → Nat) (m : Machine) (t : Replay.At) :
-    (Replay.closeSub dy m t).1.lastCut = m.lastCut ∧ (Replay.closeSub dy m t).1.interrupt = m.interrupt := by
-  unfold Replay.closeSub
-  split
-  · split <;> exact ⟨rfl, rfl⟩
-  · exact ⟨rfl, rfl⟩
-
 theorem closePause_keeps (dy : Cal.Instant → Nat) (m : Machine) (t : Replay.At) :
-    (Replay.closePause dy m t).1.lastCut = m.lastCut ∧ (Replay.closePause dy m t).1.interrupt = m.interrupt := by
-  unfold Replay.closePause
-  split
-  · split <;> exact ⟨rfl, rfl⟩
-  · exact ⟨rfl, rfl⟩
+    (Replay.closePause dy m t).1.lastCut = m.lastCut ∧ (Replay.closePause dy m t).1.interrupt = m.interrupt :=
+  Replay.closePause_lastCut dy m t
 
 theorem cut_keeps (dy : Cal.Instant → Nat) (m : Machine) (t : Replay.At) :
     (Replay.cut dy m t).1.interrupt = m.interrupt ∧
     ((Replay.cut dy m t).1.lastCut = m.lastCut ∨ ∃ c, (Replay.cut dy m t).1.lastCut = some c ∧ c.day = dy t.1) := by
-  have h1 := closeSub_keeps dy m t
-  have h2 := closePause_keeps dy (Replay.closeSub dy m t).1 t
   unfold Replay.cut
-  dsimp only
   split
-  · exact ⟨h2.2.trans h1.2, Or.inr ⟨_, rfl, rfl⟩⟩
-  · exact ⟨h2.2.trans h1.2, Or.inl (h2.1.trans h1.1)⟩
+  · exact ⟨rfl, Or.inr ⟨_, rfl, rfl⟩⟩
+  · exact ⟨rfl, Or.inl rfl⟩
 
-/-- **An arm's machine keeps the last cut, drops it, or cuts on the arm's stamp's day.** -/
+/-- **The machine an arm writes that settles its block** (the owner's D99): one of the arm's own, settled — so a
+field `settle` keeps (`Replay.settle_keeps`) is that machine's.  Each arm below reads it through this shape. -/
+theorem arm_settled_lastCut (dy : Cal.Instant → Nat) (M : Machine) : (Replay.settle dy M).1.lastCut = M.lastCut :=
+  (Replay.settle_keeps dy M).1
+
+theorem arm_settled_interrupt (dy : Cal.Instant → Nat) (M : Machine) :
+    (Replay.settle dy M).1.interrupt = M.interrupt := (Replay.settle_keeps dy M).2.1
+
+theorem arm_settled_brkOpen (dy : Cal.Instant → Nat) (M : Machine) :
+    (Replay.settle dy M).1.brkOpen = M.brkOpen := (Replay.settle_keeps dy M).2.2.2.1
+
+/-- **An arm's machine keeps the last cut's day, drops the cut, or cuts on the arm's stamp's day** — restated at the owner's
+D100 (README gap 4520b) from "keeps the last cut": a break logged after a cut and stamped inside its block takes its
+minutes down (`Replay.netClosed`), and keeps its block, its stamp and its day (`Replay.brkFx_machine`); the day is what
+the machine's days read (`stepWith_machineDays`). -/
 theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine) (e : Entry) (t : Replay.At) (d : Nat)
     (m' : Machine) (hm : m' ∈ (Replay.arm dy sl m e t d).filterMap Effect.machineOf?) :
-    m'.lastCut = m.lastCut ∨ m'.lastCut = none ∨ ∃ c, m'.lastCut = some c ∧ c.day = dy t.1 := by
+    m'.lastCut.map (·.day) = m.lastCut.map (·.day) ∨ m'.lastCut = none ∨ ∃ c, m'.lastCut = some c ∧ c.day = dy t.1 := by
   unfold Replay.arm at hm
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
     simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-      Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
-    exact Or.inr (Or.inl rfl)
+    exact Or.inr (Or.inl (arm_settled_lastCut dy _))
   case pause id =>
     split at hm
     · split at hm
-      · simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      · simp only [List.filterMap_append, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+          Replay.settle_machines, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (closeSub_keeps dy m t).1
+        exact Or.inl (congrArg (Option.map (·.day)) (arm_settled_lastCut dy _))
       · simp at hm
     · simp at hm
   case unpause id =>
     split at hm
     · split at hm
       · simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+          Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (closePause_keeps dy m t).1
+        exact Or.inl (by rw [arm_settled_lastCut]; exact congrArg (Option.map (·.day)) (Replay.closePauseM_keeps m t).1)
       · simp at hm
     · simp at hm
   case interrupt id =>
-    simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, (Replay.closePause_obs dy _ t).2.2,
-      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
     left
-    have h1 := (closePause_keeps dy (Replay.closeSub dy m t).1 t).1
-    have h2 := (closeSub_keeps dy m t).1
+    rw [arm_settled_lastCut]
+    have h1 := congrArg (Option.map (·.day)) (Replay.closePauseM_keeps m t).1
+    unfold Replay.interruptMachine
     split
-    · exact h1.trans h2
-    · exact h1.trans h2
+    · exact h1
+    · exact h1
   case resume lost dropped =>
     split at hm <;>
-    · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+        Replay.settle_machines, List.nil_append, List.mem_singleton] at hm
       subst hm
-      exact Or.inl rfl
+      exact Or.inl (congrArg (Option.map (·.day)) (arm_settled_lastCut dy _))
   case stop id rem =>
     split at hm
     · split at hm
@@ -89,7 +92,7 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
           Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm
         rcases (cut_keeps dy m t).2 with h | h
-        · exact Or.inl h
+        · exact Or.inl (congrArg (Option.map (·.day)) h)
         · exact Or.inr (Or.inr h)
       · simp at hm
     · simp at hm
@@ -110,7 +113,9 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
       · exact Or.inl rfl
   case brk p a w =>
     rw [List.filterMap_append, (Replay.dayArm_obs dy sl e t d).1, List.append_nil] at hm
-    exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).1
+    have h := congrArg (Option.map (fun x => x.2.2)) (Replay.brkFx_machine dy m t _ d m' hm).1
+    simp only [Option.map_map, Function.comp_def] at h
+    exact Or.inl h
   case brkStart pl w =>
     simp only [Effect.machineOf?, List.filterMap_cons, List.filterMap_nil, List.mem_singleton] at hm
     subst hm
@@ -125,44 +130,47 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
     simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-      Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
-    exact Or.inl (cut_keeps dy m t).1
+    exact Or.inl ((arm_settled_interrupt dy _).trans (cut_interrupt dy m t))
   case pause id =>
     split at hm
     · split at hm
-      · simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      · simp only [List.filterMap_append, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+          Replay.settle_machines, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (closeSub_keeps dy m t).2
+        exact Or.inl (arm_settled_interrupt dy _)
       · simp at hm
     · simp at hm
   case unpause id =>
     split at hm
     · split at hm
       · simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+          Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (closePause_keeps dy m t).2
+        exact Or.inl ((arm_settled_interrupt dy _).trans (Replay.closePauseM_keeps m t).2.1)
       · simp at hm
     · simp at hm
   case interrupt id =>
-    simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, (Replay.closePause_obs dy _ t).2.2,
-      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
-    have h1 := (closePause_keeps dy (Replay.closeSub dy m t).1 t).2
-    have h2 := (closeSub_keeps dy m t).2
+    rw [arm_settled_interrupt]
+    have h1 := (Replay.closePauseM_keeps m t).2.1
+    unfold Replay.interruptMachine
     split
     · exact Or.inr (Or.inr ⟨_, rfl, rfl⟩)
-    · exact Or.inl (h1.trans h2)
+    · exact Or.inl h1
   case resume lost dropped =>
     split at hm
-    · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+        Replay.settle_machines, List.nil_append, List.mem_singleton] at hm
       subst hm
-      exact Or.inr (Or.inl rfl)
-    · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      exact Or.inr (Or.inl (arm_settled_interrupt dy _))
+    · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+        Replay.settle_machines, List.nil_append, List.mem_singleton] at hm
       subst hm
-      exact Or.inl rfl
+      exact Or.inl (arm_settled_interrupt dy _)
   case stop id rem =>
     split at hm
     · split at hm
@@ -177,12 +185,10 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
     subst hm
-    have h1 := (closePause_keeps dy (Replay.closeSub dy m t).1 t).2
-    have h2 := (closeSub_keeps dy m t).2
     unfold Replay.doneClose
     split
     · split
-      · exact Or.inl (h1.trans h2)
+      · exact Or.inl rfl
       · exact Or.inl rfl
     · split
       · split
@@ -200,7 +206,7 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
 
 /-- **An arm's machine keeps the running break, ends it, or opens one on the arm's day** (the owner's D105, parity
 P100): a `break_start` opens it on its own day, a `break` line ends it (`Replay.brkFx_brkOpen`), and every other arm
-keeps it (`Replay.cut_brkOpen`, `Replay.closeSub_brkOpen`, `Replay.closePause_brkOpen`, `Replay.doneClose_brkOpen`). -/
+keeps it (`Replay.cut_brkOpen`, `Replay.settle_keeps`, `Replay.closePauseM_keeps`, `Replay.doneClose_brkOpen`). -/
 theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine) (e : Entry) (t : Replay.At)
     (d : Nat) (m' : Machine) (hm : m' ∈ (Replay.arm dy sl m e t d).filterMap Effect.machineOf?) :
     m'.brkOpen = m.brkOpen ∨ m'.brkOpen = none ∨ ∃ b, m'.brkOpen = some b ∧ b.day = d := by
@@ -208,42 +214,44 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
     simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-      Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
-    exact Or.inl (Replay.cut_brkOpen dy m t)
+    exact Or.inl ((arm_settled_brkOpen dy _).trans (Replay.cut_brkOpen dy m t))
   case pause id =>
     split at hm
     · split at hm
-      · simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      · simp only [List.filterMap_append, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+          Replay.settle_machines, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (Replay.closeSub_brkOpen dy m t)
+        exact Or.inl (arm_settled_brkOpen dy _)
       · simp at hm
     · simp at hm
   case unpause id =>
     split at hm
     · split at hm
       · simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+          Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (Replay.closePause_brkOpen dy m t)
+        exact Or.inl ((arm_settled_brkOpen dy _).trans (Replay.closePauseM_keeps m t).2.2.2)
       · simp at hm
     · simp at hm
   case interrupt id =>
-    simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, (Replay.closePause_obs dy _ t).2.2,
-      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
     left
-    have h1 := Replay.closePause_brkOpen dy (Replay.closeSub dy m t).1 t
-    have h2 := Replay.closeSub_brkOpen dy m t
+    rw [arm_settled_brkOpen]
+    have h1 := (Replay.closePauseM_keeps m t).2.2.2
+    unfold Replay.interruptMachine
     split
-    · exact h1.trans h2
-    · exact h1.trans h2
+    · exact h1
+    · exact h1
   case resume lost dropped =>
     split at hm <;>
-    · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+        Replay.settle_machines, List.nil_append, List.mem_singleton] at hm
       subst hm
-      exact Or.inl rfl
+      exact Or.inl (arm_settled_brkOpen dy _)
   case stop id rem =>
     split at hm
     · split at hm
@@ -299,7 +307,13 @@ theorem stepWith_machineDays (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat �
       · rw [h] at ho; cases ho
       · rw [h] at ho; cases ho; exact Or.inr hd
     · rcases arm_lastCut dy sl st.machine e _ _ m' hm with h | h | ⟨c', h, hd⟩
-      · rw [h] at hc; exact Or.inl (Or.inl (Or.inl (Or.inr ⟨c, hc, rfl⟩)))
+      · rw [hc] at h
+        cases hm0 : st.machine.lastCut with
+        | none => rw [hm0] at h; cases h
+        | some c0 =>
+          rw [hm0] at h
+          simp only [Option.map_some, Option.some.injEq] at h
+          exact Or.inl (Or.inl (Or.inl (Or.inr ⟨c0, rfl, h.symm⟩)))
       · rw [h] at hc; cases hc
       · rw [h] at hc; cases hc; exact Or.inr hd
     · rcases arm_interrupt dy sl st.machine e _ _ m' hm with h | h | ⟨i', h, hd⟩

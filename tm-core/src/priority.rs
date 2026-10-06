@@ -882,6 +882,14 @@ pub type SortKey = (u8, (usize, usize), (usize, usize));
 /// An id can appear twice when an item has two pending instances (§5.3's
 /// carried one and today's); [`sorted_candidates`] is the version that keeps
 /// them apart.
+///
+/// **Fork 4748911's key, and no shipped surface orders by it any more** (W-47
+/// track H, README gaps 4880 and 4755): the kernel serves the day in its own
+/// order (`diagnostics.served`, D60/D63's p0 rule), and `tm review day`'s
+/// "tomorrow" reads that order ([`crate::planwire::served_order`]). What calls
+/// this is the harness — the fork's comparands and the Rust copy of D63's
+/// order that `planner_w38_order.rs` and `planner_invariants.rs` compare with
+/// the kernel's served order by value.
 pub fn sorted(prios: &[Prio], cands: &[Candidate]) -> Vec<Id> {
     sorted_candidates(prios, cands)
         .into_iter()

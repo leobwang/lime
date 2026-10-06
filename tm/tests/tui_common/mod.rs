@@ -36,6 +36,11 @@ pub mod chokepoint;
 #[path = "../support/planreq.rs"]
 pub mod planreq;
 
+/// The `plan` section's wire (the owner's D112): the hand-built §4.3 day's rows
+/// are the kernel's cells, asked for as the binary asks for every day it plans.
+#[path = "../support/rowwire.rs"]
+pub mod rowwire;
+
 #[path = "../../src/tui/theme.rs"]
 pub mod theme;
 
@@ -496,7 +501,7 @@ pub fn day_plan(cfg: &Config) -> DayPlan {
             SegFlags::default(),
         ),
     ];
-    DayPlan {
+    let day = DayPlan {
         date: date(),
         window: (at(cfg, 7, 0), at(cfg, 16, 0)),
         budget_blocks: 6,
@@ -520,11 +525,25 @@ pub fn day_plan(cfg: &Config) -> DayPlan {
             prio("t5", 3, PrioClass::Rank),
             prio("a3", 0, PrioClass::Mandatory),
         ],
-    }
+        cells: Vec::new(),
+    };
+    // **Its rows are the kernel's** (the owner's D112): the cells the `plan`
+    // section answers for these segments over the fixture's own documents.
+    rowwire::with_kernel_cells(docs_json(), day, cfg)
+}
+
+/// The fixture's documents as the kernel's request carries them, one line per
+/// element — what [`tree`] parses ([`tree_texts`]).
+pub fn docs_json() -> Vec<serde_json::Value> {
+    tree_texts()
+        .iter()
+        .map(|(p, t)| serde_json::json!({"path": p, "lines": t.lines().collect::<Vec<_>>()}))
+        .collect()
 }
 
 /// §12.1's ghost row: the same day as it stood at arrival — nothing done yet,
-/// and `^t4` still in the 11:20 slot lunch later took.
+/// and `^t4` still in the 11:20 slot lunch later took. A ghost day has no rows
+/// (D112: nobody asks the kernel for the rows of a day it did not plan).
 pub fn ghost_plan(cfg: &Config) -> DayPlan {
     let mut plan = day_plan(cfg);
     plan.segments.truncate(6);
@@ -533,6 +552,7 @@ pub fn ghost_plan(cfg: &Config) -> DayPlan {
         seg.flags.current = false;
         seg.flags.ghost = true;
     }
+    plan.cells.clear();
     plan
 }
 
@@ -637,6 +657,7 @@ pub fn app_of_world(
         now,
         cfg,
         planner,
+        places: app::Places::new(chokepoint::kernel_places()),
     };
     App::with_plan(data, plan, ghost)
 }

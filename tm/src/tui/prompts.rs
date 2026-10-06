@@ -13,7 +13,8 @@
 //!   [`super::app::App::overtime_due`].
 //! * [`idle_lines`] — §9.2's box.
 //! * [`help_lines`] — §12.6's keymap, including the two keys the table
-//!   assigns twice (see [`super::app`]).
+//!   assigns twice (see [`super::app`]). Its break row reads the kernel's table
+//!   of places ([`Places`], the owner's D111) and does not spell it.
 //! * [`draw`] / [`draw_help`] — render them.
 
 use ratatui::layout::Rect;
@@ -24,7 +25,7 @@ use ratatui::Frame;
 use tm_core::emit;
 use tm_core::review::fmt_hm;
 
-use super::app::{Idle, Overtime, Prompt};
+use super::app::{Idle, Overtime, Places, Prompt};
 use super::theme;
 
 /// `est 2b ×1.6 = 3h12m · elapsed 3h19m` (§9.1's first row).
@@ -91,7 +92,23 @@ pub fn lines(prompt: &Prompt) -> (String, Vec<Line<'static>>) {
 }
 
 /// §12.6's keymap, for the `?` overlay.
-pub fn help_lines() -> Vec<Line<'static>> {
+///
+/// **The break row is the kernel's table of places** (the owner's D111, README
+/// gap 4904): `b + w/s/b/p` and `walk · seat · bed · phone` are each place's
+/// key and word as [`Places`] gives them, so the overlay lists exactly what
+/// the `b` chord takes and `tm break --where` accepts. Until W-47 it spelled
+/// the four a fourth time.
+pub fn help_lines(places: &Places) -> Vec<Line<'static>> {
+    let break_keys = format!(
+        "b + {}",
+        places
+            .words()
+            .iter()
+            .filter_map(|w| Places::key_of(w).map(String::from))
+            .collect::<Vec<_>>()
+            .join("/")
+    );
+    let break_words = format!("break: {}", places.words().join(" · "));
     let rows: &[(&str, &str)] = &[
         ("1–5", "screens: Today · Queue · Necessities · Review · Inbox"),
         ("?", "this help  ·  :  command line (any tm verb)  ·  q  quit"),
@@ -99,7 +116,7 @@ pub fn help_lines() -> Vec<Line<'static>> {
         ("r / R", "replan (resume, when interrupted) · sync calendar + replan"),
         ("j / k", "move the selection  ·  mouse: hover the day bar, click to select"),
         ("d / x / s", "done · extend one block · stop, the remainder re-competes"),
-        ("b + w/s/b/p", "break: walk · seat · bed · phone"),
+        (&break_keys, &break_words),
         ("i / r", "interruption starts / ends"),
         ("0 then 0–5", "report energy now (1–5 alone switch screens)"),
         ("l / K / n", "location · skip the selected routine · note"),
@@ -174,9 +191,10 @@ pub fn draw(f: &mut Frame, area: Rect, prompt: &Prompt) {
     box_of(f, area, &title, lines);
 }
 
-/// Draw the `?` help overlay (§12.6).
-pub fn draw_help(f: &mut Frame, area: Rect) {
-    box_of(f, area, "Keys — tm-spec §12.6", help_lines());
+/// Draw the `?` help overlay (§12.6), its break row from the kernel's table of
+/// places ([`help_lines`]).
+pub fn draw_help(f: &mut Frame, area: Rect, places: &Places) {
+    box_of(f, area, "Keys — tm-spec §12.6", help_lines(places));
 }
 
 #[cfg(test)]

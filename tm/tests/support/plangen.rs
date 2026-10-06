@@ -122,6 +122,16 @@ pub fn inner_break_line(t: DateTime<Tz>, len: u32) -> String {
     format!("{{\"t\":\"{}\",\"ev\":\"break\",\"planned_min\":{len},\"actual_min\":{len}}}\n", t.to_rfc3339())
 }
 
+/// **The night's length, drawn** (W-47 track C, README gap 4891; the learned-model draw's second
+/// value, `forkclass::ModelDraw`): every `slept_min` [`log_text`] writes — `tm wake`'s line and
+/// the features each `tm start` logs, which read the same night — set to `slept`. The generator
+/// writes 480 (eight hours), at which §8.5's sleep debt never fires (`under_hours` is 7.0), so a
+/// fitted `sleep_debt_shift` was read on no generated day; a short night is one the binary writes
+/// with `tm wake --slept`. One definition, for the model draw and anything that widens a night.
+pub fn with_slept(log: &str, slept: u32) -> String {
+    log.replace("\"slept_min\":480", &format!("\"slept_min\":{slept}"))
+}
+
 /// **`line`, put into `log` after the last line stamped at or before `t`** — where the verb
 /// that wrote it at `t` appended it, the day's lines being written in time order. A line whose
 /// stamp does not parse is passed over (it cannot be ordered), and the log keeps its final
@@ -623,7 +633,8 @@ pub struct TimerMarks {
 /// **The marks D61's housekeeping writes over the running block** (the kernel's
 /// `WallTimer.writes`, as the verbs a user runs through the day write them): for each
 /// joined wall span that began after the block started and by `now`, a `pause` at its
-/// start, and an `unpause` at its end once it has ended — unless the block's timer was
+/// start — and since the owner's D110 (W-47, parity P106) for a span the block began
+/// inside, a `pause` at the block's own start — and an `unpause` at its end once it has ended — unless the block's timer was
 /// already stopped when the span began (an open interruption from its start, the
 /// running block's own or one it was started inside), and with no `unpause` when an
 /// interruption began inside the span (its mark, not the wall's pause, is then the last
@@ -647,8 +658,17 @@ pub fn timer_marks(case: &Case, walls: &[(DateTime<Tz>, DateTime<Tz>)], tz: Tz, 
     }
     let ten = Duration::minutes(10);
     let mut typed_until: Option<DateTime<Tz>> = None;
-    for (lo, hi) in merged.into_iter().filter(|(lo, _)| *lo > started && *lo <= now) {
-        if stop_from.is_some_and(|s| lo >= s) || typed_until.is_some_and(|u| lo <= u) {
+    // **A span the block began INSIDE pauses it from its own start** (the owner's D110, README gap
+    // 4748, parity P106; the kernel's `WallTimer.pauseSec`): every span that has not ended by the
+    // block's start and whose pause second — its own start, or the block's when the block began
+    // inside it — is by `now`, the pause stamped at that second. Until W-47 only a span that began
+    // after the block started wrote a mark (D61).
+    for (lo, hi) in merged.into_iter().filter(|(lo, hi)| *hi > started && (*lo).max(started) <= now) {
+        let at = lo.max(started);
+        // A span the block began inside, under an interruption logged after its start, writes
+        // nothing: the kernel asks at `now`, and the interruption's mark after the pause second
+        // touches the timer (`WallTimer.touchedAfter`), so the binary holds that world as drawn.
+        if stop_from.is_some_and(|s| at >= s || lo <= started) || typed_until.is_some_and(|u| lo <= u) {
             continue;
         }
         if typed && !out.typed && lo - ten > started && hi + ten < now
@@ -661,7 +681,7 @@ pub fn timer_marks(case: &Case, walls: &[(DateTime<Tz>, DateTime<Tz>)], tz: Tz, 
             out.typed = true;
             continue;
         }
-        out.marks.push((lo, true));
+        out.marks.push((at, true));
         if hi <= now && stop_from.is_none_or(|s| hi <= s) {
             out.marks.push((hi, false));
         }

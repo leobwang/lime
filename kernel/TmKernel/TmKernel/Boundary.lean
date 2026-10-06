@@ -13050,7 +13050,7 @@ theorem the_walls_form_is_answered_through_the_emit_section :
     (match readEmitSection (wallsWitnessRequest false) with
       | .error e => e == WallTimer.Refusal.logAbsent.json
       | _ => false) = true := by
-  decide
+  intro wallsWitnessRequest; exact ⟨by decide, by decide⟩
 
 set_option maxRecDepth 40000 in
 /-- **D69 on the loader** (README gap 3345; `Width.lean`): a document whose line carries a leading

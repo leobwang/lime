@@ -861,6 +861,10 @@ tm tui
 
 A running break is ended by `tm break`, `tm start`, `tm stop`, `tm done`, `tm interrupt` or `tm resume`, and each writes the day file's journal line `break ended 10m/20m` at the break's end, before its own. Each of the five that end it on the way to their own work also says so: its line begins `break ended · 10m of 20m · ` and its `--json` carries `break_ended`, `tm break`'s own report of the ending.
 
+`tm start ^id` on the block already running continues it: a running break ends as above, nothing else is logged, and it says `^id is already running since HH:MM` (`--json`: `already_running`); another id is refused while a block runs.
+
+`tm now` prints the current row with a line under it — the segment's span, then `elapsed` and `left`. Under the running block's row they read the block, as the header does: `elapsed` the minutes worked, `left` the estimate less them (`0m` in overtime).
+
 ---
 
 ## 14. Claude Code integration

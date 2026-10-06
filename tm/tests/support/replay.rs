@@ -90,6 +90,13 @@ pub fn open_worked_min_at(b: &OpenBlock, now: DateTime<FixedOffset>) -> u32 {
     b.worked_min + b.since.map_or(0, |s| now.signed_duration_since(s).num_minutes().max(0) as u32)
 }
 
+/// **The kernel's table of places** (the owner's D111), through the binary's own
+/// reader of it (`kernel_log::places`) — what the TUI's `b` chord offers and
+/// `tm break --where` accepts.
+pub fn kernel_places() -> Vec<String> {
+    kernel_log::places().expect("the kernel answers its table of places").to_vec()
+}
+
 /// The replay of the log `text` (JSONL, one entry per line) in `tz`, over
 /// every day: what `Ctx::replay_with` derives from `.tm/log.jsonl`.
 pub fn replay_of_text(text: &str, tz: Tz) -> Replay {

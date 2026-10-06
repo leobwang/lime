@@ -49,7 +49,7 @@ theorem restore_fold_mi (z : Cal.Tz) (T₀ L cut : Nat) (As Rs : List Entry) (ws
       ckpt_machine z T₀ L cut As Rs ws
     rw [hm, foldedState_eq] at h
     rcases foldl_mi z _ _ _ _ q h with h | h
-    · simp [machineInstants, blockSince, blockPaused, State.init] at h
+    · simp [machineInstants, State.init] at h
     · obtain ⟨e, he, hqe⟩ := List.mem_flatMap.1 h
       exact List.mem_flatMap.2 ⟨e, (foldedSurvivors_sublist As Rs).subset he, hqe⟩
   · exact Or.inr h
@@ -226,9 +226,14 @@ theorem cut_state_agrees (z : Cal.Tz) (T₀ L cut : Nat) (As Rs B' : List Entry)
     · obtain ⟨y, hy, hyk⟩ := List.mem_map.1 hmem
       rw [← hyk]; exact hck y hy
     · have hqA : q ∈ (As ++ Bj).flatMap entryInstants := by
-        rcases stepQueries_sub _ e q hq with h | h
+        rcases stepQueries_sub _ _ e q hq with h | h
         · rw [List.flatMap_append]; exact List.mem_append_right _ (List.mem_flatMap.2 ⟨e, heB, h⟩)
         · exact hmiQA (dayOf z kw) sl pre hpreB q h
+      have hteA : e.t.val ∈ (As ++ Bj).flatMap entryInstants := by
+        rw [List.flatMap_append]
+        exact List.mem_append_right _ (List.mem_flatMap.2 ⟨e, heB, by simp [entryInstants]⟩)
+      have hte : headSec L ≤ e.t.val.sec := hhq _ (List.mem_append_left _ (by simp [entryInstants]))
+      rw [stepQueries_congr (dayOf z KWj) (dayOf z kw) _ e ((hQA _ hteA).symm.trans (hI2 _ hte))] at hq
       rw [← hQA q hqA]
       exact hI2 q (hhq q hq)
   have hbelowF := foldl_below z (dayOf z KWj) SLj' L (horizonOf L) svj Gj hkeys
@@ -244,7 +249,7 @@ theorem cut_state_agrees (z : Cal.Tz) (T₀ L cut : Nat) (As Rs B' : List Entry)
       dayOf z KWj q = dayOf z (foldedIndex z As Rs) q := by
     intro q hq
     rcases foldQueries_sub z _ _ _ _ q hq with h | h
-    · simp [machineInstants, blockSince, blockPaused, State.init] at h
+    · simp [machineInstants, State.init] at h
     · obtain ⟨e, he, hqe⟩ := List.mem_flatMap.1 h
       exact hIj1 q (List.mem_flatMap.2 ⟨e, hSA e he, hqe⟩)
   obtain ⟨X, hXdef⟩ : ∃ X, X = (foldedSurvivors As Rs).foldl (Replay.stepWith z (dayOf z (foldedIndex z As Rs))

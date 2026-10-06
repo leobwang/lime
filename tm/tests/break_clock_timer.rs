@@ -104,12 +104,13 @@ fn a_break_begun_before_midnight_overruns_after_it() {
 }
 
 /// **The break prompt lists the ONE table of places** (the campaign's D81 call
-/// on README gap 3903, parity P75): `b` asks `break where?` with each place's
-/// key and word as `tm break --where` reads them, in the table's order, and
-/// each key picks its place.
+/// on README gap 3903, parity P75 — the KERNEL's table since the owner's D111,
+/// README gap 4904): `b` asks `break where?` with each place's key and word as
+/// `tm break --where` reads them, in the table's order, and each key picks its
+/// place.
 #[test]
 fn the_break_prompt_lists_the_tables_places() {
-    use tm_core::store::BreakPlace;
+    use tui_common::app::Places;
     let mut app = tui_common::app();
     app.mode = tui_common::app::Mode::BreakWhere;
     let hint = tui_common::lines(&[tui_common::today::hint_line(&app, 120)]);
@@ -117,8 +118,11 @@ fn the_break_prompt_lists_the_tables_places() {
         hint.contains("break where? w walk · s seat · b bed · p phone"),
         "{hint}"
     );
-    for place in BreakPlace::all() {
-        assert!(hint.contains(&format!("{} {}", place.key(), place.as_str())), "{hint}");
-        assert_eq!(tui_common::app::BreakPlace::from_key(place.key()), Some(place));
+    let table = tui_common::chokepoint::kernel_places();
+    assert_eq!(app.places.words(), table.as_slice(), "the App's table is the kernel's");
+    for word in &table {
+        let key = Places::key_of(word).expect("a key");
+        assert!(hint.contains(&format!("{key} {word}")), "{hint}");
+        assert_eq!(app.places.word_of_key(key), Some(word.as_str()));
     }
 }

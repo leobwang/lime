@@ -21,7 +21,9 @@ The **27** known tags (`EVENT_NAMES`; the design says 25, and `define_events!` h
 **P100**, README "Stage 6 — W-46 track K") are the constructors of `Event`, plus `unknown tag rest`.  What varies between kinds is
 data, so it is a table (AGENTS §5.5): `Kind.schema` lists each kind's keys in declaration order with
 serde's type (`FTy`: `u8`, `u32`, a defaulted `u32d`, the `Option`s, `str`, `strs`, `flag`, `num` for
-`hsw`, `pair` for `window`).  There is **one reader** (`readF`) and **one writer** (`renderF`) per
+`hsw`, `pair` for `window`, and since the owner's **D111** `place` for a `break_start`'s `where` — an
+`Option<String>` whose word must be one of `placeWords`, the ONE table of places, else the line is
+malformed, parity **P108**).  There is **one reader** (`readF`) and **one writer** (`renderF`) per
 field type, and every kind reads and writes through them (`readArgs`, `renderArgs`), so a kind cannot
 read a field one way and write it another.  `Kind.build` and `Event.split` are the two directions
 between a kind's decoded fields (`Args`) and the typed `Event`; `Event.tag`, `Event.strings` and
@@ -253,13 +255,46 @@ def allFiniteO : List (List Char × JVal) → Bool
   | (_, v) :: kvs => allFinite v && allFiniteO kvs
 end
 
+/-! ## The places a break is taken (the owner's D111)
+
+**The ONE table of places.**  `tm break --where <place>` (§13) names one of these words, the
+TUI's `b` then `w`/`s`/`b`/`p` (§12.6) picks one, a logged `break_start` carries one, and the
+planner's request reads one back (`PlanWire.placeOf?`) — and every one of those readers reads
+THIS list.  Until the owner's **D111** (README gap 4904) the log's grammar read `where` as any
+string while the planner refused all but four, so a hand-edited `"where": "moon"` stopped
+`tm plan` (`badBreak place`) where fork 4748911 planned: two readers of one place.  Now the
+grammar reads a `break_start`'s place through this table (`readF`'s `place` arm) and names any
+other word a malformed line (`badField where`, D18's warning in `tm check`) — so the replay holds
+no running break for it, as the fork reads it (the fork has no `break_start` and counts the line
+an unknown event).
+
+**It is the kernel's, and the host reads it from the kernel** (`EmitWire.withPlaces`, the
+request's `places` key): a table the REQUEST carried would be an input to every sealed record
+the replay folds, and would have to join the checkpoint's key the way the zone table's digest
+did (D104); compiled into the kernel it is covered by the kernel id already.  The words'
+order is the TUI's prompt order and each word's first character is its §12.6 key, which the
+host derives and does not spell again.
+
+`brk` — the line that ENDS a break, in the fork's own shape — keeps its `where` a free string
+(`optStr`): D111 names the `break_start` line and no other, and a fork-written `break` line
+with any `where` is one the fork read. -/
+
+/-- **The places a break is taken**, in the TUI's order (§12.6: walk · seat · bed · phone). -/
+def placeWords : List (List Char) :=
+  [['w','a','l','k'], ['s','e','a','t'], ['b','e','d'], ['p','h','o','n','e']]
+
+/-- A word is a place when the table holds it, exactly as written. -/
+def isPlace (s : List Char) : Bool := placeWords.contains s
+
 /-! ## The field types -/
 
 /-- serde's field types as `define_events!` declares them.  `u32d` is a `u32` with
 `#[serde(default)]`; every `Option`, `strs` (`Vec<String>`), `flag` (`bool`) and `num` (`hsw`) is
-defaulted. -/
+defaulted.  `place` is an `Option<String>` whose string must be a word of `placeWords` (the
+owner's D111): serde reads any string there and the kernel's grammar names any other word
+`badField`. -/
 inductive FTy
-  | u8 | u32 | u32d | optU8 | optU32 | str | optStr | strs | flag | num | pair
+  | u8 | u32 | u32d | optU8 | optU32 | str | optStr | strs | flag | num | pair | place
 deriving DecidableEq, Repr
 
 /-- The kernel's type for each. -/
@@ -275,6 +310,7 @@ deriving DecidableEq, Repr
   | .flag => Bool
   | .num => Num
   | .pair => List Char × List Char
+  | .place => Option (List Char)
 
 /-- A schema's decoded fields, one per key, in order. -/
 @[reducible] def Args : List (List Char × FTy) → Type
@@ -367,7 +403,7 @@ def Kind.schema : Kind → List (List Char × FTy)
   | .extend => [(['i','d'], .str), (['b','y','_','m','i','n'], .u32)]
   | .stop => [(['i','d'], .str), (['r','e','m','a','i','n','i','n','g','_','m','i','n'], .u32)]
   | .brk => [(['p','l','a','n','n','e','d','_','m','i','n'], .u32), (['a','c','t','u','a','l','_','m','i','n'], .optU32), (['w','h','e','r','e'], .optStr)]
-  | .brkStart => [(['p','l','a','n','n','e','d','_','m','i','n'], .u32), (['w','h','e','r','e'], .optStr)]
+  | .brkStart => [(['p','l','a','n','n','e','d','_','m','i','n'], .u32), (['w','h','e','r','e'], .place)]
   | .energy => [(['p','r','e','d'], .u8), (['r','e','p'], .u8), (['h','s','w'], .num), (['l','o','c'], .str)]
   | .interrupt => [(['i','d'], .optStr)]
   | .resume => [(['l','o','s','t','_','m','i','n'], .u32), (['d','r','o','p','p','e','d'], .strs)]
@@ -618,6 +654,11 @@ def readF (k : List Char) : (t : FTy) → Option JVal → FR t.T
   | .pair, none => .missing k
   | .pair, some (.arr [.str a, .str b]) => .ok (a, b)
   | .pair, some _ => .bad k
+  -- **D111**: an `Option<String>` as `optStr` reads it, and the string a word of the table.
+  | .place, none => .ok none
+  | .place, some .null => .ok none
+  | .place, some (.str s) => if isPlace s then .ok (some s) else .bad k
+  | .place, some _ => .bad k
 
 /-- A schema's fields, each read from the pairs' last value for its key. -/
 def readArgs (kvs : List (List Char × JVal)) : (s : List (List Char × FTy)) → FR (Args s)
@@ -645,6 +686,8 @@ def renderF : (t : FTy) → t.T → Option JVal
   | .num, .nat n => some (.num n)
   | .num, .dec d => some (.dec d)
   | .pair, (a, b) => some (.arr [.str a, .str b])
+  | .place, none => none
+  | .place, some s => some (.str s)
 
 /-- A schema's fields as pairs, in declaration order, skipped ones left out. -/
 def renderArgs : (s : List (List Char × FTy)) → Args s → List (List Char × JVal)
@@ -660,6 +703,7 @@ def strsOfF : (t : FTy) → t.T → List (List Char)
   | .optStr, o => o.toList
   | .strs, ss => ss
   | .pair, p => [p.1, p.2]
+  | .place, o => o.toList
   | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .flag, _ | .num, _ => []
 
 /-- The strings a schema's fields hold, in order. -/
@@ -671,11 +715,23 @@ def argStrs : (s : List (List Char × FTy)) → Args s → List (List Char)
 def fieldFinite : (t : FTy) → t.T → Bool
   | .num, h => h.finite
   | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .str, _ | .optStr, _ | .strs, _
-  | .flag, _ | .pair, _ => true
+  | .flag, _ | .pair, _ | .place, _ => true
 
 def argsFinite : (s : List (List Char × FTy)) → Args s → Bool
   | [], () => true
   | (_, t) :: s, (x, xs) => fieldFinite t x && argsFinite s xs
+
+/-- **A field the reader reads back** (D111), a SPECIFICATION and never run (a `Prop`, as `Agrees` is):
+only a `place` can fail, and only with a word the table does not hold.  `fieldFinite` is the other such
+rule — a numeral serde refuses — checked over the whole line (`allFinite`); this one is the field's own reader's. -/
+def FieldReadable : (t : FTy) → t.T → Prop
+  | .place, o => o.all isPlace = true
+  | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .str, _ | .optStr, _ | .strs, _
+  | .flag, _ | .num, _ | .pair, _ => True
+
+def ArgsReadable : (s : List (List Char × FTy)) → Args s → Prop
+  | [], () => True
+  | (_, t) :: s, (x, xs) => FieldReadable t x ∧ ArgsReadable s xs
 
 /-! ## The known tags -/
 
@@ -999,11 +1055,12 @@ def restCanonical (rest : List (List Char × JVal)) : Bool :=
   decide (rest.Pairwise (fun a b => charsLt a.1 b.1 = true)) &&
     rest.all (fun kv => !(kv.1 == kT) && !(kv.1 == kEv))
 
-/-- An event a reader can return: `hsw` finite; an unknown event's tag not a known one, its
-numerals finite, its `rest` a `Map`. -/
+/-- An event a reader can return: `hsw` finite; a `break_start`'s place a word of the table
+(D111); an unknown event's tag not a known one, its numerals finite, its `rest` a `Map`. -/
 def Event.canonical : Event → Bool
   | .start _ _ _ h _ _ _ _ => h.finite
   | .energy _ _ h _ => h.finite
+  | .brkStart _ w => w.all isPlace
   | .unknown tag rest => !isKnownTag tag && allFiniteO rest && restCanonical rest
   | _ => true
 
@@ -1078,23 +1135,41 @@ theorem allStrs_map (ss : List (List Char)) : allStrs (ss.map JVal.str) = some s
   | nil => intro acc; rfl
   | cons s ss ih => intro acc; simp only [List.map_cons, List.foldl_cons, strStep]; rw [ih]; simp
 
-theorem readF_renderF (k : List Char) : ∀ (t : FTy) (x : t.T), readF k t (renderF t x) = .ok x
-  | .u8, x => by simp [renderF, readF, x.isLt]
-  | .u32, x => by simp [renderF, readF, x.isLt]
-  | .u32d, x => by simp [renderF, readF, x.isLt]
-  | .optU8, none => rfl
-  | .optU8, some x => by simp [renderF, readF, x.isLt]
-  | .optU32, none => rfl
-  | .optU32, some x => by simp [renderF, readF, x.isLt]
-  | .str, _ => rfl
-  | .optStr, none => rfl
-  | .optStr, some _ => rfl
-  | .strs, ss => by simp [renderF, readF, allStrs_map]
-  | .flag, false => rfl
-  | .flag, true => rfl
-  | .num, .nat _ => rfl
-  | .num, .dec _ => rfl
-  | .pair, (_, _) => rfl
+/-- **The reader reads back what the writer writes, at every field the reader can read**
+(`FieldReadable`; D111).  This was stated at EVERY value of every field type until the owner's
+D111, and that statement is false since: a `place` the writer writes may be a word the table does
+not hold, and the reader names it `badField` (`readF_renderF_at_every_value_is_refuted`). -/
+theorem readF_renderF (k : List Char) :
+    ∀ (t : FTy) (x : t.T), FieldReadable t x → readF k t (renderF t x) = .ok x
+  | .u8, x, _ => by simp [renderF, readF, x.isLt]
+  | .u32, x, _ => by simp [renderF, readF, x.isLt]
+  | .u32d, x, _ => by simp [renderF, readF, x.isLt]
+  | .optU8, none, _ => rfl
+  | .optU8, some x, _ => by simp [renderF, readF, x.isLt]
+  | .optU32, none, _ => rfl
+  | .optU32, some x, _ => by simp [renderF, readF, x.isLt]
+  | .str, _, _ => rfl
+  | .optStr, none, _ => rfl
+  | .optStr, some _, _ => rfl
+  | .strs, ss, _ => by simp [renderF, readF, allStrs_map]
+  | .flag, false, _ => rfl
+  | .flag, true, _ => rfl
+  | .num, .nat _, _ => rfl
+  | .num, .dec _, _ => rfl
+  | .pair, (_, _), _ => rfl
+  | .place, none, _ => rfl
+  | .place, some s, h => by
+    simp only [FieldReadable, Option.all_some] at h
+    simp [renderF, readF, h]
+
+/-- **`readF_renderF` as stage 5 B3 stated it — at every value — is refuted** (the owner's D111):
+the writer writes a `place` of any word and the reader names a word the table does not hold
+`badField`.  The witness is gap 4904's own hand edit, `"where": "moon"`. -/
+theorem readF_renderF_at_every_value_is_refuted :
+    ¬ ∀ (k : List Char) (t : FTy) (x : t.T), readF k t (renderF t x) = .ok x := by
+  intro h
+  have := h ['w','h','e','r','e'] .place (some ['m','o','o','n'])
+  simp [renderF, readF, isPlace, placeWords] at this
 
 /-- The pairs agree with a schema's fields: each key's last value is what the field writes. -/
 def Agrees (kvs : List (List Char × JVal)) : (s : List (List Char × FTy)) → Args s → Prop
@@ -1102,10 +1177,12 @@ def Agrees (kvs : List (List Char × JVal)) : (s : List (List Char × FTy)) → 
   | (k, t) :: s, (x, xs) => lastVal kvs k = renderF t x ∧ Agrees kvs s xs
 
 theorem readArgs_of_agrees (kvs : List (List Char × JVal)) :
-    ∀ (s : List (List Char × FTy)) (a : Args s), Agrees kvs s a → readArgs kvs s = .ok a
-  | [], (), _ => rfl
-  | (k, t) :: s, (x, xs), ⟨h1, h2⟩ => by
-    simp only [readArgs, h1, readF_renderF, readArgs_of_agrees kvs s xs h2, FR.pair]
+    ∀ (s : List (List Char × FTy)) (a : Args s), ArgsReadable s a → Agrees kvs s a →
+      readArgs kvs s = .ok a
+  | [], (), _, _ => rfl
+  | (k, t) :: s, (x, xs), hr, ⟨h1, h2⟩ => by
+    simp only [ArgsReadable] at hr
+    simp only [readArgs, h1, readF_renderF k t x hr.1, readArgs_of_agrees kvs s xs hr.2 h2, FR.pair]
 
 theorem renderArgs_keys : ∀ (s : List (List Char × FTy)) (a : Args s),
     ∀ kv ∈ renderArgs s a, kv.1 ∈ s.map Prod.fst
@@ -1164,8 +1241,10 @@ theorem Event.strings_of_split (ev : Event) (k : Kind) (a : Args k.schema)
   cases ev <;> cases h <;> simp [Event.strings, argStrs, strsOfF, Kind.schema]
 
 theorem Event.canonical_of_split (ev : Event) (k : Kind) (a : Args k.schema)
-    (h : ev.split = some ⟨k, a⟩) : ev.canonical = argsFinite k.schema a := by
-  cases ev <;> cases h <;> simp [Event.canonical, argsFinite, fieldFinite, Kind.schema]
+    (h : ev.split = some ⟨k, a⟩) :
+    (ev.canonical = true ↔ (argsFinite k.schema a = true ∧ ArgsReadable k.schema a)) := by
+  cases ev <;> cases h <;>
+    simp [Event.canonical, argsFinite, fieldFinite, ArgsReadable, FieldReadable, Kind.schema]
 
 theorem Event.split_build (k : Kind) (a : Args k.schema) : (k.build a).split = some ⟨k, a⟩ := by
   cases k <;> rfl
@@ -1226,6 +1305,7 @@ theorem allFiniteO_renderArgs : ∀ (s : List (List Char × FTy)) (a : Args s),
     | flag => cases x <;> simp [renderF, allFiniteO, allFinite]
     | num => cases x <;> simp_all [renderF, allFiniteO, allFinite, fieldFinite, Num.finite]
     | pair => simp [renderF, allFiniteO, allFinite, allFiniteL]
+    | place => cases x <;> simp [renderF, allFiniteO, allFinite]
 
 /-! ## Laws: the written line's shape -/
 
@@ -1471,10 +1551,12 @@ theorem the_log_reads_what_it_renders (e : Entry) (h : e.canonical = true) :
   cases hu : ev.isUnknown with
   | false =>
     obtain ⟨k, a, hsp⟩ := Event.split_of_not_unknown ev hu
+    have hca : argsFinite k.schema a = true ∧ ArgsReadable k.schema a := by
+      exact (Event.canonical_of_split ev k a hsp).1 hc
     have hfin : allFinite (lineVal ⟨line, t, o, ev⟩) = true := by
       simp only [lineVal, allFinite, allFiniteO, Bool.true_and]
       rw [Event.fields_of_split ev k a hsp]
-      exact allFiniteO_renderArgs _ _ (by rw [← Event.canonical_of_split ev k a hsp]; exact hc)
+      exact allFiniteO_renderArgs _ _ hca.1
     simp only [readValue]
     rw [if_pos hfin]
     simp only [lineVal, readObject]
@@ -1491,7 +1573,7 @@ theorem the_log_reads_what_it_renders (e : Entry) (h : e.canonical = true) :
         · exact Kind.no_t_key k
         · exact Kind.no_ev_key k)
     rw [← Event.fields_of_split ev k a hsp] at hag
-    have hr := readArgs_of_agrees _ k.schema a hag
+    have hr := readArgs_of_agrees _ k.schema a hca.2 hag
     simp only [List.cons_append, List.nil_append] at hr
     rw [hr]
     simp only [Kind.build_of_split ev k a hsp]
@@ -2135,6 +2217,14 @@ theorem readF_strs (k : List Char) : ∀ (t : FTy) (ov : Option JVal) (x : t.T),
     cases v <;> simp [readF] at h
     · subst h; simp [strsOfF]
     · subst h; intro s hs; simp [strsOfF] at hs; subst hs; exact ⟨_, rfl, by simp [jstrs]⟩
+  | .place, none, x, h => by simp [readF] at h; subst h; simp [strsOfF]
+  | .place, some v, x, h => by
+    cases v <;> simp [readF] at h
+    · subst h; simp [strsOfF]
+    · rename_i w
+      split at h
+      · cases h; intro s hs; simp [strsOfF] at hs; subst hs; exact ⟨_, rfl, by simp [jstrs]⟩
+      · cases h
   | .strs, none, x, h => by simp [readF] at h; subst h; simp [strsOfF]
   | .strs, some v, x, h => by
     cases v with
@@ -2727,11 +2817,13 @@ theorem emitEvent_of_fields (ev : Event) (h : ev.canonical = true) :
   cases hu : ev.isUnknown with
   | false =>
     obtain ⟨k, a, hsp⟩ := Event.split_of_not_unknown ev hu
+    have hca : argsFinite k.schema a = true ∧ ArgsReadable k.schema a := by
+      exact (Event.canonical_of_split ev k a hsp).1 h
     simp only [emitEvent, Event.tag_of_split ev k a hsp, kindOf_tag,
       Event.fields_of_split ev k a hsp]
     have hag := agrees_renderArgs k.schema a [] (Kind.keys_nodup k) (by intro kv hkv; cases hkv)
     simp only [List.nil_append] at hag
-    rw [readArgs_of_agrees _ k.schema a hag]
+    rw [readArgs_of_agrees _ k.schema a hca.2 hag]
     exact congrArg Except.ok (Kind.build_of_split ev k a hsp)
   | true =>
     cases ev with
@@ -2789,6 +2881,166 @@ theorem the_kernel_decides_what_is_left_out :
     (Event.close ['d','a','y'] ['k']).fields
       = [(['p','e','r','i','o','d'], .str ['d','a','y']), (['k','e','y'], .str ['k'])] :=
   ⟨rfl, rfl, rfl⟩
+
+/-! ## D111 — a `break_start`'s place has one reader (stage 6 W-47 track L, README gap 4904)
+
+The owner's **D111**: a logged `break_start`'s place is read through the table of places
+(`placeWords`), in the log grammar, and any other word makes the line MALFORMED — D18's warning
+in `tm check`, and no running break, as fork 4748911 reads it.  Parity **P108**.
+
+**Both directions, at every layer the line crosses** (AGENTS §5.8): the field (`readF_place`),
+the writer D16 made the kernel's (`a_break_start_is_emitted_only_with_a_place` — `tm break` can
+append no word the reader would refuse, because the emit is the reader), and the line off the
+disk (`a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word`).  The laws that
+were stated over every canonical entry keep their statements (`the_log_reads_what_it_renders`,
+`the_log_emits_what_it_reads`, `a_known_event_is_never_read_as_unknown`): a `break_start` is
+canonical when its place is a word of the table (`Event.canonical`), as an `hsw` is when serde
+reads it finite.  The per-field lemma under them is not: it held at every value until this step
+and is refuted there (`readF_renderF_at_every_value_is_refuted`). -/
+
+/-- Every word of the table is a place, and the table holds no word twice — so a word the TUI's
+prompt lists is one the reader takes, and the prompt lists each once. -/
+theorem placeWords_are_places_and_distinct :
+    placeWords.all isPlace = true ∧ placeWords.Nodup := by
+  refine ⟨by decide, by decide⟩
+
+/-- **The four, and nothing else**: gap 4904's `moon` is no place, nor the empty word, nor a place
+spelled with a capital (the table is matched exactly as written, as `tm break --where` was). -/
+theorem isPlace_reads_the_four_and_refuses_any_other_word :
+    isPlace ['w','a','l','k'] = true ∧ isPlace ['s','e','a','t'] = true ∧
+    isPlace ['b','e','d'] = true ∧ isPlace ['p','h','o','n','e'] = true ∧
+    isPlace ['m','o','o','n'] = false ∧ isPlace [] = false ∧ isPlace ['W','a','l','k'] = false := by
+  decide
+
+/-- **D111 at the field**: a `place` is a word of the table or `badField` — and absent or `null`
+is no place, as the `Option` it is. -/
+theorem readF_place (k s : List Char) :
+    readF k .place (some (.str s)) = (if isPlace s then .ok (some s) else .bad k) ∧
+    readF k .place none = .ok none ∧ readF k .place (some .null) = .ok none :=
+  ⟨rfl, rfl, rfl⟩
+
+/-- **D111 at the writer** (D16: the emit IS the reader).  A `break_start` with a place is
+emitted; with gap 4904's `moon` it is refused by the reader's own name, so no verb can append a
+line the replay would not read; with no place it is a break with none. -/
+theorem a_break_start_is_emitted_only_with_a_place :
+    emitEvent Kind.brkStart.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['w','a','l','k'])] = .ok (.brkStart 20 (some ['w','a','l','k'])) ∧
+    emitEvent Kind.brkStart.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['m','o','o','n'])] = .error (.badField ['w','h','e','r','e']) ∧
+    emitEvent Kind.brkStart.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20)]
+      = .ok (.brkStart 20 none) :=
+  ⟨rfl, rfl, rfl⟩
+
+/-- **D111 at the line**: `{"t":…,"ev":"break_start","planned_min":20,"where":"walk"}` is the
+running break's entry, and the same line hand-edited to `"where":"moon"` is a MALFORMED line —
+`badField where`, the warning D18 lists in `tm check`, and no entry for the replay to hold a
+running break from.  Its `t` is 2026-09-07T10:00:00-05:00.  Stated over the line's object (what `jparse`
+hands `readObject`), so no JSON is parsed in the kernel's evaluation (AGENTS §5.10a). -/
+theorem a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word :
+    (∃ t o, readObject 7 [(kT, (.str ['2','0','2','6','-','0','9','-','0','7','T','1','0',':','0','0',':','0','0','-','0','5',':','0','0'])), (kEv, .str Kind.brkStart.tag),
+        (['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['w','a','l','k'])]
+      = .entry ⟨7, t, o, .brkStart 20 (some ['w','a','l','k'])⟩) ∧
+    readObject 7 [(kT, (.str ['2','0','2','6','-','0','9','-','0','7','T','1','0',':','0','0',':','0','0','-','0','5',':','0','0'])), (kEv, .str Kind.brkStart.tag),
+        (['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['m','o','o','n'])]
+      = .warn 7 (.badField ['w','h','e','r','e']) := by
+  refine ⟨⟨_, _, rfl⟩, rfl⟩
+
+/-- **The `break` line that ENDS a break keeps the fork's free `where`** — D111 names the
+`break_start` line and no other: a fork-written `break` with any place reads as it did. -/
+theorem a_break_line_keeps_any_place :
+    emitEvent Kind.brk.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['m','o','o','n'])] = .ok (.brk 20 none (some ['m','o','o','n'])) :=
+  rfl
+
+/-- **A place is never a numeral serde could refuse**: `fieldFinite` holds of every `place`, absent or
+present, so D111's table adds no clause to `Event.canonical`'s finiteness — the place's own clause is
+`FieldReadable`'s, and only a word off the table fails it. -/
+theorem fieldFinite_of_a_place (o : Option (List Char)) : fieldFinite .place o = true := rfl
+
+/-- **Every place has its own key** — each word of the table has a first character and no two
+words share one.  The host's TUI picks a place by its word's first character (§12.6's `w`/`s`/`b`/`p`,
+derived and never spelled, `tui::app::Places::key_of`), so a word added to the table that began
+with another's letter would be a place the `b` chord could never reach; this is what would stop
+building first. -/
+theorem every_place_has_its_own_key :
+    placeWords.all (fun w => w.head?.isSome) = true ∧ (placeWords.map List.head?).Nodup := by
+  refine ⟨by decide, by decide⟩
+
+/-- **The reader returns only what it can read back** (D111): a field `readF` reads is
+`FieldReadable` — for every type but `place` that is no condition, and for a `place` it is a word of
+the table or none. -/
+theorem readF_readable (k : List Char) : ∀ (t : FTy) (ov : Option JVal) (x : t.T),
+    readF k t ov = .ok x → FieldReadable t x
+  | .place, none, x, h => by simp [readF] at h; subst h; rfl
+  | .place, some v, x, h => by
+    cases v <;> simp [readF] at h
+    · subst h; rfl
+    · rename_i w
+      split at h
+      · cases h; simp [FieldReadable, *]
+      · cases h
+  | .u8, _, _, _ => trivial
+  | .u32, _, _, _ => trivial
+  | .u32d, _, _, _ => trivial
+  | .optU8, _, _, _ => trivial
+  | .optU32, _, _, _ => trivial
+  | .str, _, _, _ => trivial
+  | .optStr, _, _, _ => trivial
+  | .strs, _, _, _ => trivial
+  | .flag, _, _, _ => trivial
+  | .num, _, _, _ => trivial
+  | .pair, _, _, _ => trivial
+
+/-- …and so does every schema it reads: `ArgsReadable` of what `readArgs` returns. -/
+theorem readArgs_readable (kvs : List (List Char × JVal)) :
+    ∀ (s : List (List Char × FTy)) (a : Args s), readArgs kvs s = .ok a → ArgsReadable s a
+  | [], (), _ => trivial
+  | (k, t) :: s, (x, xs), h => by
+    simp only [readArgs] at h
+    obtain ⟨h1, h2⟩ := FR.pair_ok h
+    exact ⟨readF_readable k t _ x h1, readArgs_readable kvs s xs h2⟩
+
+/-- **D111 over EVERY line, not one witness: a `break_start` the kernel reads off the disk is at a
+place of the table** — whatever the line, whatever the word, an entry the reader returns whose event
+is a `break_start` with a place has that place in `placeWords`.  So the replay can hold a running
+break at no other place (P100's `Replay.Machine.brkOpen` is folded from these entries), the planner's
+request reads every such place (`PlanWire.placeOf_reads_exactly_the_table`), and gap 4904's
+`badBreak place` has no logged line left to come from.  The witnesses above
+(`a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word`) are this law's two
+directions at `walk` and `moon`. -/
+theorem a_break_start_read_off_the_disk_is_at_a_place (n : Nat) (l : List Char) (e : Entry)
+    (h : readLine n (some l) = .entry e) (p : U32) (w : List Char)
+    (he : e.ev = .brkStart p (some w)) : isPlace w = true := by
+  obtain ⟨kvs, _, _, ho⟩ := readLine_entry_inv n l e h
+  unfold readObject at ho
+  cases hT : readT kvs with
+  | error x => simp [hT] at ho
+  | ok tp =>
+    obtain ⟨t, off⟩ := tp
+    cases hE : lastVal kvs kEv with
+    | none => simp [hT, hE] at ho
+    | some v =>
+      cases v with
+      | str tag =>
+        cases hK : kindOf tag with
+        | none => simp [hT, hE, hK] at ho; subst ho; simp at he
+        | some k =>
+          cases hA : readArgs kvs k.schema with
+          | ok a =>
+            simp [hT, hE, hK, hA] at ho
+            subst ho
+            have hr := readArgs_readable kvs k.schema a hA
+            have hs := congrArg Event.split he
+            simp only at hs
+            rw [Event.split_build] at hs
+            simp only [Event.split, Option.some.injEq] at hs
+            cases hs
+            simpa [ArgsReadable, FieldReadable, Kind.schema] using hr
+          | missing key => simp [hT, hE, hK, hA] at ho
+          | bad key => simp [hT, hE, hK, hA] at ho
+      | _ => simp [hT, hE] at ho
 
 end Log
 end Tm

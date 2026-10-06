@@ -14,6 +14,19 @@
 //! `batch: … (3)`. Three implementations agreeing by hand is the defect G1
 //! names. README gaps **1104** and **1109** owed this file.
 //!
+//! **The cells are the kernel's since the owner's D112** (W-47, README gap
+//! **4897**). Until then G1 was dead in its *output* and not in its *source*:
+//! every surface printed `emit::render_row`, but the cells it padded were built
+//! twice — by the Lean kernel's `Emit.rowOf`, which reached nothing, and by the
+//! Rust `emit::row_cells`, which the binary printed (D30 Q6 (a) said "the kernel
+//! emits cells; one Rust function pads", and R3 left the second builder
+//! standing). The binary now asks the kernel for the rows of every day it plans
+//! (`planwire::rows_request`: the day's own segments back through the `plan`
+//! section), decodes them once (`planwire::read_rows` into `DayPlan::cells`),
+//! every surface pads THOSE, and the Rust builder is deleted. [`exactly_one_function_composes_a_plan_row`] is the guard that keeps
+//! it deleted: the builder's names stay gone, and a `RowCells` is built by the
+//! decoder and nowhere else.
+//!
 //! **Position, never value** (README gap **1197**). Two items with one title
 //! give rows that differ only in the time column, and nothing forbids two
 //! segments starting at the same instant, so two rows of a day can be
@@ -32,10 +45,11 @@
 //!   the library level. It is close to tautological *by construction* — both
 //!   sides call `emit::day_lines` — and that is what single ownership means; what
 //!   it actually guards is the **wiring**, which is the thing that regresses.
-//! * [`exactly_one_function_composes_a_plan_row`] is the grep §8.3's last line
-//!   asks for. Without it the three byte-equality assertions do not keep G1
-//!   dead: a future private stand-in renderer reintroduces it and they all still
-//!   pass, because they compare surfaces that both call the new one.
+//! * [`exactly_one_function_composes_a_plan_row`] is the grep §8.3's last line asks for —
+//!   since D112 over the cells, not over cell functions (there are none left to
+//!   name). Without it the three byte-equality assertions do not keep G1 dead: a
+//!   future private stand-in builder reintroduces it and they all still pass,
+//!   because they compare surfaces that both print the new one's rows.
 //!
 //! # The guard was driven RED on its own class before it was kept
 //!
@@ -45,11 +59,16 @@
 //!
 //! | plant | caught by |
 //! |---|---|
-//! | `fn day_line_for` in `cli/render.rs` calling `title_cell` **and** `mark_of` | [`exactly_one_function_composes_a_plan_row`] |
+//! | `fn day_line_for` in `cli/render.rs` calling `title_cell` **and** `mark_of` | [`exactly_one_function_composes_a_plan_row`]'s W-23 form, which named the cell functions (restated over the cells at W-47, when they went) |
 //! | `fn seg_title` restored verbatim in `tui/today.rs` | [`no_second_set_of_row_words`] **and** [`the_one_renderer_is_still_there`] |
-//! | `let t = emit::title_cell;` aliased **inside** the function | [`exactly_one_function_composes_a_plan_row`] |
-//! | `use emit::{title_cell as tc, mark_of as mo}` at file scope | [`exactly_one_function_composes_a_plan_row`], in the `<file>` bucket |
+//! | `let t = emit::title_cell;` aliased **inside** the function | the W-23 needle |
+//! | `use emit::{title_cell as tc, mark_of as mo}` at file scope | the W-23 needle, in the `<file>` bucket |
 //! | `fn compact_row` naming **one** cell and writing the rest with `format!` | **NOTHING. It walked through, and it is the declared hole** |
+//!
+//! W-47's guard was driven the same way, in a scratch clone and never in a tree
+//! that commits (the plants and their outcomes are in README's W-47 track L
+//! block): a `RowCells { … }` literal in `cli/render.rs`, `fn title_cell(`
+//! restored in `emit.rs`, and the cells' padding moved out of `plan_rows`.
 //!
 //! The last one is not fixable by tightening this needle: `tui/today.rs`'s
 //! legitimate `next 11:20 lunch 30m · …` line has exactly that shape, so "one
@@ -272,13 +291,8 @@ fn the_tui_timeline_is_the_day_files_lines() {
     let app = tui_common::app();
     let w = tm_core::emit::DEFAULT_TITLE_W;
     let rows = app.timeline_rows(w);
-    let (_, body) = tm_core::emit::render_plan_section_with(
-        &app.plan,
-        &app.tree,
-        &app.cfg,
-        app.now,
-        &tm_core::emit::Layout::new(w),
-    );
+    let (_, body) =
+        tm_core::emit::render_plan_section_with(&app.plan, &app.cfg, app.now, &tm_core::emit::Layout::new(w));
     let file: Vec<&str> = body.lines().collect();
     assert_eq!(rows.len(), file.len(), "the pane and the file differ in length");
     for (i, (row, line)) in rows.iter().zip(&file).enumerate() {
@@ -312,7 +326,6 @@ fn byte_identical_rows_are_constructible_so_position_decides() {
     use tm_core::dayplan::{DayPlan, SegKind};
 
     let cfg = tui_common::config();
-    let tree = tui_common::tree(&cfg);
     let plan = tui_common::day_plan(&cfg);
     let twin = plan
         .segments
@@ -323,8 +336,10 @@ fn byte_identical_rows_are_constructible_so_position_decides() {
 
     let mut day = DayPlan::empty(plan.date, plan.window, plan.budget_blocks);
     day.segments = vec![twin.clone(), twin];
+    // The rows are the kernel's for these two segments (D112).
+    let day = tui_common::rowwire::with_kernel_cells(tui_common::docs_json(), day, &cfg);
 
-    let rows = emit::plan_rows(&day, &tree, &cfg, &emit::Layout::default());
+    let rows = emit::plan_rows(&day, &emit::Layout::default());
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0], rows[1], "the two rows were supposed to be identical");
 
@@ -345,7 +360,7 @@ fn byte_identical_rows_are_constructible_so_position_decides() {
     // for the row it says would land on 0 for both.
     assert_eq!(rows[current.expect("a current row")], rows[next[0]]);
     // And `day_lines` hands each row its own index, equal text or not.
-    let lines = emit::day_lines(&day, &tree, &cfg, &emit::Layout::default());
+    let lines = emit::day_lines(&day, &cfg, &emit::Layout::default());
     let segs: Vec<Option<usize>> = lines.iter().map(|l| l.segment).collect();
     assert!(
         segs.windows(2).all(|w| w[0] != w[1]),
@@ -360,101 +375,123 @@ fn byte_identical_rows_are_constructible_so_position_decides() {
 /// The one file allowed to compose a §4.3 row.
 const HOME: &str = "tm-core/src/emit.rs";
 
-/// The cell producers of §4.3's row. A function that names **two or more** of
-/// them is composing a row out of cells, and there is exactly one of those.
-///
-/// One is fine and deliberate: `tm/src/tui/today.rs`'s Now pane takes
-/// `emit::title_cell` (that is what killed seg_title) and
-/// `tm/src/cli/render.rs::rows` takes `emit::mark_of` for the JSON's `mark`
-/// field. Neither is laying out a row.
-const CELLS: &[&str] = &[
+/// **The functions the Rust builder of §4.3's cells was** — `emit::row_cells`
+/// and the cell functions it called, deleted at W-47 (the owner's D112: the
+/// binary's rows are the kernel's cells). A `fn` of one of these names anywhere
+/// in the shipped sources is that builder coming back under its own name. A
+/// builder under ANOTHER name has to build a `RowCells` to reach the padder,
+/// which [`ROW_BUILDERS`] holds to the decoder — or print text of its own, which
+/// [`no_second_set_of_row_words`] and `one_padder.rs` see.
+const DELETED_BUILDER: [&str; 11] = [
+    "row_cells",
     "title_cell",
     "est_cell",
     "parent_cell",
-    "note_cell",
-    "mark_of",
-    "glyph_of",
-    "batch_names",
-    "fit_batch",
     "underused_note",
     "hot_note",
+    "due_date",
+    "batch_names",
+    "glyph_of",
+    "shows_scale",
+    "mark_of",
 ];
 
-/// `(function name, first line, its code lines)` for each `fn` in a file.
-///
-/// A crude splitter, declared as such: it starts a bucket at every `fn`
-/// declaration and runs it to the next one, so a nested `fn` closes its parent
-/// early and a closure inside a function belongs to that function. What it
-/// cannot see at all is a function assembled by a macro. Everything before the
-/// first `fn` is the file's own scope, under the name `<file>`.
-fn functions(text: &str) -> Vec<(String, usize, Vec<String>)> {
-    let mut out: Vec<(String, usize, Vec<String>)> = vec![("<file>".to_string(), 1, Vec::new())];
-    for (n, code) in code_lines(text) {
-        let t = code.trim_start();
-        let name = t
-            .strip_prefix("pub(crate) fn ")
-            .or_else(|| t.strip_prefix("pub fn "))
-            .or_else(|| t.strip_prefix("fn "))
-            .map(|rest| {
-                rest.chars()
-                    .take_while(|c| c.is_alphanumeric() || *c == '_')
-                    .collect::<String>()
-            });
-        if let Some(name) = name {
-            out.push((name, n, Vec::new()));
-        }
-        out.last_mut().expect("a bucket").2.push(code);
-    }
-    out
+/// **Every `RowCells` struct literal in the shipped sources, by file, MEASURED
+/// at W-47, with why it is not a builder.** A literal anywhere else, a second in
+/// the file below, or the one below leaving, fails by name: an enumeration a
+/// site joins to be EXEMPT, never to be covered (W-27's shape), and it may only
+/// shrink — `no_second_planner.rs`' `DAY_BUILDERS`, for rows.
+const ROW_BUILDERS: [(&str, usize, &str); 1] = [(
+    "tm-core/src/planwire.rs",
+    1,
+    "the codec: `read_rows`' `row_cells_of` decodes the cells the kernel's `Emit.rowOf` wrote \
+     (`ok.plan.rows`); it reads nine strings and a member list off the wire and decides none of them",
+)];
+
+/// A source's code: comments dropped, one string — the text the two needles
+/// below read.
+fn code(text: &str) -> String {
+    code_lines(text).into_iter().map(|(_, c)| c).collect::<Vec<_>>().join("\n")
 }
 
-/// **One row renderer.** Nothing outside [`HOME`] names two or more of the
-/// row's cells in one function.
+/// The `RowCells` struct literals in `code`: `RowCells {` that is not a
+/// declaration (`struct`, `impl`, `for`, a return type `->`) and not the tail of
+/// a longer name.
+fn row_literals(code: &str) -> usize {
+    code.match_indices("RowCells {")
+        .filter(|(i, _)| {
+            let before = code[..*i].trim_end();
+            !code[..*i].chars().next_back().is_some_and(|c| c.is_alphanumeric() || c == '_')
+                && !["struct", "enum", "impl", "for", "->"].iter().any(|k| before.ends_with(k))
+        })
+        .count()
+}
+
+/// **Exactly one function composes a plan row — `render_row`, padding the
+/// kernel's cells — and no Rust function builds a row's cells** (the owner's
+/// D112, README gap 4897). Until W-47 this guard was a needle over the cell
+/// functions (a function outside [`HOME`] naming two of them composed a row);
+/// those functions are deleted, so it is restated over what is left to guard:
+/// the deleted builder's names stay deleted, and the one decoder is the only
+/// `RowCells` literal in the shipped sources.
 ///
-/// This is the shape, not a vocabulary: a stand-in renderer under any name is
-/// caught, because it has to *have* the cells. It is the second half of
-/// `one_padder.rs`'s guard — that one says nothing outside `emit.rs` measures or
-/// pads a column, this one says nothing outside it puts cells side by side — and
-/// together they are what keeps G1 dead.
-///
-/// **What it cannot see**, measured rather than assumed:
-///
-/// * a renderer that names **one** cell and writes the rest with `format!`.
-///   `tm/src/tui/today.rs`'s `next 11:20 lunch 30m · …` line is exactly that
-///   shape and is legitimate, so the needle cannot be "one"; a hostile version
-///   of it is invisible here and is caught, if at all, by
-///   [`no_second_set_of_row_words`].
-/// * a renderer in `tests/`, `examples/` or `build.rs` (the walk is two `src`
-///   trees), or one assembled by a macro (the splitter reads text).
-/// * a renderer that reaches the cells through a re-export under another name.
+/// **What it cannot see**, measured rather than assumed: a builder that fills a
+/// `RowCells` without a struct literal (`RowCells::default()` and field
+/// assignment — the type derives no `Default` today, so that needs a change to
+/// `emit.rs` this guard would not see either); a renderer that never builds
+/// cells and formats a row from a segment directly, which is
+/// [`no_second_set_of_row_words`]' and `one_padder.rs`' to see; and anything in
+/// `tests/`, `examples/` or `build.rs` (the walk is the shipped sources).
 #[test]
 fn exactly_one_function_composes_a_plan_row() {
-    let mut hits = Vec::new();
-    for (name, text) in sources() {
-        if name == HOME {
-            continue;
-        }
-        for (f, line, body) in functions(&text) {
-            let used: Vec<&str> = CELLS
-                .iter()
-                .copied()
-                .filter(|c| body.iter().any(|l| l.contains(c)))
-                .collect();
-            if used.len() >= 2 {
-                hits.push(format!("{name}:{line}: fn {f} composes {}", used.join(" + ")));
+    let files = sources();
+    let mut back = Vec::new();
+    for (name, text) in &files {
+        for (n, line) in code_lines(text) {
+            for f in DELETED_BUILDER {
+                if line.contains(&format!("fn {f}(")) || line.contains(&format!("fn {f}<")) {
+                    back.push(format!("{name}:{n}: fn {f}"));
+                }
             }
         }
     }
     assert!(
-        hits.is_empty(),
-        "a second row renderer (PLAN §4 G1, D30 Q5 (a): there is one, and it is \
-         `{HOME}`'s `render_row`):\n  {}",
-        hits.join("\n  ")
+        back.is_empty(),
+        "the Rust builder of a row's cells came back (D112 deleted it; the cells are the \
+         kernel's `Emit.rowOf`, decoded by `planwire::read_rows`):\n  {}",
+        back.join("\n  ")
+    );
+    let mut found: Vec<(String, usize)> = files
+        .iter()
+        .map(|(l, t)| (l.clone(), row_literals(&code(t))))
+        .filter(|(_, n)| *n > 0)
+        .collect();
+    found.sort();
+    let want: Vec<(String, usize)> = ROW_BUILDERS.iter().map(|(l, n, _)| (l.to_string(), *n)).collect();
+    println!("row builders: {found:?}");
+    assert_eq!(
+        found, want,
+        "a `RowCells` is built somewhere the census does not name (or the decoder left): a second \
+         builder of a row's cells, D30 Q6 (a)'s one-padder rule broken at the other end (README gap 4897)"
     );
 }
 
+/// **The census bites** on the shapes a second builder takes, and not on a
+/// declaration.
+#[test]
+fn the_row_builder_census_bites() {
+    let literal = "fn row(s: &Segment) -> RowCells {\n    RowCells { time: t, ci: c, p, mark, title, parent, est, actual, note, batch_names: None }\n}\n";
+    let qualified = "let c = emit::RowCells { time, ci, p, mark, title, parent, est, actual, note, batch_names };\n";
+    assert_eq!(row_literals(&code(literal)), 1, "a builder returning a literal");
+    assert_eq!(row_literals(&code(qualified)), 1, "a path-qualified literal");
+    assert_eq!(row_literals(&code("pub struct RowCells {\n    pub time: String,\n}\nimpl RowCells {\n}\n")), 0, "a declaration is not a build");
+    assert_eq!(row_literals(&code("struct MyRowCells {\n}\n")), 0, "a longer name is not this one");
+}
+
 /// The **row's own words** paired with the kind they are written for: a `match`
-/// on `SegKind` that answers text. `emit::title_cell` is the one that may.
+/// on `SegKind` that answers text. Since the owner's D112 (W-47) no Rust
+/// function may: the title cell is the kernel's `Emit.titleCell`, and
+/// `emit::title_cell`, the one that could until then, is deleted.
 ///
 /// This is a **vocabulary** and a vocabulary is one rename away from useless
 /// (README gap **1193** is the lesson). It is here because the shape needle
@@ -516,9 +553,9 @@ fn no_second_set_of_row_words() {
     }
     assert!(
         strays.is_empty(),
-        "a second renderer of the title cell (G1 — `{HOME}`'s `title_cell` is \
-         the one; if this is a wire word and not a cell, adjudicate it into \
-         WORD_ALLOW by its exact line):\n  {}",
+        "a second renderer of the title cell (G1 — the kernel's `Emit.titleCell` \
+         is the one since D112; if this is a wire word and not a cell, adjudicate \
+         it into WORD_ALLOW by its exact line):\n  {}",
         strays.join("\n  ")
     );
     let unused: Vec<&str> = WORD_ALLOW
@@ -608,10 +645,12 @@ fn the_one_renderer_is_still_there() {
     assert!(emit.contains("fn render_row("), "the row renderer is gone");
     assert!(emit.contains("pub fn plan_rows("), "the row list is gone");
     assert!(emit.contains("pub fn day_lines("), "the day's lines are gone");
-    // And the two surfaces that used to render take the list instead.
+    // And the two surfaces that used to render take the list instead, and the
+    // list is the kernel's cells padded (D112).
     for (needle, why) in [
-        ("plan_rows(plan, tree, cfg, &Layout::default())", "`tm now` selects"),
-        ("let rows = plan_rows(plan, tree, cfg, layout);", "`day_lines` maps"),
+        ("plan_rows(plan, &Layout::default())", "`tm now` selects"),
+        ("let rows = plan_rows(plan, layout);", "`day_lines` maps"),
+        ("plan.cells.iter().map(|c| render_row(c, layout)).collect()", "the rows are the kernel's cells, padded"),
     ] {
         assert!(emit.contains(needle), "{why}: `{needle}` is gone");
     }
@@ -620,8 +659,8 @@ fn the_one_renderer_is_still_there() {
         .find(|(n, _)| n == "tm/src/tui/today.rs")
         .expect("tm/src/tui/today.rs");
     assert!(
-        today.contains("emit::title_cell("),
-        "the TUI stopped taking the one title cell"
+        today.contains("app.plan.cells.get(i).map(|c| c.title.clone())"),
+        "the TUI stopped taking the kernel's title cell (D112)"
     );
     assert!(
         !today.contains("fn seg_title"),

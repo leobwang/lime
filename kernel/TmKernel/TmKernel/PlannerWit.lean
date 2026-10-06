@@ -2231,57 +2231,57 @@ def midBreakRun : Seal.Run :=
 def theMidBreakRequest : PlanReq := { theCensusRequest with run := midBreakRun }
 
 set_option maxRecDepth 400000 in
-/-- **The day lays a Block across a Break**, computed: `m1`'s replayed block runs 07:05-08:05 and the break the log
-records runs 07:10-07:25, inside it — logged after `m1`'s `done` had closed the block (gap 4520's closed half).  Both
-halves are here — the overlapping pair, **and** `PlanCheck.noBlockOverABreak`'s own verdict on the day, which is the
-battery's opinion and not a restatement of a `Planner` theorem. -/
-theorem the_mid_break_day_lays_a_block_across_a_break :
+/-- **The day cuts `m1`'s Block around the Break** (the owner's **D100**, README gap 4520b, W-47 track K), computed:
+`m1`'s replayed block ran 07:05-08:05 and the break the log records runs 07:10-07:25, inside it — logged after `m1`'s
+`done` had closed the block (gap 4520's closed half).  Since D100 the later break wins: the replay re-draws the closed
+block around it (`Replay.netClosed`), so today's record holds `m1` as `[07:05, 07:10]` and `[07:25, 08:05]` with the
+Break between, and the day draws those three rows.  Both halves are here — the rows, **and**
+`PlanCheck.noBlockOverABreak`'s own verdict on the day, now `true`, with `planOkCore`.  Until D100 this was
+the_mid_break_day_lays_a_block_across_a_break, the Block `[07:05, 08:05]` across the Break and both verdicts `false`:
+that day is `thePreD100MidBreakRequest`'s below, and section 34 holds that statement and the census D100 moved;
+`Negative.lean`'s CHEAT 289 holds the old verdict at this request. -/
+theorem the_mid_break_day_cuts_its_block_around_the_break :
     (dayPlan theMidBreakRequest).segments.map
         (fun s => (s.val.start, s.val.stop, s.val.kind))
-      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec,
-          SegKind.block),
-         ((Cal.instantOf Cal.chicago 739867 430).sec, (Cal.instantOf Cal.chicago 739867 445).sec,
-          SegKind.brk),
-         ((Cal.instantOf Cal.chicago 739867 545).sec, (Cal.instantOf Cal.chicago 739867 605).sec,
-          SegKind.block),
-         ((Cal.instantOf Cal.chicago 739867 770).sec, (Cal.instantOf Cal.chicago 739867 830).sec,
-          SegKind.wall),
-         ((Cal.instantOf Cal.chicago 739867 840).sec, (Cal.instantOf Cal.chicago 739867 880).sec,
-          SegKind.block),
-         ((Cal.instantOf Cal.chicago 739867 880).sec, (Cal.instantOf Cal.chicago 739867 940).sec,
-          SegKind.rest),
+      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 430).sec, SegKind.block),
+         ((Cal.instantOf Cal.chicago 739867 430).sec, (Cal.instantOf Cal.chicago 739867 445).sec, SegKind.brk),
+         ((Cal.instantOf Cal.chicago 739867 445).sec, (Cal.instantOf Cal.chicago 739867 485).sec, SegKind.block),
+         ((Cal.instantOf Cal.chicago 739867 545).sec, (Cal.instantOf Cal.chicago 739867 605).sec, SegKind.block),
+         ((Cal.instantOf Cal.chicago 739867 770).sec, (Cal.instantOf Cal.chicago 739867 830).sec, SegKind.wall),
+         ((Cal.instantOf Cal.chicago 739867 840).sec, (Cal.instantOf Cal.chicago 739867 880).sec, SegKind.block),
+         ((Cal.instantOf Cal.chicago 739867 880).sec, (Cal.instantOf Cal.chicago 739867 940).sec, SegKind.rest),
          ((Cal.instantOf Cal.chicago 739867 1290).sec,
           (Cal.instantOf Cal.chicago 739867 1320).sec, SegKind.windDown),
          ((Cal.instantOf Cal.chicago 739867 1320).sec, (Cal.instantOf Cal.chicago 739868 0).sec,
           SegKind.sleep)] ∧
-      PlanCheck.noBlockOverABreak theMidBreakRequest (dayPlan theMidBreakRequest) = false ∧
-      PlanCheck.planOkCore theMidBreakRequest (dayPlan theMidBreakRequest) = false := by
+      PlanCheck.noBlockOverABreak theMidBreakRequest (dayPlan theMidBreakRequest) = true ∧
+      PlanCheck.planOkCore theMidBreakRequest (dayPlan theMidBreakRequest) = true := by
   decide
 
-/-! **plan_places_no_block_over_a_break_as_stage_6_wrote_it_is_refuted stood here from W-44 track K to the W-44
-repair, which DELETED it** (README gaps 4611 and 4520; the campaign's lesson 4; W-43's precedent at `cd14952`).  It
-read
+/-- **Today's record as the replay drew it before the owner's D100**: `m1`'s two pieces either side of the Break joined
+back into the one `[07:05, 08:05]` the closed block was drawn as.  A witness transformation and nothing more. -/
+def joinAcrossTheBreak : List Replay.Segment → List Replay.Segment
+  | g1 :: g2 :: g3 :: rest =>
+    if g1.kind = .block ['m','1'] ∧ g2.kind = .brk none ∧ g3.kind = .block ['m','1'] then
+      { g1 with stop := g3.stop } :: g2 :: rest
+    else g1 :: g2 :: g3 :: rest
+  | l => l
 
-    ¬ (∀ (r : PlanReq) (b k : WfSeg), b ∈ (dayPlan r).segments → k ∈ (dayPlan r).segments →
-        b.val.kind = SegKind.block → k.val.kind = SegKind.brk →
-        b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start)
+/-- **A run the decoder does not build since D100** (README gap 4520b): `midBreakRun` with today's record as the replay
+drew it before D100 (`joinAcrossTheBreak`), so its day lays `m1`'s Block across the Break.  It keeps a day refuting
+`PlanCheck.PastPays`' `offBreak` and `PlanCheck.noBlockOverABreak` over `PlanReq` (AGENTS §9.2), as
+`openAcrossBreakRun` does for D94; that no run the decoder builds refutes them is
+`Goals.plan_places_no_block_over_a_break`'s past half, owed and not claimed (section 34). -/
+def preD100MidBreakRun : Seal.Run :=
+  { midBreakRun with answer := { midBreakRun.answer with
+      days := midBreakRun.answer.days.map (fun d => { d with record := d.record.map (fun a =>
+        { a with segments := joinAcrossTheBreak a.segments }) }) } }
 
-and was computed at `theMidBreakRequest` above, through `the_mid_break_day_lays_a_block_across_a_break`'s verdict
-and `PlanCheck.noBlockOverABreak_iff`.  Track K called that world one reading: no host reading of a closed block nets
-a break logged after it, and the `done` logged the block's minutes before the break existed.  That is true of the
-block's MINUTES and false of its SPAN: driven at the repair on the shipped binary (S9: `start` 08:00, `done` 09:00,
-`--now 08:30 break 20m` and its end), `tm --json review week` puts `[60, 20]` in hour 8 — eighty minutes in sixty,
-the reading the owner's D87 declined by name ("the heat grid counted the break as break AND as block") — and the
-plan lays the Block across the Break.  It is gap 4520's mechanism, a mark logged after the replay closed the stretch
-it lies across, on a closed block; the owner's D94 says a block and a break are read one way on every log, and the
-kernel does not yet read this one so.  A refutation that stands on that reading is not a discharge, so it went, and
-the goal returned to `Goals.lean` (burn-down 0 → 1), as at W-43.  What the deleted theorem showed is still held by
-value: the day above lays the Block across the Break, and the battery says so.
+/-- The census request with that run behind it, and nothing else changed. -/
+def thePreD100MidBreakRequest : PlanReq := { theCensusRequest with run := preD100MidBreakRun }
 
-`PlanCheck.plan_places_no_block_over_a_break`, the law over the Block rows that start at or after `now`, stands, and
-the census request below applies it.  The debt, as `Goals.lean` states it: close gap 4520 (its open half is D94's,
-its closed half the owner's), then prove the goal over the runs the decoder builds or refute it on a world with ONE
-reading. -/
+/-! The record of the refutation the W-44 repair deleted stood here; it is section 34's since W-47 track K, which put
+these three fixtures in its place so that every line the mutation roster pins in this module stays where it is. -/
 
 /-- **The restated law is not vacuous at the census request**: choice 5b's reservation is a
 Block row starting at `now`, the morning's break is a Break row, and
@@ -5088,8 +5088,8 @@ set_option maxRecDepth 400000 in
 /-- **The other half of how far §6.1's lift goes, and it is not the eligibility's.**  The seven
 eligibility-free checks are `false` on the WHOLE day at three requests this module already
 builds — the morning wall that moved onto a worked hour, the block longer than a shortened
-`block_min`, and a break the log records across a block (logged after the block was closed: gap 4520's closed half,
-section 14).  Each refuted, or (the third, until the W-44 repair) stood as refuting, a goal over the replayed past
+`block_min`, and a break drawn across a block (`thePreD100MidBreakRequest`, section 14's day as the replay drew it before
+the owner's D100; section 34).  Each refuted, or (the third, until the W-44 repair) stood as refuting, a goal over the replayed past
 (`plan_places_no_block_over_a_wall_as_stage_6_wrote_it_is_refuted`,
 `plan_reserves_one_block_at_a_time_as_stage_6_wrote_it_is_refuted`,
 plan_places_no_block_over_a_break_as_stage_6_wrote_it_is_refuted); what is new here is
@@ -5102,7 +5102,7 @@ can make it so. -/
 theorem the_core_seven_is_false_on_three_whole_days :
     PlanCheck.planOkCore theMorningWallRequest (dayPlan theMorningWallRequest) = false ∧
       PlanCheck.planOkCore theShortBlockRequest (dayPlan theShortBlockRequest) = false ∧
-      PlanCheck.planOkCore theMidBreakRequest (dayPlan theMidBreakRequest) = false := by
+      PlanCheck.planOkCore thePreD100MidBreakRequest (dayPlan thePreD100MidBreakRequest) = false := by
   decide
 
 
@@ -5204,10 +5204,10 @@ computed at the four requests, and each row has exactly one `false` in it.  So n
 the four is AGENTS §9.2's *"a check no input can fail"*, and none of the four is implied by
 the other three.
 
-Three of the four days are the ones `the_core_seven_is_false_on_three_whole_days` already
-names, each a recorded refutation of a goal that quantified over the replayed past; the
-fourth is `theOverBudgetRequest`, built here because nothing in the witness set reached the
-`budget` clause and a clause nothing refutes is a gap, not a theorem. -/
+Three of the four days are the ones `the_core_seven_is_false_on_three_whole_days` already names, each a
+recorded refutation of a goal over the replayed past (the `offBreak` day, since the owner's D100, at a run the decoder
+no longer builds: section 34); the fourth is `theOverBudgetRequest`, built here because nothing in the witness set
+reached the `budget` clause and a clause nothing refutes is a gap, not a theorem. -/
 theorem the_paying_past_fails_on_four_whole_days :
     [ decide (∀ t ∈ pastRows theShortBlockRequest, t.kind = SegKind.block →
         t.stop - t.start ≤ theShortBlockRequest.blockMin * 60)
@@ -5231,16 +5231,16 @@ theorem the_paying_past_fails_on_four_whole_days :
         (dayPlan theMorningWallRequest).budgetBlocks *
           (dayPlan theMorningWallRequest).blockMin * 60) ]
       = [true, false, true, true] ∧
-    [ decide (∀ t ∈ pastRows theMidBreakRequest, t.kind = SegKind.block →
-        t.stop - t.start ≤ theMidBreakRequest.blockMin * 60)
-    , decide (∀ t ∈ pastRows theMidBreakRequest, t.kind = SegKind.block →
-        ∀ v ∈ blockedByWalls theMidBreakRequest, t.stop ≤ v.1 ∨ v.2 ≤ t.start)
-    , decide (∀ t ∈ pastRows theMidBreakRequest, ∀ u ∈ pastRows theMidBreakRequest,
+    [ decide (∀ t ∈ pastRows thePreD100MidBreakRequest, t.kind = SegKind.block →
+        t.stop - t.start ≤ thePreD100MidBreakRequest.blockMin * 60)
+    , decide (∀ t ∈ pastRows thePreD100MidBreakRequest, t.kind = SegKind.block →
+        ∀ v ∈ blockedByWalls thePreD100MidBreakRequest, t.stop ≤ v.1 ∨ v.2 ≤ t.start)
+    , decide (∀ t ∈ pastRows thePreD100MidBreakRequest, ∀ u ∈ pastRows thePreD100MidBreakRequest,
         t.kind = SegKind.block → u.kind = SegKind.brk → t.stop ≤ u.start ∨ u.stop ≤ t.start)
     , decide (blockSeconds
-        (PlanCheck.pastHalf theMidBreakRequest (dayPlan theMidBreakRequest)) ≤
-        (dayPlan theMidBreakRequest).budgetBlocks *
-          (dayPlan theMidBreakRequest).blockMin * 60) ]
+        (PlanCheck.pastHalf thePreD100MidBreakRequest (dayPlan thePreD100MidBreakRequest)) ≤
+        (dayPlan thePreD100MidBreakRequest).budgetBlocks *
+          (dayPlan thePreD100MidBreakRequest).blockMin * 60) ]
       = [true, true, false, true] ∧
     [ decide (∀ t ∈ pastRows theOverBudgetRequest, t.kind = SegKind.block →
         t.stop - t.start ≤ theOverBudgetRequest.blockMin * 60)
@@ -5342,11 +5342,11 @@ weight and no theorem downstream.  Weakening any one of them now breaks this sta
 theorem every_refuted_day_refutes_its_own_clause :
     (¬ PlanCheck.PastPays theShortBlockRequest) ∧
     (¬ PlanCheck.PastPays theMorningWallRequest) ∧
-    (¬ PlanCheck.PastPays theMidBreakRequest) ∧
+    (¬ PlanCheck.PastPays thePreD100MidBreakRequest) ∧
     (¬ PlanCheck.PastPays theOverBudgetRequest) ∧
     PlanCheck.planOkCore theShortBlockRequest (dayPlan theShortBlockRequest) = false ∧
     PlanCheck.planOkCore theMorningWallRequest (dayPlan theMorningWallRequest) = false ∧
-    PlanCheck.planOkCore theMidBreakRequest (dayPlan theMidBreakRequest) = false ∧
+    PlanCheck.planOkCore thePreD100MidBreakRequest (dayPlan thePreD100MidBreakRequest) = false ∧
     PlanCheck.planOkCore theOverBudgetRequest (dayPlan theOverBudgetRequest) = false :=
   ⟨fun hp => absurd hp.oneBlock (by decide), fun hp => absurd hp.offWall (by decide),
    fun hp => absurd hp.offBreak (by decide), fun hp => absurd hp.budget (by decide),
@@ -8214,8 +8214,8 @@ theorem the_open_day_is_the_worked_stretch_the_wall_and_the_reservation :
           SegKind.sleep, none)] := by
   decide
 
-/-- **A run the decoder does not build since D94** (`Replay.openOf` reads past the break): its open block as D92 read it. -/
-def openAcrossBreakRun : Seal.Run := { openBreakRun with answer := { openBreakRun.answer with openBlock := openRun.answer.openBlock } }
+/-- **A run the decoder does not build since D94** (`Replay.openOf` reads past the break): its open block as D92 read it, and — since the owner's D99 drew the banked piece `[12:00, 12:05]` at once (README gap 4525) — its day as D94 drew it, with no `Block` segment of `m1`'s. -/
+def openAcrossBreakRun : Seal.Run := { openBreakRun with answer := { openBreakRun.answer with openBlock := openRun.answer.openBlock, days := openBreakRun.answer.days.map (fun d => { d with record := d.record.map (fun a => { a with segments := a.segments.filter (fun g => g.kind != .block ['m','1']) }) }) } }
 def theOpenAcrossBreakRequest : PlanReq := { theOpenRequest with run := openAcrossBreakRun }
 set_option maxRecDepth 400000 in
 /-- **The fork's marks**: the open row is `open`, carries no slot energy and says `120m so far`
@@ -9498,7 +9498,7 @@ theorem the_open_row_carries_the_logs_worked_minutes_is_refuted :
   intro h
   have hb : theHostWorkedRequest.run.answer.openBlock =
       some ⟨['m','1'], (⟨63924570000, 0⟩, ⟨true, 18000⟩), 0,
-        some (⟨63924570000, 0⟩, ⟨true, 18000⟩), false⟩ := by decide
+        some (⟨63924570000, 0⟩, ⟨true, 18000⟩), false, 739867⟩ := by decide
   have hrow : { theOpenRow with note := some (.soFar 90) } ∈ openBlockRows theHostWorkedRequest := by
     decide
   exact absurd (h _ _ hrow _ hb) (by decide)
@@ -9646,7 +9646,7 @@ set_option maxRecDepth 400000 in
 /-- **One written mark, rendered**: the pause D61 writes at `^g1`'s 12:50 on the §4.3 Monday — the
 line is the log writer's bytes (`Log.emitLine`), and the entry names the event and the wall. -/
 theorem the_pause_is_rendered_as_the_log_writes_it :
-    (match WallTimer.entryJson Cal.chicago ['t','4'] [(((Cal.instantOf Cal.chicago 739865 770).sec,
+    (match WallTimer.entryJson Cal.chicago ['t','4'] (Cal.instantOf Cal.chicago 739865 720) [(((Cal.instantOf Cal.chicago 739865 770).sec,
         (Cal.instantOf Cal.chicago 739865 830).sec), [['g','1']])]
       (true, (Cal.instantOf Cal.chicago 739865 770).sec, (Cal.instantOf Cal.chicago 739865 830).sec) with
       | .ok v =>
@@ -12306,21 +12306,21 @@ def theDoneRequest : PlanReq := atNow theRequest 630
 
 set_option maxRecDepth 400000 in
 /-- **The extension holds over a real `tm done`, and L25 fires** (AGENTS §7.4 item 2): the later record holds every
-segment and every closed id of the earlier one; `^m1`'s 07:05-08:05 block, closed before 09:30, is a row of both
-days, done in both; and `^m2`'s row is OPEN at 09:30 (the running block, 09:05 to `now`), outside the law. -/
+segment and every closed id of the earlier one; `^m1`'s 07:05-08:05 block, closed before 09:30, is a row of both days, done in both; and `^m2`'s row is OPEN at 09:30 (the running block, 09:05 to `now`), outside the law.
+The fourth conjunct is the restated L25's own conclusion (`PlanStable.plan_is_stable_across_a_replan_after_a_logged_verb`): `decide` computed it until D99's replay outgrew the default heartbeats (W-47 track K; never a raised budget, §5.10a). -/
 theorem the_morning_is_extended_by_tm_done :
-    recordExtends theMorningRequest theDoneRequest = true ∧
-    ((dayPlan theMorningRequest).segments.filter (fun s => s.val.flags.isOpen)).map
-        (fun s => (s.val.start, s.val.stop, s.val.item))
-      = [((Cal.instantOf Cal.chicago 739867 545).sec, (Cal.instantOf Cal.chicago 739867 570).sec,
-          some ['m','2'])] ∧
-    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) &&
-        !s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item, s.val.flags.done))
-      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec,
-          some ['m','1'], true)] ∧
-    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) &&
-        !s.val.flags.isOpen)).all (fun s => decide (s ∈ (dayPlan theDoneRequest).segments)) = true := by
-  refine ⟨by decide, by decide, by decide, by decide⟩
+    recordExtends theMorningRequest theDoneRequest = true ∧ ((dayPlan theMorningRequest).segments.filter (fun s => s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item)) = [((Cal.instantOf Cal.chicago 739867 545).sec, (Cal.instantOf Cal.chicago 739867 570).sec, some ['m','2'])] ∧
+    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) && !s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item, s.val.flags.done)) = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec, some ['m','1'], true)] ∧
+    ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) && !s.val.flags.isOpen)).all (fun s => decide (s ∈ (dayPlan theDoneRequest).segments)) = true := by
+  have h1 : recordExtends theMorningRequest theDoneRequest = true := by decide
+  have h3 : ((dayPlan theMorningRequest).segments.filter (fun s => decide (s.val.stop < theMorningRequest.now.sec) && !s.val.flags.isOpen)).map (fun s => (s.val.start, s.val.stop, s.val.item, s.val.flags.done)) = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec, some ['m','1'], true)] := by decide
+  refine ⟨h1, by decide, h3, List.all_eq_true.2 fun s hs => ?_⟩
+  have hdone : s.val.flags.done = true := by have hm := List.mem_map_of_mem (f := fun s : WfSeg => (s.val.start, s.val.stop, s.val.item, s.val.flags.done)) hs; rw [h3, List.mem_singleton] at hm; exact congrArg (fun x => x.2.2.2) hm
+  obtain ⟨hs, hc⟩ := List.mem_filter.1 hs; simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true'] at hc
+  obtain ⟨s', hs', heq, hd⟩ := PlanStable.plan_is_stable_across_a_replan_after_a_logged_verb theMorningRequest theDoneRequest (recordExtends_spec h1) rfl rfl (fun _ => rfl) (by decide) (by decide) s hs hc.1 hc.2
+  have key : ∀ x : Seg, x.flags.done = true → { x with flags := { x.flags with done := true } } = x := fun x hx => by cases x with | mk a b c d e f g h i j => cases g; simp_all
+  have h' := heq; rw [hdone, key _ (hd hdone)] at h'
+  exact decide_eq_true ((Subtype.ext h' : s' = s) ▸ hs')
 
 /-- **A stop and, after `now`, a done**: `^m1` started at 07:05 and STOPPED at 08:05 with thirty minutes left; then,
 after the 08:30 plan, `tm done ^m1` at 09:00. -/
@@ -12673,7 +12673,7 @@ def theInsideBreakRequest : PlanReq := { theCensusRequest with run := insideBrea
 set_option maxRecDepth 400000 in
 /-- **The day splits `m1`'s block at its break** (D87): the Block `[07:05, 07:30]`, the Break `[07:30, 07:45]`
 and the Block `[07:45, 08:05]`, and `PlanCheck.noBlockOverABreak` and `planOkCore` hold.  Until D87 this log's day
-was `the_mid_break_day_lays_a_block_across_a_break`'s, with the one Block `[07:05, 08:05]` across the Break and
+was `the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`'s, with the one Block `[07:05, 08:05]` across the Break and
 both checkers `false` — so this is that statement, at this log, refuted.  `m1`'s `done` still credits its logged
 60 minutes (the logged minutes are authoritative); the drawing is what moved. -/
 theorem the_inside_break_day_splits_the_block_at_the_break :
@@ -12757,7 +12757,7 @@ README gap 4241, parity P85.  A `break` logged before a block's `start` and last
 when the replay stepped it, so the block's clock ran from its `start` across the break's tail: credited when a
 `stop` or the next `start` cut it, and drawn across it, while the host's `Replay::idle_min_since` netted it.  The
 machine now remembers the last break's span (`Replay.Machine.brk`) and every clock starts at its end when it falls
-inside (`Replay.restartAt`).  The two days below are the ones sections 14 and 26 laid a Block across a Break with
+inside (Replay.restartAt then; `Replay.settle` since D99).  The two days below are the ones sections 14 and 26 laid a Block across a Break with
 until D92 — each now keeps its Block rows off its Break.  Section 14's refutation of
 `Goals.plan_places_no_block_over_a_break` stood on the first, and fell with it (README gap 4362). -/
 
@@ -12783,7 +12783,7 @@ def theIntoBreakRequest : PlanReq := { theCensusRequest with run := intoBreakRun
 
 set_option maxRecDepth 400000 in
 /-- **The day keeps `m1`'s Block off the Break** (D92): the Break `[07:00, 07:15]` and the Block `[07:15, 08:05]`,
-and `PlanCheck.noBlockOverABreak` and `planOkCore` hold — so this is `the_mid_break_day_lays_a_block_across_a_break`
+and `PlanCheck.noBlockOverABreak` and `planOkCore` hold — so this is `the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`
 as section 14 held it from D87 to D92, at this log, refuted.  Fork 4748911 drew the Block `[07:05, 08:05]` across the
 Break (parity P85); `m1`'s `done` still credits its logged 60 minutes, and the drawing is what moved. -/
 theorem the_into_break_day_keeps_its_block_off_the_break :
@@ -12861,8 +12861,8 @@ theorem the_open_row_begun_inside_a_break_starts_at_its_end :
 README gaps 4361 and 4506, parity P92.  D92's machine remembered the last `break` it stepped and read it where a clock
 starts; the host's `Replay::idle_min_since` unions every break of the block's ledger days, wherever the clock meets it.
 The machine now holds every break within `maxKeepDays` ledger days of the newest (`Replay.Machine.brks`), and every
-clock read nets the ones on the block's ledger days: where the clock (re)starts (`Replay.restartAt`), where a stretch is
-closed (`Replay.closeSub`, cut around them by `Replay.pieces`), and the open block read at the end of the log
+clock read nets the ones on the block's ledger days: where the clock (re)starts (Replay.restartAt then), where a stretch is
+closed (Replay.closeSub then, cut around them by `Replay.pieces`; both `Replay.settle` since D99), and the open block read at the end of the log
 (`Replay.openOf`).  The two days below are the ones sections 14 and 26 laid a Block across a Break with from W-43 to
 W-44 — a `break` logged ahead of a `start` but begun after it, which only a clock behind the log writes (gap 4361) —
 and each now keeps its Block rows off its Break.  Section 14 moved on to a break logged after `m1` was closed, a world
@@ -12891,7 +12891,7 @@ def theAheadBreakRequest : PlanReq := { theCensusRequest with run := aheadBreakR
 set_option maxRecDepth 400000 in
 /-- **The day cuts `m1`'s Block around the Break** (D94): the Block `[07:05, 07:10]`, the Break `[07:10, 07:25]` and the
 Block `[07:25, 08:05]`, and `PlanCheck.noBlockOverABreak` and `planOkCore` hold — so this is
-`the_mid_break_day_lays_a_block_across_a_break` as section 14 held it from W-43 to W-44, at this log, refuted.  D92 drew
+`the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break` as section 14 held it from W-43 to W-44, at this log, refuted.  D92 drew
 the Block `[07:05, 08:05]` across the Break, and so does fork 4748911 (parity P92).  `m1`'s `done` still credits its
 logged 60 minutes: the `actual_min` a `done` logs is authoritative, and on this log — written with a clock behind it —
 the host would have logged 45; the drawing is what moved. -/
@@ -12924,12 +12924,12 @@ set_option maxRecDepth 400000 in
 `m1` open since 12:00 with a fifteen-minute `break` at 12:05 logged ahead of its `start`.  The log's open block has
 banked the five minutes before the break and runs from its end, 12:20, so the open row is `[12:20, 14:00)` reading
 `105m so far` — the host's union at 14:00 (120 less the break's 15) — and the reservation owes 75 of the three-hour
-estimate.  No row lies across the Break; `oneBlockAtATime` and `noBlockOverAWall` still bite on the open row (`^g1` at
-12:50).  The five banked minutes are not drawn while the block runs (they are the stretch's first piece when it is
-closed).  D92 and fork 4748911 read 120 minutes and a row from 12:00, across the Break (parity P92). -/
+estimate.  No row lies across the Break; `oneBlockAtATime` and `noBlockOverAWall` still bite on the open row (`^g1` at 12:50).
+Since the owner's D99 the five banked minutes are DRAWN while the block runs (`Replay.settle`, README gap 4525 closed): the past row `[12:00, 12:05]`, before the Break; D94 drew nothing of them until the block closed.  D92 and fork 4748911 read 120 minutes and a row from 12:00, across the Break (parity P92). -/
 theorem the_open_row_is_read_past_a_break_held_ahead_of_its_clock :
     (dayPlan theOpenBreakRequest).segments.map (fun s => (s.val.start, s.val.stop, s.val.kind, s.val.note))
-      = [((Cal.instantOf Cal.chicago 739867 725).sec, (Cal.instantOf Cal.chicago 739867 740).sec,
+      = [((Cal.instantOf Cal.chicago 739867 720).sec, (Cal.instantOf Cal.chicago 739867 725).sec, SegKind.block, none),
+         ((Cal.instantOf Cal.chicago 739867 725).sec, (Cal.instantOf Cal.chicago 739867 740).sec,
           SegKind.brk, none),
          ((Cal.instantOf Cal.chicago 739867 740).sec, (Cal.instantOf Cal.chicago 739867 840).sec,
           SegKind.block, some (Note.soFar 105)),
@@ -12983,6 +12983,104 @@ theorem the_running_block_precedes_the_sleep_it_ties_with :
          ((Cal.instantOf Cal.chicago 739867 1410).sec, (Cal.instantOf Cal.chicago 739868 0).sec,
           SegKind.sleep, none)] := by
   decide
+
+/-! ############################################################################
+## 34. W-47 track K — the owner's D100: a break logged after a block closed is netted from it
+############################################################################
+
+APPENDED 2026-10-06 (stage 6, run **W-47**, track K; README "Stage 6 — W-47 track K" §11, gap 4520b, parity P105).
+
+A `break` logged after the `done` or `stop` that closed a block, and stamped inside it, is netted from the block since
+D100 (`Replay.netClosed`), so section 14's mid-break day draws `m1` around its break and passes the battery
+(`the_mid_break_day_cuts_its_block_around_the_break`).  The census that day sat in moved with it: its third refuted
+day, and the `offBreak` row of `the_paying_past_fails_on_four_whole_days`, are `thePreD100MidBreakRequest` — section
+14's request with today's record as the replay drew it before D100, a run the decoder no longer builds — and the
+decoder's own day joins the lift's domain (below).  **No day this module builds from a log refutes `offBreak` any
+more**; the clause stays in `PlanCheck.PastPays` because the lifts quantify over every `PlanReq`, and that no run the
+decoder builds can refute it is `Goals.plan_places_no_block_over_a_break`'s past half, owed and not claimed (README gap
+4918).  This section sits at the end of the module so that every line the mutation roster pins keeps its place (README
+§11.6): the deleted refutation's record that stood after section 14's day is here, and the fixtures stand in its
+place. -/
+
+set_option maxRecDepth 400000 in
+/-- **The day as the replay drew it before D100 lays a Block across a Break** — the statement section 14 held as
+the_mid_break_day_lays_a_block_across_a_break from W-44 to W-47, unchanged but for the request: the Block
+`[07:05, 08:05]` across the Break `[07:10, 07:25]`, and `PlanCheck.noBlockOverABreak` and `planOkCore` both `false`,
+the battery's opinion and not a restatement of a `Planner` theorem. -/
+theorem the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break :
+    (dayPlan thePreD100MidBreakRequest).segments.map
+        (fun s => (s.val.start, s.val.stop, s.val.kind))
+      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec,
+          SegKind.block),
+         ((Cal.instantOf Cal.chicago 739867 430).sec, (Cal.instantOf Cal.chicago 739867 445).sec,
+          SegKind.brk),
+         ((Cal.instantOf Cal.chicago 739867 545).sec, (Cal.instantOf Cal.chicago 739867 605).sec,
+          SegKind.block),
+         ((Cal.instantOf Cal.chicago 739867 770).sec, (Cal.instantOf Cal.chicago 739867 830).sec,
+          SegKind.wall),
+         ((Cal.instantOf Cal.chicago 739867 840).sec, (Cal.instantOf Cal.chicago 739867 880).sec,
+          SegKind.block),
+         ((Cal.instantOf Cal.chicago 739867 880).sec, (Cal.instantOf Cal.chicago 739867 940).sec,
+          SegKind.rest),
+         ((Cal.instantOf Cal.chicago 739867 1290).sec,
+          (Cal.instantOf Cal.chicago 739867 1320).sec, SegKind.windDown),
+         ((Cal.instantOf Cal.chicago 739867 1320).sec, (Cal.instantOf Cal.chicago 739868 0).sec,
+          SegKind.sleep)] ∧
+      PlanCheck.noBlockOverABreak thePreD100MidBreakRequest (dayPlan thePreD100MidBreakRequest) = false ∧
+      PlanCheck.planOkCore thePreD100MidBreakRequest (dayPlan thePreD100MidBreakRequest) = false := by
+  decide
+
+set_option maxRecDepth 400000 in
+/-- **Since the owner's D100 the mid-break day's past pays**: the four clauses of `PlanCheck.PastPays` hold at
+`theMidBreakRequest`, because the replay now cuts the closed block around the break.  Until D100 this request refuted
+`offBreak` (`the_paying_past_fails_on_four_whole_days` moved that row to `thePreD100MidBreakRequest`). -/
+theorem the_paying_past_at_the_mid_break_request : PlanCheck.PastPays theMidBreakRequest where
+  oneBlock := by decide
+  offWall := by decide
+  offBreak := by decide
+  budget := by decide
+
+set_option maxRecDepth 400000 in
+/-- **And the lift fires there**: `PlanCheck.dayPlan_ok_core_of_a_paying_past_on_an_unassigned_day` at
+`theMidBreakRequest` — the core seven on the whole day of a morning whose log holds a break logged after the block it
+lies across was closed, by the lift and not by a `decide` on the battery.  D100 moved this request out of the census's
+refuted days and into the lift's domain. -/
+theorem the_core_seven_hold_on_the_mid_break_day_by_the_lift :
+    PlanCheck.planOkCore theMidBreakRequest (dayPlan theMidBreakRequest) = true :=
+  PlanCheck.dayPlan_ok_core_of_a_paying_past_on_an_unassigned_day theMidBreakRequest (by decide)
+    theCensusRequest_wallsAgree
+    the_census_request_agrees.2
+    the_census_request_is_inside_the_calendar the_census_request_is_plain
+    the_paying_past_at_the_mid_break_request
+
+
+/-! **plan_places_no_block_over_a_break_as_stage_6_wrote_it_is_refuted stood here from W-44 track K to the W-44
+repair, which DELETED it** (README gaps 4611 and 4520; the campaign's lesson 4; W-43's precedent at `cd14952`).  It
+read
+
+    ¬ (∀ (r : PlanReq) (b k : WfSeg), b ∈ (dayPlan r).segments → k ∈ (dayPlan r).segments →
+        b.val.kind = SegKind.block → k.val.kind = SegKind.brk →
+        b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start)
+
+and was computed at `theMidBreakRequest` (section 14), through the_mid_break_day_lays_a_block_across_a_break's verdict
+and `PlanCheck.noBlockOverABreak_iff`.  Track K called that world one reading: no host reading of a closed block nets
+a break logged after it, and the `done` logged the block's minutes before the break existed.  That is true of the
+block's MINUTES and false of its SPAN: driven at the repair on the shipped binary (S9: `start` 08:00, `done` 09:00,
+`--now 08:30 break 20m` and its end), `tm --json review week` puts `[60, 20]` in hour 8 — eighty minutes in sixty,
+the reading the owner's D87 declined by name ("the heat grid counted the break as break AND as block") — and the
+plan lays the Block across the Break.  It is gap 4520's mechanism, a mark logged after the replay closed the stretch
+it lies across, on a closed block; the owner's D94 says a block and a break are read one way on every log, and the
+kernel does not yet read this one so.  A refutation that stands on that reading is not a discharge, so it went, and
+the goal returned to `Goals.lean` (burn-down 0 → 1), as at W-43.  What the deleted theorem showed is still held by
+value: until W-47 the day laid the Block across the Break and the battery said so; since the owner's D100 the replay
+cuts the block around the break (`the_mid_break_day_cuts_its_block_around_the_break`), and the old day is
+`thePreD100MidBreakRequest`'s (`the_mid_break_day_as_drawn_before_d100_lays_a_block_across_a_break`, below).
+
+`PlanCheck.plan_places_no_block_over_a_break`, the law over the Block rows that start at or after `now`, stands, and
+section 14's census request applies it.  The debt, as `Goals.lean` states it: close gap 4520 (its open half is D94's,
+its closed half the owner's), then prove the goal over the runs the decoder builds or refute it on a world with ONE
+reading.  W-47 track K closed both halves (the owner's D99 and D100, README gaps 4520a and 4520b); the proof or the
+refutation is what is left, and `Goals.lean` says why neither was written. -/
 
 end PlannerWit
 end Tm

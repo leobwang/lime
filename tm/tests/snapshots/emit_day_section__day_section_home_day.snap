@@ -1,5 +1,5 @@
 ---
-source: tm-core/tests/emit_day_section.rs
+source: tm/tests/emit_day_section.rs
 expression: body
 ---
 08:00  3 p3 ✓ Claude Code drafts tests     @m2  1b  (60m)

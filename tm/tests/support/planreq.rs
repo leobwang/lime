@@ -146,9 +146,7 @@ pub fn request_with_model(w: &World<'_>, model: &Model, planner: Value) -> (Valu
     let order = send_order(w.cands);
     let tz = w.cfg.tz;
     let req = json!({
-        "docs": w.docs.iter()
-            .map(|(p, t)| json!({"path": p, "lines": t.lines().collect::<Vec<_>>()}))
-            .collect::<Vec<_>>(),
+        "docs": docs_json(w),
         // `ctx.today` — `now`'s own local date — as the shipped encoder sends
         // it. This sent the PLANNED date (`state.date` first) until W-36 track
         // H, so a stale `state.date` made the kernel refuse `nowDisagrees at`
@@ -212,8 +210,34 @@ pub fn kernel_day_of(resp: &Value, w: &World<'_>, order: &[usize]) -> Result<(Ke
     }
     let ans = planwire::read_capacity_answer(resp, order, true).map_err(|e| format!("capacity: {e}"))?;
     let ctx = DayCtx { tz: w.cfg.tz, cands: w.cands, prios: &ans.prios };
-    let day = planwire::read_plan(&resp["ok"]["plan"], &ctx).map_err(|e| format!("plan: {e}"))?;
+    let mut day = planwire::read_plan(&resp["ok"]["plan"], &ctx).map_err(|e| format!("plan: {e}"))?;
+    // **The day's rows, as the binary asks for them** (the owner's D112,
+    // `kernel_capacity::read_day`): the day the kernel planned goes back through the
+    // `plan` section — its segments and priorities as the kernel wrote them — over the
+    // world's documents and zone, through the binary's own encoder and decoder.
+    let rows = planwire::rows_request(
+        &docs_json(w),
+        &tz_table::wire_for(None, w.cfg.tz),
+        w.cfg.block_min(),
+        day.day.date,
+        w.cfg.day.bed,
+        &resp["ok"]["plan"],
+    );
+    let raw = tm_kernel_ffi::call(&rows).expect("the kernel call returns");
+    let rows_resp: Value = serde_json::from_str(&raw).unwrap_or_else(|e| panic!("the response is JSON: {e}\n{raw}"));
+    day.day.cells = planwire::read_rows(&rows_resp, &day.day.segments).map_err(|e| format!("plan rows: {e}"))?;
     Ok((day, ans))
+}
+
+/// **The world's documents as a request carries them** — one line per element, the
+/// shape the capacity request's `docs` have ([`request_with_model`]).
+pub fn docs_json(w: &World<'_>) -> Value {
+    Value::Array(
+        w.docs
+            .iter()
+            .map(|(p, t)| json!({"path": p, "lines": t.lines().collect::<Vec<_>>()}))
+            .collect(),
+    )
 }
 
 /// The id of a running block, as the what-if names it.

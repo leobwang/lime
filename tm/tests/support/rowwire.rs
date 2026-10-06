@@ -10,20 +10,28 @@
 //! Nothing here asserts, and nothing here decides which differences are
 //! allowed: `differences` reports every cell that differs and each caller
 //! declares its own holes.
+//!
+//! **Since the owner's D112 (W-47) this section is the BINARY's door to its
+//! rows**: `kernel_capacity::read_day` hands every day the kernel planned back
+//! through it (`planwire::rows_request`) and pads the cells it answers. There is
+//! no Rust builder of a cell to compare with any more, so this module's jobs are
+//! two: a day a test builds by HAND gets the kernel's rows for its segments
+//! ([`with_kernel_cells`]), and a test can ask the door for the rows of any day
+//! ([`kernel_rows`]). The decoder is the binary's own, `planwire::read_rows`; a
+//! second one stood here until W-47 (AGENTS §5.3). The fork cells the Rust
+//! builder wrote went with the builder, and the bytes it wrote are frozen by
+//! value where a test still needs them (`tm/tests/kernel_row_cells.rs`, the
+//! `emit_*` snapshots).
 
 #[path = "../../src/cli/tz_table.rs"]
 pub mod tz_table;
-
-use std::collections::HashMap;
 
 use chrono::Timelike;
 use serde_json::{json, Value};
 
 use tm_core::config::Config;
-use tm_core::emit::{self, RowCells};
-use tm_core::model::Id;
+use tm_core::emit::RowCells;
 use tm_core::dayplan::{self, DayPlan, SegKind, Segment};
-use tm_core::tree::Tree;
 
 /// The kernel's epoch and a `chrono` instant as its absolute second — the host
 /// codec's (`tm_core::planwire`, W-35), not a copy of it. Not every crate that
@@ -47,13 +55,29 @@ pub fn decimal_pair(x: f64) -> Value {
     json!({"num": scaled, "den": 1_000_000u64})
 }
 
+/// **How a segment's note crosses the `plan` section.** The host holds a note
+/// as prose (`SegFlags::note`) and the kernel's `Note` is a name with its
+/// arguments, so the two directions differ:
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Notes {
+    /// `null` but for a replayed pause, whose note IS a name both sides share:
+    /// the kernel derives the column (`↓`, `⚠`) and prints no prose it was not
+    /// told.
+    Derive,
+    /// A written note crosses as the kernel's free-text note (`idleAttributed`'s
+    /// text, printed as written — a written note wins in the column, as it did in
+    /// the fork's), a replayed pause as its name, and no note as `null`. For a
+    /// day a test builds by HAND, whose notes are the prose it means to print.
+    Written,
+}
+
 /// One segment, as the `plan` section carries it.
 ///
 /// `instance` is not sent: no cell reads it (`Emit.rowOf` takes a `Seg` and
 /// never looks at `inst`). `flags.ghost` is not sent either — the kernel makes
 /// the ghost row a *kind* and the fork makes it a flag, and the fixture has no
 /// ghost row.
-pub fn seg_json(seg: &Segment) -> Value {
+pub fn seg_json(seg: &Segment, notes: Notes) -> Value {
     let mut o = json!({
         "start": kernel_sec(seg.start),
         "stop": kernel_sec(seg.end),
@@ -79,7 +103,11 @@ pub fn seg_json(seg: &Segment) -> Value {
         // kernel drew it `lost` and the host `paused`, an UNDECLARED `title`
         // difference waiting for the first generated day with a typed pause
         // (W-38 land step, README gap 3436).
-        "note": if seg.is_pause() { json!({"name": "paused"}) } else { Value::Null },
+        "note": match (&seg.flags.note, notes) {
+            _ if seg.is_pause() => json!({"note": "paused"}),
+            (Some(text), Notes::Written) => json!({"note": "idleAttributed", "text": text}),
+            _ => Value::Null,
+        },
     });
     if let SegKind::Batch(ids) = &seg.kind {
         o["batch"] = json!(ids.iter().map(|i| i.to_string()).collect::<Vec<_>>());
@@ -99,6 +127,11 @@ pub fn seg_json(seg: &Segment) -> Value {
 /// are the whole point**: the kernel reads the title, `ci`, estimate and parent
 /// out of its own parse of these bytes, and is told none of them.
 pub fn request(docs: Vec<Value>, plan: &DayPlan, cfg: &Config) -> Value {
+    request_with(docs, plan, cfg, Notes::Derive)
+}
+
+/// [`request`], with the notes crossing as `notes` says.
+pub fn request_with(docs: Vec<Value>, plan: &DayPlan, cfg: &Config, notes: Notes) -> Value {
     let prios: Vec<Value> = plan
         .priorities
         .iter()
@@ -112,7 +145,7 @@ pub fn request(docs: Vec<Value>, plan: &DayPlan, cfg: &Config) -> Value {
         "plan": {
             "bed": format!("{:02}:{:02}", cfg.day.bed.hour(), cfg.day.bed.minute()),
             "priorities": prios,
-            "segments": plan.segments.iter().map(seg_json).collect::<Vec<_>>(),
+            "segments": plan.segments.iter().map(|s| seg_json(s, notes)).collect::<Vec<_>>(),
         }
     })
 }
@@ -126,48 +159,33 @@ pub fn kernel_cells(docs: Vec<Value>, plan: &DayPlan, cfg: &Config) -> Vec<RowCe
 }
 
 /// The same, with a **refusal returned rather than a panic**: the fuzz in
-/// `planner_invariants.rs` asserts that no day the fork's planner produces is
-/// refused by the wire, which it cannot do if a refusal aborts the case.
+/// `planner_invariants.rs` asserts that no day the kernel plans is refused by
+/// the wire, which it cannot do if a refusal aborts the case.
 pub fn kernel_rows(docs: Vec<Value>, plan: &DayPlan, cfg: &Config) -> Result<Vec<RowCells>, String> {
-    let req = request(docs, plan, cfg);
-    let raw = tm_kernel_ffi::call(&req.to_string()).expect("kernel call");
-    let resp: Value = serde_json::from_str(&raw).expect("the response is json");
-    let Some(rows) = resp["ok"]["plan"]["rows"].as_array() else {
-        return Err(raw);
-    };
-    Ok(rows
-        .iter()
-        .map(|r| {
-            let s = |k: &str| r[k].as_str().unwrap_or_else(|| panic!("{k} in {r}")).to_string();
-            RowCells {
-                time: s("time"),
-                ci: s("ci"),
-                p: s("p"),
-                mark: s("mark"),
-                title: s("title"),
-                parent: s("parent"),
-                est: s("est"),
-                actual: s("actual"),
-                note: s("note"),
-                batch_names: r["batchNames"].as_array().and_then(|xs| {
-                    if xs.is_empty() {
-                        None
-                    } else {
-                        Some(xs.iter().map(|x| x.as_str().unwrap_or_default().to_string()).collect())
-                    }
-                }),
-            }
-        })
-        .collect())
+    kernel_rows_with(docs, plan, cfg, Notes::Derive)
 }
 
-/// The fork's cells for the same day.
-pub fn fork_cells(plan: &DayPlan, tree: &Tree, cfg: &Config) -> Vec<RowCells> {
-    let prios: HashMap<&Id, u8> = plan.priorities.iter().map(|(id, p)| (id, p.p)).collect();
-    plan.segments
-        .iter()
-        .map(|seg| emit::row_cells(seg, plan, tree, cfg, &prios))
-        .collect()
+/// [`kernel_rows`], with the notes crossing as `notes` says. The rows are read
+/// by the binary's own decoder (`planwire::read_rows`, the one there is).
+pub fn kernel_rows_with(docs: Vec<Value>, plan: &DayPlan, cfg: &Config, notes: Notes) -> Result<Vec<RowCells>, String> {
+    let req = request_with(docs, plan, cfg, notes);
+    let raw = tm_kernel_ffi::call(&req.to_string()).expect("kernel call");
+    let resp: Value = serde_json::from_str(&raw).expect("the response is json");
+    tm_core::planwire::read_rows(&resp, &plan.segments).map_err(|e| format!("{e}: {raw}"))
+}
+
+/// **A day a test built by hand, given the kernel's rows for its segments** —
+/// the cells the `plan` section answers (`Emit.rowOf` over the kernel's own
+/// parse of `docs`), with its written notes crossing as written. Since the
+/// owner's D112 a day's rows ARE the kernel's cells and no Rust builds one, so a
+/// test that prints a day it laid out itself asks the kernel for its rows, as
+/// the binary does for every day it plans.
+pub fn with_kernel_cells(docs: Vec<Value>, mut plan: DayPlan, cfg: &Config) -> DayPlan {
+    plan.cells = match kernel_rows_with(docs, &plan, cfg, Notes::Written) {
+        Ok(cells) => cells,
+        Err(raw) => panic!("the kernel refused the rows of a hand-built day:\n{raw}"),
+    };
+    plan
 }
 
 /// `(cell name, fork, kernel)` for every cell of a row that differs.

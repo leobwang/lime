@@ -330,13 +330,16 @@ pub const TRACE_REQUEST_ENV: &str = "TM_TRACE_CAPACITY_REQUEST";
 pub const TRACE_REQUEST_PREFIX: &str = "capacity request: ";
 
 /// **Ask the kernel** for `want` days of capacity from today (clamped by
-/// `planwire::horizon`), and the priorities of `ranked` when given.
-pub fn ask(ctx: &Ctx, allow_home: bool, want: u32, ranked: Option<&Ranked<'_>>) -> Result<Answer, CliError> {
+/// `planwire::horizon`), with no candidates: `tm plan --week`'s seven days
+/// ([`week`]). Every priority a surface reads comes from the day's own request
+/// ([`plan_day`]); the ranked capacity-only request and its `ranked` argument
+/// went with `rank`, its last caller, at W-47 track H (README gap 4755).
+pub fn ask(ctx: &Ctx, allow_home: bool, want: u32) -> Result<Answer, CliError> {
     let (days, clamped) = planwire::horizon(ctx.today, want);
     if clamped {
         say_clamped(ctx.today, want, days);
     }
-    let (req, order) = request(ctx, allow_home, days, ranked)?;
+    let (req, order) = request(ctx, allow_home, days, None)?;
     if std::env::var_os(TRACE_REQUEST_ENV).is_some() && !kernel_bridge::capturing_kernel_stderr() {
         eprintln!("{TRACE_REQUEST_PREFIX}{req}");
     }
@@ -347,23 +350,7 @@ pub fn ask(ctx: &Ctx, allow_home: bool, want: u32, ranked: Option<&Ranked<'_>>) 
         }
         Err(e) => return Err(e),
     };
-    let answer = read_answer(&resp, &order, ranked.is_some())?;
-    if let Some(r) = ranked {
-        for (c, p) in r.cands.iter().zip(&answer.prios) {
-            if c.id != p.id {
-                return Err(defect("a grant answers another candidate"));
-            }
-        }
-    }
-    Ok(answer)
-}
-
-/// **§7 and §8.4 from the kernel**: the priorities of `cands` over a lookahead
-/// long enough for every deadline and floor (`priority::lookahead_days`), and
-/// its first days.
-pub fn rank(ctx: &Ctx, cands: &[Candidate], yesterday: &BTreeMap<Id, u8>, allow_home: bool) -> Result<Answer, CliError> {
-    let want = priority::lookahead_days(cands, ctx.today);
-    ask(ctx, allow_home, want, Some(&Ranked { cands, yesterday }))
+    read_answer(&resp, &order, false)
 }
 
 /// **R3's planner request** (the W-41 repair, README gaps 4130 and 4142; sent by
@@ -475,6 +462,12 @@ pub struct PlannerAsk {
     pub want: u32,
     /// Whether the horizon clamped them.
     pub clamped: bool,
+    /// **What the rows of the day it plans are asked over** (the owner's D112):
+    /// the request's own documents and zone, read once with it, so the `plan`
+    /// section renders the day against the tree the planner planned it on.
+    pub rows_docs: Value,
+    /// The zone table the request carried (`tz`).
+    pub rows_tz: Value,
 }
 
 /// **[`planner_request`], with §9.1's what-if when `extend` names one** — `blocks`
@@ -490,17 +483,68 @@ pub fn planner_ask_from(
 ) -> Result<PlannerAsk, CliError> {
     let mut state = ctx.state.clone();
     state.roll_to(ctx.today);
+    planner_ask_over(ctx, &state, inputs, allow_home, extend)
+}
+
+/// [`planner_ask_from`] over `state` in place of `ctx.state` as `tm plan`'s roll leaves it — the
+/// one body; [`arrival_window`] asks it over the state an arrival at `at` would store.
+fn planner_ask_over(
+    ctx: &Ctx,
+    state: &tm_core::store::RuntimeState,
+    inputs: &TickInputs,
+    allow_home: bool,
+    extend: Option<(&Id, u32)>,
+) -> Result<PlannerAsk, CliError> {
     let cands = priority::collect_candidates(&ctx.tree, &ctx.replay, &ctx.cfg, &ctx.model, ctx.today, ctx.now_tz);
     let yesterday = &inputs.yesterday;
     let want = priority::lookahead_days(&cands, ctx.today);
     let (days, clamped) = planwire::horizon(ctx.today, want);
     let ranked = Ranked { cands: &cands, yesterday };
-    let (request, order) = request_with(ctx, &state, allow_home, days, Some(&ranked), &inputs.reads)?;
+    let (request, order) = request_with(ctx, state, allow_home, days, Some(&ranked), &inputs.reads)?;
     // The section composed once, by the body every harness that builds it calls (README gap 4890):
     // the routines, the what-if, the running block's worked minutes (`day::worked_min`'s reading).
     let planner =
-        tm_core::plansection::planner_section(&state, &ctx.replay, ctx.now_tz, ctx.cfg.tz, &ctx.tree, &cands, &ctx.cfg, extend);
-    Ok(PlannerAsk { request: planwire::with_planner(&request, &planner), cands, order, days, want, clamped })
+        tm_core::plansection::planner_section(state, &ctx.replay, ctx.now_tz, ctx.cfg.tz, &ctx.tree, &cands, &ctx.cfg, extend);
+    Ok(PlannerAsk {
+        request: planwire::with_planner(&request, &planner),
+        cands,
+        order,
+        days,
+        want,
+        clamped,
+        rows_docs: Value::Array(inputs.reads.docs.clone()),
+        rows_tz: inputs.reads.tz_wire.clone(),
+    })
+}
+
+/// **§8.1's window and budget for an arrival at `at`, as the KERNEL reads them** (README gap
+/// **4746**, parity **P113**; W-47 track H): the day's own request over the state an arrival at `at`
+/// would leave — today's date, the arrival, no stored window or budget — and the window and budget
+/// the kernel's day plans by (`Planner.PlanReq.window`: `Look.windowFrom`'s fixed point,
+/// `Look.windowEnd`, over the kernel's walls of the day, `Look.wallsClippedOn`; and
+/// `Planner.PlanReq.budgetBlocks`, `Look.budgetOf` in exact arithmetic). `Ctx::arrival_window`, the
+/// ONE definition `tm arrive` writes into `.tm/state.json` and D42's rebuild derives back (D45),
+/// is this.
+///
+/// Until W-47 it was the host's: `capacity::window_and_budget` over `Tree::walls_on` (fork
+/// `Ctx::walls_on`), a second reading of the day's walls beside the kernel's, and an `f64` budget
+/// beside the kernel's exact one — and once stored, the kernel's day read the host's window back
+/// (gap 320's reading), so the walls that decided the day's window after an arrive were never the
+/// kernel's.
+pub fn arrival_window(ctx: &Ctx, at: chrono::NaiveTime) -> Result<((chrono::NaiveTime, chrono::NaiveTime), u32), CliError> {
+    let mut state = ctx.state.clone();
+    state.roll_to(ctx.today);
+    state.date = Some(ctx.today);
+    state.arrival = Some(at);
+    state.window = None;
+    state.budget = None;
+    let ask = planner_ask_over(ctx, &state, &tick_inputs(ctx)?, false, None)?;
+    let planned = read_day(ctx, ask).map_err(|e| match e {
+        CliError::Kernel(issue) => named_refusal(&issue).unwrap_or(CliError::Kernel(issue)),
+        e => e,
+    })?;
+    let (lo, hi) = planned.day.window;
+    Ok(((lo.time(), hi.time()), planned.day.budget_blocks))
 }
 
 /// **The day the kernel planned** (R3), with what it was ranked by: the
@@ -518,6 +562,13 @@ pub struct Planned {
     pub caps: Vec<UnitCapacity>,
     /// §9.1's what-if (`plan.overtime`), when `extend` asked for one.
     pub overtime: Option<tm_core::dayplan::PlanDiff>,
+    /// **§8.2 step 5's served order**, as positions into [`Planned::cands`] — the kernel's
+    /// `diagnostics.served` (`PlanWire.the_served_key_is_the_walks_order`: one entry per ranked
+    /// answer, in `rankedLe`'s order, D60/D63's p0 rule included) read by
+    /// [`tm_core::planwire::served_order`]. The one ranking a host surface orders items by
+    /// (README gaps 4880 and 4755, parity P112): `tm review day`'s "tomorrow" reads it, never fork
+    /// `priority::sorted`'s `(p, root line, own line)` key.
+    pub served: Vec<usize>,
 }
 
 /// **§8's day, asked of the kernel** — R3's body swap (D48, D50): the plan
@@ -578,15 +629,36 @@ pub fn read_day(ctx: &Ctx, ask: PlannerAsk) -> Result<Planned, CliError> {
         }
     }
     let read = planwire::DayCtx { tz: ctx.cfg.tz, cands: &ask.cands, prios: &answer.prios };
-    let day = planwire::read_plan(&resp["ok"]["plan"], &read).map_err(|e| {
+    let mut day = planwire::read_plan(&resp["ok"]["plan"], &read).map_err(|e| {
         CliError::Kernel(kernel_bridge::fault_issue(&format!("planner response: {e}"), ""))
     })?;
-    Ok(Planned { day: day.day, cands: ask.cands, prios: answer.prios, caps: answer.days, overtime: day.overtime })
+    // **The day's rows are the kernel's cells** (the owner's D112): the day it just
+    // planned goes back through the `plan` section — its segments and priorities as the
+    // kernel wrote them, over the same documents and zone — and the cells it answers are
+    // what every surface pads (`emit::render_row`). `tm check` asks them too, so a row
+    // the kernel cannot render is a fault `tm check` meets where `tm plan` would (README
+    // gap 4711's rule).
+    let rows = planwire::rows_request(
+        &ask.rows_docs,
+        &ask.rows_tz,
+        ctx.block_min(),
+        day.day.date,
+        ctx.cfg.day.bed,
+        &resp["ok"]["plan"],
+    );
+    let (rows_resp, _) = kernel_bridge::call_text(&rows)?;
+    day.day.cells = planwire::read_rows(&rows_resp, &day.day.segments).map_err(|e| {
+        CliError::Kernel(kernel_bridge::fault_issue(&format!("plan rows: {e}"), ""))
+    })?;
+    let served = planwire::served_order(&resp["ok"]["plan"]["diagnostics"], &ask.order, &ask.cands).map_err(|e| {
+        CliError::Kernel(kernel_bridge::fault_issue(&format!("planner response: {e}"), ""))
+    })?;
+    Ok(Planned { day: day.day, cands: ask.cands, prios: answer.prios, caps: answer.days, overtime: day.overtime, served })
 }
 
 /// **`tm plan --week`'s seven days** from the kernel.
 pub fn week(ctx: &Ctx, allow_home: bool) -> Result<Vec<UnitCapacity>, CliError> {
-    Ok(ask(ctx, allow_home, 7, None)?.days)
+    Ok(ask(ctx, allow_home, 7)?.days)
 }
 
 #[cfg(test)]

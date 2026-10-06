@@ -459,11 +459,11 @@ theorem resealOfV_eq (z : Cal.Tz) (T : Nat) (K : Ckpt) (b : List Log.Line) (term
 
 /-! ## The emitters a resume's wire adds -/
 
-/-- The open block (fork `OpenBlock`): `[id, started, workedMin, since, paused]`. -/
+/-- The open block (fork `OpenBlock`): `[id, started, workedMin, since, paused, day]` — `day` since the owner's D99 (gap 4616). -/
 def cOpenBlock : Codec OpenBlock :=
-  cIso (cTuple <| tCons cStr <| tCons cAt <| tCons cNat <| tCons cOptAt <| tCons cBool <| tNil)
-    (fun b => (b.id, b.started, b.workedMin, b.since, b.paused, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1⟩) (fun _ => rfl)
+  cIso (cTuple <| tCons cStr <| tCons cAt <| tCons cNat <| tCons cOptAt <| tCons cBool <| tCons cNat <| tNil)
+    (fun b => (b.id, b.started, b.workedMin, b.since, b.paused, b.day, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1⟩) (fun _ => rfl)
 theorem cOpenBlock_nonnull : cOpenBlock.NonNull := fun _ => nofun
 theorem cInterruption_nonnull : cInterruption.NonNull := fun _ => nofun
 

@@ -461,10 +461,12 @@ def cDayAcc : Codec DayAcc :=
       <| tCons cOptStr <| tCons (cOpt (cPair cStr cStr) (cPair_nonnull cStr cStr)) <| tCons cOptNat
       <| tCons (cList maxList (cPair cAt cStr)) <| tCons cNat <| tCons cNat <| tCons (cList maxList cIdleRec)
       <| tCons (cList maxList cBreakRec) <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr
+      <| tCons (cList maxList (cPair cNat cNat))
       <| tNil)
     (fun a => (a.firstStart, a.starts, a.blockMin, a.blocksDone, a.loadFifths, a.byCi, a.ciUnknown, a.done, a.lostMin,
       a.dropped, a.segments, a.wake, a.sleptMin, a.onsetMin, a.arrival, a.loc, a.window, a.budget, a.locChanges,
-      a.leakMin, a.longestLeak, a.idle, a.breaks, a.routineMin, a.plans, a.replansToday, a.driftMin, a.lastPlanHash, ()))
+      a.leakMin, a.longestLeak, a.idle, a.breaks, a.routineMin, a.plans, a.replansToday, a.driftMin, a.lastPlanHash,
+      a.durNet, ()))
     (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
@@ -473,7 +475,8 @@ def cDayAcc : Codec DayAcc :=
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
-      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩)
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩)
     (fun _ => rfl)
 theorem cDayAcc_nonnull : cDayAcc.NonNull := fun _ => nofun
 
@@ -485,12 +488,21 @@ def cItemAcc : Codec ItemAcc :=
 theorem cItemAcc_nonnull : cItemAcc.NonNull := fun _ => nofun
 
 /-- The open block (fork `Block`), and since the owner's D94 its `start`'s ledger day (`Replay.Block.day`), whose
-breaks its clock nets. -/
+breaks its clock nets — and since the owner's D99 (README gap 4520a) its own closed idle spans (`Replay.Block.idle`,
+each `[from, until]`) and the pieces it has drawn (`Replay.Block.drawn`), each list of at most `maxList` (§10.4's
+"every length"), so a resumed fold re-draws a piece a later mark moves exactly where a whole replay does.  A piece
+(`Replay.Piece`) is `[start, end, day]`, its codec written in place: a codec of its own was a definition the
+compiled checkpoint never named (check 12), the compiler having folded it into this one. -/
 def cBlock : Codec Block :=
   cIso (cTuple <| tCons cStr <| tCons cAt <| tCons cOptAt <| tCons cBool <| tCons cOptAt <| tCons cNat
-      <| tCons (cOpt cEnergyObs cEnergyObs_nonnull) <| tCons cNat <| tNil)
-    (fun b => (b.id, b.started, b.since, b.paused, b.pausedAt, b.workedMin, b.obs, b.day, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1⟩)
+      <| tCons (cOpt cEnergyObs cEnergyObs_nonnull) <| tCons cNat
+      <| tCons (cList maxList (cPair cAt cAt))
+      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
+          (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
+      <| tNil)
+    (fun b => (b.id, b.started, b.since, b.paused, b.pausedAt, b.workedMin, b.obs, b.day, b.idle, b.drawn, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
+      p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1⟩)
     (fun _ => rfl)
 theorem cBlock_nonnull : cBlock.NonNull := fun _ => nofun
 
@@ -505,20 +517,31 @@ def cOpenInt : Codec (At × Nat × Option Log.Id) :=
     (fun i => (i.1, i.2.1, i.2.2, ())) (fun p => (p.1, p.2.1, p.2.2.1)) (fun _ => rfl)
 theorem cOpenInt_nonnull : cOpenInt.NonNull := fun _ => nofun
 
+/-! A held closed block (the owner's D100, `Replay.Closed`, README gap 4520b) is written in place in `cMachine`, as the
+open block's pieces are in `cBlock`: a separate codec was folded by the compiler into the machine's and called by
+nothing, so check 12 found it emitted and unreached (W-47 track K, README "Stage 6 — W-47 track K" §11.6). -/
+
+
 /-- The machine (fork `Machine`): the open block, **the last cut** (carried note 2: no Rust field reads it, so the
 view omits it, and only the checkpoint carries it), the open interruption, and — since the owner's D94 (README gaps
 4361 and 4506; D92's last span before it) — every break it holds (`Replay.Machine.brks`, at most `maxKeepDays + 1`
-ledger days of them, each `[start, end, ledger day]`), which a later step's clock reads (`Replay.restartAt`,
-`Replay.closeSub`), so a resumed fold nets a break where a whole replay does. -/
+ledger days of them, each `[start, end, ledger day]`), which a later step's clock reads (`Replay.settle`,
+`Replay.cut`), so a resumed fold nets a break where a whole replay does. -/
 def cMachine : Codec Machine :=
   cIso (cTuple <| tCons (cOpt cBlock cBlock_nonnull) <| tCons (cOpt cCut cCut_nonnull)
       <| tCons (cOpt cOpenInt cOpenInt_nonnull)
       <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
           (fun (k : Replay.HeldBrk) => (k.s, k.e, k.day, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1⟩) (fun _ => rfl)))
       <| tCons cOptOpenBrk
+      <| tCons (cList maxList (cIso (cTuple <| tCons cStr <| tCons cNat <| tCons cNat <| tCons cOptU8 <| tCons cNat
+          <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
+              (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
+          <| tCons cOptNat <| tNil)
+        (fun (c : Replay.Closed) => (c.id, c.day, c.credDay, c.ci, c.min, c.drawn, c.durLine, ()))
+        (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
       <| tNil)
-    (fun m => (m.block, m.lastCut, m.interrupt, m.brks, m.brkOpen, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1⟩) (fun _ => rfl)
+    (fun m => (m.block, m.lastCut, m.interrupt, m.brks, m.brkOpen, m.closed, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1⟩) (fun _ => rfl)
 
 def cHeaderRec : Codec HeaderRec :=
   cIso (cTuple <| tCons cNat <| tCons cStr <| tCons cOptStr <| tCons cBool <| tCons cVInstant <| tCons cVOffset <| tNil)
@@ -1373,7 +1396,8 @@ def pendingOn (m : Machine) (d : Nat) : List EnergyObs :=
 emitted, and the observations by line. -/
 def OpenDay.finish (m : Machine) (o : OpenDay) : DayRecord :=
   ⟨o.day, o.acc.map DayAcc.finish, o.seam.map (fun a => { a with idleMarks := a.idleMarks.reverse }),
-   Replay.sortObs (o.energy ++ pendingOn m o.day), o.durations, o.interrupts, o.demotions, o.closes, o.headers⟩
+   Replay.sortObs (o.energy ++ pendingOn m o.day), o.durations.map (Replay.netDur o.acc), o.interrupts, o.demotions,
+   o.closes, o.headers⟩
 
 /-- The dates with a window fact: an item's minutes, a done date, an instance whose `inst` names the date. -/
 def winKeys (st : State) : List Nat :=
@@ -1661,7 +1685,7 @@ def sealable (z : Cal.Tz) (T₀ L : Nat) (ls r : List Log.Line) : Bool :=
 
 /-- **The empty checkpoint** (§9.2): nothing folded, cut 0, ledger day 0. -/
 def Ckpt.empty (z : Cal.Tz) : Ckpt :=
-  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, [], [], [], false, [], ⟨none, none, none, [], none⟩, [], [], [], [], [], none,
+  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, [], [], [], false, [], ⟨none, none, none, [], none, []⟩, [], [], [], [], [], none,
    none, 0, 0, none, [], [], 0⟩
 
 /-- The meta the host reads beside a checkpoint. -/

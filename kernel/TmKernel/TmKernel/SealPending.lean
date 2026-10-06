@@ -28,53 +28,58 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
     simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-      Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
     right
+    rw [Replay.settle_obs]
     cases rep with
     | none => left; rfl
     | some rp => right; exact ⟨_, rfl, rfl⟩
   case pause id =>
     split at hm
     · split at hm
-      · simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      · simp only [List.filterMap_append, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+          Replay.settle_machines, List.mem_singleton] at hm
         subst hm
         left
-        rw [← Replay.closeSub_pending dy m t]
-        cases (Replay.closeSub dy m t).1.block <;> rfl
+        rw [Replay.settle_obs]
+        rename_i b hb _
+        simp [hb]
       · simp at hm
     · simp at hm
   case unpause id =>
     split at hm
     · split at hm
       · simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+          Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
         subst hm
         left
-        rw [← Replay.closePause_pending dy m t]
-        cases (Replay.closePause dy m t).1.block <;> rfl
+        rw [Replay.settle_obs, ← Replay.closePauseM_pending m t]
+        cases (Replay.closePauseM m t).block <;> rfl
       · simp at hm
     · simp at hm
   case interrupt id =>
-    simp only [List.filterMap_append, (Replay.closeSub_obs dy m t).2.2, (Replay.closePause_obs dy _ t).2.2,
-      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    simp only [List.filterMap_append, (Replay.closePause_obs dy m t).2.2, List.nil_append, List.filterMap_cons,
+      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
     subst hm
     left
-    have h1 := Replay.closePause_pending dy (Replay.closeSub dy m t).1 t
-    have h2 := Replay.closeSub_pending dy m t
+    rw [Replay.settle_obs]
+    have h1 := Replay.closePauseM_pending m t
+    unfold Replay.interruptMachine
     split
-    · exact h1.trans h2
-    · exact h1.trans h2
+    · exact h1
+    · exact h1
   case resume lost dropped =>
     split at hm <;>
-    · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+    · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+        Replay.settle_machines, List.nil_append, List.mem_singleton] at hm
       subst hm
       left
-      show (m.block.map (fun b => Replay.resumeBlock b t (Replay.restartAt m b.day t))).bind (·.obs) = m.block.bind (·.obs)
+      rw [Replay.settle_obs]
+      show (m.block.map (fun b => Replay.resumeBlock b _ t)).bind (·.obs) = m.block.bind (·.obs)
       cases m.block with
       | none => rfl
-      | some b => exact Replay.resumeBlock_obs b t _
+      | some b => exact Replay.resumeBlock_obs b _ t
   case stop id rem =>
     split at hm
     · split at hm

@@ -3,12 +3,17 @@
 //! One row of `cols` cells over 24 h from wake to wake, the cursor at `now`,
 //! the arrival plan as a ghost row, and the colour rules (project hue by
 //! FNV-1a of the root id, brightness = `ci`).
+//!
+//! Moved from `tm-core/tests/` at W-47 with `emit_fixture`: the fixture's days
+//! carry the kernel's rows since the owner's D112, which the hover reads for a
+//! row whose item has no title of its own, and `tm-core` does not link the
+//! kernel. A test that moves a segment asks for the rows again (`with_rows`).
 
 mod emit_fixture;
 
 use chrono::Duration;
 use chrono_tz::Tz;
-use emit_fixture::{at, config, ghost_plan, plan, tree, TZ};
+use emit_fixture::{at, config, ghost_plan, plan, tree, with_rows, TZ};
 use tm_core::capacity::local_dt;
 use tm_core::emit::{self, Cell, CellStyle, DayBar};
 use tm_core::model::Id;
@@ -136,6 +141,7 @@ fn the_left_half_is_the_log_and_the_right_half_the_plan() {
     planned.item = Some(Id::new("t5"));
     planned.energy = Some(3);
     day.segments.insert(1, planned);
+    let day = with_rows(day);
     let bar = emit::daybar_cells(&day, None, &tree, &cfg, 96, at(6, 5), at(10, 42));
     let col = bar.col_of(at(7, 30)).expect("07:30");
     assert_eq!(bar.cells[col].segment, Some(0), "the logged block");
@@ -146,6 +152,7 @@ fn the_left_half_is_the_log_and_the_right_half_the_plan() {
     let mut logged = day.segments[8].clone();
     logged.flags.done = true;
     day.segments.insert(8, logged);
+    let day = with_rows(day);
     let bar = emit::daybar_cells(&day, None, &tree, &cfg, 96, at(6, 5), at(10, 42));
     let col = bar.col_of(at(14, 30)).expect("14:30");
     assert_eq!(bar.cells[col].segment, Some(9), "the planned block");

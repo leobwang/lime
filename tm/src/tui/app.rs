@@ -178,11 +178,49 @@ impl InputKind {
     }
 }
 
-/// Where a break was taken (§12.6's `b` + `w`/`s`/`b`/`p`) — the ONE host
-/// table of places in `tm-core` (the campaign's D81 call on README gap 3903,
-/// parity P75), which `tm break --where` reads too; until W-41 this module
-/// spelled the four words and keys a second time.
-pub use tm_core::store::BreakPlace;
+/// **Where a break may be taken** (§12.6's `b` + `w`/`s`/`b`/`p`) — the KERNEL's
+/// table of places (`Log.placeWords`, the owner's **D111**, README gap 4904,
+/// parity P108), handed to the App with its data ([`AppData::places`]) and never
+/// spelled here: the driver asks the kernel once per process
+/// (`cli::kernel_log::places`), and a place's §12.6 key is its word's first
+/// character. `tm break --where` reads the same table, and so does the log's
+/// grammar when it reads the `break_start` that verb writes. Until D111 this
+/// re-exported a table of the host's own (`tm_core::store::BreakPlace`, the
+/// campaign's D81 call on README gap 3903), which the kernel's was held to by a
+/// test; until W-41 this module spelled the four words and keys yet again.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Places(Vec<String>);
+
+impl Places {
+    /// The table as the kernel answered it, in the TUI's order.
+    pub fn new(words: Vec<String>) -> Places {
+        Places(words)
+    }
+
+    /// The words, in the table's order.
+    pub fn words(&self) -> &[String] {
+        &self.0
+    }
+
+    /// §12.6's key for a place: its word's first character.
+    pub fn key_of(word: &str) -> Option<char> {
+        word.chars().next()
+    }
+
+    /// The place a key picks: the first word whose key it is.
+    pub fn word_of_key(&self, key: char) -> Option<&str> {
+        self.words().iter().find(|w| Places::key_of(w) == Some(key)).map(String::as_str)
+    }
+
+    /// The break prompt's list: `w walk · s seat · b bed · p phone`.
+    pub fn prompt(&self) -> String {
+        self.words()
+            .iter()
+            .filter_map(|w| Places::key_of(w).map(|k| format!("{k} {w}")))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    }
+}
 
 /// An answer to the pending prompt (§9.1, §9.2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,8 +274,12 @@ pub enum Action {
     Stop,
     /// `b` — ask where.
     Break,
-    /// `w`/`s`/`b`/`p` after `b`.
-    BreakWhere(BreakPlace),
+    /// A key after `b` — `w`/`s`/`b`/`p`, each the first character of a word of
+    /// the kernel's table of places ([`Places`], the owner's D111). [`resolve`]
+    /// is a pure function of the key and knows no table, so the App reads the
+    /// place off the key ([`Places::word_of_key`]) and a key that names none
+    /// cancels the chord, as any other key did.
+    BreakWhere(char),
     /// `i`.
     Interrupt,
     /// `0` — start an energy report.
@@ -556,6 +598,9 @@ pub struct AppData {
     /// **Where the App's days come from** ([`Planner`]): asked over this same
     /// plan directory.
     pub planner: Planner,
+    /// **The kernel's table of places** ([`Places`], the owner's D111): what the
+    /// `b` chord offers and `tm break --where` accepts.
+    pub places: Places,
 }
 
 /// The whole TUI state.
@@ -638,6 +683,8 @@ pub struct App {
     pub quit: bool,
     /// [`AppData::planner`].
     planner: Planner,
+    /// [`AppData::places`].
+    pub places: Places,
     /// A FAULT the planner answered, held for the driver ([`App::take_fault`]).
     fault: std::cell::RefCell<Option<Unplanned>>,
 }
@@ -717,6 +764,7 @@ impl App {
             idle_at: None,
             quit: false,
             planner: data.planner,
+            places: data.places,
             fault: std::cell::RefCell::new(None),
         }
     }
@@ -835,6 +883,9 @@ impl App {
             segments,
             diagnostics: Default::default(),
             priorities: Vec::new(),
+            // The arrival's ghost row is drawn in the day bar alone (D112:
+            // rows are asked of the kernel for a day it planned).
+            cells: Vec::new(),
         })
     }
 
@@ -906,7 +957,7 @@ impl App {
     /// answers it once, where the divider is spliced in.
     pub fn timeline_rows(&self, title_w: usize) -> Vec<TimelineRow> {
         let layout = emit::Layout::new(title_w);
-        emit::day_lines(&self.plan, &self.tree, &self.cfg, &layout)
+        emit::day_lines(&self.plan, &self.cfg, &layout)
             .into_iter()
             .map(|l| TimelineRow {
                 text: l.text,
@@ -1189,6 +1240,7 @@ impl App {
         self.now = data.now;
         self.today = data.now.date_naive();
         self.planner = data.planner;
+        self.places = data.places;
         self.replan();
     }
 
@@ -1512,14 +1564,18 @@ impl App {
                 self.mode = Mode::BreakWhere;
                 Vec::new()
             }
-            Action::BreakWhere(place) => {
-                self.mode = Mode::Normal;
-                vec![Effect::Verb(vec![
-                    "break".into(),
-                    "--where".into(),
-                    place.as_str().into(),
-                ])]
-            }
+            Action::BreakWhere(key) => match self.places.word_of_key(key) {
+                Some(place) => {
+                    self.mode = Mode::Normal;
+                    vec![Effect::Verb(vec![
+                        "break".into(),
+                        "--where".into(),
+                        place.to_string(),
+                    ])]
+                }
+                // A key that names no place of the table cancels the chord.
+                None => self.apply(Action::Cancel),
+            },
             Action::Interrupt => vec![Effect::Verb(vec!["interrupt".into()])],
             Action::EnergyPrompt => {
                 self.mode = Mode::Energy;
@@ -2000,9 +2056,7 @@ pub fn resolve(screen: Screen, mode: Mode, prompt: Option<PromptKind>, key: KeyE
         // exhaustive without an `_` arm that would swallow a new mode.
         Mode::Command | Mode::Input(_) => text_key(key),
         Mode::BreakWhere => match key.code {
-            KeyCode::Char(c) => BreakPlace::from_key(c)
-                .map(Action::BreakWhere)
-                .unwrap_or(Action::Cancel),
+            KeyCode::Char(c) => Action::BreakWhere(c),
             _ => Action::Cancel,
         },
         Mode::Energy => match key.code {
@@ -2191,13 +2245,20 @@ mod tests {
     }
 
     #[test]
-    fn the_break_chord_takes_a_place_then_returns_to_normal() {
+    fn the_break_chord_takes_a_key_and_the_table_names_its_place() {
         let action = resolve(Screen::Today, Mode::BreakWhere, None, key('w'));
-        assert_eq!(action, Action::BreakWhere(BreakPlace::Walk));
+        assert_eq!(action, Action::BreakWhere('w'));
         assert_eq!(
-            resolve(Screen::Today, Mode::BreakWhere, None, key('z')),
+            resolve(Screen::Today, Mode::BreakWhere, None, KeyEvent::from(KeyCode::Esc)),
             Action::Cancel
         );
+        // The App reads the place off the key through the table it was handed.
+        let places = Places::new(["walk", "seat", "bed", "phone"].map(String::from).to_vec());
+        assert_eq!(places.word_of_key('w'), Some("walk"));
+        assert_eq!(places.word_of_key('p'), Some("phone"));
+        assert_eq!(places.word_of_key('z'), None);
+        assert_eq!(places.prompt(), "w walk · s seat · b bed · p phone");
+        assert_eq!(Places::default().word_of_key('w'), None);
     }
 
     #[test]

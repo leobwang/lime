@@ -1162,33 +1162,18 @@ fn a_routine_window_s_close_is_planned_by_the_kernel() {
     }
 }
 
-/// **The cells the kernel is allowed to disagree with the fork about on a
-/// GENERATED day, with the gap that records why.**
-///
-/// The same two holes `tm/tests/kernel_row_cells.rs` declares on its fixture
-/// day, and no others — a third name appearing here would be a finding, not a
-/// widening:
-///
-/// * **`note`** (gap **1102**, and the `note: null` decision in `seg_json`) —
-///   `SegFlags::note` is a `String` the fork's planner wrote as prose and
-///   `Planner.Note` is eleven names with their arguments, so a host whose
-///   planner produced text has nothing to send. The kernel **derives** the
-///   column and cannot derive the `⚠` branch, which needs the fork's
-///   `effective_due`.
-/// * **`est`** (gap **1101**) — the fork's `est_cell` reads `est_original`
-///   first and this kernel has one estimate view, `Core.est`, which is `est:`
-///   then the leading estimate. A line carrying both makes the two readers pick
-///   different numbers.
-///
-/// Every other cell — `time`, `ci`, `p`, `mark`, `title`, `parent`, `actual`
-/// and `batchNames` — is compared **exactly**, on every row of every case.
-///
-/// **And `parent` is now compared at a value** (W-27). It was in this list
-/// before, and the list was true and empty of content for that one cell: the
-/// generated corpus had no `@` token, so both readers wrote `""` on every row
-/// and the cell asserted nothing. [`CENSUS`]'s fifth counter and the
-/// `parents > 0` assertion are what make the membership load-bearing.
-const CELL_HOLES: [&str; 2] = ["note", "est"];
+// **The cells the kernel was allowed to disagree with the fork about on a
+// GENERATED day** stood here until W-47 as CELL_HOLES — `note` (README gap
+// 1102, the `⚠` row's deadline) and `est` (gap 1101, the leading estimate
+// first) — with [`the_kernel_reads_every_day_it_plans`] holding the kernel's
+// cells to the Rust builder's. The owner's D112 made the kernel's cells the rows
+// the binary prints, both holes are closed at their cause (`EmitDue.hotCell`,
+// `Emit.itemEstOf`), and the Rust builder is deleted. The comparison was run
+// one last time at the switch, before the builder went — every generated day of
+// three runs, the builder's cells beside the rows the binary now asks for, no
+// hole declared — and its census is the README's W-47 track L block: the two
+// differ only where parity P109 says they do.
+
 
 // ===========================================================================
 // **W-38 (track H): what the fork region compared that needs no fork, moved out of it**
@@ -1243,10 +1228,10 @@ fn w36_kernel_work_rows(plan: &Value, now_sec: i64) -> Vec<(i64, i64, Vec<String
 }
 
 
-/// `(rows compared, cases, note-hole firings, est-hole firings, non-empty parent cells, kernel rows
-/// digested at a multiplier other than 1.0)` — what [`the_kernel_reads_every_day_it_plans`] looked
-/// at, read inside the arm that fills it (as `CENSUS`, the fork arm's, is).
-static KERNEL_CELL_CENSUS: Mutex<[u64; 6]> = Mutex::new([0; 6]);
+/// `(rows compared, cases, rows whose note the host holds as prose, non-empty parent cells, kernel
+/// rows digested at a multiplier other than 1.0)` — what [`the_kernel_reads_every_day_it_plans`]
+/// looked at, read inside the arm that fills it (as `CENSUS`, the fork arm's, is).
+static KERNEL_CELL_CENSUS: Mutex<[u64; 5]> = Mutex::new([0; 5]);
 
 /// `[cases, impossible tuples, underused tuples, blocked tuples, blocked deps]` — what
 /// [`the_kernels_step_8_ids_are_the_projections_of_its_tuples`] compared.
@@ -1298,16 +1283,24 @@ proptest! {
         ..ProptestConfig::default()
     })]
 
-    /// **The kernel reads every day IT plans, and writes the host's cells for it** (W-38,
-    /// README gap 3282) — `the_kernel_reads_every_day_the_fork_planned`'s two claims, asked of
-    /// the day R3 ships instead of the fork's: (1) no day the kernel plans is refused by the
-    /// `plan` section's wire (every R10 bound it carries is one a real day could exceed); (2)
-    /// cell for cell, row for row, against the host's `emit::row_cells` over the SAME decoded
-    /// day, with [`CELL_HOLES`]'s two declared exceptions and no others. The day is drawn at a
-    /// learned multiplier too (the hash arm's values), so the host codec's digest check —
-    /// `planwire::read_plan` refuses a day whose rows do not hash to the kernel's `hash` —
-    /// asks the EMITTER of zmij's spellings on generated days, which the region's hash arm
-    /// asked of the fork's rows.
+    /// **The kernel reads every day IT plans, and the rows it answers are the rows its `plan` section
+    /// draws for the same day** (W-38, README gap 3282; restated at W-47 for the owner's D112) — (1)
+    /// no day the kernel plans is refused by the `plan` section's wire (every R10 bound it carries is
+    /// one a real day could exceed); (2) row for row, the rows the BINARY prints (`DayPlan::cells`:
+    /// the `plan` section asked over the planner's OWN segments and priorities, as the kernel wrote
+    /// them — `planwire::rows_request`, `kernel_capacity::read_day`'s call) against the `plan`
+    /// section's answer over the SAME day as the host DECODED it and this file's encoder wrote it
+    /// back (`rowwire::seg_json`), cell for cell and `batchNames` — so a field `planwire::read_plan`
+    /// drops or bends on its way into a `Segment` is a cell that differs — with ONE rule for the
+    /// note: the door is sent no note the host holds as prose (`rowwire::Notes::Derive`), so on a
+    /// row whose segment carries one the binary's note cell must BE that prose (`planwire::note_text`,
+    /// the host's reading of the same `Note`, against the kernel's `Emit.noteText`) and the door's
+    /// may differ; on every other row the two derive the same note. Until D112 (2) held the kernel's
+    /// cells to the Rust builder's, two declared holes aside; the builder is gone (see the comment
+    /// above). The day is drawn at a learned multiplier too (the hash arm's values), so the host
+    /// codec's digest check — `planwire::read_plan` refuses a day whose rows do not hash to the
+    /// kernel's `hash`, and since D112 `planwire::read_rows` one whose rows are not one per segment
+    /// — asks the EMITTER of zmij's spellings on generated days.
     #[test]
     fn the_kernel_reads_every_day_it_plans(
         case in case_strategy(),
@@ -1318,7 +1311,7 @@ proptest! {
         let mut w = build(&case);
         w.set_multiplier(mult);
         let day = Kernel.day(&w, &w.state, w.now).map_err(TestCaseError::fail)?;
-        let lean = match rowwire::kernel_rows(w.docs_json(), &day, &w.cfg) {
+        let door = match rowwire::kernel_rows(w.docs_json(), &day, &w.cfg) {
             Ok(rows) => rows,
             Err(raw) => {
                 let head: String = raw.chars().take(400).collect();
@@ -1326,29 +1319,34 @@ proptest! {
                 unreachable!()
             }
         };
-        let host = rowwire::fork_cells(&day, &w.tree, &w.cfg);
-        prop_assert_eq!(lean.len(), host.len(), "the kernel answered {} rows for {} segments", lean.len(), host.len());
-        let mut seen = [0u64; 6];
-        seen[0] = host.len() as u64;
+        prop_assert_eq!(day.cells.len(), day.segments.len(), "the binary's rows: {} for {} segments", day.cells.len(), day.segments.len());
+        prop_assert_eq!(door.len(), day.cells.len(), "the door answered {} rows for {}", door.len(), day.cells.len());
+        let mut seen = [0u64; 5];
+        seen[0] = day.cells.len() as u64;
         seen[1] = 1;
-        seen[5] = day.segments.iter().filter(|s| s.flags.multiplier.is_some_and(|m| m != 1.0)).count() as u64;
-        for (i, (f, l)) in host.iter().zip(&lean).enumerate() {
-            if !f.parent.is_empty() {
-                seen[4] += 1;
+        seen[4] = day.segments.iter().filter(|s| s.flags.multiplier.is_some_and(|m| m != 1.0)).count() as u64;
+        for (i, ((seg, planned), drawn)) in day.segments.iter().zip(&day.cells).zip(&door).enumerate() {
+            if !planned.parent.is_empty() {
+                seen[3] += 1;
             }
-            for (cell, hosted, kernelled) in rowwire::differences(f, l) {
-                prop_assert!(
-                    CELL_HOLES.contains(&cell),
-                    "row {i}: the two readers disagree on an UNDECLARED cell {cell:?} — host {hosted:?}, kernel {kernelled:?}"
+            let prose = seg.flags.note.as_deref().filter(|_| !seg.is_pause());
+            if let Some(text) = prose {
+                seen[2] += 1;
+                prop_assert_eq!(
+                    planned.note.as_str(),
+                    text,
+                    "row {}: the binary's note cell is not the host's reading of the same note",
+                    i
                 );
-                if cell == "note" {
-                    seen[2] += 1;
-                } else {
-                    seen[3] += 1;
-                }
+            }
+            for (cell, p, d) in rowwire::differences(planned, drawn) {
+                prop_assert!(
+                    cell == "note" && prose.is_some(),
+                    "row {i}: the binary's rows and the door's over the decoded day disagree on {cell:?} -- binary {p:?}, door {d:?}"
+                );
             }
         }
-        let [rows, cases, notes, ests, parents, mults] = {
+        let [rows, cases, prose, parents, mults] = {
             let mut c = KERNEL_CELL_CENSUS.lock().expect("census");
             for (a, b) in c.iter_mut().zip(seen) {
                 *a += b;
@@ -1357,14 +1355,12 @@ proptest! {
         };
         prop_assert!(rows >= 4 * cases, "only {rows} rows over {cases} cases");
         if cases >= 32 {
-            prop_assert!(notes > 0, "the `note` hole has not fired in {cases} cases (gap 1102)");
-            prop_assert!(ests > 0, "the `est` hole has not fired in {cases} cases (gap 1101)");
             prop_assert!(parents > 0, "no row's `parent` cell was non-empty in {cases} cases");
             prop_assert!(mults > 0, "no row was digested at a multiplier other than 1.0 in {cases} cases");
         }
         eprintln!(
-            "planner_invariants kernel-day census: {cases} cases, {rows} rows compared, note-hole {notes}, \
-             est-hole {ests}, parent-cells {parents}, rows digested at a multiplier other than 1.0 {mults}"
+            "planner_invariants kernel-day census: {cases} cases, {rows} rows compared, prose notes {prose}, \
+             parent-cells {parents}, rows digested at a multiplier other than 1.0 {mults}"
         );
     }
 

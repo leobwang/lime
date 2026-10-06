@@ -515,9 +515,11 @@ theorem dayRead_state (st : State) (hs : List (Nat × HeaderRec)) (n : Nat) (hk 
           (fun o => decide (o.day = d)))
       rw [sortObs_filter, List.filter_append, List.filter_reverse, pendingOn_eq]
     | durations =>
-      show Replay.Answer.durations (st.durations.filter (fun o => decide (o.day = d))).reverse
-        = Replay.Answer.durations (st.durations.reverse.filter (fun o => decide (o.day = d)))
-      rw [List.filter_reverse]
+      show Replay.Answer.durations ((st.durations.filter (fun o => decide (o.day = d))).reverse.map
+          (Replay.netDur (st.days.get d)))
+        = Replay.Answer.durations ((st.durations.reverse.map (fun o => Replay.netDur (st.days.get o.day) o)).filter
+          (fun o => decide (o.day = d)))
+      rw [Replay.filter_map_netDur, List.filter_reverse]
     | interrupts =>
       show Replay.Answer.interrupts (st.interrupts.filter (fun o => decide (o.day = d))).reverse
         = Replay.Answer.interrupts (st.interrupts.reverse.filter (fun o => decide (o.day = d)))
@@ -555,7 +557,7 @@ theorem dayRead_state (st : State) (hs : List (Nat × HeaderRec)) (n : Nat) (hk 
     | durations =>
       show Replay.Answer.durations [] = Replay.Answer.durations _
       simp only [Replay.finish]
-      rw [List.filter_reverse, filter_day_eq_nil _ _ d h4]; rfl
+      rw [Replay.filter_map_netDur, List.filter_reverse, filter_day_eq_nil _ _ d h4]; rfl
     | interrupts =>
       show Replay.Answer.interrupts [] = Replay.Answer.interrupts _
       simp only [Replay.finish]
@@ -1064,22 +1066,24 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
   unfold Replay.arm
   cases hev : e.ev <;> simp only
   case done id est actual went tags ci isPartial => exact absurd hev (h _ _ _ _ _ _ _)
-  case start => simp [List.filterMap_append, (Replay.cut_obs dy m t).2.1, Effect.durationOf?]
+  case start => simp [List.filterMap_append, List.filterMap_cons, (Replay.cut_obs dy m t).2.1, Replay.settle_duration,
+    Effect.durationOf?]
   case pause id =>
     split
     · split
-      · simp [List.filterMap_append, (Replay.closeSub_obs dy m t).2.1, Effect.durationOf?]
+      · simp [List.filterMap_append, Replay.settle_duration, Effect.durationOf?]
       · rfl
     · rfl
   case unpause id =>
     split
     · split
-      · simp [List.filterMap_append, (Replay.closePause_obs dy m t).2.1, Effect.durationOf?]
+      · simp [List.filterMap_append, (Replay.closePause_obs dy m t).2.1, Replay.settle_duration, Effect.durationOf?]
       · rfl
     · rfl
   case interrupt id =>
-    simp [List.filterMap_append, (Replay.closeSub_obs dy m t).2.1, (Replay.closePause_obs dy _ t).2.1, Effect.durationOf?]
-  case resume lost dropped => split <;> simp [Effect.durationOf?]
+    simp [List.filterMap_append, (Replay.closePause_obs dy m t).2.1, Replay.settle_duration, Effect.durationOf?]
+  case resume lost dropped =>
+    split <;> simp [List.filterMap_append, List.filterMap_cons, Replay.settle_duration, Effect.durationOf?]
   case stop id rem =>
     split
     · split
@@ -1304,7 +1308,7 @@ theorem obs_perm_state (st : State) (hs : List (Nat × HeaderRec)) (L : Nat) :
       ++ ((((dayKeys st hs).filter (fun d => decide (L ≤ d))).map (openDayOf st hs)).map
         (OpenDay.finish st.machine)).flatMap DayRecord.obs).Perm
       ((st.energy.reverse ++ (st.machine.block.bind (·.obs)).toList).map Obs.energy ++
-        st.durations.reverse.map Obs.duration) := by
+        (st.durations.reverse.map (fun o => Replay.netDur (st.days.get o.day) o)).map Obs.duration) := by
   have hks : (dayKeys st hs).Nodup := nodup_canon natLt_strictTotal _
   have hsplit : ((dayKeys st hs).filter (fun d => decide (0 ≤ d ∧ d < L)) ++
       (dayKeys st hs).filter (fun d => decide (L ≤ d))).Perm (dayKeys st hs) := by
@@ -1317,10 +1321,11 @@ theorem obs_perm_state (st : State) (hs : List (Nat × HeaderRec)) (L : Nat) :
   have hg : ∀ d, DayRecord.obs ((OpenDay.finish st.machine ∘ openDayOf st hs) d)
       = (Replay.sortObs ((st.energy.reverse ++ (st.machine.block.bind (·.obs)).toList).filter
           (fun o => decide (o.day = d)))).map Obs.energy
-        ++ (st.durations.reverse.filter (fun o => decide (o.day = d))).map Obs.duration := by
+        ++ ((st.durations.reverse.map (fun o => Replay.netDur (st.days.get o.day) o)).filter
+          (fun o => decide (o.day = d))).map Obs.duration := by
     intro d
     simp only [Function.comp_apply, DayRecord.obs, OpenDay.finish, openDayOf]
-    rw [List.filter_append, List.filter_reverse, List.filter_reverse, ← pendingOn_eq]
+    rw [Replay.filter_map_netDur, List.filter_append, List.filter_reverse, List.filter_reverse, ← pendingOn_eq]
   simp only [hg]
   refine (flatMap_append_perm _ _ _).trans (List.Perm.append ?_ ?_)
   · refine (perm_flatMap_pointwise _ (fun d => ((st.energy.reverse ++ (st.machine.block.bind (·.obs)).toList).filter
@@ -1338,7 +1343,10 @@ theorem obs_perm_state (st : State) (hs : List (Nat × HeaderRec)) (L : Nat) :
         subst ho
         exact mem_dayKeys_pending hb
   · rw [← map_flatMap_eq]
-    exact List.Perm.map _ (perm_flatMap_filter _ _ hks _ (fun o ho => mem_dayKeys_durations (List.mem_reverse.1 ho)))
+    exact List.Perm.map _ (perm_flatMap_filter _ _ hks _ (fun o ho => by
+      obtain ⟨o0, h0, rfl⟩ := List.mem_map.1 ho
+      rw [Replay.netDur_day]
+      exact mem_dayKeys_durations (List.mem_reverse.1 h0)))
 
 /-- **Law 11, over entries**: the observations of the day records below `L` and of the answer, by line, are the
 replay's, on entries whose lines strictly increase. -/
@@ -1355,13 +1363,14 @@ theorem observations_read_state (z : Cal.Tz) (T₀ L cut : Nat) (es : List Entry
   have hperm := obs_perm_state st hs L
   have hR : ((Replay.finish st).energy.map Obs.energy ++ (Replay.finish st).durations.map Obs.duration).Perm
       ((st.energy.reverse ++ (st.machine.block.bind (·.obs)).toList).map Obs.energy ++
-        st.durations.reverse.map Obs.duration) :=
+        (st.durations.reverse.map (fun o => Replay.netDur (st.days.get o.day) o)).map Obs.duration) :=
     List.Perm.append_right _ ((Replay.insSort_perm _ _).map _)
   rw [sortByLine_eq_of_perm _ _ (hperm.trans hR.symm) ?_]
   refine ((hperm.trans hR.symm).map _).nodup_iff.2 ?_
   have hP : ((Replay.sortObs (st.energy.reverse ++ (st.machine.block.bind (·.obs)).toList)).map (·.line)
-      ++ st.durations.reverse.map (·.line)).Perm (Replay.obsLines st ++ (st.durations.map (·.line)).reverse) := by
-    refine List.Perm.append ?_ (by rw [List.map_reverse])
+      ++ (st.durations.reverse.map (fun o => Replay.netDur (st.days.get o.day) o)).map (·.line)).Perm
+        (Replay.obsLines st ++ (st.durations.map (·.line)).reverse) := by
+    refine List.Perm.append ?_ (by rw [Replay.map_line_netDur, List.map_reverse])
     refine ((Replay.insSort_perm _ _).map _).trans ?_
     unfold Replay.obsLines Replay.pendLines
     rw [List.map_append, List.map_reverse]
@@ -1369,8 +1378,8 @@ theorem observations_read_state (z : Cal.Tz) (T₀ L cut : Nat) (es : List Entry
     cases st.machine.block.bind (·.obs) <;> simp
   have e1 : ((Replay.finish st).energy.map Obs.energy ++ (Replay.finish st).durations.map Obs.duration).map Obs.line
       = (Replay.sortObs (st.energy.reverse ++ (st.machine.block.bind (·.obs)).toList)).map (·.line)
-        ++ st.durations.reverse.map (·.line) := by
-    simp only [List.map_append, List.map_map]; rfl
+        ++ (st.durations.reverse.map (fun o => Replay.netDur (st.days.get o.day) o)).map (·.line) := by
+    simp only [Replay.finish, List.map_append, List.map_map]; rfl
   rw [e1]
   exact hP.nodup_iff.2 hn
 

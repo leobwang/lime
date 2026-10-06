@@ -117,6 +117,34 @@ pub fn kernel_id() -> &'static str {
     tm_kernel_ffi::KERNEL_ID
 }
 
+/// **The places a break is taken — the kernel's table, asked once per process** (the owner's
+/// **D111**, README gap 4904, parity P108). A logged `break_start`'s place is read through
+/// `Log.placeWords` in the kernel's log grammar, and any other word makes the line malformed, so
+/// the words `tm break --where` accepts and the TUI's `b` chord offers are THAT table, read off the
+/// request's `places` key (`EmitWire.withPlaces`, which `PlanWire.respondPlanner` applies), in the TUI's order. Until D111 the host spelled
+/// them in a table of its own (tm_core::store::BREAK_PLACES, deleted; the campaign's D81 call) held to the
+/// kernel's by a test. The answer is cached: the table is the kernel's, so it cannot change while
+/// the process runs.
+pub fn places() -> Result<&'static [String], String> {
+    static PLACES: std::sync::OnceLock<Result<Vec<String>, String>> = std::sync::OnceLock::new();
+    PLACES
+        .get_or_init(|| {
+            // Built as a value, as every request the binary sends is, so check 13's reader of the
+            // host's requests (`sentkeys.host_sections`) holds its keys to the kernel's readers.
+            let request = serde_json::json!({"docs": [], "places": true}).to_string();
+            let raw = tm_kernel_ffi::call(&request).map_err(|e| format!("the kernel's table of places: {e:?}"))?;
+            let resp: Value =
+                serde_json::from_str(&raw).map_err(|e| format!("the kernel's table of places: {e}"))?;
+            resp["ok"]["places"]
+                .as_array()
+                .and_then(|ws| ws.iter().map(|w| w.as_str().map(str::to_string)).collect::<Option<Vec<_>>>())
+                .ok_or_else(|| format!("the kernel answered no table of places: {raw}"))
+        })
+        .as_ref()
+        .map(Vec::as_slice)
+        .map_err(Clone::clone)
+}
+
 /// FNV-1a-64 (§9.8's prefix digest, and since the owner's D93 each sealed month file's — [`month_digest`]): the
 /// binary's one body, `tm_core::fnv` (the W-44 repair, README gap 4612).
 pub use tm_core::fnv::fnv1a64;
@@ -1970,8 +1998,16 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         let date = d_date(dn, "a day's number")?;
         let rec = d_at(p, 1, "a day record")?;
         if !rec.is_null() {
-            let a = d_tuple(rec, 28, "a day record")?;
+            let a = d_tuple(rec, 29, "a day record")?;
             let g = |i: usize, what: &'static str| -> D<&Value> { d_at(a, i, what) };
+            // Field 28, `durNet` (the owner's D100, README gap 4520b, parity P105): the minutes a break logged after a
+            // `done` took off that `done`'s duration observation, by the observation's line.  The kernel nets the
+            // observations it hands over (`Replay.netDur`), so the host reads the pairs only to refuse a malformed one.
+            for c in d_arr(g(28, "durNet")?, "durNet")? {
+                let c = d_tuple(c, 2, "a durNet pair")?;
+                d_u64(d_at(c, 0, "a durNet line")?, "a durNet line")?;
+                d_u32(d_at(c, 1, "a durNet minute")?, "a durNet minute")?;
+            }
             let mut ci_unknown = BTreeMap::new();
             for c in d_arr(g(6, "ciUnknown")?, "ciUnknown")? {
                 let c = d_tuple(c, 2, "a ciUnknown pair")?;
@@ -2289,7 +2325,11 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
 
     let open = v.get("open").unwrap_or(&Value::Null);
     let open_block = d_opt(open.get("block").unwrap_or(&Value::Null), |o| {
-        let o = d_tuple(o, 5, "the open block")?;
+        let o = d_tuple(o, 6, "the open block")?;
+        // `day`, its `start`'s ledger day (the owner's D99, README gap 4616): the first day the kernel's wall rule reads
+        // the block's marks from (`WallTimer.answer`). Read and checked here; not kept, because `OpenBlock` is fork
+        // 4748911's shape, which T5 compares key for key, and no host reader asks for it.
+        d_date(d_at(o, 5, "the open block's day")?, "the open block's day")?;
         Ok(OpenBlock {
             id: d_str(d_at(o, 0, "the open block's id")?, "the open block's id")?,
             started: d_when(d_at(o, 1, "the open block's start")?, "the open block's start")?,
