@@ -3322,13 +3322,13 @@ per piece), never more than its credit still standing. -/
 def netMin (s e : At) (C : Closed) : Nat := min (minutesOf C.spans - minutesOf (cutOut s e C.spans)) C.min
 
 /-- **One held closed block netted by a `break` `[s, e)` stepped on ledger day `d`** (the owner's **D100**, README gap
-4520b, W-47 track K, parity P105): a break filed on a ledger day before the block's nets nothing (D94's rule for an open
-block); otherwise its pieces are cut around the break (`pieces`, each piece on its own) and re-drawn (`redraw`), and
-what that took — the pieces' minutes before less after (site R8, per piece), never more than its credit still standing
-— comes off its credit (`DayOp.net` on the day it was filed, the item's minutes, its minutes on that day) and off its
-`done`'s duration observation.  The block, what it writes, and the minutes taken. -/
+4520b, parity P105): a break filed on a ledger day before the block's nets nothing (D94's rule), nor one that meets
+none of its pieces — there is nothing of it to cut (gap 4920's early exit); otherwise its pieces are cut around the break
+(`pieces`, each on its own) and re-drawn (`redraw`), and what that took — the pieces' minutes before less after (site
+R8, per piece), never more than its credit still standing — comes off its credit (`DayOp.net` on the day it was filed,
+the item's minutes, its minutes on that day) and off its `done`'s duration observation.  Block, effects, minutes. -/
 def netOne (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) : Closed × List Effect × Nat :=
-  if d < C.day then (C, [], 0)
+  if d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) then (C, [], 0)
   else
     ({ C with drawn := (redraw dy C.id C.drawn (cutOut s e C.spans)).1, min := C.min - netMin s e C },
       (redraw dy C.id C.drawn (cutOut s e C.spans)).2 ++
@@ -10557,8 +10557,11 @@ theorem netOne_leaves_no_piece_across_the_break (dy : Cal.Instant → Nat) (s e 
     ∀ p ∈ (netOne dy s e d C).1.drawn, p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1 := by
   intro p hp
   unfold netOne at hp
-  rw [if_neg (Nat.not_lt.2 hd)] at hp
-  exact cutOut_avoids s e _ hne _ (redraw_fst_spans dy C.id C.drawn _ p hp)
+  split at hp
+  · rename_i hc
+    have hall := hc.resolve_left (Nat.not_lt.2 hd)
+    exact of_decide_eq_true (List.all_eq_true.1 hall p hp)
+  · exact cutOut_avoids s e _ hne _ (redraw_fst_spans dy C.id C.drawn _ p hp)
 
 /-- **Every Block segment a late break writes lies outside it** (D100): `netClosed`'s effects over every held block. -/
 theorem netClosed_avoids_the_break (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (m : Machine) (hne : s.1 < e.1) :

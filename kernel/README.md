@@ -93895,3 +93895,35 @@ decides by the ledger day alone.  Which of the two costs dominates was not profi
 (`FIRST_VERB` 5 s), so nothing fails; a log longer than three years, or a day with many breaks, pays it in proportion.
 4. *Clears it.*  An early exit in `netOne` for a held block none of whose pieces the break meets — the result is the
 block unchanged, so `netOne`'s laws carry over with one more case — and a profile of genesis before and after.
+
+### 12. Gap 4920 — closed: a late break skips a held block it does not meet
+
+The fourth commit.  `Replay.netOne` leaves a held closed block as it is, writing nothing, when the break meets none of
+its pieces (every drawn piece ends at or before the break's start or starts at or after its end), and `Seal.closedReads`
+reads the day index at nothing for it — so a `break` no longer cuts and re-draws a month of held blocks it does not
+touch.  **The answers did not move**, and that was checked rather than argued: T5's `TM_ORACLE` arm reports the same 92
+disagreements, leaf for leaf (`scratchpad/w47-k/d100/t5-oracle-opt.out` against t5-oracle-d100.out), the class drive
+on this commit's binary is byte-identical to §11.7's (`drive/class-k8.out`), and every witness, T5 and the door, the
+late-break arm and the workspace runs below hold as they were.  No parity number: nothing a reader sees changed.
+
+* **Measured** (`cli_latency --include-ignored`, two runs alone, `scratchpad/w47-k/d100/optlat-1.log`, optlat-2.log;
+  12:48-12:50, load 1.5-3.3): the three-year first verb (genesis) **2.36-2.42 s**, where the third commit measured
+  3.00-3.15 s and the W-46 repair 2.26-2.32 s; the one-year first verb **1.28-1.29 s** (1.50-1.54; earlier stamps
+  1.23-1.35 s); later verbs 71-76 ms (months), 111-122 ms (1 y), 157-162 ms (3 y), as they were.  What is left of the
+  difference from W-46 (about a tenth of a second at three years) is inside one run's spread at this load and was not
+  profiled further.
+* **Laws**: `Seal.netOne_congr` keeps its statement, re-proved over the new condition; `Seal.netClosed_congr` re-proved
+  by the new case (a block the break does not meet is the same machine under either index);
+  `Replay.netOne_leaves_no_piece_across_the_break` re-proved (an unmet block's pieces lie outside the break by the
+  condition itself); every other law over `netOne` and `closedReads` closed as it stood.  Line-neutral where a pin
+  follows: the definition's doc comment rewritten in its own six lines, `closedReads` kept on its one line.
+* **D40**: `Replay.netOne` and `Seal.closedReads`, whose bodies changed, re-run in clones (w7A.out, w7C.out, porcelain
+  equal before and after): PINNED, `netOne` on the D99 refutation `also` `netOne_mem`, `closedReads` on
+  `netClosed_congr` `also` `closedReads_mi`.  The gate: 796 rostered, 0 owed.
+
+* **Acceptance** (capped, over the tree this commit holds): `check.sh` seventeen lines ok, exit 0
+  (`scratchpad/w47-k/d100/check-k8.log`; 12:51-12:57, 6m12s); `cargo test --workspace --no-fail-fast` **2,903 passed /
+  0 failed / 51 ignored over 156 result lines, three runs** (ws-k8a.log … ws-k8c.log: 12:57-13:12, load 12.86 →
+  5.02, 14m27s; 13:12-13:26, 13m51s; 13:26-13:40, load 3.62, 13m56s), no `.proptest-regressions` file moved.
+
+**Gap 4920 is closed.**

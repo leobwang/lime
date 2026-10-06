@@ -50,7 +50,7 @@ def cutReads (m : Machine) (t : Replay.At) : List Cal.Instant :=
 /-- **The instants netting the held closed blocks reads the index at** (the owner's D100, README gap 4520b): each
 block a break of ledger day `d` nets, the starts of the pieces it draws anew for it (`redrawReads`). -/
 def closedReads (s e : Replay.At) (d : Nat) (l : List Replay.Closed) : List Cal.Instant :=
-  l.flatMap (fun C => if d < C.day then [] else redrawReads C.drawn (Replay.cutOut s e C.spans))
+  l.flatMap (fun C => if d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) then [] else redrawReads C.drawn (Replay.cutOut s e C.spans))
 
 /-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), the open block's pause start
 when the step closes it (`closePause`), and — since the owner's D99 (README gap 4520a) — the start of every piece the

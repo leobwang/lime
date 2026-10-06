@@ -98,7 +98,7 @@ theorem netOne_congr (s e : Replay.At) (d : Nat) (C : Replay.Closed)
   split
   · rfl
   · rename_i hd
-    have hr := redraw_congr dy₁ dy₂ C.id C.drawn (Replay.cutOut s e C.spans) (h.resolve_left hd)
+    have hr := redraw_congr dy₁ dy₂ C.id C.drawn (Replay.cutOut s e C.spans) (h.resolve_left (fun h' => hd (Or.inl h')))
     simp only [hr]
 
 /-- **Netting the held closed blocks reads the index only at `closedReads`** (the owner's D100). -/
@@ -107,10 +107,10 @@ theorem netClosed_congr (s e : Replay.At) (d : Nat) (m : Machine)
     Replay.netClosed dy₁ s e d m = Replay.netClosed dy₂ s e d m := by
   have hC : ∀ C ∈ m.closed, Replay.netOne dy₁ s e d C = Replay.netOne dy₂ s e d C := by
     intro C hC
-    apply netOne_congr
-    by_cases hd : d < C.day
-    · exact Or.inl hd
-    · exact Or.inr (fun q hq => h q (List.mem_flatMap.2 ⟨C, hC, by simp [hd, hq]⟩))
+    by_cases hd : d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) = true
+    · unfold Replay.netOne; simp only [if_pos hd]
+    · apply netOne_congr
+      exact Or.inr (fun q hq => h q (List.mem_flatMap.2 ⟨C, hC, by simp only [if_neg hd]; exact hq⟩))
   unfold Replay.netClosed
   have e1 : m.closed.map (fun C => (Replay.netOne dy₁ s e d C).1) =
       m.closed.map (fun C => (Replay.netOne dy₂ s e d C).1) :=
