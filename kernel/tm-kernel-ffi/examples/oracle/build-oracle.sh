@@ -20,7 +20,9 @@
 #   <binary> parse < lines.jsonstrings     one JSON string per line
 #   <binary> replay <tz> < log.jsonstrings the fork's `log::replay`, as JSON
 #   <binary> plan < requests.jsonl         the fork's planner, ranked as the
-#                                          shipped binary ranks it (owner D72)
+#                                          shipped binary ranks it (owner D72);
+#                                          a world's `.tm/model.json` read by the
+#                                          fork's own loader (README gap 4891)
 #   <binary> review < requests.jsonl       the fork's week grid, review::week_review's
 #                                          heat over a world (README gap 3718)
 #   <binary> capacity < requests.jsonl     the fork's lookahead, day-0 slots, slot cut,

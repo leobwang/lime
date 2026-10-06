@@ -35,9 +35,10 @@
 #      its rule (README gap 3718).  Driven from `tm/tests/fork_week_grid.rs`.
 #
 #   6. the planner, through the `plan` mode (owner D72): every frozen class,
-#      batch and driven line, and every frozen P56 day (README gap 3719), still
-#      fork 4748911's answer, and fresh draws -- the class draw's and the
-#      seeded P56 days' --
+#      batch, driven and learned-model line (W-47 track C, README gap 4891: a
+#      world's `.tm/model.json` read by the fork's own loader), and every frozen
+#      P56 day (README gap 3719), still fork 4748911's answer, and fresh draws --
+#      the class draw's, the learned-model draw's and the seeded P56 days' --
 #      against the kernel with every registered departure applied by its
 #      property.  Driven from `tm/tests/planner_classes.rs`,
 #      `tm/tests/planner_invariants.rs` and `tm/tests/planner_p56_cut.rs`; these
@@ -118,7 +119,8 @@ echo "############ input set 6: the planner, through the plan mode"
 # the oracle's banner and refuses a binary without the `plan` mode by name.
 ( cd "$repo" && TM_ORACLE="$oracle" cargo test --quiet -p tm --test planner_classes \
     -- --ignored --exact --nocapture \
-    the_frozen_lines_are_the_forks_oracle_answer_today )
+    the_frozen_lines_are_the_forks_oracle_answer_today \
+    the_kernel_plans_every_fresh_model_draw_as_the_forks_oracle_plans_it )
 ( cd "$repo" && TM_ORACLE="$oracle" cargo test --quiet -p tm --test planner_invariants \
     -- --ignored --exact --nocapture \
     the_kernel_plans_every_fresh_draw_as_the_forks_oracle_plans_it )

@@ -1601,3 +1601,9 @@ with_minute
 1 wake_default
 1 with_allow_home
 1 zero_capacity_is_infinite_utilization
+
+# W-47 TRACK C (README gap 4891): the oracle's hand reader of a capacity request's model is DELETED -- `tm-oracle
+# capacity` reads a model as `.tm/model.json`'s text through fork 4748911's own loader (`fork_model`), as `tm-oracle
+# plan` reads a world's.  The one citation counted here names it as it stood, in the append-only README block of W-46
+# track C (gap 4817's paragraph); every sentence since writes the dead name unbackticked.
+1 cap_model

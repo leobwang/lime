@@ -93080,3 +93080,397 @@ kernel step.
   `break_ended` dropped from `tm stop` (§4) — every one FAILED a named test.
 * **Driven** on the repair's binary: §4's three verbs, §5's four instants either side of 1883-11-18 and three after
   2200, §6's two cases with and without the file; §1's reproductions on `357c0f2`'s binary.
+
+<!-- =====================================================================
+     APPENDED 2026-10-05: stage 6 (the planner), run **W-47**, **TRACK C**
+     — README gap 4891: a learned model's tables meet the fork.  `tm-oracle
+     plan` and `tm-oracle capacity` read `.tm/model.json`'s text through
+     fork 4748911's own loader; the class worlds draw a learned model and a
+     night; 48 learned-model days frozen with the fork's answers by value;
+     T13's capacity requests re-keyed to the file's text, every answer
+     unchanged.  Gaps 4990-5009 are this track's (4990-4995 used); no parity
+     number (no behaviour of the binary moved, and no departure is
+     registered).  Whoever merges renumbers nothing: the range is the
+     track's own.
+     ===================================================================== -->
+
+## Stage 6 — W-47 track C: a learned model's tables meet the fork — the oracle reads `.tm/model.json` with the fork's own loader, and 48 learned-model days are frozen
+
+**Status (kept current; a cut is recoverable from this block and the branch `w47-c`).**  **Two sessions of this
+track.**  The FIRST wrote every change below, measured it (§9's first-session runs) and was cut off during its fourth
+workspace run (2026-10-06 00:29), before any commit; the snapshot `refs/archive/w47/c-wip` (`20dafb3`, 2026-10-05
+23:30 — not a step's commit) holds its working files, and every file the second session found in the worktree is
+byte-identical to that snapshot but this block (`git show refs/archive/w47/c-wip:<file> | cmp - <file>`, fifteen
+files).  The SECOND session (from 2026-10-06 01:40) wrote none of the code and none of the fixtures: it re-read every
+changed file, built the oracle FRESH into a new directory (§0), and re-measured before committing — the bless re-run
+into scratch (byte-identical to the file, §3), `model-rekey.py` (§6), both `TM_ORACLE` planner arms and T13 against
+the live oracle (§5, §6), `check.sh` and three workspace runs of its own (§9) — and committed it on `w47-c` as this
+block's first commit.  Owed after it, by this track: `run-oracle.sh` whole with the fresh oracle — set 7, and sets 1-6
+beside it — recorded in a later commit (§10).  The second session has also built, in a scratch clone, the lines with
+no wake logged that would close gap 4991 (§8); they land in a later commit of this track with an acceptance of their
+own, or not at all — nothing of them is in this commit, and gap 4991 is open here.
+
+Rust tests, the oracle and fixtures only: no `.lean` file, nothing under `tm/src` or `tm-core/src`.  The files: the
+oracle (`kernel/tm-kernel-ffi/examples/oracle/src/main.rs`, `build-oracle.sh`'s and `run-oracle.sh`'s comments and set 6,
+the new `model-rekey.py`), `tm/tests/support/forkclass.rs`, `forkplan.rs`, `forkcap.rs`, the new `forkmodel.rs`,
+`plangen.rs` (one widening, `plangen::with_slept`), `tm/tests/planner_classes.rs`, `tm/tests/fork_frozen_refile.rs` (the
+count of frozen comparand files, §3), `tm/tests/fixtures/fork-4748911-planner-models.jsonl` (new) and
+`tm/tests/fixtures/fork-4748911-capacity-kernel_lookahead_parity.jsonl` (re-keyed, §6), and one counted line of
+`kernel/citations-allow.txt` (§1).
+
+### 0. The brief, measured before it was acted on
+
+* HEAD `49186d7` (docs D107–D113 over the W-46 audit repair `b164b47`), tree clean; worktrees `stage5-lookahead` and this
+  run's `w47-h`, `w47-k` and `w47-c` (and `w47-l` by the second session).  The oracle was built FRESH for the step into
+  the scratch directory (`build-oracle.sh`; `.oracle-ref` `4748911555… 2fa866bb… 41561bf9… 037dc302…`), rebuilt after
+  each edit to its source, its usage banner read before it was fed; the second session built it again into a NEW
+  directory (`scratchpad/w47-c/oracle-r2`, 15 s, the same stamp, its `src/main.rs` byte-identical to this branch's) and
+  measured everything it quotes against that binary, whose banner names the model loader in both modes.
+* **Gap 4891's sentence is right about `plan` and short of the truth about `capacity`.**  `ForkWorld::read` built
+  `Model::default()` and set one table, `duration._default`, from `world.mult` — so `tm-oracle plan` never read a model
+  file.  `tm-oracle capacity` DID read a model, but by hand — cap_model (deleted, §1): the curves through serde, each
+  weight through `str::parse` of its display text, each arrival through a `NaiveTime` parse standing in for the fork's
+  `Hhmm` — and `forkcap::model_wire` asserted the model held those three tables and nothing else, so no capacity request
+  ever carried a fitted shift or a multiplier.
+* **What the fork's DAY reads of a model, read off the fork's code rather than assumed** (`git show
+  4748911:tm-core/src/planner.rs`, `energy.rs`, `priority.rs`).  `planner::plan` ranked by the kernel's grants (the seam
+  of `plan-seam.patch`, D53) reads the energy curves and the shift (`Planner::energy_ctx` → `EnergyCtx` → `predict`:
+  `Model::energy_at`, else the prior, minus `Model::sleep_shift` rounded, under debt), the duration multipliers
+  (`collect_candidates` → `duration_multiplier`), and the expected arrival only through `Model::wake_or_expected` for a
+  day with NO logged wake.  The lounge weights and the later days' arrivals feed `capacity::lookahead`, which the seam
+  REPLACES with the kernel's grants.  So asking the fork's day of a learned model compares the curves, the shift and the
+  multipliers; the weights and the arrivals reach that comparison only through the kernel's grants (§4's last test
+  counts it; gap 4990), and meet the fork's own reading in T13, as they did before this step (§6).
+* **Every generated night is eight hours.**  `plangen::log_text` writes `"slept_min":480` on the `wake` line and on each
+  `start` line's features, and §8.5's `under_hours` is 7.0 — so a fitted `sleep_debt_shift` would be read on no
+  generated day at all.  The model draw therefore draws the night too (§2).
+* **`ClassWorld` is spelled by struct literal in seven test files outside this track** (`planner_separator_days.rs`,
+  `planner_w41_request.rs` ×4, `planner_w41_starts.rs`, `kernel_date_worlds.rs`, `tui_kernel_answers.rs`,
+  `kernel_separator_worlds.rs`, `planner_p85_days.rs`), every one as `mult: None, ratio: None`.  A new field would
+  have broken all of them; the model rides in `mult`'s TYPE instead (§2), and every one compiles unedited.
+* **The request the comparison asks needed no new builder.**  `planreq::request_with_model` (the W-46 audit's, gap 3901)
+  already sends the capacity section at a given model; `forkclass::kernel_answer_with_grants` called
+  `request_with_section`, which is it at `Model::default()`.  `planreq.rs` is unedited.
+* `cargo test --workspace` measured by the orchestrator at `b164b47`: 2,897 / 0 / 51 over 155 result lines.  Re-measured
+  here (§9).
+
+### 1. The oracle reads the model with the fork's own loader — `plan` and `capacity`, and a stale oracle is refused by name
+
+* **`fork_model`** (`kernel/tm-kernel-ffi/examples/oracle/src/main.rs`): `.tm/model.json`'s text read by fork 4748911's
+  own expression from fork `Ctx::load`, `store.read_json::<Model>(MODEL_PATH)?.unwrap_or_default()`, over the fork's own
+  `MemStore` holding the text at `MODEL_PATH` — the fork's `serde` reading of every table on the fork's own `serde_json`
+  (no `float_roundtrip`: parity P25's build, the reading the fork binary gave the file).  Nothing re-types a field of it.
+* **`plan`**: `world.model` is the file's whole text; `ForkWorld::read` reads it with `fork_model` and the answer names the
+  reader, `"model_read_by": "store::StoreExt::read_json::<energy::Model>(MODEL_PATH)"` (`MODEL_READ_BY`).
+  `world.mult` stays the older spelling of one table on the default model (every line frozen before W-47); a world
+  carrying both is refused by name.
+* **`capacity`**: the `today` and `lookahead` ops read the request's `model` — now the file's TEXT — with `fork_model` and
+  name the reader; cap_model and its weekday helper are deleted.  `forkcap::model_wire` writes the host's own file
+  (`Model::to_json`, what `tm model --fit` writes), held to read back as the same model by serde.
+* **The freshness rule (§7.3, gap 196), by name and DRIVEN.**  `support/forkmodel.rs` holds the harness's one
+  `MODEL_READ_BY`; `forkplan::Oracle::plan` refuses an answer to a world carrying the file that does not name it, and
+  `forkcap::Store::ask` refuses, before any other comparison and in all three modes, an answer to a request carrying the
+  text that does not.  Driven with the W-46 repair's oracle binary (`scratchpad/repair-w46a/oracle`, the same
+  `.oracle-ref` stamp as a fresh one: provenance is not freshness): `the_frozen_lines_are_the_forks_oracle_answer_today`
+  FAILED naming all 48 learned-model lines `… it is STALE, rebuild it (build-oracle.sh)`, the 229 others answered as
+  frozen; `kernel_lookahead_parity` FAILED 3 of its 4 tests, each `… reads .tm/model.json's text as an empty model: it
+  is STALE`.  Against the fresh oracle both pass (§5, §6).
+* **Check 8**: cap_model is cited once, backticked, in W-46 track C's append-only block (gap 4817's paragraph), and is
+  now a dead name — `kernel/citations-allow.txt` counts that one citation (`1 cap_model`, its own comment); every
+  sentence since writes it unbackticked.  And one trap, found by check 8 and avoided rather than allowed: the model's
+  variant was first named Learned::File, which made the README's four `File::create` citations resolve through an enum
+  variant (`File`) and the core declaration `create` — check 8's pairing blind spot (gap 1731) — so the allow entry
+  `File::create` exempted nothing and failed; the variant is `Learned::ModelJson`.
+
+### 2. The class worlds draw a learned model and a night
+
+* **`forkclass::Learned`** — the world's `.tm/model.json`: `Mult(text)`, the `_default` multiplier alone (spelled `mult`
+  on a line, as every line before W-47 spells it), or `ModelJson(text)`, the file's whole text (spelled `model`).
+  `ClassWorld::to_json` writes no `model` key for a world without the file, so every earlier line reads back as its own
+  bytes (`every_frozen_world_round_trips_through_its_json` holds all 277 lines, the 48 new ones included).
+* **The host reads it with the binary's own loader** — `forkclass::host_model`, the expression of `tm/src/cli/ctx.rs`'s
+  `Ctx::load`, `store.read_json::<Model>(MODEL_PATH)?.unwrap_or_default()`, over a `MemStore`; `Built::of` collects the
+  candidates with it, and `kernel_answer_with_grants`, `forkplan::grown_prios` (P52's grown request) and
+  `forkplan::request_with_loc` send the capacity section at it (`planreq::request_with_model`, `request_model`).  On a
+  world without the file that section is the one sent before, byte for byte (the encoder reads no `duration` table;
+  the multiplier crosses on the candidates), and every earlier frozen comparison is unchanged (§9).
+* **`binary_holds` asks the binary with the file written** (`binary_rebuilds` writes `.tm/model.json` beside the world,
+  and `drive` does), so a model the binary refuses (P26) fails clause 6 by name and is never frozen.
+* **`forkclass::model_strategy`** draws what fork 4748911's own fit writes (`round2`: two places) and the edges each
+  reader has: a learned `lounge` and `home` curve each half the time (twelve buckets, `energyOk`'s shape; a level of 6 or
+  7 one time in thirteen — the clamp comes after the shift, `Look.predictShift`); a weight per weekday, a third of the
+  time absent, from `0, 0.31, 0.4, 0.49, 0.5, 0.51, 0.81, 0.84, 0.92, 1` (P1's threshold and its two sides); an arrival
+  per weekday from eight clocks; a fitted shift half the time from `−1, −0.5, 0, 0.49, 0.5, 1.01, 1.5, 2, 2.5, 3` (site
+  R10's `roundAway` at every rounding, and `0.49`, which rounds to none); a `_default` multiplier half the time, an inert
+  tag multiplier (`admin`, as the fit's file carries one; gap 4994), `fitted` and `n_obs`; and **the night** two draws
+  in three from `300, 330, 360, 400, 419, 420` minutes (`420` is exactly `under_hours` and is not debt;
+  `plangen::with_slept`, every `slept_min` the generated log writes).
+* **`forkclass::model_draws(seed)`** pairs the class draw's own sequence (`class_draws(seed, None)`) with a model from a
+  stream of its OWN (the seed's 32 bytes with the high bit of each set), so a model line's class world IS the class draw
+  at its index and drawing the model moves no class draw; **`model_world_of`** folds the hash arm's multiplier into the
+  drawn model's `_default` (one table, one reading), shortens the night when drawn, and writes the file with the host's
+  writer.
+
+### 3. 48 learned-model days, frozen — INTRODUCED (the owner's D70), the shipped fork day by value
+
+`tm/tests/fixtures/fork-4748911-planner-models.jsonl` (new; 1,435,676 bytes): the first `MODEL_DRAWS` = 48 draws of
+`MODEL_SEED` ("W-47 track C models, gap 4891"), **48 of 48 held by the binary**, each line the batch's shape — `name`
+`model draw <i>`, its class, arm, case, seed, draw index and world — with `forkplan::comparand_answers` over the fresh
+oracle (`the_frozen_model_days_are_blessed`, inert without `TM_PLANNER_BLESS_MODELS` and `TM_ORACLE`; held against the
+committed history by `frozenhist::held` like every bless, and on this first bless the history holds no line, so every
+line is new — D70's introduction, nothing changed).  `day` is the comparand (the fork as the binary runs it, every
+registered departure by its property); **`shipped` holds fork 4748911's own day by value on the 35 lines where the
+comparand departs from it** (P51's D60 order on 33, P47 on 4, P56 on 3, P46 on 1, P64 on 2).  What the 48 hold: 20 of
+the class space's 36 classes (`interrupted-block/late` and `interrupted/late` 7 each, the rest 1-4), every arm (w35 15, step-8 15,
+hash 13, base 5); a learned curve on 33, a fitted shift on 25, a night shortened on 31 (29 of them under `under_hours`), lounge weights on 48 (178 weights in
+all), arrivals on 48, a duration table on 37; 25 what-ifs, 4 running breaks.  `fork_frozen_refile.rs`'
+`every_frozen_comparand_file_is_found_by_its_property` pinned the comparand files at twelve: thirteen now, the new one
+named among those it must find.
+
+**The 48 lines, each by name** (the second session, read off the file).  `flagged`: the parity numbers whose condition
+held on the line (P51 is set where D60's key moved the fork's §7.4 ORDER, `forkplan::comparand_answers`, whether or not
+the day moved); `shipped`: the fork's own day kept by value because the comparand's day departs from it; `curves`: the
+learned energy curves the file carries; `shift`: its `sleep_debt_shift`; `night`: the `slept_min` the world's log
+writes (480 is the generator's eight hours, 420 is exactly `under_hours` and not debt).  Every line also carries
+lounge weights (178 in all) and expected arrivals; 37 carry a duration table.
+
+| line | class | arm | flagged | `shipped` | curves | shift | night |
+|---|---|---|---|---|---|---|---|
+| `model draw 0` | `wall-on-now/late` | base | P47 P51 | yes | — | -0.5 | 480 |
+| `model draw 1` | `interrupted-block/late` | w35 | P51 P56 | yes | home | — | 360 |
+| `model draw 2` | `interrupted/home` | base | P51 | yes | — | — | 300 |
+| `model draw 3` | `interrupted/late` | step8 | P51 | yes | — | — | 480 |
+| `model draw 4` | `interrupted/late` | step8 | P51 | yes | — | 0.5 | 480 |
+| `model draw 5` | `interrupted-block/home` | w35 | P51 | yes | — | 0.0 | 400 |
+| `model draw 6` | `idle/home` | hash | — | — | home,lounge | — | 480 |
+| `model draw 7` | `interrupted/late` | step8 | P51 | yes | home | 0.5 | 400 |
+| `model draw 8` | `break/home` | w35 | P45 P51 | yes | home,lounge | 1.01 | 480 |
+| `model draw 9` | `interrupted-block/late` | w35 | — | — | home | 3.0 | 480 |
+| `model draw 10` | `idle/late` | hash | P51 | — | — | — | 419 |
+| `model draw 11` | `idle/home` | step8 | P51 | yes | home,lounge | — | 400 |
+| `model draw 12` | `running/lounge` | hash | — | — | home,lounge | 0.5 | 330 |
+| `model draw 13` | `running/home` | hash | P51 | yes | home,lounge | — | 330 |
+| `model draw 14` | `running/home` | hash | P51 P56 | yes | — | 1.5 | 480 |
+| `model draw 15` | `wall-on-now/late` | hash | P47 P51 | yes | — | — | 400 |
+| `model draw 16` | `interrupted/late` | hash | P51 | yes | home | — | 330 |
+| `model draw 17` | `wall-on-now/travel` | step8 | P47 P51 | yes | lounge | 3.0 | 400 |
+| `model draw 18` | `interrupted-block/home` | w35 | P51 | yes | lounge | — | 480 |
+| `model draw 19` | `running/lounge` | hash | P51 | — | home | — | 360 |
+| `model draw 20` | `interrupted-block/home` | w35 | P51 | — | home,lounge | — | 330 |
+| `model draw 21` | `running/lounge` | base | P51 | yes | lounge | 1.5 | 480 |
+| `model draw 22` | `idle/late` | w35 | P51 P64 | yes | — | — | 300 |
+| `model draw 23` | `interrupted-block/late` | w35 | P56 | yes | home | 0.5 | 480 |
+| `model draw 24` | `interrupted/late` | w35 | — | — | — | 1.5 | 300 |
+| `model draw 25` | `idle/home` | hash | — | — | home,lounge | — | 420 |
+| `model draw 26` | `break/late` | w35 | P45 P51 | yes | home,lounge | — | 480 |
+| `model draw 27` | `idle/travel` | step8 | P51 | yes | home | 2.5 | 480 |
+| `model draw 28` | `interrupted/travel` | step8 | P51 | yes | — | — | 360 |
+| `model draw 29` | `interrupted/late` | hash | P51 P64 | yes | home | 2.5 | 420 |
+| `model draw 30` | `break/late` | w35 | P45 P51 | yes | home,lounge | 3.0 | 330 |
+| `model draw 31` | `interrupted-block/travel` | step8 | P51 | yes | — | 2.5 | 300 |
+| `model draw 32` | `wall-on-now/lounge` | hash | P51 | yes | home | — | 300 |
+| `model draw 33` | `wall-on-now/travel` | step8 | P47 | yes | home | — | 360 |
+| `model draw 34` | `running/home` | step8 | — | — | lounge | 2.0 | 300 |
+| `model draw 35` | `interrupted-block/late` | step8 | P51 | yes | home | 0.0 | 419 |
+| `model draw 36` | `interrupted-block/late` | step8 | P51 | — | — | — | 419 |
+| `model draw 37` | `interrupted/home` | w35 | P51 | yes | home,lounge | 0.0 | 480 |
+| `model draw 38` | `break/late` | w35 | P45 P51 P67 | yes | lounge | 2.5 | 300 |
+| `model draw 39` | `interrupted-block/lounge` | step8 | P51 | yes | home,lounge | 3.0 | 300 |
+| `model draw 40` | `idle/lounge` | base | — | — | lounge | 2.5 | 419 |
+| `model draw 41` | `interrupted/lounge` | step8 | — | — | — | 0.49 | 480 |
+| `model draw 42` | `interrupted-block/late` | w35 | — | — | — | — | 360 |
+| `model draw 43` | `interrupted-block/late` | hash | P51 | yes | lounge | -1.0 | 360 |
+| `model draw 44` | `overtime/lounge` | w35 | P46 P51 | yes | home,lounge | 1.01 | 480 |
+| `model draw 45` | `interrupted/travel` | step8 | P51 | yes | home,lounge | — | 400 |
+| `model draw 46` | `running/lounge` | hash | P51 | yes | lounge | — | 480 |
+| `model draw 47` | `interrupted/late` | base | P51 | yes | lounge | — | 480 |
+
+### 4. What a plain `cargo test --workspace` holds (`planner_classes.rs`, four new tests)
+
+* **`the_kernel_plans_every_frozen_model_day_the_fork_planned`** — `forkclass::compare_line`, the classes' one comparison,
+  over every line: **48 lines, 0 differences** — 44 days by value (456 fork rows, 25,779 other values, **44 of 44 hashes
+  equal**) and 4 running breaks by P45's rule (34 rows after the break against P45's comparand; P67's on 1); P46 1, P47 4,
+  P51 33, P56 3; 25 what-ifs.  Floors: every line compared, every line carries the file and no `mult`, short nights on
+  some lines and not all.
+* **`the_frozen_models_are_every_draw_the_binary_holds`** — the batch's property for this file: every index below 48
+  RE-DRAWN from the tree (class draw and model), a held line's world byte for byte and its provenance, an index left out
+  only where `binary_holds` refuses it (none is).
+* **`every_learned_table_moves_a_frozen_model_day`** — non-vacuity, per table (§5.2, §9.2): the kernel asked again with
+  ONE table taken out of the file, against its day at the whole file (which the first test holds to the fork's frozen day).
+  Measured: taking out the **energy curves moves the ROWS on 20 lines** (and the grants alone on 11 more), **the fitted
+  shift the rows on 9**, **the duration multipliers the rows on 19**; **the lounge weights move the grants alone on 37,
+  the arrivals on 26**.  Asserted: each of the first three moves some line's rows, each of the last two some line at all.
+* **`every_frozen_model_is_the_hosts_writing_and_the_binarys_literals`** — the file is the host writer's to the byte,
+  read back by the binary's loader; and the two model decimals the capacity section carries AS WRITTEN (the binary's
+  `Written::parse`, `kernel_capacity::written_of`) are the same exact decimal as the harness's fallback text
+  (`Written::default()`: the double's shortest text), by `planwire::written_pair` — 178 weights and 25 shifts.  So the
+  request the comparison asks is the binary's on every line (lesson 5).
+
+### 5. What `TM_ORACLE` holds
+
+* `the_frozen_lines_are_the_forks_oracle_answer_today` (set 6) now holds the learned-model lines beside the class, batch
+  and driven ones: **277 of 277 lines answered as frozen** (8 carrying P81's answer; 3,682 oracle requests) against the
+  fresh oracle.  Its census counted FINDINGS against answered lines, so a run where lines did not answer printed
+  "181 of 229" for 277; it counts lines now.
+* **`the_kernel_plans_every_fresh_model_draw_as_the_forks_oracle_plans_it`** (new, set 6 and `arms.py`'s class): draw 0 of
+  `model_draws` from a fresh seed, set aside where the binary cannot hold it, otherwise the comparand over the oracle and
+  `compare_line`, floors on compared draws, short nights, learned curves and fitted shifts.  Smoke-run by the first
+  session at 8 cases (`TM_PROPTEST_CASES=8`): 8 drawn, 8 held, 8 compared with 0 findings — short nights 5, learned
+  curves 6, fitted shifts 4, one running break; 100 oracle requests.  **Run whole by the second session at its default
+  96 cases** against `oracle-r2` (01:45-01:47, load 3.7 → 4.8, beside the frozen-lines arm, 85.7 s for the two):
+  **96 drawn, 0 the binary cannot hold, 96 compared with 0 findings** — short nights under `under_hours` 52, learned
+  curves 72, fitted shifts 43, running-break (P45) days 5; 992 oracle requests.  The frozen-lines arm in the same run:
+  277 of 277 answered as frozen (277 answered; 8 carrying P81's answer; 3,682 oracle requests).  Both again in
+  `run-oracle.sh`'s set 6 (§10).
+
+### 6. T13's capacity requests re-keyed to the file's text — every answer unchanged, by value
+
+The capacity mode's model is the file's text now (§1), so every `today` and `lookahead` request has a new canonical
+text and key.  `fork-4748911-capacity-kernel_lookahead_parity.jsonl` was re-blessed by its own bless
+(`forkcap::the_frozen_fork_capacity_answers_are_reblessed_from_the_oracle`, `TM_ORACLE` and `TM_FORK_BLESS`), whose
+recording run is T13 itself asking the live oracle and holding the kernel to it — it passed.  A re-bless is a decision,
+never a repair (AGENTS §7.2): this one is the brief's (the loader made the mode's one reader of a model), and what it
+moved is checked BY VALUE by `kernel/tm-kernel-ffi/examples/oracle/model-rekey.py` against the committed file: **154
+configuration lines byte-identical; 546 model-free answer lines (`cut`, `rank`) byte-identical — key, request and
+answer; 740 `today`/`lookahead` requests re-keyed, each matched to exactly ONE old request equal but for the model,
+whose tables are the same exact decimals; 0 answers moved beyond the added `model_read_by`**.  So with the fork's own
+loader reading the model — the fork's `serde_json`, no `float_roundtrip` — the fork answered every one of T13's 740
+model-carrying requests exactly as it answered the hand reader's, the raw 17-digit weights included (an answer is what
+the file can see of a reading; a difference no answer shows is not measured).  T13 plain: 4 passed; under the live
+oracle: 4 passed (cut 1,104, lookahead 3,025, rank 148, today 131 asked).  **Re-run by the second session**:
+`model-rekey.py` over `git show 49186d7:<the file>` and the branch's file printed the same line and exited 0; T13 under
+`oracle-r2` 4 passed with the same four counts (01:47, 2.0 s).
+
+### 7. It bites — the kernel's reading, the host's encoding, and the blind spot it closes
+
+Each plant in a clone (`scratchpad/w47-c/bend-k`, `bend-h`: `git clone --shared` of `w47-c` with this step's working
+files copied in), the shared tree's porcelain 0 before and after.
+
+* **K1, the kernel's reading of the fitted shift** — `Look.SleepCfg.shift` bent to `s.shiftConfig` (the model's
+  `sleep_debt_shift` ignored).  **The library built with every proof** (194 jobs, 10 min 8 s, exit 0 — gap 4993): no
+  theorem, witness or cheat tells the bend from the definition.  `the_kernel_plans_every_frozen_model_day_the_fork_planned`
+  **FAILED, 55 disagreements on 10 lines** (draws 5, 24, 30, 31, 34, 35, 38, 39, 40, 43) — exactly the lines where a
+  short night meets a fitted shift that rounds unlike the config's 1, but for draw 17, a travel day whose budget step 1
+  zeroes, so no slot energy reaches a row — and `every_learned_table_moves_a_frozen_model_day` FAILED (the shift moves no
+  rows).  **The rest of the workspace did not see it**: `cargo test --workspace --no-fail-fast` in the bent clone (18 min 22 s,
+  23:09-23:28, load 12 → 37 → 12): 155 result lines, 152 ok, and the three that FAILED are the two model tests above,
+  `cli_latency`'s two three-year rows (at load 37 — re-run in the same clone at load 11: 7 passed, 1 ignored) and
+  `fork_frozen_refile`'s count of frozen comparand files (the clone predates §3's count — this step's fact, not the
+  bend's).  T13, `planner_request_keys`, `planner_invariants`, T5, the door, the batch and the classes — every comparison
+  before this step — passed with the model's fitted shift ignored: that is gap 4891, measured.
+* **H1, the host's encoding of the fitted shift** — `planwire::capacity_json` sending `"shiftModel": null`: the same two
+  tests FAILED, 55 disagreements on the same 10 lines.  No other comparison can see it: the binary's request and the
+  harness's are both that encoder's (`planner_request_keys.rs` compares the two, and they agree on the bent value).
+* **H2, the host's encoding of a learned curve** — each curve sent reversed: **244 disagreements on 30 lines**.
+
+### 8. Gaps
+
+**Gap 4990 — the lounge weights and the later days' arrivals meet the fork's DAY only through the kernel's grants.**
+1. *What.*  On the learned-model lines the kernel's grants are held to the kernel's own grants at the bless (each frozen
+`day`'s `priorities`): fork 4748911's planner is ranked by them (D53), so a reading of `pLounge.model` or `arrival.model`
+that diverged from the fork's would have moved both days alike when the line was frozen.  2. *Why.*  The fork's own
+lookahead and §7 pass are exactly what the ranking seam replaces; holding the kernel's to them is T13's job, over
+generated windows with P1's twin, and T13 reads its model through the fork's loader since §6.  3. *Cost.*  On a class
+world — items, walls, routines, breaks — the kernel's lookahead over a learned model meets no fork reading; T13's windows
+carry no items, and the 37 and 26 lines of §4 that the weights and the arrivals move are a regression against the
+kernel, never a fork comparison.  4. *Clears it.*  T13's comparison over a learned-model class world: the kernel's grants
+against fork `priority::compute` over fork `capacity::lookahead` (`tm-oracle capacity`'s `rank` and `lookahead`, which
+read the file now), P1, P2, P3, P7, P12 and P27 applied by their rules.
+
+**Gap 4991 — a learned expected arrival meets the fork's planner on no line.**  1. *What.*  Fork `Planner::new` reads
+`Model::wake_or_expected` only for a day with no logged wake, and every class world logs one (`state.wake` and the `wake`
+line); so the kernel's day-0 fallback to `arrival.model` is compared with the fork's on no learned-model line.
+2. *Why.*  The generator writes a wake on every world, and a world without one must lack it in the log as well as the
+cache (D42's rebuild).  3. *Cost.*  A bend of day 0's arrival fallback moves only grants through later days here.
+4. *Clears it.*  Learned-model draws with no `tm wake` logged, beside these.
+
+**Gap 4992 — the hash arm's multiplier is never written where the binary is asked whether it holds the world.**
+1. *What.*  `binary_rebuilds` writes `.tm/model.json` only for a `Learned::ModelJson` world; a `Learned::Mult` world (every class, batch and
+driven line before W-47) is asked of the binary with no model, so whether the binary accepts its multiplier is asked
+only of the harness's codec (`kernel_answer_with_grants`, P26's 18 places), never of the binary.  2. *Why.*  Writing it
+would re-run clause 6 on every frozen hash-arm world — a measurement, and possibly a re-draw, that is not this step's.
+3. *Cost.*  None measured: every drawn multiplier is inside P26's bound (`0.30000000000000004` has 17 places).
+4. *Clears it.*  Write the `_default` table for a `Mult` world too, and re-run the four `binary_holds` properties.
+
+**Gap 4993 — the kernel's proofs do not tell the fitted shift from the configured one.**  1. *What.*  §7's K1
+(`SleepCfg.shift := s.shiftConfig`) built the whole library; check 9's constants do not reach the bend (it is a
+projection of the argument, not a constant of the type).  2. *Why.*  No Lean witness plans day 0 under a model shift
+that rounds unlike the config's.  3. *Cost.*  A re-proof that drops the model's shift is caught by the Rust suites only
+(§7).  4. *Clears it.*  One small `decide` witness over a short night with `shiftModel` set (a Lean step; this track
+holds no `.lean` file).
+
+**Gap 4994 — a tag multiplier meets the fork on no line.**  1. *What.*  The draw writes `duration.admin`, as the fit's
+file carries tags, but no generated item carries a tag, so `duration_multiplier`'s `ci:tag` and `tag` lookups — the
+host's, whose result crosses on each candidate (D34) — meet the fork nowhere in the class worlds.  2. *Why.*  Tagging the
+generated items is a generator change that re-maps every draw (a D64(b) question).  3. *Cost.*  A divergence in the
+host's tag lookup is found by no class comparison.  4. *Clears it.*  Tags on a model draw's items, drawn in its own
+stream as the model is.
+
+**Gap 4995 — the learned-model lines derive no secondary worlds.**  1. *What.*  The class file derives D61, window,
+worked, overrun, typed and order worlds from its primary lines; no learned-model line has one.  2. *Why.*  The file is
+the batch's shape (one draw, one line).  3. *Cost.*  A learned model mid-meeting, after a break the log holds inside a
+block, or past an overrun break meets the fork only where a draw lands there (4 lines are wall-on-now, 4 break days).
+4. *Clears it.*  The class file's derivations applied to the model lines.
+
+### 9. Measured
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16G for the oracle), in the
+worktree unless said, the shared tree's porcelain 0 throughout; the box shared with this run's other tracks, whose Lean
+builds held the load at 10-25 for most of the second session.
+
+**The second session's, against the files this commit holds** (every one byte-identical to the first session's but
+this block, so what the first session measured below was measured on the same code):
+
+* **`check.sh`**: seventeen lines, all ok, 31 s (01:47:18, load 4.3 → 5.8) — axiom audit **6,398** theorems (no Lean
+  file touched); Negative.lean rejected; FFI **96** tests; corpus **29/37 files and 4/5 whole plans**; stage goals
+  **1**; prose citations **62,327** (58,677 resolved, 3,650 allowed: 206 vocabulary, 699 counted); check 9 **750**
+  rostered, 0 owed; parity **P1-P102, next free P103**; twins 0 unanswered; check 12 **1,520** reachable, **1,099**
+  exempt, 0 unanswered; check 13's four lines 0 unanswered; replay **95** modules.  Run again after this block's last
+  edit, before the commit: seventeen lines, all ok, 32 s (02:36:32, load 7.1 → 10.3), every figure as here but prose
+  citations 62,337 (58,687 resolved, the same 3,650 allowed) — this block's own growth.
+* **`cargo test --workspace --no-fail-fast`, three runs**, each over **155 result lines**, all three green, the
+  worktree's porcelain exactly its fifteen working files after each (no proptest seed written):
+  run 1 (01:48-02:03, load 5.4 → 13.9) **2,901 passed, 0 failed, 53 ignored**;
+  run 2 (02:03-02:18, load 13.9 → 16.0) **2,901 passed, 0 failed, 53 ignored**;
+  run 3 (02:18-02:33, load 16.0 → 16.4) **2,901 passed, 0 failed, 53 ignored**.
+  Against `b164b47`'s 2,897 / 51: +4 passed (§4's four tests), +2 ignored (§1's two oracle arms: the fresh-draw arm and
+  the bless).
+* **The suites the brief names**, the same in all three runs: T5 (`kernel_replay_parity`) 52 passed (4 ignored); the
+  door (`kernel_log_door`) 44; `cli_switch_acceptance` 16; `cli_latency` 7 (1 ignored); `kernel_call_counts` 3;
+  `one_padder` 9; `one_renderer` 35; `kernel_row_cells` 36; `kernel_planner_wire` 27; `planner_classes` **74** (10
+  ignored; 81.9, 84.2 and 90.3 s); `planner_invariants` 31 (1 ignored); `cli_conformance` 7; `cli_json_matrix` 8; T13
+  (`kernel_lookahead_parity`) 4 (1 ignored); `fork_frozen_refile` 5; `fork_rebless_history` 10; `planner_request_keys`
+  21.  The FFI's 96 are check 5's.
+* **`cli_latency --include-ignored`, three runs** (02:32-02:35, load 10.2 → 14.9): 8 of 8 each; `review week` 516, 531
+  and 893 ms against its 1 s band, the stall's worst day 709, 733 and 905 ms — numbers of a loaded box (gap 4901),
+  never a band to move.
+* **§4's figures re-read** (`planner_classes -- --nocapture model`, 02:35, 43.7 s): every figure §4 quotes, printed by
+  the four tests themselves.
+* **`TM_ORACLE`** against `oracle-r2`: the frozen-lines arm and the fresh learned-model arm (§5, 85.7 s); T13 (§6); the
+  bless re-run into the scratch directory (`TM_PLANNER_BLESS_MODELS_OUT`, 35 s): 48 lines added over a committed history
+  of none, 0 refused, 0 draws the binary cannot hold, **byte-identical to the file**; `model-rekey.py` (§6).
+
+**The first session's** (2026-10-05 22:00 – 2026-10-06 00:29, the same code; its logs are scratch files this block
+cites by what they print):
+
+* **`check.sh`**: seventeen lines, all ok, 32 s (23:28:56, load 9.6 → 7.4), prose citations **62,308** (the block was
+  shorter), every other figure as above.
+* **`cargo test --workspace --no-fail-fast`**: run 1 (23:29-23:45, load 6.7 → 21.5) **2,901 / 0 / 53**; run 2
+  (23:45-00:00, load 21.5 → 12.6) **2,900 / 1 / 53** — `cli_latency`'s three-year row
+  (`a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`: `tm review week was still running after 1s`,
+  at load ≈ 20), gap 4901's row, which this track's files cannot reach (no binary code, no fixture the binary reads);
+  run 3 (00:00-00:15, load 12.6 → 15.4) **2,901 / 0 / 53**; run 4 (from 00:18, load 16.2) cut off with the session at
+  94 of 155 result lines — **1,448 passed, 1 failed, 28 ignored**, the failure the same three-year row (`tm drop ^z15
+  was still running after 1s`).
+* **`cli_latency --include-ignored`**, three runs (00:16-00:18, load 13.9 → 17.9): 8 of 8 each; `review week` 522, 873
+  and 536 ms, the stall's worst day 704, 843 and 744 ms.
+* **`TM_ORACLE`**: the frozen-lines arm 277 of 277; T13 4 of 4; the bless's dry run byte-identical; the stale-oracle
+  runs of §1; the fresh arm's 8-case smoke run (§5).
+* **The bends of §7**: K1's library build (10 min 8 s), its two failing tests and its whole-workspace run; H1's and H2's
+  `planner_classes` runs; each in its clone.
+
+### 10. `run-oracle.sh`, whole, with the fresh oracle
+
+NOT YET RUN at this block's first commit: the sweep holds the box for most of an hour and runs after the commit, so
+that a cut leaves the measured work committed.  This section's figures are the second commit's; until it lands, no
+figure of set 7 is claimed anywhere in this block.

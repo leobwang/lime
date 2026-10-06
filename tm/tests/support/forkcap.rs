@@ -48,14 +48,23 @@
 //! # What it cannot see, declared
 //!
 //! A request the harness never makes (the bless writes what the file's tests ask, and a line no
-//! test asks any more leaves at the next bless, not before); and the oracle's own wire readers —
-//! `cap_cand`, `cap_model` — which are checked only by the answers they produce: the first bless
-//! held every answer equal to the in-tree function's at `16aaafc` (README "W-46 track C" §3).
+//! test asks any more leaves at the next bless, not before); and the oracle's own wire reader of a
+//! candidate, `cap_cand`, which is checked only by the answers it produces: the first bless held
+//! every answer equal to the in-tree function's at `16aaafc` (README "W-46 track C" §3). The
+//! model's reader is no longer the oracle's own: since W-47 track C (README gap 4891) a model
+//! crosses as `.tm/model.json`'s text ([`model_wire`]) and fork 4748911's own loader reads it,
+//! every `today` and `lookahead` answer naming that loader or refused as stale.
 
 #![allow(dead_code)]
 
 #[path = "fnv.rs"]
 mod fnv;
+
+/// How fork 4748911 reads a learned model, as the oracle names it (`support/forkmodel.rs`, W-47
+/// track C, README gap 4891).
+#[allow(dead_code)]
+#[path = "forkmodel.rs"]
+mod forkmodel;
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
@@ -63,12 +72,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 
-use chrono::{DateTime, NaiveDate, Weekday};
+use chrono::{DateTime, NaiveDate};
 use chrono_tz::Tz;
 use serde_json::{json, Value};
 use tm_core::capacity::{DayCapacity, Exact, Slot, SlotKind, Wall, WallsByDate};
 use tm_core::config::Config;
-use tm_core::energy::{Hhmm, Model, WeekdayMap};
+use tm_core::energy::Model;
 use tm_core::model::Id;
 use tm_core::priority::{Candidate, Prio, PrioClass};
 
@@ -255,13 +264,34 @@ impl Store {
             }
             Ok(answer)
         };
+        // **A model the fork's own loader read, or a STALE oracle by name** (W-47 track C, README
+        // gap 4891): a request carrying `.tm/model.json`'s text is answered `model_read_by` the
+        // fork's loader — an oracle built before W-47 reads the text as an empty model and says
+        // nothing — and is checked before any other comparison, frozen answers included.
+        let read_by = |a: &Value, whose: &str| {
+            if req.get("model").is_some_and(Value::is_string) && a["model_read_by"] != forkmodel::MODEL_READ_BY {
+                panic!(
+                    "{}: {op} ({key}): {whose} answer does not say fork 4748911's loader read the model (model_read_by {}, \
+                     not {:?}) — an oracle built before W-47 reads `.tm/model.json`'s text as an empty model: it is STALE, \
+                     rebuild it (kernel/tm-kernel-ffi/examples/oracle/build-oracle.sh)",
+                    self.name,
+                    a["model_read_by"],
+                    forkmodel::MODEL_READ_BY
+                );
+            }
+        };
         match self.mode {
-            Mode::Frozen => frozen().unwrap_or_else(|e| panic!("{e}")).clone(),
+            Mode::Frozen => {
+                let a = frozen().unwrap_or_else(|e| panic!("{e}")).clone();
+                read_by(&a, "the frozen");
+                a
+            }
             Mode::Oracle | Mode::Record => {
                 let live = {
                     let mut pipe = self.pipe.lock().expect("the oracle's pipe");
                     pipe.as_mut().expect("an oracle").ask(&req).unwrap_or_else(|e| panic!("{}: {op} ({key}): {e}", self.name))
                 };
+                read_by(&live, "the oracle's");
                 if self.mode == Mode::Oracle {
                     let held = frozen().unwrap_or_else(|e| panic!("{e}"));
                     assert_eq!(*held, live, "{}: {key}: the frozen {op} answer is not fork 4748911's answer today", self.name);
@@ -395,38 +425,22 @@ pub fn config_wire(cfg: &Config) -> String {
     text
 }
 
-const WEEK: [(Weekday, &str); 7] = [
-    (Weekday::Mon, "Mon"),
-    (Weekday::Tue, "Tue"),
-    (Weekday::Wed, "Wed"),
-    (Weekday::Thu, "Thu"),
-    (Weekday::Fri, "Fri"),
-    (Weekday::Sat, "Sat"),
-    (Weekday::Sun, "Sun"),
-];
-
-/// **A model as the oracle reads it**: its learned `energy` curves, `p_lounge` (each weight a
-/// double's text) and `expected_arrival` — the three a capacity reads — and nothing else: a model
-/// carrying any other learned value FAILS here rather than reaching the fork without it.
+/// **A model as the oracle reads it: `.tm/model.json`'s TEXT** (W-47 track C, README gap 4891) —
+/// what the host's writer writes (`Model::to_json`, `tm model --fit`'s), the file the binary reads,
+/// which `tm-oracle capacity` reads with fork 4748911's own loader (`fork_model`, fork `Ctx::load`'s
+/// `store.read_json::<Model>(MODEL_PATH)`): every table, as the fork binary read the file. Until
+/// W-47 this crossed three tables by hand (`energy`, `p_lounge` as each weight's double text,
+/// `expected_arrival`), which the oracle re-read with a parse of its own (cap_model, deleted) — not the
+/// fork's reading of the file, and blind to the fitted shift and the multipliers. The file is
+/// held to read back as THIS model by the host's own loader, so a model the text could not carry
+/// is a different request to the fork, refused here rather than sent.
 pub fn model_wire(m: &Model) -> Value {
-    let mut back = Model { energy: m.energy.clone(), ..Model::default() };
-    let (mut p, mut a) = (serde_json::Map::new(), serde_json::Map::new());
-    let (mut pw, mut aw) = (WeekdayMap::new(), WeekdayMap::new());
-    for (wd, k) in WEEK {
-        if let Some(x) = m.p_lounge.get(wd) {
-            p.insert(k.to_string(), json!(x.to_string()));
-            pw.set(wd, *x);
-        }
-        if let Some(h) = m.expected_arrival.get(wd) {
-            a.insert(k.to_string(), json!(h.0.format("%H:%M").to_string()));
-            aw.set(wd, Hhmm(h.0));
-        }
-    }
-    back.p_lounge = pw;
-    back.expected_arrival = aw;
-    assert!(back == *m, "a model with learned values beyond energy, p_lounge and expected_arrival — the capacity wire carries those three");
-    json!({"energy": m.energy, "p_lounge": p, "expected_arrival": a})
+    let text = m.to_json();
+    let back: Model = serde_json::from_str(&text).unwrap_or_else(|e| panic!("the model's .tm/model.json does not read back: {e}\n{text}"));
+    assert!(back == *m, "the model does not round-trip through its .tm/model.json:\n{text}");
+    json!(text)
 }
+
 
 /// An instant on the wire (RFC 3339, its offset, sub-seconds when there are any).
 pub fn instant_wire(t: &DateTime<Tz>) -> Value {

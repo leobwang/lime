@@ -99,6 +99,12 @@ mod p81;
 #[path = "p85.rs"]
 mod p85;
 
+/// How fork 4748911 reads a learned model, as the oracle names it (`support/forkmodel.rs`, W-47
+/// track C, README gap 4891): the one definition [`MODEL_READ_BY`] re-exports.
+#[allow(dead_code)]
+#[path = "forkmodel.rs"]
+mod forkmodel;
+
 /// FNV-1a-64, the test harness's one definition (`support/fnv.rs`, README gap 4581, W-44 track C):
 /// [`day_hash`] digests a serialised day with it, as fork 4748911's `DayPlan::hash` does.
 #[allow(dead_code)]
@@ -514,7 +520,8 @@ pub fn grown_prios(b: &Built) -> Option<Vec<Prio>> {
     let id = forkclass::whatif_item(&b.world.state)?;
     let g = b.cands.iter().find(|c| c.id == *id).and_then(|c| planwire::grown(c, None, b.cfg.block_min(), &b.cfg))?;
     let pw = b.request_world();
-    let (mut req, order) = planreq::request(&pw, None);
+    // At the world's own model (W-47 track C, README gap 4891), as the day it grows is asked.
+    let (mut req, order) = planreq::request_model(&pw, &b.model, None);
     for it in req["capacity"]["candidates"]["items"].as_array_mut()?.iter_mut().filter(|it| it["id"] == id.as_str()) {
         it["remaining"] = json!(g.remaining_min);
         it["plan"]["plannedMin"] = json!(g.planned_min);
@@ -530,7 +537,8 @@ pub fn grown_prios(b: &Built) -> Option<Vec<Prio>> {
 /// W-41 so the TUI days and the start days ask through one definition.)
 pub fn request_with_loc(b: &Built, loc: Option<&str>) -> (Value, Vec<usize>) {
     let pw = b.request_world();
-    let (mut req, order) = planreq::request(&pw, forkclass::whatif_json(b));
+    // At the world's own model (W-47 track C, README gap 4891).
+    let (mut req, order) = planreq::request_model(&pw, &b.model, forkclass::whatif_json(b));
     if let Some(worked) = forkclass::host_worked(b) {
         planwire::add_worked_min(&mut req["planner"], worked);
     }
@@ -927,6 +935,13 @@ pub fn oracle_path() -> Option<std::path::PathBuf> {
 /// call (README gap 4507). [`Oracle::worked`] refuses an answer that does not name it.
 pub const WORKED_READ_BY: &str = "planner::active_worked";
 
+/// **The entry of fork 4748911 that read a world's `.tm/model.json`** — `tm-oracle plan`'s
+/// `fork_model`, fork `Ctx::load`'s own expression over the fork's store (W-47 track C, README gap
+/// 4891; one definition, `support/forkmodel.rs`). [`Oracle::plan`] refuses, as STALE, an answer to
+/// a world carrying the file that does not name it: an oracle built before W-47 ignores
+/// `world.model` and plans at `Model::default()`.
+pub use forkmodel::MODEL_READ_BY;
+
 /// **`tm-oracle plan`, running**: one request line in, one answer line out — or, built
 /// [`Oracle::with_mode`], another mode of the same protocol (`review`, the fork's week grid,
 /// README gap 3718).
@@ -1023,6 +1038,16 @@ impl ForkPlan for Oracle {
             "runs": ask.p64,
         });
         let a = self.ask(&req)?;
+        // **The fork read the world's model with its own loader** (W-47 track C, README gap 4891),
+        // or this oracle predates it and planned the world at `Model::default()`: STALE, by name.
+        if b.world.model_file().is_some() && a["model_read_by"] != MODEL_READ_BY {
+            return Err(format!(
+                "the oracle's `plan` answer does not say fork 4748911's loader read the world's .tm/model.json \
+                 (model_read_by {}, not {MODEL_READ_BY:?}) — an oracle built before W-47 plans it at Model::default(): \
+                 it is STALE, rebuild it (build-oracle.sh)",
+                a["model_read_by"]
+            ));
+        }
         // The fork's candidates are its OWN collection over its own reading of the world;
         // the grants are keyed to the host's. Two different lists would rank by grants
         // the fork never saw, so they are held equal here, by id and order.

@@ -43,10 +43,11 @@
 //!   meet after it — D23's shape, for the planner. Two ops:
 //!
 //!   ```text
-//!   {"op":"plan", "world":{docs,log,state,now,mult,ratio}, "state":{..}, "now":"..",
+//!   {"op":"plan", "world":{docs,log,state,now,mult|model,ratio}, "state":{..}, "now":"..",
 //!    "log_line":null|"..", "order":null|{id:[[r,r],[o,o]]}, "prios":[grant..],
 //!    "extend":null|[id,minutes], "runs":false|true}
-//!     -> {"day":<DayPlan>, "hash":<DayPlan::hash>, "ranked":[id..], "cands":[id..]}
+//!     -> {"day":<DayPlan>, "hash":<DayPlan::hash>, "ranked":[id..], "cands":[id..],
+//!         "model_read_by":null|"store::StoreExt::read_json::<energy::Model>(MODEL_PATH)"}
 //!   {"op":"diff", "old":[segment..], "new":[segment..]}
 //!     -> {"diff":<planner::diff>}
 //!   {"op":"worked", "world":{..}, "state":{..}, "now":"..", "log_line":null|".."}
@@ -61,8 +62,11 @@
 //!
 //!   The world is read as the FORK reads it — its own parser, its own
 //!   `log::replay` over the same bytes (and `log_line` appended for the day
-//!   planned), its own `priority::collect_candidates` at the world's `now` —
-//!   and ranked by the grants the request carries, which is how the shipped
+//!   planned), its own `priority::collect_candidates` at the world's `now`, and
+//!   since W-47 track C (README gap 4891) `world.model`, `.tm/model.json`'s whole
+//!   text, through its own loader (`fork_model`: fork `Ctx::load`'s
+//!   `store.read_json::<Model>(MODEL_PATH)`), the answer naming that reader in
+//!   `model_read_by` — and ranked by the grants the request carries, which is how the shipped
 //!   binary runs its fork (D53): fork 4748911's `planner::plan` takes NO ranking,
 //!   so `build-oracle.sh` grafts `09d38fa`'s two edits onto it
 //!   (`plan-seam.patch`, whose header says which). `order` is D60's key, the
@@ -342,17 +346,58 @@ fn instant(v: &Value, tz: chrono_tz::Tz, what: &str) -> Result<chrono::DateTime<
     chrono::DateTime::parse_from_rfc3339(t).map(|d| d.with_timezone(&tz)).map_err(|e| format!("`{what}` {t:?}: {e}"))
 }
 
+/// **Which of the fork's readers read a `.tm/model.json` text** — named on every answer that
+/// read one (`plan`'s `model_read_by`, and `capacity`'s `today` and `lookahead`), so a harness
+/// refuses by name an oracle built before W-47 track C, which ignored a world's model and planned
+/// it at `Model::default()` (README gap 4891; gap 196's rule: provenance is not freshness).
+const MODEL_READ_BY: &str = "store::StoreExt::read_json::<energy::Model>(MODEL_PATH)";
+
+/// **`.tm/model.json`'s text, read by fork 4748911's OWN loader** (W-47 track C, README gap
+/// 4891) — the expression fork `Ctx::load` evaluates, `store.read_json::<Model>(MODEL_PATH)?
+/// .unwrap_or_default()`, over the fork's own memory store holding the text at that path: the
+/// fork's `serde` reading of every table (`WeekdayMap`'s weekday keys, `Hhmm`'s clock, the
+/// curves, the multipliers, the fitted shift), on the fork's own `serde_json`, which has no
+/// `float_roundtrip` (parity P25's build). Nothing here re-types a field of it — until W-47 the
+/// `capacity` mode read three of the model's tables by hand (cap_model, a `NaiveTime` parse
+/// standing in for `Hhmm`'s, a `str::parse` for the weights) and the `plan` mode read none.
+fn fork_model(text: &str) -> Result<tm_core::energy::Model, String> {
+    use tm_core::store::{MemStore, StoreExt, MODEL_PATH};
+    let store = MemStore::new().with_file(MODEL_PATH, text);
+    store
+        .read_json::<tm_core::energy::Model>(MODEL_PATH)
+        .map(Option::unwrap_or_default)
+        .map_err(|e| format!("{MODEL_PATH}: {e}"))
+}
+
+/// **A request's `.tm/model.json`**: its TEXT, as the binary's file holds it, read by
+/// [`fork_model`] — or why it is not one.
+fn model_text(v: &Value, what: &str) -> Result<tm_core::energy::Model, String> {
+    match v {
+        Value::String(text) => fork_model(text),
+        other => Err(format!("`{what}` is {other}, not `.tm/model.json`'s text")),
+    }
+}
+
 /// **A world as the FORK reads it** — its own parser over the documents
 /// (`Tree::from_texts`), the default configuration with the world's budget ratio, the
-/// duration model the world names, its stored state and instant, and the log's bytes, which
+/// learned model the world carries, its stored state and instant, and the log's bytes, which
 /// [`ForkWorld::log_with`] hands the fork's own `log::replay`. The ONE reading of a request's
 /// `world`, shared by the `plan` and `worked` ops (W-44 track C, README gap 4507), so the two
 /// ops read one world one way.
+///
+/// **The model** (W-47 track C, README gap 4891): `world.model` is `.tm/model.json`'s whole text,
+/// read by the fork's own loader ([`fork_model`]) — the lounge weights, the expected arrivals,
+/// the energy curves, the fitted sleep shift and the duration multipliers, every table the fork
+/// plans a day from; `world.mult` is the older spelling of one table alone, the `_default`
+/// duration multiplier on the default model, which every line frozen before W-47 carries. A world
+/// carrying both is refused by name, never merged.
 struct ForkWorld {
     cfg: tm_core::config::Config,
     tree: tm_core::tree::Tree,
     log_text: String,
     model: tm_core::energy::Model,
+    /// [`MODEL_READ_BY`] when the world carried `.tm/model.json`'s text.
+    model_read_by: Option<&'static str>,
     state: tm_core::store::RuntimeState,
     now: chrono::DateTime<chrono_tz::Tz>,
 }
@@ -376,15 +421,23 @@ impl ForkWorld {
         let files: Vec<(&str, &str)> = docs.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
         let tree = tm_core::tree::Tree::from_texts(&files, &cfg);
         let log_text = world["log"].as_str().ok_or("world.log is not a string")?.to_string();
-        let mut model = tm_core::energy::Model::default();
-        if let Some(m) = world["mult"].as_str() {
-            let m: f64 = m.parse().map_err(|e| format!("world.mult {m:?}: {e}"))?;
-            model.duration.insert(tm_core::energy::DEFAULT_TAG.to_string(), m);
-        }
+        let (model, model_read_by) = match (&world["model"], world["mult"].as_str()) {
+            (Value::Null, None) => (tm_core::energy::Model::default(), None),
+            (Value::Null, Some(m)) => {
+                let m: f64 = m.parse().map_err(|e| format!("world.mult {m:?}: {e}"))?;
+                let mut model = tm_core::energy::Model::default();
+                model.duration.insert(tm_core::energy::DEFAULT_TAG.to_string(), m);
+                (model, None)
+            }
+            (text, None) => (model_text(text, "world.model")?, Some(MODEL_READ_BY)),
+            (_, Some(_)) => {
+                return Err("world.model and world.mult are both set: a world carries `.tm/model.json` once".to_string())
+            }
+        };
         let state: tm_core::store::RuntimeState =
             serde_json::from_value(world["state"].clone()).map_err(|e| format!("world.state: {e}"))?;
         let now = instant(&world["now"], cfg.tz, "world.now")?;
-        Ok(ForkWorld { cfg, tree, log_text, model, state, now })
+        Ok(ForkWorld { cfg, tree, log_text, model, model_read_by, state, now })
     }
 
     /// The fork's own log and replay of the world's bytes, with `line` appended when the
@@ -463,6 +516,7 @@ fn plan_one(req: &Value) -> Result<Value, String> {
         "hash": day.hash(),
         "ranked": ranked,
         "cands": cands.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(),
+        "model_read_by": world.model_read_by,
     }))
 }
 
@@ -640,46 +694,16 @@ fn worked_one(req: &Value) -> Result<Value, String> {
 // build's serde_json is the fork's, without `float_roundtrip` (parity P25), so a JSON
 // number of seventeen significant digits could come back one ULP away.  The config
 // crosses as `config.toml` TEXT for the same reason — `Config::parse`, the fork's own
-// reader of it.
+// reader of it — and since W-47 track C (README gap 4891) the model as `.tm/model.json`'s
+// TEXT, read by `fork_model`, fork `Ctx::load`'s own loader: the file the binary reads, its
+// weights read by the fork's own `serde_json` as the fork binary read them.  Until W-47 the
+// model crossed as three hand-read tables (cap_model: a `NaiveTime` parse standing in for
+// `Hhmm`'s, a `str::parse` for each weight), which is not the fork's reading of a file.
 
 /// A `config.toml` text, read by the fork's own `Config::parse`.
 fn cap_config(v: &Value) -> Result<tm_core::config::Config, String> {
     let text = v.as_str().ok_or_else(|| format!("`config` is {v}, not a config.toml's text"))?;
     tm_core::config::Config::parse(text).map_err(|e| format!("config: {e}"))
-}
-
-/// A weekday as the wire names it (`Mon` .. `Sun`).
-fn cap_weekday(k: &str) -> Result<chrono::Weekday, String> {
-    use chrono::Weekday::*;
-    Ok(match k {
-        "Mon" => Mon,
-        "Tue" => Tue,
-        "Wed" => Wed,
-        "Thu" => Thu,
-        "Fri" => Fri,
-        "Sat" => Sat,
-        "Sun" => Sun,
-        other => return Err(format!("a weekday {other:?}")),
-    })
-}
-
-/// A model: the default one with its learned `energy` curves, `p_lounge` (each weight a
-/// double's text) and `expected_arrival` (`HH:MM`) set — the three a capacity reads.
-fn cap_model(v: &Value) -> Result<tm_core::energy::Model, String> {
-    let mut m = tm_core::energy::Model::default();
-    if let Some(e) = v.get("energy").filter(|e| !e.is_null()) {
-        m.energy = serde_json::from_value(e.clone()).map_err(|e| format!("model.energy: {e}"))?;
-    }
-    for (k, x) in v["p_lounge"].as_object().into_iter().flatten() {
-        let t = x.as_str().ok_or_else(|| format!("model.p_lounge.{k} is {x}, not a double's text"))?;
-        m.p_lounge.set(cap_weekday(k)?, t.parse::<f64>().map_err(|e| format!("model.p_lounge.{k} {t:?}: {e}"))?);
-    }
-    for (k, x) in v["expected_arrival"].as_object().into_iter().flatten() {
-        let t = x.as_str().ok_or_else(|| format!("model.expected_arrival.{k} is {x}"))?;
-        let at = chrono::NaiveTime::parse_from_str(t, "%H:%M").map_err(|e| format!("model.expected_arrival.{k} {t:?}: {e}"))?;
-        m.expected_arrival.set(cap_weekday(k)?, tm_core::energy::Hhmm(at));
-    }
-    Ok(m)
 }
 
 /// `[[start, end], …]` — walls as instants, in the configuration's zone.
@@ -817,13 +841,14 @@ fn cap_prio_json(p: &tm_core::priority::Prio) -> Value {
 /// **One `capacity` op** (W-46 track C):
 ///
 /// ```text
-/// {"op":"today", "config":<toml>, "model":{..}, "from":t, "end":t, "walls":[[a,b]..],
+/// {"op":"today", "config":<toml>, "model":<.tm/model.json's text>, "from":t, "end":t, "walls":[[a,b]..],
 ///  "reports":[[t,pred,rep]..], "wake":t, "loc":"lounge", "slept":n|null, "blocks_done":n,
 ///  "allow_home":bool, "date":"YYYY-MM-DD"}
-///   -> {"slots":[[start,end,energy,kind]..], "day0":[6]}        cut_slots, EnergyCtx, energize, DayCapacity::from_slots
-/// {"op":"lookahead", "config":<toml>, "model":{..}, "walls":{date:[[a,b]..]}, "slots":[..],
+///   -> {"slots":[[start,end,energy,kind]..], "day0":[6], "model_read_by":..}
+///                                                                cut_slots, EnergyCtx, energize, DayCapacity::from_slots
+/// {"op":"lookahead", "config":<toml>, "model":<.tm/model.json's text>, "walls":{date:[[a,b]..]}, "slots":[..],
 ///  "from":"YYYY-MM-DD", "days":n, "wake":"HH:MM:SS[.f]"}
-///   -> {"days":[[date,[6]]..]}                                  capacity::lookahead
+///   -> {"days":[[date,[6]]..], "model_read_by":..}              capacity::lookahead
 /// {"op":"cut", "config":<toml>, "from":t, "end":t, "walls":[[a,b]..]}
 ///   -> {"slots":[..], "breaks":[[a,b]..], "slot_minutes":n, "break_minutes":n}
 ///                                                                cut_slots, Cut::slot_minutes, Cut::break_minutes
@@ -846,7 +871,7 @@ fn capacity_one(req: &Value) -> Result<Value, String> {
     let tz = cfg.tz;
     match req["op"].as_str() {
         Some("today") => {
-            let model = cap_model(&req["model"])?;
+            let model = model_text(&req["model"], "model")?;
             let from = instant(&req["from"], tz, "from")?;
             let end = instant(&req["end"], tz, "end")?;
             let walls = cap_walls(&req["walls"], tz, "walls")?;
@@ -877,10 +902,13 @@ fn capacity_one(req: &Value) -> Result<Value, String> {
                 .with_allow_home(allow_home);
             let slots = capacity::energize(&cut.slots, &ectx);
             let day0 = capacity::DayCapacity::from_slots(date, &slots);
-            Ok(json!({ "slots": slots.iter().map(cap_slot_json).collect::<Vec<_>>(), "day0": day0.minutes_at_level }))
+            Ok(json!({
+                "slots": slots.iter().map(cap_slot_json).collect::<Vec<_>>(), "day0": day0.minutes_at_level,
+                "model_read_by": MODEL_READ_BY,
+            }))
         }
         Some("lookahead") => {
-            let model = cap_model(&req["model"])?;
+            let model = model_text(&req["model"], "model")?;
             let mut walls = capacity::WallsByDate::new();
             for (d, ws) in req["walls"].as_object().ok_or("`walls` is not an object")? {
                 walls.insert(cap_date(&json!(d), "a walls date")?, cap_walls(ws, tz, "walls")?);
@@ -891,7 +919,7 @@ fn capacity_one(req: &Value) -> Result<Value, String> {
             let wake_text = req["wake"].as_str().ok_or("`wake` is not a clock")?;
             let wake = chrono::NaiveTime::parse_from_str(wake_text, "%H:%M:%S%.f").map_err(|e| format!("wake {wake_text:?}: {e}"))?;
             let caps = capacity::lookahead(&walls, &cfg, &model, &slots, from, days, wake);
-            Ok(json!({ "days": caps.iter().map(cap_day_json).collect::<Vec<_>>() }))
+            Ok(json!({ "days": caps.iter().map(cap_day_json).collect::<Vec<_>>(), "model_read_by": MODEL_READ_BY }))
         }
         Some("cut") => {
             let from = instant(&req["from"], tz, "from")?;
@@ -1131,11 +1159,13 @@ fn main() {
                  \x20      tm-oracle replay <tz>  (whole log texts, one JSON string per line)\n\
                  \x20      tm-oracle fit <tz> <today>  (the same, fitted: `tm model --fit`)\n\
                  \x20      tm-oracle plan  (one planning request per line: the fork's planner, ranked as the binary ranks it;\n\
-                 \x20                       ops plan, diff, worked)\n\
+                 \x20                       ops plan, diff, worked; a world's model is .tm/model.json's text, read by\n\
+                 \x20                       the fork's own loader)\n\
                  \x20      tm-oracle review  (one week-grid request per line: the fork's review::week_review heat over a world)\n\
                  \x20      tm-oracle capacity  (one request per line: the fork's lookahead, day-0 slots, slot cut, §7 pass and\n\
                  \x20                           §7.5 batches; ops today, lookahead, cut, rank, batches, cand, sort_key,\n\
-                 \x20                           wall_minutes)"
+                 \x20                           wall_minutes; a model is .tm/model.json's text, read by the fork's own\n\
+                 \x20                           loader)"
             );
             std::process::exit(2);
         }

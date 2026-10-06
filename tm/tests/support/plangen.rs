@@ -122,6 +122,16 @@ pub fn inner_break_line(t: DateTime<Tz>, len: u32) -> String {
     format!("{{\"t\":\"{}\",\"ev\":\"break\",\"planned_min\":{len},\"actual_min\":{len}}}\n", t.to_rfc3339())
 }
 
+/// **The night's length, drawn** (W-47 track C, README gap 4891; the learned-model draw's second
+/// value, `forkclass::ModelDraw`): every `slept_min` [`log_text`] writes — `tm wake`'s line and
+/// the features each `tm start` logs, which read the same night — set to `slept`. The generator
+/// writes 480 (eight hours), at which §8.5's sleep debt never fires (`under_hours` is 7.0), so a
+/// fitted `sleep_debt_shift` was read on no generated day; a short night is one the binary writes
+/// with `tm wake --slept`. One definition, for the model draw and anything that widens a night.
+pub fn with_slept(log: &str, slept: u32) -> String {
+    log.replace("\"slept_min\":480", &format!("\"slept_min\":{slept}"))
+}
+
 /// **`line`, put into `log` after the last line stamped at or before `t`** — where the verb
 /// that wrote it at `t` appended it, the day's lines being written in time order. A line whose
 /// stamp does not parse is passed over (it cannot be ordered), and the log keeps its final
