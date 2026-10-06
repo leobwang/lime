@@ -98,7 +98,11 @@ use cli_common::Tm;
 fn expected_log_calls(verb: &str) -> u32 {
     match verb {
         "wake" => 3,
-        "arrive" => 5,
+        // 6 since W-47 track H (README gap 4746, parity P113): `tm arrive` asks the kernel for the
+        // window it stores (`kernel_capacity::arrival_window`, the day's own request over the
+        // state the arrival leaves), and that request carries the capacity section's `log`
+        // replay, as every capacity call does (gap 275).
+        "arrive" => 6,
         "start" => 3,
         "pause" => 4,
         "done" => 4,
@@ -182,10 +186,13 @@ fn expected_apply_calls(verb: &str) -> u32 {
 /// **The per-verb `capacity`-section count**, pinned exactly beside the `log`
 /// column for the first time at W-14 (**gap 278**).
 ///
-/// Three of R14's verbs compute capacity: `arrive` and `energy` because their
-/// replan calls `Ctx::priorities`, and `review day` because it ranks. The other
-/// nine make none — which is why `tm drop`'s T11 row is the *reliable* one
-/// (README gap 240): it is the row that pays no capacity call.
+/// Three of R14's verbs computed capacity at W-14: `arrive` and `energy` because
+/// their replan called `Ctx::priorities` (since R3 a replan is the day's own
+/// request, and `Ctx::priorities` went at W-47 track H, README gap 4755), and
+/// `review day` because it ranks; since W-47 `arrive` asks the day twice, its
+/// window's and its replan's (README gap 4746). The other nine make none — which
+/// is why `tm drop`'s T11 row is the *reliable* one (README gap 240): it is the
+/// row that pays no capacity call.
 ///
 /// Pinned exactly, and not merely "at least", because the pairing below
 /// (`each capacity section is a second replay`) turns this column into gap
@@ -193,7 +200,10 @@ fn expected_apply_calls(verb: &str) -> u32 {
 fn expected_capacity_calls(verb: &str) -> u32 {
     match verb {
         // `check` since the W-41 repair: the day R3's `tm plan` asks for (gap 4142).
-        "arrive" | "energy" | "review day" | "check" => 1,
+        "energy" | "review day" | "check" => 1,
+        // 2 since W-47 track H (README gap 4746, parity P113): the window `tm arrive` stores is
+        // the kernel's — one day request for it, then the replan's.
+        "arrive" => 2,
         "wake" | "start" | "pause" | "done" | "break" | "drop" | "undo" | "log" => 0,
         // `interrupt` and `resume` since the W-45 repair (README gap 4745): `resume` replans.
         "interrupt" => 0,
@@ -274,7 +284,10 @@ fn expected_walls_calls(verb: &str) -> u32 {
 /// sending one fails here by name.
 fn expected_planner_calls(verb: &str) -> u32 {
     match verb {
-        "check" | "arrive" | "energy" | "review day" => 1,
+        "check" | "energy" | "review day" => 1,
+        // 2 since W-47 track H (README gap 4746, parity P113): `kernel_capacity::arrival_window`
+        // asks the kernel's day for the window and budget the arrival stores, then the replan.
+        "arrive" => 2,
         "wake" | "start" | "pause" | "done" | "break" | "drop" | "undo" | "log" => 0,
         // `interrupt` and `resume` since the W-45 repair (README gap 4745): `resume` replans.
         "interrupt" => 0,
@@ -616,12 +629,13 @@ fn expected_capacity_verb_log_sections(verb: &str) -> u32 {
 
 /// **The capacity call's traced line** — since R3 (W-45) the three verbs that plan
 /// the day send the `planner` section inside their one capacity call
-/// (`kernel_capacity::plan_day`), and `tm review week`, which ranks without
-/// planning, sends the capacity request alone.
+/// (`kernel_capacity::plan_day`), and since W-47 track H so does `tm review week`
+/// (README gap 4755): its deadline health reads the ranking of the day's own
+/// request, the one every planning verb sends, and no longer a second,
+/// capacity-only one (`Ctx::priorities`, deleted).
 fn expected_capacity_line(verb: &str) -> &'static str {
     match verb {
-        "plan" | "now" | "review day" => "capacity+log+planner",
-        "review week" => "capacity+log",
+        "plan" | "now" | "review day" | "review week" => "capacity+log+planner",
         other => panic!("`tm {other}` is not in the capacity-verb table"),
     }
 }
@@ -716,25 +730,50 @@ const DAY_ASKERS: &[(&str, &str, &str)] = &[
     ("planning.rs", "plan", "plan"),
     ("planning.rs", "now", "now"),
     ("day.rs", "arrive", "arrive"),
+    // W-47 track H (README gap 4746): the window `tm arrive` stores, asked of the kernel's day.
+    // D42's rebuild reaches it too (`Ctx::reconcile_state`, a day of two arrivals with no
+    // `.tm/state.json`), through `Ctx::arrival_window`, which is no entry of its own.
+    ("kernel_capacity.rs", "arrival_window", "arrive"),
     ("day.rs", "resume", "resume"),
     ("day.rs", "energy", "energy"),
     ("lifecycle.rs", "day_extras", "review day"),
+    // W-47 track H (README gap 4755): the week's deadline health ranks by the day's request.
+    ("lifecycle.rs", "review", "review week"),
     ("lifecycle.rs", "planner_problems", "check"),
 ];
 
-/// The calls to a [`DAY_ENTRIES`] entry in `text`, outside comments and `#[cfg(test)]` blocks,
+/// The calls to a [`DAY_ENTRIES`] entry in `text`, outside comments and `#[cfg(test)]` items,
 /// each as the name of the top-level function it sits in.
+///
+/// **A `#[cfg(test)]` FUNCTION is skipped, not taken for the test module** (W-47 track H, README
+/// gap 4971): until then the scan stopped at the first `#[cfg(test)]` line of a file, and
+/// `kernel_capacity.rs` carries one on `planner_request` 190 lines before its test module at
+/// `49186d7` (242 on W-47 track H's branch) — so every function after it (`plan_day`,
+/// `read_day`, and W-47's `arrival_window`, which asks for the day) was in no scan, a list where
+/// the rule is a class. The item the attribute stands on decides: a `#[cfg(test)]` MODULE ends
+/// the scan (every file's test module, and the `mod loggen` `ctx.rs` carries just before its own,
+/// are its last items), a `#[cfg(test)]` top-level `fn` is skipped, and any other `#[cfg(test)]`
+/// item changes nothing.
 fn day_entry_callers(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current: Option<String> = None;
-    for line in text.lines() {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut test_fn = false;
+    let is_fn = |l: &str| ["pub fn ", "fn ", "pub(crate) fn "].iter().any(|p| l.starts_with(p));
+    for (n, line) in lines.iter().enumerate() {
         if line.starts_with("#[cfg(test)]") {
-            break;
+            let next = lines[n + 1..].iter().find(|l| !l.starts_with("#[")).copied().unwrap_or("");
+            if next.starts_with("mod ") || next.starts_with("pub mod ") {
+                break;
+            }
+            test_fn = is_fn(next);
+            continue;
         }
         let code = line.split("//").next().unwrap_or("");
         let top = code.strip_prefix("pub fn ").or_else(|| code.strip_prefix("fn ")).or_else(|| code.strip_prefix("pub(crate) fn "));
         if let Some(rest) = top {
-            current = Some(rest.split(|c: char| c == '(' || c == '<').next().unwrap_or("").to_string());
+            let name = rest.split(|c: char| c == '(' || c == '<').next().unwrap_or("").to_string();
+            current = if std::mem::take(&mut test_fn) { None } else { Some(name) };
             continue;
         }
         for name in DAY_ENTRIES {
@@ -761,6 +800,42 @@ fn day_entry_callers(text: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// **The scan reads the item a `#[cfg(test)]` stands on** (W-47 track H, README gap 4971) — both
+/// directions, on a source written for it: a `#[cfg(test)]` function is skipped and the scan goes
+/// on past it (the rule that left every function after `planner_request` in no scan stopped
+/// here); a `#[cfg(test)]` `use` changes nothing, so the function after it is still read; and a
+/// `#[cfg(test)]` module ends the scan.
+#[test]
+fn the_scan_reads_the_item_a_cfg_test_attribute_stands_on() {
+    let text = "\
+pub fn before(ctx: &Ctx) {
+    plan_day(ctx, false, None);
+}
+
+#[cfg(test)]
+pub fn only_in_tests(ctx: &Ctx) {
+    planner_ask(ctx, false);
+}
+
+#[cfg(test)]
+use std::fmt;
+
+pub fn after(ctx: &Ctx) {
+    kernel_capacity::plan_day(ctx, false, None);
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod tests {
+}
+
+fn past_the_tests(ctx: &Ctx) {
+    plan_day(ctx, false, None);
+}
+";
+    assert_eq!(day_entry_callers(text), ["before", "after"]);
 }
 
 /// **Every verb that asks the kernel for the day is a row of the measured tables** — a PROPERTY

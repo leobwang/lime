@@ -534,12 +534,21 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
                 None => s.push_str("nothing running\n"),
             }
             // §13: the current block and the next three, rendered by the
-            // §4.3 renderer so `tm now` and the day file agree.
+            // §4.3 renderer so `tm now` and the day file agree — and the line
+            // under the running block's row reads the header's two numbers
+            // (the owner's D109, README gap 4894, parity P111): one reading of
+            // the block on one screen.
+            let running = out.active.as_ref().map(|a| tm_core::emit::Running {
+                id: &a.id,
+                worked_min: a.elapsed_min,
+                est_min: a.est_min,
+            });
             s.push_str(&tm_core::emit::render_now_with(
                 &plan,
                 &ctx.tree,
                 &ctx.cfg,
                 ctx.now_tz,
+                running.as_ref(),
             ));
             if !s.ends_with('\n') {
                 s.push('\n');

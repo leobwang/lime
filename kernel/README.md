@@ -93080,3 +93080,544 @@ kernel step.
   `break_ended` dropped from `tm stop` (§4) — every one FAILED a named test.
 * **Driven** on the repair's binary: §4's three verbs, §5's four instants either side of 1883-11-18 and three after
   2200, §6's two cases with and without the file; §1's reproductions on `357c0f2`'s binary.
+
+<!-- =====================================================================
+     APPENDED 2026-10-05: stage 6 (the planner), run **W-47**, **TRACK H** —
+     the host verbs and one definition of rank: the owner's D107 (`tm start
+     ^id` on the running block continues it: README gap 4892) and D109 (`tm
+     now`'s line under the running row reads the block: gap 4894), gaps 4880
+     and 4755 (one ranking in the binary), gap 4746 (the window `tm arrive`
+     stores is the kernel's) and gap 4749 (the example tree's `^t3`).  Gaps
+     4970-4989 are this track's; parity P110-P113 are this track's, all four
+     taken here.  Written on branch `w47-h`; the Land merges it.
+     ===================================================================== -->
+
+## Stage 6 — W-47 track H: a re-start continues the running block, `tm now` reads the block, one ranking in the binary, and the kernel's arrival window
+
+**Status.**  D107 (§1), D109 (§2), gaps 4880 and 4755 (§3) and gap 4746 (§4) are built, driven and pinned on
+branch `w47-h`; gap 4749 is measured and NOT landed (§5, gap 4976: its blast radius is track C's frozen files).
+Nothing here touches a `.lean` file: every answer this track reads (the served order, the day's window and budget) the
+kernel already emits.
+
+**Two sessions, one commit.**  The first session (22:16-00:12, §9) built everything above, wrote §0-§9 and ran five
+workspace runs, and was CUT OFF before it committed: at 01:40 the worktree held its work uncommitted (18 porcelain
+lines) and the scratchpad its logs.  The second session (from 01:40, §10) read every changed line and every claim of
+§0-§9 against the code and the scratchpad before committing any of it.  What it found and changed, before the
+commit: the rebuild's refusal notice (§4.1) carried a run of 22 spaces inside its string, where a line continuation
+had been lost, and the two-arrival notice beside it still said `RECOMPUTED … absent,` on a day the kernel had
+refused — the notice now says only what happened and a fourth test pins it (§4.3); gap 4971's scan marked ANY
+`#[cfg(test)]` item a test function and its doc comment said the attribute stood "four hundred lines" before the
+test module (190 at `49186d7`, 242 on this branch), and both are corrected, with a test of the rule itself; §0's
+"byte for byte" was an argument and
+is now a measurement; §3.4's class is counted; `kernel_capacity::ask` kept a `ranked` argument only `rank` had
+passed, and it is gone (§3.3), with four doc comments that still named `Ctx::priorities` or `Ctx::walls_on` as live;
+and gaps 4977 (a window longer than a day) and 4978 (the TUI's Review screen draws no `tomorrow`) are new.  Every figure of §10
+is the second session's, on the committed tree; §8's are the first session's, on the tree before those repairs.
+
+### 0. The brief, measured
+
+* HEAD `49186d7` (docs only over `b164b47`), tree clean; worktrees `stage5-lookahead` and, when this track began,
+  track K's `w47-k`.  `kernel/TmKernel/.lake` copied from the main checkout (`lake build TmKernel:static`: 194 jobs
+  replayed, nothing rebuilt); `cargo build --workspace --tests` in the worktree, 1 m 21 s.  The machine was shared
+  with another session's Lean builds throughout: load 1.2 at 22:16, **113.9** at 22:45, 13-50 after.
+* Gap 4892's two worlds reproduce on the HEAD binary exactly as the gap says (§1.2), and gap 4894's two lines (§2.2).
+* The brief's step 3 says the week's deadline health "orders items"; it does not — `priority::deadline_health`
+  COUNTS (hot, impossible, overdue, the tightest slack) over the priorities, in no order.  What gap 4755 names is
+  the SOURCE of those priorities, a second request; §3.3 is that.
+* The brief's step 3 says gap 4755's ranking ran "over `.tm/state.json` unrolled".  For the CLI it did not: `tm
+  review` loads with housekeeping, which rolls the state before anything ranks (`roll_day` in `Ctx::load_with`), so
+  the capacity section `Ctx::priorities` sent was byte for byte the planner request's capacity section; the
+  unrolled ranking was the TUI's, closed at the W-45 repair (gap 4743).  The two could not differ; §3.3 deletes the
+  second request anyway, so there is one.  **Measured** (second session, HEAD's binary, `TM_TRACE_CAPACITY_REQUEST=1`;
+  the example tree with `^t3` started at 09:00, both verbs at 10:00 on two copies): `tm review week`'s one request
+  and `tm review day`'s day request carry the same `blockMin`, `capacity`, `docs`, `log`, `now` and `tz`, value for
+  value, and differ in the `planner` section alone — one world, beside the argument.
+* `the_example_templates_are_the_plan_basic_fixture` (§17.1, `tm/tests/init_tree.rs`) requires `tm init
+  --example`'s templates to BE `tm-core/tests/fixtures/plan-basic`, byte for byte — so gap 4749's template is the
+  fixture every CLI test copies (`Tm::new`), and its blast radius is the suite's (§5).
+
+### 1. D107 — `tm start ^id` on the running block continues it (gap 4892 CLOSED, parity P110)
+
+**1.1 Built.**  `day::start`, when `.tm/state.json`'s running block is `^id` itself: a running break ends through the
+one body every verb that ends a break runs (`end_break_first`, D97's journal line `break ended Xm/Ym`, D101's clause
+and `--json` `break_ended`); nothing else is logged; the verb says `^id is already running since HH:MM` — the log's
+start (D75, `day::running_start`), dated when not today's (`day::when`) — and `--json` is `day::ContinueOut`
+(`already_running: true`, `started`, `est_min`, `paused`, `break_ended` when one was ended).  The arm sits inside
+`start`, so `cli_break_ended_journal.rs`' class test still reads the six verbs that end a break off the code.  With
+no break running a continuation writes NOTHING — no log line, no `.tm/state.json`, no journal line, no undo entry
+(neither the gate nor the undo recorder is started) — so the write gate (D35) is asked only when a break ends.
+Another id is refused by name as before.  Two things the decision does not name, taken as the smallest reading and
+recorded (gap 4970): a paused block stays paused and the line says so (``· paused (`tm pause` starts the timer)``,
+or the interruption's clause), and an `--energy N` report is not recorded — no `start` carries it — and the line
+says so, naming `tm energy N`.  §13 of the spec says the rule.
+
+**1.2 Driven** (HEAD binary `scratchpad/w47-h/tm-head`, then the track's; the example tree, `tm init --example`; the
+first `start` with `--energy 3`, the second with none; re-driven by the second session on this commit's binary, the
+cells below are that drive's output, word for word):
+
+| world | HEAD | W-47 | `tm review day` minutes |
+|---|---|---|---|
+| `start ^t3` 09:00, `start ^t3` 09:30, `stop` 09:50 | 09:30 `▶ ^t3 Exercises 5.3–5.5 · 09:30 · pred 5`, a second `start` logged (tags `start start stop`); `stopped ^t3 after 20m · 40m left`, `est:40m` | 09:30 `^t3 is already running since 09:00`, nothing logged (tags `start stop`); `stopped ^t3 after 50m · 10m left`, `est:10m` | 50 (both) |
+| `start` 09:00, `break` 09:30, `start ^t3` 09:50, `stop` 10:20 | `break ended · 20m of 20m · ▶ ^t3 Exercises 5.3–5.5 · 09:50 · pred 5`, a second `start` (tags `start break_start break start stop`); `stopped ^t3 after 30m · 30m left`, `est:30m` | `break ended · 20m of 20m · ^t3 is already running since 09:00`, the break's line only (tags `start break_start break stop`); `stopped ^t3 after 60m · 5m left`, `est:5m` (§6.4's floor) | 60 (both) |
+
+So the estimate `tm stop` writes is the estimate less the minutes `tm review day` counts, in both worlds.
+**Through the TUI** (a pty, `TM_TUI_CLOCK_RUNS=1`, `scratchpad/w47-h/tui/d107-tui.sh`: the second world, the TUI
+opened at 09:50 over the running break, `:start ^t3` typed at +3 s): W-47 logged the break's line and nothing else,
+asked nothing, and the Now pane read `elapsed 30m`; HEAD left the screen to ask `energy 0-5 (predicted 5, Enter to
+skip):` for the second `start` it was about to log (the drive was ended there, nothing logged); the second session
+re-ran the drive on this commit's binary and read the same log and frame.  `tm undo` after a continuation that ended
+a break puts the break back (`undid start (start ^t3 · already running · break ended) · 1 file(s) restored · 2 left`,
+then `.tm/state.json`'s `break` running from 09:30 and `^t3` paused under it), and a continuation with no break
+running leaves every byte of the tree as it was (md5 of all 27 files, before and after).
+
+**1.3 Behaviour row**: `tm/tests/cli_start_continues.rs`, six tests — both worlds (each asserting the stop's minutes
+equal the review's), the no-write continuation, another id refused and the `--json` shape, the paused and
+`--energy` clauses, and the undo.  **RULE M**: no expectation of the binary's own output moved — the suite at HEAD
+holds no re-start of the running block (the first full run with D107 in, 2,905 passed, failed only on two lines
+§8 explains).
+
+**Parity P110 taken**: `tm start ^id` on the block already running CONTINUES it — a running break ends as every verb ends one (its `break` line, `tm break`'s journal line and clause), nothing else is logged, and it says `^id is already running since HH:MM` (`--json` `already_running`), so the replay, `tm review day`, `tm stop` and `tm done` read one block from its one `start`; fork 4748911 logged a second `start` and restarted the clock, so `tm stop` wrote `est:` less only the second stretch (the owner's D107, W-47 track H, README gap 4892)
+
+### 2. D109 — `tm now`'s line under the running row reads the block (gap 4894 CLOSED, parity P111)
+
+**2.1 Built.**  `emit::now_annotation` is the line under `tm now`'s current row, and `emit::render_now_with` takes the
+running block as `tm now`'s header reads it (`emit::Running`: the id, `active.elapsed_min` — the log's one reading,
+`day::shown_worked_min` — and `active.est_min`).  Under the running block's row (a work segment of the running item)
+`elapsed` is the minutes worked and `left` the estimate less them (`Running::minutes_left`, `0m` in overtime); under any
+other row — nothing running, a wall over the running block, a routine — the segment's span elapses as before.  The
+header's two numbers are the definition: `planning::now` builds `Running` from the very `ActiveOut` it prints.
+`tm now --json` carries no annotation and does not move (second session: byte-identical on both binaries at 10:20
+and 11:05 in §2.2's world, 1,181 and 1,199 bytes).  A running ROUTINE's row is a block too: `tm start laundry` at
+10:20, `tm now` at 10:35 reads `15m of 30m` and `  10:35–10:50 · elapsed 15m · left 15m` (HEAD `elapsed 0m`).  §13 of
+the spec says it.
+
+**2.2 Driven** (the example tree, `start ^t3` at 09:50; re-driven by the second session on both binaries, every cell
+as below):
+
+| `tm now` at | header | row note | HEAD's line | W-47's line |
+|---|---|---|---|---|
+| 10:20 | `30m of 60m` | `running · 30m left` | `  10:20–10:50 · elapsed 0m · left 30m` | `  10:20–10:50 · elapsed 30m · left 30m` |
+| 11:05 (overtime) | `75m of 60m` | `running · 0m left` | `  11:05–11:50 · elapsed 0m · left 45m` | `  11:05–11:50 · elapsed 1h15m · left 0m` |
+| 13:10 (the meeting over `^t3`) | `… · paused` | the wall's | `  12:50–13:50 · elapsed 20m · left 40m` | unchanged |
+
+**2.3 Behaviour row**: `tm/tests/cli_now_annotation.rs` (both lines above and the no-over-bite rows: nothing running,
+and the meeting's row over a running block) and `tm-core/tests/emit_now.rs`'
+`the_line_under_the_running_row_reads_the_block` (the block read under its row, another item's reading ignored, the
+overtime `0m`, and the rows themselves unmoved).  **RULE M**: no snapshot of the binary moved — `emit_now`'s
+`now_current` is rendered with no running block (`None`) and is byte-identical; no other test holds a running
+block's annotation.
+
+**Parity P111 taken**: the line under `tm now`'s current row reads the RUNNING BLOCK when the row is its own — `elapsed` the minutes worked and `left` the estimate less them (`0m` in overtime), the two numbers the header prints (`emit::now_annotation`, `emit::Running`); fork 4748911 read the segment's span on every row, so beside `30m of 60m` it said `elapsed 0m`, and in overtime `left 45m` under a row whose note said `running · 0m left` (the owner's D109, W-47 track H, README gap 4894)
+
+### 3. One definition of rank (gaps 4880 and 4755 CLOSED, parity P112)
+
+**3.1 The served order, read.**  `planwire::served_order` reads the kernel's `diagnostics.served`
+(`PlanWire.the_served_key_is_the_walks_order`: one `{ix, id, ci}` per ranked answer in `rankedLe`'s order, D60/D63's
+p0 rule in it) as positions into the host's candidates, through the order they were sent in (`send_order`), and
+names a defect — an `ix` the request did not send, another candidate's id or `ci`, a candidate served twice — never
+guesses.  `kernel_capacity::read_day` decodes it once per day request, into `Planned::served`.
+
+**3.2 Gap 4880.**  `tm review day`'s "tomorrow" (`lifecycle::day_extras`) is the served order of the day's own answer
+— no second request — less the items the day places and the items done, three of them, each noted from its own
+candidate's grant (the index pairing `read_day` checks).  Driven on the example tree with two twenty-block items added
+under `# Tasks`, the later-due one first (`^z1` due Thursday, `^z2` due Tuesday), so three p0 IMPOSSIBLE items
+(`^d1` due Friday) whose file order and due order disagree, at 21:00: HEAD `tomorrow  first candidate d1 (p0
+u=1.62) · z1 p0 u=2.17 · z2 p0 u=4.33` (fork `priority::sorted`: file order); W-47 `first candidate z2 (p0 u=4.33) ·
+z1 p0 u=2.17 · d1 p0 u=1.62` (the day's: by due date, P51) — both lines re-driven by the second session, and the
+week's `deadlines min slack -3.5d · hot 0 · impossible 3 · overdue 1` at 10:00 on both binaries.  On the example tree
+itself the two keys agree (`laundry p0`, `m1 p3`, `m3 p3`, both binaries).
+
+**3.3 Gap 4755.**  `tm review week`'s deadline health reads the priorities of the day's own request
+(`kernel_capacity::plan_day`), the one every planning verb sends; `Ctx::priorities` and `kernel_capacity::rank`, the
+second, capacity-only request and its only caller, are deleted — and (second session) so is the `ranked` argument of
+`kernel_capacity::ask`, which only `rank` had passed: `ask`'s one caller is `tm plan --week`'s seven days, with none.  Measured (§0): the two could not differ for the CLI;
+on the three-impossible world above both binaries say `impossible 3 · overdue 1 · min slack -3.5d` at 10:00.
+**Price of the request**, `tm review week` best of 15 on the example tree with a block running: HEAD 27 ms, W-47
+31-33 ms (two rounds, load 19-28; the first session kept no log of them, and the second re-measured them, §10.3) — the
+planner section, about 5 ms; on cli_latency's three-year world (row 7, one
+run each, alternated): HEAD 486, 521, 622 ms; W-47 506, 516, 506 ms (load 42 → 20) — inside the noise and the 1 s band.
+
+**3.4 The class, by body shape** — every Rust sort of items in `tm/src` and `tm-core/src` (`sort*`, `min_by*`,
+`max_by*`, ordered maps keyed by a priority), and what each orders by:
+
+| site | orders | by | why not the served order |
+|---|---|---|---|
+| `lifecycle::day_extras` | tomorrow's candidates | **the served order** (§3.2) | — |
+| `lifecycle::review` (week) | nothing — counts | the day's request's grants (§3.3) | not an order |
+| `priority::sorted`, `priority::sorted_candidates` | candidates | fork §7.4's `(p, root line, own line)` | NO shipped caller now; the fork comparands and the harness's independent copy of D63's order (`planner_w38_order.rs`, `planner_invariants.rs`, compared by value with `served`) |
+| `priority::collect_candidates` (`ids.sort_by_key(tree.order)`) | the candidates collected | (file, line) | §6.2's collection order, the request's; the kernel ranks it |
+| `planwire::send_order` | the candidates SENT | fork `(effective_due, own_order, index)` | the EDF pass's tie order (P12), not a rank |
+| `planwire` diagnostics (`hot`, `impossible`, `blocked`, `deferred`, `waiting`, `unplaced`) | printed ids | the host's candidate order | fork `diagnose`'s print order (gap 3086), not a rank |
+| `tui::necessities::rows` (Dated) | dated rows | section, then `u` descending, then id | §12.3's own order — how tight each deadline is, a different question from what is served first |
+| `tui::queue` month rows | rows | `demoted` last | not a rank |
+
+`App::next_block` (the idle prompt's "work") reads the kernel's day segments already.
+
+**Counted** (second session): `grep -rnE '\.(sort|sort_by|sort_by_key|sort_unstable|sort_unstable_by|sort_unstable_by_key|sort_by_cached_key|min_by|min_by_key|max_by|max_by_key)\b'`
+over `tm/src` and `tm-core/src`, comment lines left out, finds **49** calls.  The rows above hold every one that
+orders items or candidates; the other forty-odd order something that is no rank — spans and intervals
+(`log.rs`, `review.rs`, `capacity.rs`), walls by start (`check.rs`, `necessities.rs`, `capacity.rs`, `tree.rs`), ICS
+events and recurrence parts (`ics.rs`, `recur.rs`), files and paths (`store.rs`, `tui/mod.rs`), problems by place
+(`lifecycle.rs`), energy curve steps and reports (`config.rs`, `energy.rs`), log rows by line (`kernel_log.rs`), the
+token vector (`grammar.rs`), wire keys (`planwire.rs`, `model.rs`), demoted copies and a cycle's rotation
+(`tree.rs`) — and `horizon::churn` orders §11's cut list by its number of stamps, most first, which is the cut list's
+own question and no rank.  The TUI's Queue panes list file order (§7.4: line order is rank), and its fits footer
+runs §7.3's reservation in row order without sorting.
+
+**3.5 Behaviour row**: `tm/tests/cli_review_rank.rs` — the three-impossible world's list (JSON and the human line),
+the example tree's unchanged list, and the week's deadline health equal to `tm plan --json`'s classes.
+**RULE M**: no expectation of the binary's own output moved.
+
+**Parity P112 taken**: `tm review day`'s "tomorrow" list orders the candidates the day did not place by the kernel's served order (`diagnostics.served`, `planwire::served_order` — D60/D63's p0 rule: impossible p0 items by due date, before every other p0 item), each noted from its own grant; fork 4748911 sorted them by `priority::sorted`'s `(p, root line, own line)`, their place in the file, so two p0 impossible items came out in file order where the day serves them by due date (README gaps 4880 and 4755, W-47 track H)
+
+### 4. The window `tm arrive` stores is the kernel's (gap 4746 CLOSED, parity P113)
+
+**4.1 Built.**  `Ctx::arrival_window` — the ONE definition `tm arrive` writes and D42's rebuild derives back (D45) —
+is `kernel_capacity::arrival_window`: the day's own request (`planner_ask_over`, the one body `planner_ask_from` is
+too) over the state the arrival leaves (today's date, the arrival, no stored window or budget), and the day's window
+and budget read back (`Planner.PlanReq.window`: `Look.windowFrom` over the day's walls clipped to it,
+`Look.wallsClippedOn`; `Planner.PlanReq.budgetBlocks`: `Look.budgetOf`, exact).  The kernel then plans the day by the
+window it computed.  The window and budget it reads are functions of the date, the arrival, the configured `[day]`
+and the day's walls alone (`Planner.PlanReq.window`, `.budgetBlocks`), so `tm arrive`'s state and the rebuild's — no
+running block restored yet — give one answer.  The rebuild's recompute moved after the cached branch (a cached state
+never read it) and costs a day request only there — a day of two arrivals with no `.tm/state.json`.  A tree whose day
+the kernel refuses gets no window back: the rebuild says ``tm: NOT recomputed: `window` and `budget` — the kernel
+refused the day's request (<the refusal>), so nothing stands for them until it accepts the tree``, and the
+two-arrival line that says `RECOMPUTED rather than restored` is printed only when they were.  `Ctx::walls_today` and
+`Ctx::walls_on`, the host's walls, went with their last caller.  `tm arrive` asks one day request more: +14 to +26 ms
+on the example tree (HEAD best 245 ms, W-47 259-267 ms, two rounds of twelve, load 22-28; unlogged, re-measured in
+§10.3).
+
+**4.2 Measured — what moves.**  `scratchpad/w47-h/arrive-ab.sh`: `tm arrive --at HH:MM` on the HEAD binary and the
+track's, every half hour from 05:00 to 23:30, on the example tree and `plan-basic`, `plan-home-day` and
+`plan-travel-day`: **152 of 152** stored windows and budgets identical.  On constructed worlds (the example tree, one
+wall appended): a wall before the arrival or inside the day, and a red-eye whose buffer starts the night before,
+identical; a wall running PAST MIDNIGHT moves it — an overnight shift 18:30-01:30, arrived at at 11:00: HEAD
+`11:00–03:00` (the host extends the window by the wall's whole span), W-47 `11:00–01:30` (its part of the day); at
+17:00 `17:00–02:00` against `17:00–00:30`; and a 24-hour wall from 09:00 stored `07:00–15:00` on HEAD — the host's end
+TOMORROW at 15:00 kept as a bare clock, which the day then read as today's — against `07:00–06:00` (tomorrow 06:00,
+gap 3782's reading).  Every W-47 window is the one `tm plan` plans the day by (`plan.window` equal to the stored one).
+The second session re-drove the moved worlds on both binaries (the shift at 11:00 and 17:00, `tm plan --json`'s
+window after each; the 24-hour wall written `at:2026-09-07T09:00/2026-09-08T09:00`) and three that do not move — a
+call at 06:00-06:30 before a 07:00 arrival (`07:00–16:00` on both), a seminar at 15:00-16:00 (`07:00–17:00` on both),
+and a red-eye at 01:00 tomorrow with `buffer:2h`, arrived at at 15:00 (`15:00–19:00` on both).
+
+**4.3 Behaviour row**: `tm/tests/cli_arrive_window.rs` — the overnight shift (the stored window, the log's `arrive`
+line, `tm arrive`'s line and `tm plan`'s window all `11:00–01:30`), the formula's windows where no wall crosses
+midnight, D42's rebuild of a two-arrival day recomputing the window the second `tm arrive` stored, and (second
+session) its other direction: on a tree whose `.tm/model.json` weight the kernel refuses (P26), the rebuild of that
+day stores no window and no budget, names the refusal, claims no recompute, and `tm add` still runs.  The call-count
+instrument moves with it (an instrument's table, not the binary's output): `tm arrive` 6 `log`, 2 `capacity`, 2
+`planner` sections where it read 5, 1, 1; `tm review week`'s capacity line is `capacity+log+planner` (§3.3).  **RULE
+M**: no expectation of the binary's own output moved — no world of the suite holds a wall past midnight before an
+arrival.
+
+**Parity P113 taken**: the window and budget `tm arrive` stores (and D42's rebuild recomputes for a day of two arrivals) are the KERNEL's — the day's own request over the state the arrival leaves, `Planner.PlanReq.window` over the day's walls clipped to it, and its exact `budgetBlocks` — so a wall running past midnight extends the window by its part of the day (an overnight shift 18:30-01:30 arrived at at 11:00: `11:00–01:30`); fork 4748911's `capacity::window_and_budget` over `Ctx::walls_on` extended it by the wall's whole span (`11:00–03:00`) and kept an end past tomorrow's midnight as a bare clock (README gap 4746, W-47 track H)
+
+### 5. Gap 4749 — the example tree's `^t3`: measured, NOT landed (gap 4976)
+
+`tm init --example`'s `^t3` is `- [>] 4 2b Exercises 5.3–5.5 @m1 est:1b ^t3`.  The one-estimate line that keeps the
+day the planner plans is `- [>] 4 1b Exercises 5.3–5.5 @m1 ^t3` (`remaining` is `est:1b` today and the leading `1b`
+after), and §0's last bullet makes it `plan-basic` itself — so the change is four lines (the template's and the
+fixture's week line, and their day files' frozen row `09:20  4 p1 ▶ Exercises 5.3–5.5            @m1  2b×1.6`, which
+becomes `… @m1  1b×1.6`, the columns unmoved) and its blast radius is the suite's.  **Driven in a
+copy of this branch** (`scratchpad/w47-h/plant`, the four lines and nothing else, `cargo test --workspace
+--no-fail-fast` niced beside this branch's acceptance run): **2,880 passed, 33 failed, 51 ignored**, in 19 binaries
+(`error: 19 targets failed`; the first session wrote 21, and the second counted the log's own list):
+
+* **eight FROZEN COMPARANDS** whose committed worlds are `plan-basic`'s files, by value — `fork_week_grid`'s
+  `every_frozen_week_is_the_world_its_steps_build`, `fork_rebless_history`'s two, `fork_frozen_refile`,
+  `planner_p85_days`, `planner_separator_days`, `planner_w41_starts`, `tui_kernel_answers` — each a D64 re-bless of
+  `tm/tests/fixtures/*`, which is track C's;
+* rows and screens showing `^t3`'s estimate cell or its progress: `emit_planner` (three), `tui_today_render` (four),
+  `tui_today_prompts` (four — the overtime box's `est 2b`), and `kernel_row_cells`' two, where gap 1101's declared
+  hole (`2b×1.6` against `1b×1.6`) CLOSES on this fixture — the very cell track L's D112 moves to the kernel's;
+* tests whose world IS the two-estimate line: `cli_items`' `edit_est_moves_the_remaining_estimate_not_the_one_as_written`
+  and `edit_unset_removes_a_key`, `cli_one_estimate`'s `a_token_slot_is_written_in_canonical_minutes`, `cli_day`'s
+  `done_partial_keeps_the_line_open_with_a_remainder`, `horizon_close`'s two, tm-core's `grammar_fixtures` (two),
+  `store_fs` and `tree_basic`'s `remaining_rolls_up` — each needs the two-estimate line written into its own world,
+  or its expectation moved under the number;
+* this track's own two D107 worlds, which assert `est:10m` and `est:5m` — after the change `tm stop` rewrites the
+  leading estimate in place (D56/D62), `10m` and `5m`.
+
+Not landed, because eight of the 33 are track C's frozen files and a re-bless of them is a decision under D64, and
+because the parity number it needs is not this track's (P110-P113 are spent above): it is gap 4976, for the Land.
+
+### 6. Gaps opened
+
+**Gap 4970 — two readings D107 does not name, taken as the smallest (campaign call, revisable).**  1. *What.*  A
+continuation of a block a `tm pause` holds (or an open interruption) leaves it paused and says ``· paused (`tm
+pause` starts the timer)``; an `--energy N` given to a continuation is not recorded and the line says ``--energy N not
+recorded: no `start` is logged (`tm energy N` reports it)`` (`--json` `energy_not_recorded`).  2. *Why.*  D107 says
+"logs nothing else": an `unpause` or an `energy` line would be something else; and a report thrown away without a word
+is the class `tm start`'s own comment refuses.  3. *Cost.*  None found; a user who wanted the re-start to resume a
+pause types `tm pause`.  4. *Clears it.*  The owner, if either should log.
+
+**Gap 4971 — CLOSED: the call-count instrument stopped at the first `#[cfg(test)]` of a file.**
+`kernel_call_counts.rs`' `day_entry_callers` broke at the first `#[cfg(test)]` line, and `kernel_capacity.rs`
+carries one on `planner_request` 190 lines above its test module at `49186d7` (242 on this branch), so `plan_day`,
+`read_day` and every function after them were in no scan — a list where the rule is a class.  The item the attribute
+stands on decides now: a `#[cfg(test)]` module ends the scan (each file's test module, and the `mod loggen` `ctx.rs`
+carries just before its own, are last), a `#[cfg(test)]` top-level `fn` is skipped, and any other `#[cfg(test)]`
+item changes nothing (the first session's rule marked ANY such item a test function, so the next real function after
+a `#[cfg(test)] use` would have left the scan; no file holds one today).  The scan then found
+`kernel_capacity::arrival_window` (§4) by itself, and since the second session
+`the_scan_reads_the_item_a_cfg_test_attribute_stands_on` holds the rule on a source written for it — a test function
+skipped and read past, a `#[cfg(test)] use` changing nothing, a test module ending the scan — so the first session's
+rule fails it.
+
+**Gap 4972 — the class generator's arrival window is the host formula the binary no longer runs.**  1. *What.*
+`tm/tests/support/plangen.rs`' `arrival_of` writes a generated world's `arrive` line with
+`capacity::window_and_budget` over the tree's walls — "the binary's `Ctx::arrival_window`" until §4.  2. *Why not
+here.*  The class worlds are track C's, and the generator draws its walls from `plan-basic`'s calendar, which holds no
+wall past midnight, so the two readings agree on every world it builds (§4.2's measurement is the reason, not a
+proof).  3. *Cost.*  A generated wall past midnight would hold an `arrive` line the binary would not write (lesson
+5).  4. *Clears it.*  The generator asks the kernel's window, or asserts its walls end by midnight.
+
+**Gap 4973 — `Tree::walls_on`, `capacity::window_and_budget`, `priority::sorted` and `priority::sorted_candidates`
+have no shipped caller.**  1. *What.*  After §4 the first two are called by tests and the fork comparands alone
+(`kernel_lookahead_parity.rs`, `plangen.rs`, `forkgrid.rs`, `capacity_slots.rs`, and `capacity.rs`' own unit tests;
+`cli_wall_kernel.rs` finds `walls_on` by its signature as the host's wall reader its housekeeping must not call); after
+§3 the second two by `priority_rules`, `priority_plan_basic`, `priority_regressions`, `planner_w40_runs`,
+`planner_w38_order`, `planner_invariants` and `support/forkclass.rs` alone (second session, `grep` for a call outside a
+comment over `tm/src`, `tm-core/src` and both test trees).  2. *Why.*  They are fork 4748911's readings, the
+comparand's.  3. *Cost.*  Fork code in `tm-core` no verb reaches (gap 4752's class).  4. *Clears it.*  Their
+comparisons frozen or asked of `tm-oracle` (D72), then deleted.
+
+**Gap 4974 — three readers of `diagnostics.served`.**  1. *What.*  `planwire::served_order` (§3.1) is the binary's;
+`planner_w38_order.rs` and `planner_invariants.rs` decode the key on their own (each asserting the same three
+things).  2. *Why not here.*  Both files are the harness's, and their copies predate a host reader.  3. *Cost.*  §5.3
+in the harness: a decoder defect fixed in one is not fixed in the others.  4. *Clears it.*  The two read
+`served_order`.
+
+**Gap 4975 — the TUI's ghost row puts an overnight stored window's end on the window's start day.**  1. *What.*
+`App::arrival_window` places both clocks of `.tm/state.json`'s window on the state's date, so a window ending after
+midnight (`11:00–01:30`) gives the ghost row an end before its start.  2. *Why.*  Pre-existing — HEAD stored such
+windows too (`11:00–03:00`, §4.2) — and the TUI is not this track's.  3. *Cost.*  A ghost row drawn over no span on a
+night-shift day.  4. *Clears it.*  The end read as the planner reads it (gap 3782: the next day when before the start).
+
+**Gap 4976 — gap 4749 measured and not landed (§5).**  1. *What.*  `tm init --example` still writes `^t3` with two
+estimates; the four-line change is ready (§5) and its blast radius is 33 tests in 19 binaries of the suite, eight of
+them frozen comparands of `plan-basic`.  2. *Why not here.*  The template must BE `plan-basic`
+(`the_example_templates_are_the_plan_basic_fixture`, §17.1), so the change re-blesses track C's frozen files (D64) and
+moves row cells track L's D112 moves too (gap 1101's hole on the same `^t3` row); and the track's four parity numbers
+are spent.  3. *Cost.*  A user's first tree contradicts the one-estimate rule the writers follow (gap 4749's cost).
+4. *Clears it.*  The Land, after D112: the four lines, the eight frozen lines re-blessed under D64 with their world
+named (clause (b): the binary's example tree is one-estimate), the 25 others moved or given their own two-estimate
+line, and `PARITY-PENDING: tm init --example's ^t3 carries one estimate (the leading 1b, no est:), where fork 4748911
+wrote 2b and est:1b`.
+
+**Gap 4977 — a window that ends more than a day after the arrival is stored as a bare clock and read back as the
+same day's** (pre-existing; fork 4748911 and both binaries).  1. *What.*  `.tm/state.json`'s window is two clocks,
+and every reader takes an end before the start for tomorrow's (gap 3782's reading) — so an end past the arrival's own
+clock tomorrow comes back as today's.  Driven (second session; the example tree with `- [ ] 1 Long shift
+at:2026-09-07T07:30/00:00 ^g8` appended to the calendar, `tm arrive lounge` at 07:00): the kernel's window is §8.1's
+least solution, 07:30 TOMORROW (eight hours to 15:00, extended by the shift's sixteen and a half), and HEAD's binary
+and this branch's both print and store `window 07:00–07:30`, and `tm plan` then plans the day by a half-hour window
+(`plan.window` `["07:00", "07:30"]`, both binaries).  2. *Why not here.*  It needs ≥ 16 hours of walls after an early
+arrival; the remedy is a format change (the end's date, or a day offset, in the stored window and the `arrive`
+line's payload), which D42's rebuild and the log grammar would carry, or a rule clamping the stored end — an owner
+decision either way.  3. *Cost.*  On such a day everything after the first half hour is planned out of the window.
+4. *Clears it.*  The owner's ruling, then the window's end carried with its date.
+
+**Gap 4978 — the TUI's Review screen draws `tomorrow  -` and no deadline health** (pre-existing; found by the second
+session).  1. *What.*  `App::reviews` builds the day's and the week's reviews with `DayExtras` and `WeekExtras` holding
+only the arrival plan, `underused`, the window and the budget, so the Review screen's `tomorrow` line is empty and its
+week has no `deadlines` line, where `tm review day` and `tm review week` compute both.  Driven through a pty (`stty
+cols 140 rows 45`, `TM_TUI_CLOCK_RUNS` unset, key `4` at +3 s) on §3.2's three-impossible world at 21:00: both HEAD's
+binary and this branch's draw `│ tomorrow  -`, while `tm review day` on the same tree prints `tomorrow  first
+candidate z2 (p0 u=4.33) · z1 p0 u=2.17 · d1 p0 u=1.62` (HEAD: `d1 … z1 … z2`).  2. *Why not here.*  `tm/src/tui/app.rs`
+is in no list of this track's and track L's worktree changes it; the App would keep the day's `Planned::served` beside
+its candidates and priorities.  3. *Cost.*  Two surfaces of one review disagree (§5.3): the TUI user never sees
+tomorrow's first candidates or the week's deadline health.  4. *Clears it.*  One function, shared by
+`lifecycle::day_extras` and `App::reviews`, reading the served order and the grants of the day's own answer.
+
+### 7. Files outside this track's list, for the Land
+
+* `tm-core/src/emit.rs` (track L's): `emit::Running`, `emit::now_annotation` and `render_now_with`'s new `running`
+  argument (§2) — `tm now`'s annotation is this track's step and it lives there; `render_now_with`'s first line
+  (`plan_rows`) is untouched, so a merge with D112's row source meets one argument and the annotation's three lines.
+* `tm-core/src/planwire.rs`: `served_order`, after `read_plan` (§3.1).  `tm/src/cli/kernel_capacity.rs`:
+  `Planned::served`, `planner_ask_over`, `arrival_window`; `rank` deleted, and `ask`'s `ranked` argument with it.
+  `tm-core/src/tree.rs`: `Tree::walls_on`'s doc comment (its last shipped caller went, gap 4973).  `tm/src/cli/ctx.rs`: `arrival_window`'s
+  body, the rebuild's recompute, `priorities`, `walls_today` and `walls_on` deleted.  `tm-core/src/priority.rs` and
+  `tm/src/tui/queue.rs`: one doc sentence each.  `tm/tests/kernel_call_counts.rs`: §4.3's rows and gap 4971's scan.
+  `tm-spec-v1.md` §13: two paragraphs after the break paragraph.
+* **Where the Land meets another track** (read off the other worktrees' `git status` at 01:41, uncommitted then):
+  track L's worktree changes `tm/src/cli/day.rs` (D111's place — this track changes `day::start` and `day::arrive`
+  there) and track K's changes `tm/src/cli/ctx.rs` (this track changes `Ctx::arrival_window`, the rebuild's
+  recompute and the module header there, and deletes `Ctx::priorities`, `walls_today` and `walls_on`).  Neither was
+  read further: they are those tracks' files, and the Land composes them.
+
+### 8. Measured — the first session, on the tree before the second session's repairs (§10 is the record)
+
+* **Built** warning-free (`cargo build --workspace --tests`); the first build of §3/§4 warned four times (unused
+  imports and `walls_today`/`walls_on`, deleted).
+* **`check.sh`** in the worktree, capped: the first run FAILED check 8 — the method's first name was the fork's own
+  name for a group's minutes left, which three COUNTED allow entries keep (spelled with `Group::`, with `g.` and
+  bare), so a new definition of that name resolved citations the entries count; the method is
+  `Running::minutes_left` and nothing is laundered (the second session found this very sentence, which spelled the
+  three in backticks, failing check 8 the same way, and re-spelled it); then seventeen lines, all ok, 35.4 s (23:19,
+  load 18): axiom audit **6,398**; Negative.lean rejected; FFI **96** tests; corpus **29/37 files and 4/5 whole plans**; stage goals
+  **1**; prose citations **62,245** (58,605 resolved, 3,640 allowed, 698 counted); check 9 **750** rostered, 0 owed
+  (no Lean definition is new); parity **P1-P113, 7 declared holes** (P103-P109, tracks K's and L's), next free P114;
+  twins 0 unanswered; check 12 **1,520** reachable, **1,099** exempt; check 13's four lines 0 unanswered; replay
+  **95** modules.  The run of record is §10's, on the committed tree.
+* **The first full run with D107 and D109 in** (a probe, 22:42-23:00, load 13 → **113.9** → 34): 2,905 passed, 2
+  failed, 51 ignored over 157 result lines — `cli_latency`'s three-year row (`tm drop ^z15` past its 1 s at load
+  113) and `kernel_call_counts`' class test reading §3.3's `review`, edited while the run ran (the test reads the
+  source at run time).
+* **`cargo test --workspace --no-fail-fast`, in the worktree, capped at 40 GB**, on the first session's tree
+  (porcelain 18 lines before and after every run, so no proptest seed was written):
+
+  | run | when (load) | passed | failed | ignored | result lines |
+  |---|---|---|---|---|---|
+  | 1 | 23:20-23:35 (16 → 18) | 2,913 | 0 | 51 | 159 |
+  | 2 | 23:35-23:51 (18 → 17) | 2,912 | **1** | 51 | 159 |
+  | 3 | 23:51-00:06 (17 → 15) | 2,912 | **1** | 51 | 159 |
+  | 4 | 00:07-00:23 (11.9 → 24.2) | 2,913 | 0 | 51 | 159 |
+  | 5 | 00:23-00:37 (24.2 → 6.9) | 2,913 | 0 | 51 | 159 |
+
+  Runs 2 and 3 each failed ONE row: T19's set-up in `cli_latency` (`tm drop ^a1` — the three-year tree's FIRST verb,
+  genesis — `was still running after 5s`), at load 19.2 and 21.8; run 2 overlapped this track's own niced suite
+  in a copy (§5, 23:26-23:41), run 3 nothing of this track's.  A row missed under load is a measurement, and no band
+  moved.  **Measured against HEAD on the very world** (`scratchpad/w47-h/world-t11`, T11's tree written by the
+  harness's own builders, a fresh copy per run, alternated, load 13-14): HEAD 3,213 and 3,285 ms, W-47 3,022 and
+  2,941 ms (no log of these four was kept — the second session re-measured them, §10.2) — this track adds nothing to
+  a `tm drop` (its only load-path change, §4's rebuild, runs on a day of two
+  arrivals with no `.tm/state.json`, and T11's tree has no arrival today).  Runs 4 and 5 finished after the session
+  was cut off, green; the second session read their logs (`scratchpad/w47-h/ws-run4.log`, `ws-run5.log`) and the
+  porcelain after each (18 lines, as before).
+  Against `b164b47`'s 2,897: +16, this track's new tests (`cli_start_continues` 6, `cli_now_annotation` 3,
+  `cli_review_rank` 3, `cli_arrive_window` 3, `emit_now` 1), and +4 result lines, their binaries (since the second
+  session `cli_arrive_window` has 4).
+* **`cli_latency --include-ignored --test-threads=1`**, capped at 16 GB, alone (no log of this run was kept; §10.2
+  has the second session's): 8 of 8 (00:06:59-00:07:42, load 11.8 → 12.8): three-year first verb 3.28 s, later verb 177 ms; review week 638 ms; reseal 446 ms; the stall row's worst
+  790 ms (gap 4901's margin: 210 ms); T18's planner call 8.6 ms on the example tree and 127 ms on T11's.
+* **Plants** (`scratchpad/w47-h/plant`, a copy of the worktree with its own `target/`, porcelain 0 before and after;
+  the worktree's held at 18 lines; the second session found the per-test counts of the first plant missing from
+  `plants2.log` and re-runs every plant after this block's commit, §10.4): the continuation removed (D107) →
+  `cli_start_continues` 6 FAILED;
+  `Running::is_the_row_of` → `false` and `minutes_left` ignoring the minutes worked (D109) → `cli_now_annotation` 2
+  and `emit_now` 1 FAILED each; `served_order` answering the collect order → `cli_review_rank` 2 FAILED;
+  tomorrow by `priority::sorted_candidates` again → 1 FAILED; `arrival_window` back to the host formula →
+  `cli_arrive_window` 2 FAILED; the rebuild not recomputing → 1 FAILED; the scan stopping at the first
+  `#[cfg(test)]` again → `kernel_call_counts`' class test FAILED (STALE `arrival_window`).
+* **Driven**: §1.2's, §2.2's, §3.2's and §4.2's tables, on `scratchpad/w47-h/tm-head` (HEAD's binary) and the
+  track's.
+
+### 9. The clock
+
+* 22:16 — the step began: worktree `w47-h` off `49186d7`, `.lake` copied, the workspace built (1 m 21 s).
+* 22:22-22:40 — gap 4892's and gap 4894's worlds driven on HEAD; D107 and D109 built and driven.
+* 22:42-23:00 — the probe run (§8), at load up to 113.9; §3 and §4 written meanwhile.
+* 23:00-23:14 — the call-count instrument's tables and its scan (gap 4971); the arrival A/B (152 of 152) and the
+  overnight worlds; the prices of §3.3 and §4.1, A/B against a HEAD build in `scratchpad/w47-h/head-clone`.
+* 23:15-23:20 — this block, P110-P113, `check.sh` (red on check 8, then green).
+* 23:20-00:06 — three workspace runs; the plants (23:22-23:25); gap 4749's copy run (23:26-23:41, §5); the T11
+  world's A/B (00:06); `cli_latency` alone (00:07).
+* 00:07 — runs 4 and 5 started; the session was cut off after 00:12 (the README and the register were last written
+  then; runs 4 and 5 finished at 00:37, green, with nobody to read them).
+* 01:40 — the second session began on the uncommitted worktree: every changed file read against `49186d7`, every
+  claim of §0-§9 against the code and the scratchpad's logs (§10.1).
+* 01:49-01:53 — the repairs of the status paragraph, a fourth `cli_arrive_window` test driven by hand first, gap 4977
+  driven on both binaries, §0's request traced on HEAD's binary; `check.sh` red on check 8 (§8's own sentence), then
+  re-spelled.
+* 01:56 and 01:58 — the three workspace runs started, and stopped twice, unread, to put in the scan's own test and
+  then `ask`'s argument and four stale doc comments: a run is of the tree it is quoted for.
+* 01:58-02:06 — §1-§4's worlds re-driven on HEAD's binary and this branch's (D107's TUI drive through the pty
+  included), the plant clone brought to this tree (its base commit `base2`, porcelain 0).
+* 02:07-02:53 — the three runs of record (§10.2): 1 and 2 green, 3 one latency row past its band at load 41;
+  meanwhile §1-§5's figures re-checked against the scratchpad's logs (four of them were never logged, §10.1, and
+  are re-measured), the TUI's Review screen driven (gap 4978).
+* 02:54-03:33 — runs 4 and 5 (latency rows again, load 12-39); `cli_latency` alone, HEAD and this branch alternated;
+  `check.sh` (03:16, green); T19's first verb, HEAD and this branch alone.
+* 03:33-03:48 — run 6, the machine quieter: green.  03:48 — the prices (§10.3).  Then this commit.
+
+### 10. The second session: what it checked, and this commit's acceptance
+
+**10.1 Read, not inferred.**  Each claim of §0-§9 was checked against the code at this commit or a log the first
+session left in `scratchpad/w47-h/` before it was kept: the D107 worlds and their TUI drive (`tui/d107-tui.sh`; the
+two logs are identical — the break's line on both binaries — and HEAD's screen ends in `energy 0-5 (predicted 5,
+Enter to skip): q`, the prompt for the second `start` it was about to log); the 152-of-152 arrival A/B
+(`arrive-ab.out`); the 33 failures of §5's copy (`t4749-failures.txt`, exactly the list §5 gives); runs 1-5
+(`ws-run1.log`..`ws-run5.log`).  Not kept as written: §0's "byte for byte" (now measured), §8's check 8 sentence (it
+failed check 8 itself), gap 4971's distance and rule, the rebuild's two notices (§4.1), §5's "21 binaries" (the log
+lists 19), §1.2's HEAD cell `pred 5 rep 3` for a second `start` given no `--energy` (the drive prints `pred 5`), and
+`plants2.log`, which holds no line for the first plant — so every plant is re-run, after this block's commit, and
+recorded in the block that follows it (§10.4).
+
+**10.2 Acceptance** — `cargo test --workspace --no-fail-fast` in the worktree, capped at 40 GB, three runs on this
+tree, one after another (porcelain 19 lines before every run, compared after each):
+
+  | run | when (load) | passed | failed | ignored | result lines | |
+  |---|---|---|---|---|---|---|
+  | 1 | 02:07-02:21 (21.29 → 5.19) | 2,915 | 0 | 51 | 159 | exit 0; porcelain unchanged |
+  | 2 | 02:21-02:36 (5.19 → 7.11) | 2,915 | 0 | 51 | 159 | exit 0; porcelain unchanged |
+  | 3 | 02:36-02:53 (7.11 → 41.75) | 2,914 | **1** | 51 | 159 | exit 101; porcelain unchanged |
+  | 4 | 02:54-03:12 (39.33 → 31.32) | 2,913 | **2** | 51 | 159 | exit 101; porcelain unchanged |
+  | 5 | 03:17-03:33 (26.9 → 12.24) | 2,912 | **3** | 51 | 159 | exit 101; porcelain unchanged |
+  | 6 | 03:33-03:48 (10.1 → 14.12) | 2,915 | 0 | 51 | 159 | exit 0; porcelain unchanged |
+
+  Run 3's one failure is `cli_latency`'s three-year row, at its stall step: `` `tm drop ^z15` was still running after
+  1s `` — gap 4901's row, which sits at 648-819 ms against its 1 s band — while the other tracks' Lean builds and
+  mutation clones took the load from 13 to 41 (at 02:53 nine `lean` processes held 100-350 % CPU each, track K's
+  `Replay.lean` among them).  The same run's other rows say what the machine was doing: a routine for a 3-day-old
+  instance 667 ms (243-268 ms over the six runs of the first session's `cli_latency` A/B at load 20-42,
+  `scratchpad/w47-h/lat-ab.log`), `review week` 713 ms (486-622 ms there).  A row missed under load is a
+  measurement and no band moved; run 4 was started at 02:54 for a third green run, and missed two rows at load
+  29-39: T19's set-up (`` `tm drop ^a1` was still running after 5s `` — the three-year tree's FIRST verb, genesis,
+  3.1 s in the same run's other test) and the stall step again.  Every other test of runs 3 and 4 passed, the same
+  2,913 that pass in runs 1 and 2.
+
+  **The rows, HEAD against this branch, at the same load** (`scratchpad/w47-h/r2/latab.sh`: `cargo test -q -p tm
+  --test cli_latency -- --include-ignored --test-threads=1 --nocapture`, capped at 16 GB, HEAD's clone
+  `scratchpad/w47-h/head-clone` at `49186d7` and this worktree, alternated, 03:12-03:15, load 18-29): HEAD round 1
+  **7 of 8** (`` `tm drop ^z2` was still running after 5s ``, the `tm log` row's genesis), this branch round 1 **8 of
+  8**, HEAD round 2 **8 of 8**, this branch round 2 **5 of 8** (the three-year genesis twice past 5 s, and T18's
+  `tm plan` plus its planner call past 1 s).  The stall step's worst: HEAD 855 and 917 ms, this branch 800 and 784
+  ms; `review week` HEAD 557 and 758 ms, this branch 671 and 668 ms; the 30-day hand undo HEAD 2.07 and 2.30 s, this
+  branch 2.22 and 2.29 s.  Both binaries miss the same rows at this load, by turns: the misses are the machine's.
+
+  **`check.sh`**, capped, on this tree — at 03:16 (load 35.7 → 26.9, 33.7 s) and again after the last README edit,
+  03:49:05-03:49:58 (load 34.6 → 50.0): seventeen lines, all ok, exit 0 both times — `lake build TmKernel:static` ok;
+  totality ok; axiom audit **6,398** ok; Negative.lean rejected ok; FFI **96** tests ok; corpus **29/37 files and
+  4/5 whole plans** ok; stage goals **1** ok; prose citations ok (62,362 at 03:49 — 58,722 resolved, 3,640 allowed,
+  698 counted, 0 unused); new definitions mutated ok (750 rostered, 0 owed — no Lean
+  definition is new); parity ok (**P1-P113**, 7 declared holes P103-P109, next free P114); no two names ok (0
+  unanswered); every emitted definition reached ok (1,520 reachable, 1,099 exempt, 0 unanswered); the four check-13
+  lines ok (0 unanswered each); the kernel replays every module ok (95).
+
+  **The named suites**, from runs 1 and 2 (identical in both): T5 `kernel_replay_parity` 52 passed / 4 ignored; the
+  door `kernel_log_door` 44; `cli_switch_acceptance` 16; `cli_latency` 7 / 1 ignored; `kernel_call_counts` 4;
+  `one_padder` 9; `one_renderer` 35; `kernel_row_cells` 36; `kernel_planner_wire` 27; `planner_classes` 70 / 8
+  ignored; `planner_invariants` 31 / 1 ignored; `cli_conformance` 7; `cli_json_matrix` 8; this track's
+  `cli_start_continues` 6, `cli_now_annotation` 3, `cli_review_rank` 3, `cli_arrive_window` 4, `emit_now` 8 — every
+  one 0 failed; the FFI's 96 are check 5's.  Against `b164b47`'s 2,897 over 155 result lines: **+18** tests
+  (`cli_start_continues` 6, `cli_now_annotation` 3, `cli_review_rank` 3, `cli_arrive_window` 4, `emit_now` 1,
+  `kernel_call_counts` 1) and **+4** result lines (the four new binaries).
+
+  The README and the register's anchors were edited while the runs ran (prose, and the line numbers of P110-P113);
+  no test reads the README, and `planner_classes` reads `kernel/parity.txt` only for which numbers are registered,
+  which did not change.
+
+  Run 5 (load 12-27) missed three `cli_latency` rows, each at the three-year tree's genesis — `` `tm drop ^a1` `` (T18's
+  set-up and the three-year row's) and `` `tm drop ^z2` `` (the `tm log` row's) `was still running after 5s` — the
+  first verb, which `cli_latency`'s own tests run at once, in parallel, inside one workspace run.  **The first verb,
+  HEAD against this branch, alone** (`scratchpad/w47-h/r2/t11ab.py`: T19's `tm drop ^a1` at 2026-09-14 09:00 on a
+  fresh copy of T11's three-year tree, which holds no arrival that day — so §4's rebuild recompute cannot run — the
+  two binaries alternated in one capped scope, 03:33, load 10.1 → 8.7): HEAD 2,832, 2,759, 2,771 ms; this branch
+  2,742, 2,759, 2,801 ms.
+
+  **Three green runs on this tree — 1, 2 and 6 — and three (3, 4, 5) whose only failures are `cli_latency` rows the
+  machine's load put past their bands**, every one of them a row HEAD's binary misses the same way at the same load
+  (above); no other test failed in any of the six, and no band moved.
+
+**10.3 Prices, re-measured** (`scratchpad/w47-h/r2/price.py`: each call timed inside ONE capped scope, so no
+`systemd-run` start-up is in the figure, a fresh copy of the example tree with `^t3` started at 09:00 per call, the two
+binaries alternated, fifteen rounds, 03:48:37-03:48:42, load 18.0 → 21.5): `tm arrive lounge` at 10:00 — HEAD best
+84.8 ms, median 97.0 ms; this branch best 104.2 ms, median 115.0 ms (+19 ms best, +18 ms median: §4.1's day request);
+`tm review week` at 10:00 — HEAD best 37.2 ms, median 44.4 ms; this branch best 43.2 ms, median 48.1 ms (+6 ms, +4
+ms: §3.3's planner section).  The first session's absolute figures (245 and 27 ms) were taken another way and are
+not comparable to these; its differences (+14 to +26 ms, about +5 ms) are what these find.
+

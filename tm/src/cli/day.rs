@@ -1083,8 +1083,11 @@ pub fn arrive(g: &Globals, args: &super::ArriveArgs) -> Result<i32, CliError> {
     // **One definition of §8.1's window, shared with D42's rebuild** (the
     // owner's **D45**, AGENTS §5.3): `Ctx::arrival_window` is what writes the
     // cache here and what derives it back from the log when the cache is
-    // gone, so the two cannot disagree about a day with two arrivals.
-    let (window, budget) = ctx.arrival_window(at);
+    // gone, so the two cannot disagree about a day with two arrivals — and
+    // since W-47 it is the KERNEL's window (README gap 4746, parity P113): the
+    // day's own request over the state this arrival stores, so the window the
+    // day is planned by after an arrive is the kernel's reading of its walls.
+    let (window, budget) = ctx.arrival_window(at)?;
     ctx.state.date = Some(ctx.today);
     ctx.state.arrival = Some(at);
     ctx.state.loc = Some(loc.clone());
@@ -1231,6 +1234,26 @@ pub fn start(g: &Globals, args: &super::StartArgs) -> Result<i32, CliError> {
                 a.id.token()
             )));
         }
+        // **The block already running is CONTINUED, not restarted** — the owner's **D107**
+        // (README gap 4892, parity **P110**): a running break ends, through the one body every
+        // verb that ends a break runs (`end_break_first`, with `tm break`'s journal line, D97),
+        // and nothing else is logged. Nothing at all is written when no break runs, so the write
+        // gate (D35) and the undo recorder are asked only then ([`say_already_running`]).
+        let break_ended = if ctx.state.break_.is_some() {
+            super::kernel_bridge::gate(&ctx, "start")?;
+            let rec = Recorder::start(&ctx, "start")?;
+            let ended = end_break_first(&mut ctx)?;
+            ctx.save_state()?;
+            ctx.reload()?;
+            if let Some(b) = &ended {
+                note_break_ended(&ctx, b, ctx.now_tz)?;
+            }
+            rec.finish(&ctx, format!("start {} · already running · break ended", id.token()))?;
+            ended
+        } else {
+            None
+        };
+        return say_already_running(&ctx, &id, &item, args.energy, break_ended);
     }
     super::kernel_bridge::gate(&ctx, "start")?;
     let rec = Recorder::start(&ctx, "start")?;
@@ -1325,6 +1348,93 @@ pub fn start(g: &Globals, args: &super::StartArgs) -> Result<i32, CliError> {
                 out.rep.map(|r| format!(" rep {r}")).unwrap_or_default(),
                 if paused { " · paused: an interruption is open (`tm resume` starts the timer)" } else { "" }
             ))
+        },
+        &out,
+    )?;
+    Ok(0)
+}
+
+/// `tm start --json` on the block already running (the owner's **D107**, parity **P110**).
+#[derive(Debug, Serialize)]
+pub struct ContinueOut {
+    /// The item.
+    pub id: Id,
+    /// Its title.
+    pub title: String,
+    /// Always `true`: the block was already running, and nothing but the end of a running break
+    /// was logged.
+    pub already_running: bool,
+    /// When it started, as the log has it (D75) — `HH:MM`, dated when not today's.
+    pub started: String,
+    /// Planned minutes (`.tm/state.json`'s, as `tm now` reads them).
+    pub est_min: u32,
+    /// The timer is paused — by a `tm pause` before the break, or an open interruption.
+    pub paused: bool,
+    /// The `--energy` report given, which a continuation does not record (it logs no `start`);
+    /// absent when none was given.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub energy_not_recorded: Option<u8>,
+    /// **The break this verb ended** — `tm break`'s own report of its ending (D97, D101), as a
+    /// `tm start` that starts a block carries it; absent when no break was running.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub break_ended: Option<BreakOut>,
+}
+
+/// **What `tm start ^id` says on the block already running** — the owner's **D107** (README gap
+/// 4892, parity **P110**): `^id is already running since HH:MM`, after `tm break`'s clause when the
+/// verb ended a running break (D101), and in `--json` [`ContinueOut`].
+///
+/// Fork 4748911 logged a second `start` and restarted `.tm/state.json`'s clock: the replay closed
+/// the first stretch at it, so `tm review day` and the drawn rows counted both stretches while `tm
+/// stop` and `tm done` computed from the second start and wrote `est:` less only that stretch —
+/// resuming after a break wrote `30m left` where 60 minutes were worked, a silently wrong estimate
+/// in the user's file. The block keeps its one `start` now, so every reader counts one block.
+///
+/// A typed `tm pause` before the break, or an open interruption, keeps the block paused, as ending
+/// a break leaves it (P84), and the line says so; an `--energy` report is not recorded (no `start`
+/// is logged) and the line says that too, naming the verb that records one.
+fn say_already_running(
+    ctx: &Ctx,
+    id: &Id,
+    item: &tm_core::model::Item,
+    energy: Option<u8>,
+    break_ended: Option<BreakOut>,
+) -> Result<i32, CliError> {
+    let Some(active) = ctx.state.active.clone() else {
+        return Err(CliError::msg("nothing is running"));
+    };
+    // The log's start (D75); the cache's clock only where the log holds no open block for it,
+    // which D42's reconcile at load makes unreachable — `tm now`'s reading of the same start.
+    let started = running_start(ctx)
+        .map(|t| when(ctx, t))
+        .unwrap_or_else(|| active.started.format("%H:%M").to_string());
+    let out = ContinueOut {
+        id: id.clone(),
+        title: item.title.clone(),
+        already_running: true,
+        started,
+        est_min: active.est_min,
+        paused: active.paused,
+        energy_not_recorded: energy,
+        break_ended,
+    };
+    let interrupted = super::ctx::open_interruption(&ctx.replay).is_some();
+    emit(
+        ctx.json,
+        || {
+            let paused = match (out.paused, interrupted) {
+                (false, _) => "",
+                (true, true) => " · paused: an interruption is open (`tm resume` starts the timer)",
+                (true, false) => " · paused (`tm pause` starts the timer)",
+            };
+            let energy = out
+                .energy_not_recorded
+                .map(|e| format!(" · --energy {e} not recorded: no `start` is logged (`tm energy {e}` reports it)"))
+                .unwrap_or_default();
+            said_after_break(
+                out.break_ended.as_ref(),
+                format!("{} is already running since {}{paused}{energy}", out.id.token(), out.started),
+            )
         },
         &out,
     )?;

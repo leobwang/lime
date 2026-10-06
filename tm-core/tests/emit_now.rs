@@ -15,7 +15,7 @@ fn now_shows_the_current_block_and_the_next_three() {
     let tree = tree(&cfg);
     let day = plan();
     let now = at(10, 42);
-    let out = emit::render_now_with(&day, &tree, &cfg, now);
+    let out = emit::render_now_with(&day, &tree, &cfg, now, None);
     // 09:20 → 11:20, so at 10:42: 1h22m gone, 38m left.
     assert!(out.contains("▶ Exercises 5.3–5.5"));
     assert!(out.contains("elapsed 1h22m · left 38m"));
@@ -45,18 +45,59 @@ fn now_shows_the_current_block_and_the_next_three() {
     insta::assert_snapshot!("now_current", out);
 }
 
+/// **The owner's D109 (README gap 4894, parity P111): the line under the running block's row
+/// reads the BLOCK** — `elapsed` the minutes worked, `left` the estimate less them, the two
+/// numbers `tm now`'s header prints (`75m of 192m`) — and not the segment's span. Both
+/// directions: under the running block's row the block is read; under any other row (here the
+/// running item is another one) the segment's span still elapses; in overtime `left` is `0m`, as
+/// the row's own `running · 0m left` (P46) says.
+#[test]
+fn the_line_under_the_running_row_reads_the_block() {
+    let cfg = config();
+    let tree = tree(&cfg);
+    let day = plan();
+    let now = at(10, 42);
+    let t3 = Id::new("t3");
+    let running = emit::Running { id: &t3, worked_min: 75, est_min: 192 };
+    let out = emit::render_now_with(&day, &tree, &cfg, now, Some(&running));
+    assert!(out.contains("▶ Exercises 5.3–5.5"), "{out}");
+    assert!(
+        out.contains("  09:20–11:20 · elapsed 1h15m · left 1h57m\n"),
+        "the running row's line reads the block's 75m of 192m: {out}"
+    );
+    assert!(!out.contains("elapsed 1h22m"), "the segment's span is not read under the running row: {out}");
+    // The rows are untouched: the same selection as without a running block, line for line.
+    let plain = emit::render_now_with(&day, &tree, &cfg, now, None);
+    let rows = |s: &str| s.lines().filter(|l| !l.starts_with("  ")).map(str::to_string).collect::<Vec<_>>();
+    assert_eq!(rows(&out), rows(&plain), "D109 moves the annotation and nothing else");
+    assert!(plain.contains("elapsed 1h22m · left 38m"), "with nothing running the span is read: {plain}");
+
+    // Another item running: the current row is not its row, so the segment's span is read.
+    let t4 = Id::new("t4");
+    let other = emit::Running { id: &t4, worked_min: 75, est_min: 192 };
+    assert_eq!(emit::render_now_with(&day, &tree, &cfg, now, Some(&other)), plain);
+
+    // Overtime: worked past the estimate, nothing is left.
+    let over = emit::Running { id: &t3, worked_min: 200, est_min: 192 };
+    assert_eq!(over.minutes_left(), 0);
+    assert!(
+        emit::render_now_with(&day, &tree, &cfg, now, Some(&over)).contains("· elapsed 3h20m · left 0m\n"),
+        "overtime reads 0m left"
+    );
+}
+
 #[test]
 fn now_says_so_when_nothing_is_running() {
     let cfg = config();
     let tree = tree(&cfg);
     let mut day = plan();
     day.segments.retain(|s| !matches!(s.kind, SegKind::Wall));
-    let out = emit::render_now_with(&day, &tree, &cfg, at(13, 20));
+    let out = emit::render_now_with(&day, &tree, &cfg, at(13, 20), None);
     assert!(out.starts_with("— nothing running (13:20)"));
     insta::assert_snapshot!("now_idle", out);
 
     // Past the last segment there is nothing to come either.
-    let out = emit::render_now_with(&day, &tree, &cfg, at(23, 0));
+    let out = emit::render_now_with(&day, &tree, &cfg, at(23, 0), None);
     assert_eq!(out, "— nothing running (23:00)\nnext   —\n");
 }
 
@@ -69,7 +110,7 @@ fn the_default_config_variant_agrees_with_the_fixture_config() {
     let day = plan();
     assert_eq!(
         emit::render_now(&day, &tree, at(10, 42)),
-        emit::render_now_with(&day, &tree, &cfg, at(10, 42))
+        emit::render_now_with(&day, &tree, &cfg, at(10, 42), None)
     );
 }
 

@@ -2037,6 +2037,46 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
     Ok(KernelDay { day, hash, overtime })
 }
 
+/// **§8.2 step 5's served order, read off the kernel's `diagnostics.served`** (W-47 track H, README
+/// gaps 4880 and 4755, parity P112): one `{ix, id, ci}` per ranked answer in the walk's order
+/// (`PlanWire.the_served_key_is_the_walks_order` — `Planner.PlanReq.rankedCands`, D60/D63's p0 rule
+/// and §7.4's key), each `ix` the position the candidate was SENT at (`send_order`), answered here
+/// as the position into `cands` (`collect_candidates` order) that `order[ix]` names.
+///
+/// **The host's one reading of the kernel's rank.** Fork 4748911's surfaces ordered items by
+/// `priority::sorted`'s `(p, root line, own line)`, which since R3 is not the order the day is
+/// served in: the kernel serves two p0 IMPOSSIBLE items by due date (P51, D60) and every p0
+/// impossible item before every other p0 item (D63). A defect of the answer is named, never
+/// guessed: an `ix` the request did not send, an entry naming another candidate's id or `ci`, or a
+/// candidate served twice.
+pub fn served_order(diagnostics: &Value, order: &[usize], cands: &[Candidate]) -> W<Vec<usize>> {
+    let served = array(&diagnostics["served"], "plan.diagnostics.served")?;
+    let mut seen = vec![false; cands.len()];
+    served
+        .iter()
+        .enumerate()
+        .map(|(k, e)| {
+            let what = format!("plan.diagnostics.served[{k}]");
+            let ix = usize::try_from(nat(&e["ix"], &format!("{what}.ix"))?)
+                .map_err(|_| WireDefect::at(format!("{what}.ix is past usize")))?;
+            let i = *order
+                .get(ix)
+                .ok_or_else(|| WireDefect::at(format!("{what}.ix {ix} names no candidate the request sent")))?;
+            let c = cands.get(i).ok_or_else(|| WireDefect::at(format!("{what}: no candidate at {i}")))?;
+            if text(&e["id"], &format!("{what}.id"))? != c.id.as_str() {
+                return Err(WireDefect::at(format!("{what} names another id than the candidate sent at {ix}")));
+            }
+            if nat(&e["ci"], &format!("{what}.ci"))? != u64::from(c.ci) {
+                return Err(WireDefect::at(format!("{what} carries another `ci` than the one sent at {ix}")));
+            }
+            if std::mem::replace(&mut seen[i], true) {
+                return Err(WireDefect::at(format!("{what}: `{}` is served twice", c.id.as_str())));
+            }
+            Ok(i)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

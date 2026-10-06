@@ -1835,7 +1835,60 @@ fn next_hour(t: DateTime<Tz>) -> DateTime<Tz> {
 /// block unit behind `1b` and the `bed` time in the wind-down row); pass your
 /// own with [`render_now_with`].
 pub fn render_now(plan: &DayPlan, tree: &Tree, now: DateTime<Tz>) -> String {
-    render_now_with(plan, tree, &Config::default(), now)
+    render_now_with(plan, tree, &Config::default(), now, None)
+}
+
+/// **The running block as `tm now`'s header reads it** — the owner's **D109** (README gap 4894,
+/// parity **P111**): its id, the minutes WORKED on it (`tm now`'s `active.elapsed_min`, the log's
+/// one reading of them, D75) and its planned minutes (`active.est_min`). The header prints the two
+/// numbers as `30m of 60m`; [`render_now_with`]'s line under the running block's row reads the
+/// same two, so one screen has one reading of one block (AGENTS §5.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Running<'a> {
+    /// The running item.
+    pub id: &'a Id,
+    /// Minutes worked on the block so far.
+    pub worked_min: u32,
+    /// Its planned minutes (`est × multiplier`).
+    pub est_min: u32,
+}
+
+impl Running<'_> {
+    /// What is left of the block: the estimate less the minutes worked, never negative (an
+    /// overtime block has `0m` left, as its row's `running · 0m left` says, P46).
+    pub fn minutes_left(&self) -> u32 {
+        self.est_min.saturating_sub(self.worked_min)
+    }
+
+    /// Is `seg` the running block's row — a work segment of the running item?
+    fn is_the_row_of(&self, seg: &Segment) -> bool {
+        seg.kind.is_work() && seg.item.as_ref() == Some(self.id)
+    }
+}
+
+/// **The line under `tm now`'s current row** — indented two spaces, so it cannot be mistaken for
+/// one: the segment's span, then `elapsed` and `left`.
+///
+/// **Under the running block's row they read the BLOCK** (the owner's **D109**, README gap 4894,
+/// parity **P111**): `elapsed` the minutes worked and `left` the estimate less them, as the header
+/// reads them. Fork 4748911 (and this function until W-47) read the SEGMENT's span on every row —
+/// `elapsed` since the segment's start and `left` until its end — and the current segment of a
+/// running block starts at `now`, so beside the header's `30m of 60m` it said `elapsed 0m`, and in
+/// overtime P46's reservation to the end of its block made it `left 45m` under a row whose note
+/// said `running · 0m left`. Under any other row — a wall, a routine, a planned block that is not
+/// running — there is no block to read, and the segment's span is what elapses.
+pub fn now_annotation(seg: &Segment, now: DateTime<Tz>, running: Option<&Running<'_>>) -> String {
+    let (elapsed, left) = match running {
+        Some(r) if r.is_the_row_of(seg) => (r.worked_min, r.minutes_left()),
+        _ => (minutes_between(&seg.start, &now), minutes_between(&now, &seg.end)),
+    };
+    format!(
+        "  {}–{} · elapsed {} · left {}\n",
+        fmt_clock(seg.start),
+        fmt_clock(seg.end),
+        fmt_dur(elapsed),
+        fmt_dur(left)
+    )
 }
 
 /// **The positions `tm now` shows** (§13): the segment `now` is inside — the
@@ -1894,9 +1947,16 @@ pub fn now_window(plan: &DayPlan, now: DateTime<Tz>) -> (Option<usize>, Vec<usiz
 /// measured exactly that). The behaviour row is in the README block.
 ///
 /// The two lines that are **not** rows stay `tm now`'s own: the `elapsed … left
-/// …` annotation under the current row (indented two spaces, so it cannot be
-/// mistaken for one) and `— nothing running (HH:MM)`.
-pub fn render_now_with(plan: &DayPlan, tree: &Tree, cfg: &Config, now: DateTime<Tz>) -> String {
+/// …` annotation under the current row ([`now_annotation`], which reads
+/// `running` — the block `tm now`'s header reads, D109 — under its row) and
+/// `— nothing running (HH:MM)`.
+pub fn render_now_with(
+    plan: &DayPlan,
+    tree: &Tree,
+    cfg: &Config,
+    now: DateTime<Tz>,
+    running: Option<&Running<'_>>,
+) -> String {
     let rows = plan_rows(plan, tree, cfg, &Layout::default());
     let (current, next) = now_window(plan, now);
     let mut out = String::new();
@@ -1904,14 +1964,7 @@ pub fn render_now_with(plan: &DayPlan, tree: &Tree, cfg: &Config, now: DateTime<
         Some(i) => {
             out.push_str(&rows[i]);
             out.push('\n');
-            let seg = &plan.segments[i];
-            out.push_str(&format!(
-                "  {}–{} · elapsed {} · left {}\n",
-                fmt_clock(seg.start),
-                fmt_clock(seg.end),
-                fmt_dur(minutes_between(&seg.start, &now)),
-                fmt_dur(minutes_between(&now, &seg.end))
-            ));
+            out.push_str(&now_annotation(&plan.segments[i], now, running));
         }
         None => {
             out.push_str(&format!("— nothing running ({})\n", fmt_clock(now)));
