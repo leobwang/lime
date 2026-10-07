@@ -193,6 +193,9 @@ fn a_hand_edited_logged_place_is_a_malformed_line_and_the_day_plans() {
         named[0]["message"].as_str().is_some_and(|m| m.contains("badField") && m.contains("break_start")),
         "{doc}"
     );
+    // **And the field it names** (W-47 repair, README gap 5023): P108's `badField where` reaches the user whole —
+    // until the repair the host dropped the kernel's `key` and printed `badField` alone.
+    assert!(named[0]["message"].as_str().is_some_and(|m| m.contains("badField where")), "{doc}");
     // And the line is the only problem: the day itself is sound.
     assert_eq!(doc["problems"].as_array().map(Vec::len), Some(1), "{doc}");
     assert_eq!(doc["exit_code"], 0, "a warning leaves the exit code the tree's: {doc}");

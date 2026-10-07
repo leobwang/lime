@@ -21,7 +21,8 @@ kernel had neither (W-31's R3 table, README gap 2228).
   day, the day of the what-if request, and the ids the second no longer holds.  The what-if is
   the one `App::extend_drops` actually runs — the running block's `active.est_min` grows *and* an
   `extra_min` override rides beside it (`PlanOverrides::extending`) — and the override is
-  `Planner.PlanOverrides`, the value `PlanWire.readOptOverrides` already decodes, **reused**.
+  `Planner.PlanOverrides`, the value PlanWire.readOptOverrides decoded until the W-47 repair took `overrides`
+  off the wire (D112), **reused**.
 
 Two further reasons for a module of its own, both about the run it was written in: track H holds
 the section of `Planner.lean` right after `dayPlan`, so a section appended there would have been
@@ -254,8 +255,8 @@ block's `active.est_min` grows when `i` is the running item (`runtime.active.est
 est_min.saturating_add(minutes)`, because `planner::active_run` sizes the reservation from it and
 never reads `extra_min`), and one `extra_min` override rides beside it (`PlanOverrides::new()
 .extending(id, minutes)`, which REPLACES the request's overrides, as `with_overrides` does).  The
-override is `Planner.PlanOverrides`, the value `PlanWire.readOptOverrides` decodes — reused, not
-re-typed.  Nothing else of the request moves. -/
+override is `Planner.PlanOverrides`, the value PlanWire.readOptOverrides decoded until D112 took `overrides`
+off the wire (W-47 repair) — reused, not re-typed.  Nothing else of the request moves. -/
 def PlanReq.extending (r : PlanReq) (i : Id) (m : Nat) : PlanReq :=
   { r with
     state := { r.state with
@@ -283,10 +284,9 @@ theorem the_extension_moves_only_the_running_estimate_and_the_overrides (r : Pla
       (r.extending i m).prio = r.prio ∧ (r.extending i m).routines = r.routines ∧
       (r.extending i m).state.brk = r.state.brk ∧
       (r.extending i m).state.interrupt = r.state.interrupt ∧
-      (r.extending i m).state.lastHash = r.state.lastHash ∧
       (r.extending i m).state.yesterday = r.state.yesterday ∧
       (r.extending i m).state.activeId = r.state.activeId := by
-  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
+  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
   unfold PlanReq.extending RuntimeIn.activeId
   cases r.state.active with
   | none => rfl

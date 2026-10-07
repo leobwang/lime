@@ -461,12 +461,22 @@ fn an_unknown_break_place_is_refused_by_name() {
     );
 }
 
-/// **A `lastHash` that is not sixteen hex digits**, through `Planner.mkHash?` —
-/// the kernel's one hex reader.
+/// **`lastHash` and `overrides` are no longer read** (the owner's D112, W-47 repair, README gap
+/// 5021): a request that still carries either — even one the old decoder refused, a short hash and a
+/// `drop` that is not an id — is answered with exactly the day the same request without them is.
 #[test]
-fn a_short_last_plan_hash_is_refused() {
-    let resp = call(&request(state(json!({"lastHash": "00ff"}))));
-    assert_eq!(planner_err(&resp).as_deref(), Some("badHash"), "{resp}");
+fn the_last_hash_and_the_overrides_are_left_unread() {
+    let bare = call(&request_with_docs(Some(json!({"routines": [
+        {"id": "lunch", "winLo": NOW, "winHi": NOW + 7200, "durMin": 30}
+    ]})), Some(capacity(Some(json!(20)), true)), routine_docs()));
+    let carried = call(&request_with_docs(Some(json!({
+        "state": {"lastHash": "00ff"},
+        "routines": [{"id": "lunch", "winLo": NOW, "winHi": NOW + 7200, "durMin": 30}],
+        "overrides": {"drop": [3], "est": [{"id": "m1", "min": 4_294_967_296u64}]}
+    })), Some(capacity(Some(json!(20)), true)), routine_docs()));
+    assert_eq!(planner_err(&bare), None, "{bare}");
+    assert_eq!(planner_err(&carried), None, "the old decoder's refusals are gone: {carried}");
+    assert_eq!(carried["ok"]["plan"], bare["ok"]["plan"], "an unread key moves nothing");
 }
 
 /// **A stored priority past seven**, through `Planner.mkYesterday?` — the one
@@ -511,30 +521,6 @@ fn a_routine_duration_past_the_forks_u32_is_refused() {
     );
 }
 
-/// **A `drop` override that is not an id** is refused by name, never skipped.
-#[test]
-fn a_drop_override_that_is_not_an_id_is_refused() {
-    let resp = call(&request(Some(json!({"overrides": {"drop": [3]}}))));
-    assert_eq!(
-        planner_err(&resp).as_deref(),
-        Some("badOverride drop"),
-        "{resp}"
-    );
-}
-
-/// **An override's minutes past the fork's `u32`.**
-#[test]
-fn an_override_estimate_past_the_forks_u32_is_refused() {
-    let resp = call(&request(Some(
-        json!({"overrides": {"est": [{"id": "m1", "min": 4_294_967_296u64}]}}),
-    )));
-    assert_eq!(
-        planner_err(&resp).as_deref(),
-        Some("badOverride est"),
-        "{resp}"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // And the other direction (AGENTS §5.8): a real day reads
 // ---------------------------------------------------------------------------
@@ -551,19 +537,13 @@ fn a_day_with_everything_running_is_accepted() {
             "active": {"id": "m2", "started": NOW - 900, "estMin": 60, "paused": false},
             "break": {"started": NOW - 300, "plannedMin": 10, "place": "walk"},
             "interrupt": {"started": NOW - 120, "id": "m1"},
-            "lastHash": "00000000000000ff",
             "yesterday": [{"id": "m1", "p": 3}, {"id": "m2", "p": 0}]
         },
         "routines": [
             {"id": "lunch", "winLo": NOW, "winHi": NOW + 7200, "durMin": 30},
             {"id": "shower", "winLo": NOW, "winHi": NOW + 3600, "durMin": 20,
              "mandatory": true}
-        ],
-        "overrides": {
-            "est": [{"id": "m1", "min": 90}],
-            "extra": [{"id": "m2", "min": 30}],
-            "drop": ["m3"]
-        }
+        ]
     })), Some(capacity(Some(json!(20)), true)), routine_docs()));
     assert_eq!(
         planner_err(&resp),

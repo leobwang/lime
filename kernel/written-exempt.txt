@@ -9,8 +9,6 @@
 # the committed file does not hold FAILS as RATCHET, whatever heading it sits under (D51; README
 # gap 3953, the W-40 repair, which removed a dated-heading escape).  One line per key path or
 # section, at its SHALLOWEST unwritten path: `<section.key.path> -- <dated reason naming its EXIT>`.
-planner.overrides -- 2026-09-28: READ by the day (the active run's `d done` what-if in Planner.lean reads `overrides.drop`; `estMin`/`extraMin` are inputs-exempt) and written only by tests (kernel_planner_wire.rs); the TUI's one override, `PlanOverrides::extending`, is sent as `overtime` (D58). EXIT: R3 sends the TUI's what-if overrides through a planwire writer, or the kernel stops decoding the key.
-planner.state.lastHash -- 2026-09-28: decoded and read by no definition of the day (inputs-exempt.txt's `RuntimeIn.lastHash`); `state_json` writes neither it nor `yesterday` by design (planwire's module docs). EXIT: the day reads it and the codec writes it, or PlanWire stops decoding it.
 planner.state.yesterday -- 2026-09-28: decoded and read by no definition of the day (inputs-exempt.txt's `RuntimeIn.yesterday`); ranking reads each candidate's `Look.Cand.yesterday` (inputs-exempt.txt: a second wire spelling of one fact). EXIT: the day reads it and the codec writes it, or PlanWire stops decoding it.
 
 ## W-40 track E (2026-09-30): the written half asks every section at every place a request is built (README gap 3717)

@@ -23,8 +23,9 @@
 //! carries, and **a fork value that is not the named one is refused by name** — so the carry cannot move a leaf the
 //! frozen answer no longer holds, and a re-blessed fixture that moved under it is a finding, not a silent pass.  A
 //! rule over the fork's answer alone cannot see which marks were logged out of order (the answer holds no line
-//! order), which is why this carry is a list and P81's and P85's are rules; the live oracle arms (`TM_ORACLE`) carry
-//! no P104 rule, README gap 4912.
+//! order), which is why this carry is a list and P81's and P85's are rules.  **The live oracle arm (`TM_ORACLE`) asks
+//! P104 by a rule since the W-47 repair** (`late.rs`, README gap 5028, which closes gap 4912), and holds this list to
+//! the fork's own answer asked that day on the one frozen input it moves.
 
 use serde_json::Value;
 

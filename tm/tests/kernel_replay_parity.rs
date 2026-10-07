@@ -83,6 +83,10 @@ mod p85;
 #[path = "support/p104.rs"]
 mod p104;
 
+// Parities P104 and P105 asked of fork 4748911 (the owner's D99 and D100, W-47 repair, README gap 5028).
+#[path = "support/late.rs"]
+mod late;
+
 #[allow(dead_code)]
 #[path = "../src/cli/kernel_log.rs"]
 mod kernel_log;
@@ -2988,10 +2992,16 @@ fn stage5_parity_the_kernel_replays_and_fits_as_the_fork_point_does() {
             Err(why) => findings.push(format!("{name}: {why}")),
             Ok(a) => {
                 findings.extend(compare_with_fork_asked(name, &answer, tz, &kf, a, &mut t));
-                match p81::carry(&fork_replays[i]).and_then(|(c81, _)| p85::carry(&c81)) {
+                // Since the W-47 repair the asked day is D99's and D100's too (`late.rs`), so the frozen carries are
+                // held to it whole: P81's and P85's rules, then P104's by-value list (README gap 4912, now held to
+                // the fork asked rather than only to the frozen bytes).
+                match p81::carry(&fork_replays[i])
+                    .and_then(|(c81, _)| p85::carry(&c81))
+                    .and_then(|(c85, t85)| p104::carry(name, &c85).map(|(c104, _)| (c104, t85)))
+                {
                     Err(why) => findings.push(format!("{name}: the frozen carry refuses what the fork answers: {why}")),
                     Ok((carried, _)) if &carried != a => findings.push(format!(
-                        "{name}: the frozen carry is not fork 4748911's answer asked the D87 and D92 day: {}",
+                        "{name}: the frozen carry is not fork 4748911's answer asked the D87, D92, D99 and D100 day: {}",
                         forkdiff(&carried, a)
                     )),
                     Ok(_) => {}
@@ -3078,6 +3088,22 @@ fn stage5_parity_the_kernel_replays_and_fits_as_the_fork_point_does() {
          them that answer is not the fork's answer to the log as given"
     );
     assert!(starts > 0 && moved > 0, "P85 was asked of the fork on no input it moves: the live arm carries nothing");
+    let (inputs, marks, moved) = *p104_asked_tally().lock().expect("the P104 tally");
+    eprintln!(
+        "  parity P104, asked of fork 4748911: {marks} part(s) of a stretch the fork drew and the kernel's machine does not \
+         (a mark logged after the stretch it lies in was closed) or empty stop(s), in {inputs} input(s), each part given \
+         as a pause and an unpause before the line that closed the stretch and each empty stop's two pieces read as one, \
+         and the kernel held to that answer; on {moved} of them that answer is not the fork's answer to the log as given"
+    );
+    assert!(marks > 0 && moved > 0, "P104 was asked of the fork on no input it moves: the live arm carries nothing");
+    let (inputs, breaks, moved) = *p105_asked_tally().lock().expect("the P105 tally");
+    eprintln!(
+        "  parity P105, asked of fork 4748911: {breaks} break(s) logged after a block closed and stamped inside it, netted \
+         from {inputs} input(s), each given as a pause and an unpause before the line that closed the piece (a done's \
+         actual_min lowered by what the break took), and the kernel held to that answer; on {moved} of them that answer is \
+         not the fork's answer to the log as given"
+    );
+    assert!(breaks > 0 && moved > 0, "P105 was asked of the fork on no input it moves: the live arm carries nothing");
 
     eprintln!(
         "\nstage-5 parity — the Lean kernel vs fork point 4748911's log::replay and energy::fit\n\
@@ -3401,7 +3427,7 @@ fn compare_with_fork_asked(name: &str, answer: &Value, tz: Tz, kf: &Facts, asked
 /// (`p81::as_asked`); the answer as given where P81 nets nothing.
 fn asked_of_the_fork(bin: &std::path::Path, zone: &str, texts: &[String], answers: &[Value]) -> Vec<Result<Value, String>> {
     let mut out: Vec<Result<Value, String>> = Vec::new();
-    let mut pending: Vec<(usize, Vec<p81::Netted>, Vec<p85::Restart>, Vec<u64>)> = Vec::new();
+    let mut pending: Vec<(usize, Vec<p81::Netted>, Vec<p85::Restart>, late::Nets, Vec<u64>)> = Vec::new();
     let mut asks: Vec<String> = Vec::new();
     for (i, (text, a)) in texts.iter().zip(answers).enumerate() {
         let refused: Vec<u64> = a["warningLines"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(Value::as_u64).collect();
@@ -3421,11 +3447,20 @@ fn asked_of_the_fork(bin: &std::path::Path, zone: &str, texts: &[String], answer
                 continue;
             }
         };
-        if n.is_empty() && r.is_empty() {
+        // P105's breaks (the owner's D100): a break logged after a block closed, stamped inside it, read off the log
+        // by the kernel's block machine and given to the fork in the same asked log (`late::as_asked_log`).
+        let d = match late::nets(text, &refused, a) {
+            Ok(d) => d,
+            Err(why) => {
+                out.push(Err(why));
+                continue;
+            }
+        };
+        if n.is_empty() && r.is_empty() && d.pairs.is_empty() && d.lowers.is_empty() && d.merges.is_empty() {
             out.push(Ok(a.clone()));
             continue;
         }
-        match p85::as_asked_log(text, &n, &r) {
+        match late::as_asked_log(text, &n, &r, &d) {
             Err(why) => out.push(Err(why)),
             Ok((asked, inserted)) => {
                 if !n.is_empty() {
@@ -3438,7 +3473,17 @@ fn asked_of_the_fork(bin: &std::path::Path, zone: &str, texts: &[String], answer
                     tally.0 += 1;
                     tally.1 += r.len();
                 }
-                pending.push((i, n, r, inserted));
+                if d.breaks > 0 {
+                    let mut tally = p105_asked_tally().lock().expect("the P105 tally");
+                    tally.0 += 1;
+                    tally.1 += d.breaks;
+                }
+                if d.p104 > 0 {
+                    let mut tally = p104_asked_tally().lock().expect("the P104 tally");
+                    tally.0 += 1;
+                    tally.1 += d.p104;
+                }
+                pending.push((i, n, r, d, inserted));
                 asks.push(asked);
                 out.push(Err(String::new()));
             }
@@ -3447,8 +3492,8 @@ fn asked_of_the_fork(bin: &std::path::Path, zone: &str, texts: &[String], answer
     if !asks.is_empty() {
         let replies = fork_oracle(bin, &["replay", zone], &asks);
         assert_eq!(replies.len(), asks.len(), "{zone}: one fork replay per log asked the D87 and D92 day");
-        for ((i, n, r, inserted), reply) in pending.into_iter().zip(replies) {
-            out[i] = p85::as_asked_answer(&reply, &n, &r, &inserted);
+        for ((i, n, r, d, inserted), reply) in pending.into_iter().zip(replies) {
+            out[i] = late::as_asked_answer(&reply, &n, &r, &d, &inserted);
             // Not vacuous: the fork's answer asked that day is not its answer to the log as given.
             if out[i].as_ref().is_ok_and(|asked| asked != &answers[i]) {
                 if !n.is_empty() {
@@ -3456,6 +3501,12 @@ fn asked_of_the_fork(bin: &std::path::Path, zone: &str, texts: &[String], answer
                 }
                 if !r.is_empty() {
                     p85_asked_tally().lock().expect("the P85 tally").2 += 1;
+                }
+                if d.breaks > 0 {
+                    p105_asked_tally().lock().expect("the P105 tally").2 += 1;
+                }
+                if d.p104 > 0 {
+                    p104_asked_tally().lock().expect("the P104 tally").2 += 1;
                 }
             }
         }
@@ -3466,6 +3517,18 @@ fn asked_of_the_fork(bin: &std::path::Path, zone: &str, texts: &[String], answer
 /// `(inputs, clock starts, inputs whose asked answer is not the answer to the log as given)` P85 was asked of the
 /// fork for in this binary's live arm.
 fn p85_asked_tally() -> &'static Mutex<(usize, usize, usize)> {
+    static T: OnceLock<Mutex<(usize, usize, usize)>> = OnceLock::new();
+    T.get_or_init(|| Mutex::new((0, 0, 0)))
+}
+
+/// P104, asked of the fork: (inputs, pairs and merges D99 gave the fork, inputs whose asked answer moved).
+fn p104_asked_tally() -> &'static Mutex<(usize, usize, usize)> {
+    static T: OnceLock<Mutex<(usize, usize, usize)>> = OnceLock::new();
+    T.get_or_init(|| Mutex::new((0, 0, 0)))
+}
+
+/// P105, asked of the fork: (inputs, breaks that netted a held closed block, inputs whose asked answer moved).
+fn p105_asked_tally() -> &'static Mutex<(usize, usize, usize)> {
     static T: OnceLock<Mutex<(usize, usize, usize)>> = OnceLock::new();
     T.get_or_init(|| Mutex::new((0, 0, 0)))
 }

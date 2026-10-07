@@ -2212,6 +2212,15 @@ pub struct RuntimeState {
 }
 
 impl RuntimeState {
+    /// **The running break's start, as every reader reads it** — the logged `break_start`'s
+    /// instant when the replay holds one, else the cache's clock (`BreakState::started_at_logged`).
+    /// ONE body for the CLI's `Ctx::running_break` and the TUI's `App::running_break`, each the
+    /// input of the worked-minutes reading (W-47 repair, README gap 5025: they were one body
+    /// written twice).
+    pub fn running_break_at(&self, replay: &crate::log::Replay, tz: Tz, now: DateTime<Tz>) -> Option<DateTime<Tz>> {
+        self.break_.as_ref()?.started_at_logged(replay.open_break.as_ref(), tz, now)
+    }
+
     /// **Roll the day-scoped fields to `today`** — what the binary's housekeeping does
     /// at the first verb of a new local date (`tm/src/cli/ctx.rs`' `roll_day`, which
     /// calls this): `date` becomes `today`, and `window`, `budget`, `arrival` and

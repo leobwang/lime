@@ -1262,7 +1262,13 @@ replay answers — two bounds still draw a Block across a Break, and each reads 
 refutation with one reading either (README gaps 4914 and 4917): a break held more than `Seal.maxKeepDays` ledger days
 behind the newest is dropped while its block is open, and a closed block more than that behind the newest closed is
 dropped before a late break reaches it (`Replay.a_late_break_nets_a_block_held_and_not_one_pruned`); each needs a log
-written with a clock a month behind it.  The goal therefore needs a statement of which runs the
+written with a clock a month behind it.  **That sentence was not the whole of it, and the W-47 repair corrects it**
+(README gap 5020): both W-47 auditors drove a world the binary writes with a FORWARD clock — `^t4` started 12:30, the
+meeting pausing it at 12:50, `tm break 30m` at 13:00, the break overrun at 14:00 when the meeting's `unpause` is logged
+— and the day laid the open row from 13:50 to `now` across the running break's row.  The repair clips the open row
+under a running break that covers its `since` (`Planner.openClipStep`) and proves the open row and the running break
+disjoint whichever began first (`Planner.the_open_row_lies_under_no_running_break`); the two bounded worlds above are
+what the record knows of still.  The goal therefore needs a statement of which runs the
 decoder builds (an invariant over `Seal.resumeRun`'s fold that no day record draws a Block piece across a Break piece,
 and the same of the open block's row) and those bounds named in it, or the bounds removed.  README gap 4918.
 `PlanCheck.plan_places_no_block_over_a_break`, the law over the Block rows that start at or after `now`, stays proved

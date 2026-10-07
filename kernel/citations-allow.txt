@@ -1675,3 +1675,30 @@ with_minute
 # plan` reads a world's.  The one citation counted here names it as it stood, in the append-only README block of W-46
 # track C (gap 4817's paragraph); every sentence since writes the dead name unbackticked.
 1 cap_model
+
+# W-47 REPAIR (README gap 5021): the owner's D112 takes `planner.state.lastHash` and `planner.overrides` off the wire,
+# and with them their readers (`PlanWire.readHash`, the five override readers), the two decoders they called (`mkHash?`,
+# `mkOverrides?`), the refusals they threw (`badHash`, `badOverride`, `tooManyOverrides`) and every law about them;
+# `hashHex_reads_back` is restated as `PlanWire.hashHex_digits_read_back`.  Every citation counted here names one as it
+# stood, in the append-only README blocks that built or audited them; every sentence since writes the dead name
+# unbackticked.
+1 PlanWire.hashHex_reads_back
+1 PlanWire.readDropIds
+2 PlanWire.readHash
+4 PlanWire.readOptOverrides
+1 PlanWire.readOverrideList
+1 PlanWire.readOverridePair
+2 PlanWire.readOverrides
+4 Planner.mkHash?
+3 Planner.mkOverrides?
+2 hashHex_of_zero_reads_back
+1 mkHash?_accepts
+1 mkHash?_refuses_a_non_hex_digit
+1 mkHash?_refuses_a_short_digest
+1 mkOverrides?_refuses_too_many_drops
+1 mkOverrides?_refuses_too_many_estimates
+3 readHash
+1 readOptOverrides
+4 tooManyOverrides
+7 mkHash?
+4 mkOverrides?

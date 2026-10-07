@@ -1478,10 +1478,7 @@ impl App {
     /// start: `tm now` and `tm stop` net the break from the logged second, and
     /// the timer read from the cached minute would disagree with them.
     fn running_break(&self) -> Option<DateTime<Tz>> {
-        self.state
-            .break_
-            .as_ref()?
-            .started_at_logged(self.replay.open_break.as_ref(), self.cfg.tz, self.now)
+        self.state.running_break_at(&self.replay, self.cfg.tz, self.now)
     }
 
     /// When the gap started: the last event logged today, else the window

@@ -145,13 +145,31 @@ pub fn is_p56_day(b: &Built) -> bool {
 /// **The seeded P56 days**: draws whose world the shipped binary holds and that are P56 days,
 /// in draw order, with their worlds.
 pub fn p56_days(seed: &str) -> impl Iterator<Item = (P56Draw, ClassWorld)> {
-    p56_draws(seed).filter_map(|d| {
+    let seed = seed.to_string();
+    let mut last = 0usize;
+    p56_draws(&seed).filter_map(move |d| {
+        // **A bounded search, failed by name** (W-47 repair, README gap 5022): until the repair this filter
+        // never ended when no draw was held — a planner answer the binary refuses on every day — so the arms
+        // that read it hung for half an hour instead of failing.  Measured on `P56_SEED`, the widest gap
+        // between two held P56 days is 11 draws (draws 54 to 65); `P56_GAP` draws with none is a finding.
+        assert!(
+            d.index < last + P56_GAP,
+            "seed {seed}: no held P56 day in the {P56_GAP} draws after draw {last} — the binary holds none \
+             (is every planned day refused?)"
+        );
         let w = world_of(&d);
         let b = Built::of(w.clone());
         // The cheap test first: `binary_holds` runs the binary twice.
-        (is_p56_day(&b) && forkclass::binary_holds(&b).is_ok()).then_some((d, w))
+        let held = is_p56_day(&b) && forkclass::binary_holds(&b).is_ok();
+        if held {
+            last = d.index;
+        }
+        held.then_some((d, w))
     })
 }
+
+/// The most draws [`p56_days`] makes past its last held P56 day before it fails by name (README gap 5022).
+pub const P56_GAP: usize = 128;
 
 /// **A frozen P56 line's shape** — `forkclass::drawn_line` (the class line's world and
 /// provenance, arm `base`) named `p56 draw <index>`, with `typed` beside the case; the caller

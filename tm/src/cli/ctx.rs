@@ -2057,10 +2057,7 @@ impl Ctx {
     /// local midnight is the evening's after it. `None` with no break running,
     /// or one with no `started`.
     pub fn running_break(&self) -> Option<DateTime<Tz>> {
-        self.state
-            .break_
-            .as_ref()?
-            .started_at_logged(self.replay.open_break.as_ref(), self.cfg.tz, self.now_tz)
+        self.state.running_break_at(&self.replay, self.cfg.tz, self.now_tz)
     }
 
     /// **§8.1's working window and block budget from one arrival** — the ONE

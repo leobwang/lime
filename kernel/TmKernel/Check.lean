@@ -4715,9 +4715,6 @@ open Tm
 #print axioms Tm.Planner.Diagnostics.withNote_touches_only_the_notes
 #print axioms Tm.Planner.Diagnostics.droppedTail_withDropped
 #print axioms Tm.Planner.Diagnostics.withDropped_touches_only_the_dropped_tail
-#print axioms Tm.Planner.mkHash?_refuses_a_short_digest
-#print axioms Tm.Planner.mkHash?_refuses_a_non_hex_digit
-#print axioms Tm.Planner.mkHash?_accepts
 #print axioms Tm.Planner.mkBudget?_refuses_an_impossible_budget
 #print axioms Tm.Planner.mkBudget?_accepts
 #print axioms Tm.Planner.mkActive?_accepts
@@ -4727,8 +4724,6 @@ open Tm
 #print axioms Tm.Planner.mkYesterday?_refuses_too_many
 #print axioms Tm.Planner.RuntimeIn.activeId_empty
 #print axioms Tm.Planner.PlanOverrides.isEmpty_empty
-#print axioms Tm.Planner.mkOverrides?_refuses_too_many_estimates
-#print axioms Tm.Planner.mkOverrides?_refuses_too_many_drops
 #print axioms Tm.Planner.assignedOf_empty
 #print axioms Tm.Planner.blockSeconds_empty
 #print axioms Tm.Planner.PlanReq.window_is_the_lookaheads_on_a_dated_state_with_a_budgeted_window_unless_a_windowless_day_has_only_a_logged_arrival_or_a_wall_passes_its_bounds
@@ -6468,9 +6463,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlanWire.readBreak_accepts_a_running_break
 #print axioms Tm.PlanWire.readInterrupt_refuses_a_long_id
 #print axioms Tm.PlanWire.readInterrupt_accepts_an_open_interruption
-#print axioms Tm.PlanWire.readHash_refuses_a_short_digest
-#print axioms Tm.PlanWire.readHash_accepts_sixteen_hex_digits
-#print axioms Tm.PlanWire.readHash_of_an_absent_hash
 #print axioms Tm.PlanWire.readYesterday_refuses_a_priority_past_seven
 #print axioms Tm.PlanWire.readYesterday_accepts_seven
 #print axioms Tm.PlanWire.readYesterday_refuses_past_the_cap
@@ -6484,14 +6476,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlanWire.readRoutine_mandatory_is_absent_is_false
 #print axioms Tm.PlanWire.readRoutines_of_nil
 #print axioms Tm.PlanWire.readRoutines_accepts_two_instances
-#print axioms Tm.PlanWire.readOverrides_refuses_an_estimate_past_the_width
-#print axioms Tm.PlanWire.readOverrides_refuses_a_drop_that_is_not_an_id
-#print axioms Tm.PlanWire.readOverrides_refuses_a_long_drop_id
-#print axioms Tm.PlanWire.readOverrides_refuses_too_many_estimates
-#print axioms Tm.PlanWire.readOverrides_refuses_too_many_drops
-#print axioms Tm.PlanWire.readOverrides_of_an_empty_object
-#print axioms Tm.PlanWire.readOptOverrides_of_an_absent_key
-#print axioms Tm.PlanWire.readOptOverrides_accepts_a_what_if
 #print axioms Tm.PlanWire.readBatchMaxMin_refuses_past_the_width
 #print axioms Tm.PlanWire.readBatchMaxMin_refuses_an_absent_priority
 #print axioms Tm.PlanWire.readBatchMaxMin_accepts_the_shipped_default
@@ -6541,7 +6525,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlanWire.the_seam_carries_its_run_exactly_when_it_carries_its_facts
 #print axioms Tm.PlanWire.the_two_candidate_caps_are_one_number
 #print axioms Tm.PlanWire.hashHex_length
-#print axioms Tm.PlanWire.hashHex_of_zero_reads_back
 #print axioms Tm.PlanWire.readKind_reads_back_every_kind_it_writes
 #print axioms Tm.PlanWire.callExport_is_callPlanner
 
@@ -6921,7 +6904,8 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 -- `Planner.lean` and from this file: it is refuted by
 -- `PlannerWit.the_plan_hash_is_a_placeholder_until_the_emitter_lands_is_refuted`
 -- and renamed to what the day carries, `Planner.dayPlan_planHash` (AGENTS
--- §3.2).  `PlanWire.hashHex_reads_back` is the round trip at every digest.
+-- §3.2).  PlanWire.hashHex_reads_back was the round trip at every digest (`PlanWire.hashHex_digits_read_back` since
+-- the W-47 repair).
 -- ===========================================================================
 #print axioms Tm.Planner.fnvFold_lt
 #print axioms Tm.Planner.fnv1a_lt
@@ -6934,7 +6918,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.Planner.multText_is_zmijs
 #print axioms Tm.Planner.the_placement_bytes_are_the_forks
 #print axioms Tm.PlanWire.hexFold_digits
-#print axioms Tm.PlanWire.hashHex_reads_back
 #print axioms Tm.PlannerWit.the_witness_days_hash_is_the_forks
 #print axioms Tm.PlannerWit.the_plan_hash_is_a_placeholder_until_the_emitter_lands_is_refuted
 
@@ -8611,3 +8594,13 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.EmitWire.rowsJson_length_on_a_day
 #print axioms Tm.EmitWire.readNote_reads_soFar
 #print axioms Tm.EmitWire.readNote_reads_the_planners_key_and_refuses_the_other
+
+/-! APPENDED 2026-10-06 (stage 6, run W-47, THE REPAIR): the open row under a running break (README gap 5020) and
+D112's decoder exits (gap 5021).  The theorems the exits deleted (the `lastHash` and `overrides` readers' laws, and
+mkHash?'s and mkOverrides?'s) left this file with them. -/
+#print axioms Tm.Planner.openClipStep_le
+#print axioms Tm.Planner.openClip_le_cover
+#print axioms Tm.Planner.the_open_row_lies_under_no_running_break
+#print axioms Tm.PlanWire.hashHex_digits_read_back
+#print axioms Tm.PlanWire.hashHex_injective
+#print axioms Tm.PlanWire.readPlannerSection_leaves_overrides_unread

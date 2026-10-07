@@ -2584,6 +2584,13 @@ fn warning_text(w: &Value) -> String {
         "tNotString" => "`t` is not a string".to_string(),
         "badT" => format!("invalid timestamp: {why}"),
         "duplicateT" => "duplicate field `t`".to_string(),
+        // **The field the kernel names is said** (W-47 repair, README gap 5023): until the repair these four fell to
+        // the arm below, which dropped the `key` the kernel sends, so D111's `badField where` reached the user as
+        // `badField` alone.  Parity P15's rule — a warning NAMED, not formatted as serde would — is unchanged.
+        "noEv" => "missing field `ev`".to_string(),
+        "evNotString" => "`ev` is not a string".to_string(),
+        "missingField" => format!("missing field `{0}` (missingField {0})", w.get("key").and_then(Value::as_str).unwrap_or("?")),
+        "badField" => format!("`{0}` is not a value the log reads (badField {0})", w.get("key").and_then(Value::as_str).unwrap_or("?")),
         other => format!("the kernel refused this line: {other}"),
     }
 }

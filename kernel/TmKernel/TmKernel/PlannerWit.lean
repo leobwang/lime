@@ -8190,7 +8190,7 @@ def theOpenBreakRequest : PlanReq := { theOpenRequest with run := openBreakRun }
 def theInterruptedOpenRequest : PlanReq :=
   { theOpenRequest with state :=
       ⟨some theOpenBlock, none, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 810).sec, 0⟩, none⟩,
-       none, Capped.nil, none⟩ }
+       Capped.nil, none⟩ }
 
 set_option maxRecDepth 400000 in
 /-- **The day, end to end**: the worked stretch `[12:00, 14:00)`, the meeting it ran across, the
@@ -8469,7 +8469,7 @@ is `[14:00, 14:05)` and not the block's end. -/
 def theShortRunRequest : PlanReq :=
   { theRunBatchRequest with state :=
       ⟨some ⟨['m','1'], ⟨(Cal.instantOf Cal.chicago 739867 820).sec, 0⟩, 25, false⟩, none, none,
-       none, Capped.nil, none⟩ }
+       Capped.nil, none⟩ }
 
 set_option maxRecDepth 400000 in
 /-- **§9.1's "x extend +1 block", answered**: the reservation grows to the block's end at 14:40,
@@ -8840,7 +8840,7 @@ repair, README gap 2739).  Track H restated that law IN PLACE when the emitter l
 pair went from `hashHex PlanHash.zero` to `hashHex (planDigest ..)` under the same name — and the
 old statement described the placeholder hole, so D5 asks for it refuted and renamed, not
 overwritten.  Here it is, false at `theRequest`: the restated law and the old one together would
-make `hashHex` of the fork's digest equal `hashHex` of zero, and `hashHex_reads_back` says
+make `hashHex` of the fork's digest equal `hashHex` of zero, and `hashHex_injective` says
 `hashHex` loses nothing. -/
 theorem planJson_of_a_planned_day_emits_the_zero_hash_is_refuted :
     ¬ ∀ r : PlanReq, PlanWire.planJson (dayPlan r)
@@ -8858,10 +8858,8 @@ theorem planJson_of_a_planned_day_emits_the_zero_hash_is_refuted :
   have h2 := congrArg (fun l => l.getLast?) h1
   simp only [List.getLast?_cons_cons, List.getLast?_singleton, Option.some.injEq,
     Prod.mk.injEq, JVal.str.injEq, true_and] at h2
-  have h3 := congrArg Planner.mkHash? h2
-  rw [PlanWire.hashHex_reads_back, PlanWire.hashHex_reads_back] at h3
   have h4 : (dayPlan theRequest).planHash = PlanHash.zero := by
-    rw [dayPlan_planHash]; exact Option.some.inj h3
+    rw [dayPlan_planHash]; exact PlanWire.hashHex_injective _ _ h2
   have hv := congrArg Subtype.val h4
   rw [the_witness_days_hash_is_the_forks] at hv
   exact absurd hv (by decide)
@@ -10552,7 +10550,7 @@ def theMeetingInterruptedRequest (id : Option Id) : PlanReq :=
     look := { theOpenRequest.look with today0 :=
       { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 830).sec, 0⟩ } },
     state := ⟨some theOpenBlock, none, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 770).sec, 0⟩, id⟩,
-      none, Capped.nil, none⟩ }
+      Capped.nil, none⟩ }
 
 set_option maxRecDepth 400000 in
 /-- **README gap 3281, computed: the Lost row and the Wall row that tie are drawn in fork `collect_walls`' order.**

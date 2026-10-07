@@ -95,7 +95,6 @@ const CLASS: &[(&str, Option<&str>, Why, &str)] = &[
     ("badState", Some("active"), Why::Shape, "planwire::state_json writes `active` as an object of a `Map`"),
     ("badState", Some("brk"), Why::Shape, "planwire::state_json writes `break` as an object of a `Map`"),
     ("badState", Some("interrupt"), Why::Shape, "planwire::state_json writes `interrupt` as an object of a `Map`"),
-    ("badState", Some("lastHash"), Why::NotSent, "planwire::state_json writes no `lastHash`"),
     ("badState", Some("yesterday"), Why::NotSent, "planwire::state_json writes no `yesterday`"),
     ("badActive", Some("id"), Why::Shadowed, "a running item's id is a candidate's, bounded by `CapWire.maxCandId` first; past it only by hand (gap 4792)"),
     ("badActive", Some("started"), Why::HandEdited, "an instant outside the calendar: the kernel's `emit` refuses a start stamped past it (`badAt`, driven), so only a hand-edited log or `.tm/state.json` (gap 4793)"),
@@ -109,7 +108,6 @@ const CLASS: &[(&str, Option<&str>, Why, &str)] = &[
     ("badBreak", Some("wf"), Why::HostType, "`BreakState.wf`: started at or before `now`, planned within the `u32`'s width"),
     ("badInterrupt", Some("started"), Why::HandEdited, "an instant outside the calendar: the kernel's `emit` refuses an interruption stamped past it (`badAt`, driven), so only a hand edit (gap 4793)"),
     ("badInterrupt", Some("id"), Why::Shadowed, "the interrupted item's id, a candidate's; past `maxCandId` only by hand (gap 4792)"),
-    ("badHash", None, Why::NotSent, "planwire::state_json writes no `lastHash`"),
     ("badYesterday", None, Why::NotSent, "planwire::state_json writes no `yesterday`"),
     ("badYesterdayList", None, Why::NotSent, "planwire::state_json writes no `yesterday`"),
     ("badRoutine", Some("routines"), Why::Shape, "planwire::routines_json writes an array"),
@@ -119,8 +117,6 @@ const CLASS: &[(&str, Option<&str>, Why, &str)] = &[
     ("badRoutine", Some("winHi"), Why::YieldsToTheEvening, "as `winLo`; a window past the calendar on a day whose evening is inside crosses midnight, and the capacity section's `badCandidate <i> due` comes first (gap 4793)"),
     ("badRoutine", Some("durMin"), Why::HostType, "`RoutineInst::dur_min: u32`"),
     ("badRoutine", Some("mandatory"), Why::HostType, "`RoutineInst::mandatory: bool`"),
-    ("badOverride", None, Why::NotSent, "planwire::planner_json writes no `overrides`"),
-    ("tooManyOverrides", None, Why::NotSent, "planwire::planner_json writes no `overrides`"),
     ("badBatchMaxMin", None, Why::HostType, "`PriorityCfg::batch_max_min: u32`, written by planwire::capacity_json"),
     ("capacityAbsent", None, Why::Filtered, "the planner request is the capacity request with the section spliced in (planwire::with_planner)"),
     ("runAbsent", None, Why::Excluded, "PlanWire.planReqOf_never_refuses_what_the_capacity_section_excludes"),
@@ -261,10 +257,14 @@ fn every_planner_refusal_is_classified() {
     let planner = lean_code(&std::fs::read_to_string(root().join("kernel/TmKernel/TmKernel/Planner.lean")).expect("Planner.lean"));
     let ctors = constructors(&plan_wire, "PlannerRefusal");
     let errs = constructors(&planner, "RoutineErr");
-    assert!(ctors.len() >= 20 && ctors.contains(&"shape".to_string()) && ctors.contains(&"ciDisagrees".to_string()), "{ctors:?}");
+    // 20 until the W-47 repair, whose D112 exits deleted `badHash`, `badOverride` and `tooManyOverrides` with the
+    // keys they refused (README gap 5021): the floor is the enum's size, re-measured, not a margin.
+    assert!(ctors.len() >= 17 && ctors.contains(&"shape".to_string()) && ctors.contains(&"ciDisagrees".to_string()), "{ctors:?}");
     assert_eq!(errs.len(), 6, "{errs:?}");
     let thrown = thrown(&plan_wire, &ctors);
-    assert!(thrown.len() > 40, "the scan reached {} pairs", thrown.len());
+    // `> 40` until the W-47 repair: its D112 exits took `badState lastHash`, `badHash`, `badOverride` (three keys) and
+    // `tooManyOverrides` out of the thrown set (README gap 5021) — the floor re-measured at its subject, 40.
+    assert!(thrown.len() >= 40, "the scan reached {} pairs", thrown.len());
     let mut problems = Vec::new();
     for c in &ctors {
         if !CLASS.iter().any(|(n, _, _, _)| n == c) {

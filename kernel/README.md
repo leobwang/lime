@@ -96408,3 +96408,349 @@ estimates), 5014 (the owner: a running break under a meeting's unpause), 5015 (D
 measured above), 4917 and 4918 (the owner's), 4910, 4911, 4913, 4914; track L's 4950, 4951, 4953, 4955, 4957-4960;
 track H's 4970 and 4977 (the owner's), 4972-4975, 4978; track C's 4990, 4993-4995.  `RuntimeIn.yesterday` is D108's,
 W-48.  Burn-down: **1**.
+
+<!-- =====================================================================
+     APPENDED 2026-10-06: stage 6 (the planner), run **W-47**, **THE REPAIR**
+     — the defects W-47's two independent auditors found (the verifier's
+     twelve, the reuse critic's eleven), each reproduced first, fixed as a
+     class or recorded for the owner by name.  Gaps 5020-5059 are this step's
+     (5020-5041 used).  Parity: none issued — the three numbers pre-allocated
+     to the repair are left free (`parity.py`: P1-P113, next free P114).
+     ===================================================================== -->
+
+## Stage 6 — W-47 repair: the open row off a running break, D112's exits, P104 and P105 asked of the fork, and the rest by name
+
+### 0. The brief, measured before it was acted on
+
+* **The brief's "where this stands" was a run old.**  It named HEAD `49186d7` and the last code commit `b164b47`; at
+  this step's start HEAD was **`3f93815`** (the W-47 land's octopus), clean, worktrees `stage5-lookahead` alone.  The
+  land's figures are the ones this step started from (land §6): `check.sh` seventeen lines ok, axiom audit 6,561,
+  stage goals 1, parity P1-P113 next free P114, `cargo test --workspace` 2,953 / 0 / 53 over 160 result lines.
+  Highest gap at `3f93815`: **5017** (the land's), not 4905.
+* **Every auditor finding was reproduced on this step's own binary before it was touched** (§1's table names the
+  drive or plant that reproduced it), with one partial exception: the land's archived D99 drive (`drive3.out`) was
+  read rather than re-run, and it does log in time order, as the critic says (§5).
+* **A process slip, recorded**: `python3 mutate.py --gate` was run ONCE in this step's worktree (the brief forbids
+  running it in a tree one commits from).  It refused at its no-build precheck (346 drifted pin sites, §2.2) before
+  any mutation; `git status --porcelain` was the same before and after, and no `.lean` file was rewritten.  Every
+  mutation this step made ran in the clone `scratchpad/repair-w47/mclone`.
+
+### 1. The findings, and what became of each
+
+| # | finding (auditor) | reproduced | outcome |
+|---|---|---|---|
+| A1 | the last goal's record is wrong: a forward-clock log draws a Block across a Break (verifier, critic) | yes, `drive/a1.out` | **fixed** — the open row is clipped under a running break covering its `since`, and the law is proved (gap 5020); the record corrected (Goals.lean, gap 5020) |
+| A2 | D99's re-draw at every mark is superlinear in the open block's marks (verifier) | yes, `drive/perf.out` | **recorded** with measurements, gap 5027 |
+| A3 | the committed differential sweep halts red at set 3: P104 and P105 under no rule (verifier) | yes, `set3-a.log` (before), 92 → 9 → 0 | **fixed** — both asked of the fork by rule (`late.rs`), set 3 green, gap 5028 (closes 4912, 4919) |
+| A4 | D112 half built: `RuntimeIn.lastHash` and `planner.overrides` still decoded (verifier) | yes | **fixed** — both off the wire, three exemption lines gone, gap 5021 |
+| A5 | out-of-order logs still read two ways (late break past the bound; late interrupt after a done) (verifier) | recorded already (4917, 4913) | **the claim corrected** — the land's "one reading of a block on every log" is false on those two logs, gap 5029 |
+| A6 | a pause stamped before the block's start: the host says paused, the minutes count it running (verifier) | yes, `drive/critic/f1.out` | **recorded**, gap 5030 |
+| A7 | the `window ends` divider is a host-built row (verifier, critic) | read | **recorded**, gap 5031 (gap 1301 still open) |
+| A8 | the TUI Now pane prints its own ci, p, est beside the kernel's cells (verifier) | read | **recorded**: gap 4958 stands, gap 5032 |
+| A9 | the self-declared red snapshot `7ffd91c` is an ancestor of the branch (verifier) | `git merge-base --is-ancestor` | **recorded for the owner**, gap 5033 |
+| A10 | the P56 frozen arms hang rather than fail when the planner answer is corrupted (verifier) | yes, the auditor's plant, `plants3.log` | **fixed** — a bounded search that fails by name in ~30 s, gap 5022 |
+| A11 | P112's and P113's rows name no licensing decision (verifier) | read | **fixed** in `parity.txt`: D63, and D45 with D12, named — gap 5026 |
+| A12 | D111's warning drops the field name (verifier) | yes, `drive/d111.sh` | **fixed** — every named warning says its field, gap 5023 |
+| B2 | a `start` stamped inside a block a `done` closed reads two ways (critic) | yes, `drive/critic/c10.out` | **recorded for the owner**, gap 5034 |
+| B3 | D111 covers `break_start` only: the `break` line's place has no table (critic) | yes, `drive/critic/c9b.out` | **recorded for the owner**, gap 5035 |
+| B4 | D110 is built for `tm start` only: a block resumed inside a wall counts the meeting (critic) | yes, `drive/critic/c13.out` | **recorded for the owner**, gap 5036 (gap 3042) |
+| B5 | a bend passing `cargo test --workspace`: the TUI's places emptied (critic) | yes (plant) | **fixed** — a failure is loud and a test bites, gap 5024 |
+| B6 | the land's D99 drive does not log out of order (critic) | read (`refs/archive/w47/land-drive`) | **re-driven** out of order here, gap 5038 |
+| B7 | the land's D100 numbers are not in its archive (critic) | re-driven | **re-driven and archived**, gap 5038 |
+| B9 | tracks K, C and H cite scratch-only evidence (critic) | 67 of 73 cited paths still exist | **archived** (41 files and 4 small directories), gap 5039 |
+| B10 | `written-exempt.txt` grew a line (critic) | yes | **recorded for the owner**, gap 5037 (the file is now smaller than before W-47) |
+| B11 | the running-break reader is one body written twice (critic) | read | **fixed**: `RuntimeState::running_break_at`, gap 5025 |
+
+### 2. The kernel changes
+
+#### 2.1 The open row under a running break (gap 5020)
+
+`Planner.openClipStep` is the open row's clip, one step of `PlanReq.openStop`'s fold: a pause row that begins after
+`since` ends the stretch at its start (as before), and **a pause row that is not a wall's and covers `since` leaves no
+stretch** (`min e since`).  The running break's row (and the running interruption's, which the replay already reads
+as a stopped clock) began at or before the stretch's start and runs to `now`, so the stretch the block "ran" is all
+under it — exactly what the host's worked minutes read (`RuntimeIn.worked`, P55: the running break netted; `tm now`
+said `20m of 60m` beside the drawn `13:50-14:00`).  A wall's row covering `since` does not clip: a wall stops the
+clock only through D61's and D110's logged marks, which `since` already reads, and a block resumed inside a wall is
+the owner's question (gap 5036).  No parity number: the fork never drew a running break (P45 is that departure), and
+the minutes do not move.
+
+* `Planner.the_open_row_lies_under_no_running_break` — **unconditional**: the open row and the running break's row do
+  not overlap whichever began first; with `the_open_row_stops_where_the_running_break_starts` it is the half of
+  `Goals.plan_places_no_block_over_a_break` the open row owes the running break.  `Planner.openClip_le_cover` is its
+  lemma, `Planner.openClipStep_le` the step's shortening.
+* **Driven** (`drive/a1.sh` on `tm init --example`, Monday): `^t4` started 12:30, `tm break 30m` at 13:00 inside the
+  12:50-13:50 meeting, `tm plan` at 14:00 — before the repair the rows were `12:30 ^t4`, `12:50 ⏰`, `13:00 break 1h`,
+  **`13:50 ^t4 … 20m so far`**, `14:00 Pick up package`; after it the `13:50` row is gone and nothing else moved.
+* **Pinned**: `cli_wall_pause::a_block_unpaused_by_the_meetings_end_is_not_drawn_across_a_running_break`, which fails on
+  the kernel and host of `3f93815` (`plants3.log`: `no block of ^t4 lies across the running break: [("12:30", "12:50"),
+  ("13:50", "14:00")]`), and the mutation rows of `openClipStep` (PINNED at `0`, `1`, `lo`) and `openStop` (PINNED at
+  `0`, `1`, `since`).
+* **The record corrected.**  Goals.lean's "The debt", track K's §11.8 and gap 4918 said the only Block-over-Break days
+  need a log written a month behind its clock (gaps 4914, 4917); both auditors drove this forward-clock world, the
+  land's gap 5014 world, and neither 5014 nor 4918 linked it to the goal.  The goal's doc comment now says so and names
+  the fix.  **The burn-down is still 1**: the two bounded worlds stand, and the proof over the runs the decoder builds
+  is still gap 4918's.  Gap 5014's DRAWING half is closed; its STATE half (`tm now` heads `▶ ^t4 … 20m of 60m` and no
+  break, `.tm/state.json` `paused: false`, while the break runs past the meeting's end) stays the owner's.
+
+#### 2.2 D112's decoder exits (gap 5021; track L's gap 4956, the land's gap 5015)
+
+`planner.state.lastHash` and `planner.overrides` leave the wire: `PlanWire`'s readHash and its five override
+readers, the `PlannerRefusal` constructors badHash, badOverride and tooManyOverrides, the six `PlanKey`s only they used,
+`Planner.RuntimeIn`'s `lastHash` field, and the decoders mkHash? and mkOverrides? with their five laws are deleted;
+`readPlannerSection` answers `overrides := none` (`PlanReq.overrides` is the kernel's own what-if's, `PlanDiff`'s
+`PlanReq.extending`).  A request that still carries either key is answered as the same request without it
+(`PlanWire.readPlannerSection_leaves_overrides_unread`; FFI `the_last_hash_and_the_overrides_are_left_unread`, which
+sends the old decoder's own refusals — a short hash, a `drop` that is not an id — and gets the bare request's day).
+hashHex_reads_back was stated through mkHash?; it is restated over the fold that decoder ran, written in the
+statement (`PlanWire.hashHex_digits_read_back`), with `PlanWire.hashHex_injective` beside it for the one proof that
+used it — the same digits, the same number, and no definition the export does not reach.
+`PlanDiff.the_extension_moves_only_the_running_estimate_and_the_overrides` loses its `lastHash` conjunct because the
+field is gone, not because it was weakened.  `inputs-exempt.txt`'s `RuntimeIn.lastHash` and `written-exempt.txt`'s
+`planner.overrides` and `planner.state.lastHash` are deleted (every exemption line whose EXIT named R3).
+`RuntimeIn.yesterday` and `planner.state.yesterday` stay: D108's, W-48.  `kernel_planner_refusals`' floors re-measured
+at the enum's size (17 constructors, 40 thrown pairs) with the reason beside each.
+
+**The roster.**  The deletions moved 346 recorded pin sites (mutations.txt's fifth column: `file:line declaration`)
+without moving their text.  337 were re-anchored mechanically (`scratchpad/repair-w47/reanchor.py`: a line diff of
+each file at `3f93815` against the tree; a site moves only from a line inside an EQUAL block to the same text, still
+inside the declaration it names, which `mutate.py`'s own no-build check then confirms); the 9 whose cited line was
+edited were re-run by `mutate.py --verify --write --only` in the clone, and `openClipStep` (new) and `openStop`
+(changed) by `--write`.  Gate: **807 rostered, 0 owed** (812 at the land, less 6 deleted rows, plus 1).
+
+### 3. P104 and P105 asked of the fork (gap 5028; closes 4912 and 4919)
+
+`tm/tests/support/late.rs` is the T5 `TM_ORACLE` arm's rule for both numbers, beside P81's and P85's: the fork is
+ASKED the log the kernel reads, never carried by a model of its answer.  One file-order walk reads, at once, the pieces
+fork 4748911's clock draws in the asked log (P81's and P85's marks included, each piece with the line that closed it)
+and the pieces the kernel's machine draws (the complement of the block's idle spans and its held breaks, D99).  At a
+block's close every part of a fork piece the kernel does not draw is a `pause`/`unpause` pair placed before the line
+that closed that piece, a fork boundary inside one kernel piece is a merge the answer is read with (D99's empty stop,
+refused by name where the merge would move a whole minute), and a part the kernel draws that the fork cannot is a
+finding.  At each `break`, every held closed block it nets (within 31 ledger days, on a ledger day not before the
+block's, the ledger days read off the fork's own wakes) gets a pair before the line that closed the piece it lies in,
+and a `done`'s `actual_min` is lowered by what the break took (P105) — the `done`'s credit and duration observation
+are its logged minutes.  The answer is read back with every inserted `Pause` taken off.  Phase 1 now also holds the
+frozen carries — P81's and P85's rules and P104's by-value list (`p104.rs`) — to the fork asked that day.
+
+* **Measured** (one run each, `TM_ORACLE` the `4748911` oracle built today, `set3-*.log`): before, **92**
+  disagreements (track K's figure); with P105's half, **9** (P104's); with both, **0** — "no disagreements beyond the
+  recorded exceptions" over 469 logs and 8,442 `Replay` keys.  P105: **29 breaks in 28 inputs**, each answer moved;
+  P104: **33 parts and merges in 6 inputs**, each moved; P81 48 breaks in 23 inputs, P85 162 starts in 2 (unchanged).
+* **It bites** (`plants.log`, in a clone): the `done` left unlowered → **81** disagreements; no P104 pair → **7**.
+* **What it is, said out loud** (lesson 5): the PIECES are the model's, as `p81::clock_read`'s are; every number the
+  fork computes from them — credits, minutes by ci, loads, the fit's observations, the segments' days — is the fork's.
+* `run-oracle.sh` as committed runs whole again (set 3 green); §7 has the sweep.
+
+### 4. The host
+
+* **D111's field said (gap 5023)**: `kernel_log::warning_text` named `missingField`, `badField`, `noEv` and
+  `evNotString` nowhere, so the kernel's `key` was dropped and P108's `badField where` reached the user as `badField`.
+  Now: `` `where` is not a value the log reads (badField where) ``; P15's rule (a warning named, not serde's text) is
+  unchanged; `cli_break_place`'s D111 test asserts `badField where`.
+* **The TUI's places (gap 5024)**: `tui::data_with` swallowed a kernel failure of the table into an empty one
+  (unwrap_or_default); it now ends the TUI loudly (`data_of`/`data_with` answer a `Result`), and
+  `tui::tests::the_apps_places_are_the_kernels_table` fails on the critic's bend (`plants2.log`).
+* **One running-break reader (gap 5025)**: `RuntimeState::running_break_at` (tm-core `store.rs`) is the one body;
+  `Ctx::running_break` and `App::running_break` each call it.
+* **The P56 search bounded (gap 5022)**: `forkp56::p56_days` fails by name after `P56_GAP` = 128 draws with no held
+  P56 day (the widest gap on `P56_SEED` is 11 draws, 54 to 65); `every_frozen_p56_day_is_its_seeds_draw` also checks
+  that the seed did not run out before the file's last line.  The auditor's plant (`read_plan` lengthening the last
+  segment) now fails both arms by name in 34 s and 30 s (`plants3.log`), where it hung for over 30 minutes.
+
+### 5. Driven (AGENTS §5.13; this step's binary, `tm init --example`; scripts and outputs in `refs/archive/w47-repair/evidence`)
+
+* **D99, a clock behind the log** (`drive/d99.sh`): `start ^t1` 09:00, `pause` 09:50, `pause` (resume) 10:00, then a
+  `break` stamped 09:30 appended AFTER the 10:00 unpause.  `tm now` at 10:20 **`60m of 60m`** (09:00-09:30 and
+  09:40-09:50, and 10:00-10:20); `tm plan` draws `09:00 ^t1`, `09:30 break 10m`, `09:40 ^t1`, `09:50 paused 10m`; `tm
+  stop` at 10:30 `after 70m`.  This is the out-of-order drive the land's `drive3.sh` was not: its marks were in time
+  order (the critic's B6).
+* **D100** (`drive/d100.sh`, isolated on a fresh tree): `start ^t1` 15:00, `done` 15:40 (`40m/60m`), then a `break`
+  stamped 15:10 appended after the `done` — `tm review day --json`'s `block_min` **40 → 30** and `minutes_by_ci[5]`
+  **40 → 30**, breaks' `actual_min` 0 → 10; `tm plan` draws `15:00 ✓ (10m)`, `15:10 break 10m`, `15:20 ✓ (20m)`.  (The
+  land quoted 75 → 65 on a tree with another block done; its archived python read the wrong object — B7.)
+* **The A1 world** (`drive/a1.sh`, §2.1), **D111's warning** (`drive/d111.sh`: `` `where` is not a value the log reads
+  (badField where) ``), **the cost of re-drawing** (`drive/perf.sh`, gap 5027), and the critic's `c10`, `c9b`, `c13`
+  and the verifier's `f1` re-run on this binary (`drive/critic/`): each reads as the auditor wrote.
+
+### 6. Gaps 5020-5041
+
+**Gap 5020 — a Block drawn across a running break on a forward-clock log; the last goal's record.**  Closed for the
+open row (§2.1).  What stays: the goal (burn-down 1, gap 4918's proof), and gap 5014's state half (the owner's).
+
+**Gap 5021 — D112's decoder exits.**  Closed (§2.2).  `RuntimeIn.yesterday` is D108's (W-48).
+
+**Gap 5022 — an unbounded search under the P56 arms.**  Closed (§4).
+
+**Gap 5023 — the host's warning text dropped the kernel's field.**  Closed (§4).
+
+**Gap 5024 — the TUI swallowed a failure of the kernel's table of places.**  Closed (§4).
+
+**Gap 5025 — one running-break reader written twice.**  Closed (§4).
+
+**Gap 5026 — P112 and P113 named no licensing decision.**  1. *What.*  Their `parity.txt` rows now name one: P112
+the owner's D63 (p0 items in D60's due-date order, which the day serves) read once (AGENTS §5.3); P113 D45 (what `tm
+arrive` writes and D42's rebuild derives has one definition) and D12 (the walls that decide capacity have one reader,
+the kernel).  2. *Why.*  Both rows cited only gaps.  3. *Cost.*  These are this repair's reading of which standing
+decision licenses each — the README's issuance lines (append-only) are unchanged.  4. *Clears it.*  The owner, if a
+reading is wrong: then the number is a divergence no decision covers, and comes back as a gap.
+
+**Gap 5027 — D99's re-draw costs superlinear time in an open block's marks.**  1. *What.*  `Replay.settle` runs at
+every mark and re-draws the open block's pieces (`openPieces`, then `redraw`, which looks each new piece up among the
+old ones — by its shape k² in the block's k pieces, at every one of its marks).  Doubling the pairs multiplied `tm now`'s
+time by 2.2 and then 4.3.  Measured here (`drive/perf.sh`, `tm now`
+over N pause/unpause pairs on one open block, one day; load ~21): **N = 50: 102-108 ms; 100: 223-241 ms; 200:
+984-1,030 ms** (three runs each).  The verifier measured the pre-W-47 binary at 54-61 ms for 100 pairs and 78-85 ms
+for 200, and 600 pairs over 8 days at 31.6 s cold / 17.9 s warm (158 / 98 ms before), 2,000 over 28 days at 467 s cold
+/ 140 s warm.  2. *Why not fixed.*  A fast twin needs `redraw`'s answer to be order-independent of duplicate spans, an
+invariant over the fold that `Replay`'s laws do not yet carry; a `@[csimp]` twin must be equal on every input.  3.
+*Cost.*  An ordinary day (a handful of pauses) is unaffected; a block kept open for weeks with hundreds of pauses
+makes every verb slow, and gap 4911's checkpoint grows with it.  No latency row holds it; none was added, because a
+row that passes at 50 pairs says nothing about 600.  4. *Clears it.*  `redraw` keyed on the pieces' order (the pieces
+are disjoint and sorted, a law to prove first), or a settle that re-draws only the pieces a mark meets.
+
+**Gap 5028 — P104 and P105 meet the fork by rule.**  Closed (§3); it closes track K's gaps 4912 and 4919.
+
+**Gap 5029 — "one reading of a block on every log" overstates W-47.**  1. *What.*  The land's title and §1 say a block
+reads one way on every log.  Two logs still read two ways, each recorded by track K and confirmed by the verifier:
+a `break` logged after a block closed more than 31 ledger days behind (gap 4917: heat hour 09 `[60, 10]`, review
+`block_min 60`, the plan's `09:00 ✓ (60m)` under `09:20 break`), and an `interrupt` logged after a `done`, stamped
+inside it (gap 4913: heat hour 08 holds block 60 and lost 10).  2. *Why.*  Both are the owner's (4917: the bound;
+4913: D100 names a break, not an interruption).  3. *Cost.*  The claim is true of every log a forward clock writes
+and of D99's and D100's classes inside the bound; not of these two.  4. *Clears it.*  The owner's answers on 4913 and
+4917.
+
+**Gap 5030 — a pause stamped before its block's start leaves the host paused while every minute runs.**  1. *What.*
+`start ^t1` 09:00, `--now 08:50 pause`: at 09:30 `tm now` heads `30m of 60m · paused` while `tm plan` draws `09:00 ▶
+… 30m so far` and `tm stop` at 09:40 says `after 40m`; after `rm .tm/state.json` D42's rebuild prints `RESTORED from
+the log: active.paused`, and a later `tm pause` says `resumed` while idling nothing (the verifier's `f1`, `f2`;
+`drive/critic/f1.out` here).  The kernel's machine reads the pause as not the block's (P104), the host's flag as the
+block's.  2. *Why not fixed.*  Which reading the host's flag should take — the log's mark (paused) or the kernel's
+(not) — is a §5.3 choice no decision names; the pre-W-47 binary behaves the same.  3. *Cost.*  The header and the
+next `tm pause` say the opposite of the minutes.  4. *Clears it.*  The owner: the host's paused flag read off the
+kernel's open block (D42's rule that the cache follows the log as the kernel reads it), or the pause made the block's.
+
+**Gap 5031 — the `window ends` divider is a host-built row.**  1. *What.*  `tm-core/src/emit.rs`'s `divider_instant`
+re-sums the work segments' minutes against `budget_blocks × block_min`, and `divider_row` formats and pads the line
+that `day_lines` splices into the day file, `tm plan` and the TUI's timeline — beside D112's kernel cells, a second
+reader of the budget's end.  2. *Why not fixed.*  Gap 1301 (still open) is this row; D112 names the plan rows the
+kernel emits, and the divider is no `Emit.Row`.  3. *Cost.*  The divider and the kernel's day could disagree about
+where the budget ends.  4. *Clears it.*  A kernel cell for it (`Emit.Row`, its instant the kernel's), gap 1301.
+
+**Gap 5032 — the TUI's Now pane prints its own ci, p and estimate beside the kernel's title cell.**  Gap 4958 stands
+(the owner's: `×1.1` in the pane against `×1.13` in the row); nothing new was found.
+
+**Gap 5033 — a self-declared red snapshot is an ancestor of `rebuild-on-lean`.**  1. *What.*  The land's octopus
+`3f93815` names `7ffd91c` (track K's archived D110 snapshot, whose own message says `2,897 passed / 5 failed`) as a
+parent, so a bisect without `--first-parent` can land on a red tree — against D88's intent.  2. *Why not fixed.*
+Rewriting the branch is the owner's (D88 was); `origin` holds `3f93815`.  3. *Cost.*  `git bisect` must be run with
+`--first-parent` (every first-parent commit was measured green).  4. *Clears it.*  The owner: a D88-style rewrite of
+`3f93815` with `7ffd91c` dropped from its parents (its tree is the land's, so nothing else moves), or a note that bisects
+use `--first-parent`.
+
+**Gap 5034 — a `start` stamped inside a block a `done` already closed reads two ways.**  1. *What.*  `start ^t1`
+09:00, `done` 10:00, then `--now 09:30 start ^t4`, `stop` 10:30: `tm plan` draws `09:00 ✓ ^t1 (60m)` across `09:30 ^t4
+… 60m so far`, and `tm review day` counts 120 block minutes inside a 90-minute span (the critic's `c10`, re-run here).
+2. *Why not fixed.*  D99 re-draws an OPEN block at a late mark and D100 nets a closed one at a late BREAK; no decision
+says whether a late `start` cuts a closed block.  3. *Cost.*  On a clock-behind log, two blocks share a span.  4.
+*Clears it.*  The owner.
+
+**Gap 5035 — the `break` line's place has no table.**  1. *What.*  D111 reads a `break_start`'s `where` through the
+kernel's table; the `break` line that ends it keeps `where` as any string (`Log.Kind.schema`'s `.brk`,
+`Log.a_break_line_keeps_any_place`), so a hand edit makes one break `walk` while it runs and `moon` once it ends (`tm
+check` says no problems; `tm review day` `actual 10 (moon)`; the critic's `c9b`, re-run here).  2. *Why not fixed.*
+D111 names the `break_start` line; the `break` line is fork 4748911's own format, and making an unknown place a
+malformed line there is a divergence from the fork no decision licenses.  3. *Cost.*  Two readers of a place on
+hand-edited logs.  4. *Clears it.*  The owner: D111 widened to the `break` line (a parity number), or the `break`
+line's place read from its `break_start`.
+
+**Gap 5036 — a block resumed inside a calendar wall counts the meeting.**  1. *What.*  `start ^t4` 12:00, `interrupt`
+12:40, `resume` 13:00 inside the 12:50-13:50 meeting, `stop` 14:00: `after 100m`, review `block_min 100`; started at
+13:00 instead it stops at `10m` (the critic's `c13`, re-run here).  2. *Why not fixed.*  D110 names a block STARTED
+inside a wall; gap 3042 asked the owner exactly this case and is still open.  3. *Cost.*  The meeting counted as work.
+4. *Clears it.*  The owner's answer on gap 3042.
+
+**Gap 5037 — `written-exempt.txt`'s line count grew at W-47 track L.**  1. *What.*  The `plan` section's one line
+became two (`plan.segments`, `plan.priorities`), narrower, because the file's format is one line per SHALLOWEST
+unwritten path and the binary now writes `plan` itself.  After this repair's two deletions the file holds four data
+lines where it held five before W-47.  2. *Why not changed.*  D51 says each exemption file may only shrink; whether
+that is counted in lines or in what the lines exempt is the owner's to say, and folding the two back into one would
+exempt more.  3. *Cost.*  None silent.  4. *Clears it.*  The owner, or gap 4959 (the written half learning that a value
+copied from a kernel answer is the kernel's serialiser's), which deletes both lines.
+
+**Gap 5038 — the land's D99 and D100 drives.**  Re-driven here (§5): the land's D99 drive logged in time order (B6), and
+its D100 numbers were not in its archive (B7).  Closed by §5's drives and their archive.
+
+**Gap 5039 — evidence cited from scratch by tracks K, C and H.**  1. *What.*  73 scratchpad paths are cited by the
+W-47 blocks; 67 still exist, 6 are refs already (`refs/archive/w47-k/{d100-wip,d110,resume-0}`,
+`refs/archive/w47-l/{d112-scripts,d112-switch-census-probe}`) or a prefix (`land-w47/acc-ws-{1,2,3}.log`, which exist).
+41 files (each under 5 MB) and 4 small directories (`w47-c/r2/set7-drive`, `w47-c/r3/probe`, `w47-h/world-t11`,
+`w47-k/dump`) are archived at `refs/archive/w47-repair/track-evidence` under their scratch paths.  2. *Why not all.*
+The other 22 are clones, build directories and `tm` binaries (184 MB to 29 GB each), whose content is the commits they
+were built from.  3. *Cost.*  A reader cannot re-open those trees' scratch state.  4. *Clears it.*  Nothing owed.
+
+**Gap 5040 — the frozen T5 arms carry no P105.**  Measured, not fixed: no frozen input holds a break D100 nets (phase 1
+holds the frozen carries to the fork asked P105's day and agrees on all 8), so the frozen arms have nothing of P105 to
+carry; the live arm (§3) is where P105 meets the fork.  A frozen input that gains one fails phase 1 by name.
+
+**Gap 5041 — `mutate.py --gate` run once in the worktree** (§0).  Nothing mutated; recorded so the slip is on the
+record.
+
+### 7. Acceptance (every command capped: `systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16G for the oracle's build and the mutations; the machine shared, load 2-55 across the step)
+
+* **`check.sh`**, seventeen lines, all ok, on the tree this repair commits (re-run after this block was written, §8):
+  build; totality; axiom audit **6,549** theorems (6,561 at the land, less the 18 laws D112's exits deleted, plus 6);
+  `Negative.lean` rejected; FFI **96** tests; corpus **29/37 files and 4/5 whole plans**; stage goals **1**
+  (`plan_places_no_block_over_a_break`); citations 0 unresolved, 0 allow entries unused; new definitions mutated
+  **807 rostered, 0 owed**; parity **P1-P113, next free P114**; no two names 0 unanswered; reach **1,600 reachable**,
+  1,099 exempt (no exemption line grew; two census sentences re-derived, §2.2); the four field/key checks 0 unanswered
+  (inputs: 36 fields, 3 exempt — `RuntimeIn.lastHash` gone); the kernel replays all 96 modules.
+* **`cargo test --workspace --no-fail-fast`, THREE runs** (`scratchpad/repair-w47/ws-{1,2,3}.log`, archived): **2,953
+  passed / 0 failed / 53 ignored over 160 result lines, each run**, exit 0 — 21:30-21:47 (load 3.0 → 4.1), 21:47-22:04
+  (4.1 → 5.2), 22:04-22:22 (5.2 → 5.3).  Porcelain empty before and after; no `.proptest-regressions` line appeared.
+  *Before them*, one run over the tree as it then stood failed one test (2,952 / 1 / 53 over 160):
+  `kernel_break_start::a_running_breaks_start_has_one_reading` enumerates the readers of a running break's start and
+  still named `ctx.rs` and `app.rs`, which gap 5025 made callers of the one body; the test now holds both the reading's
+  call sites and the two callers of `running_break_at`, and the three runs above were made from the start.
+* **The named suites**, identical in each of the three runs (passed / failed / ignored): T5 `kernel_replay_parity`
+  53/0/4, the door `kernel_log_door` 44/0/0, `cli_switch_acceptance` 16/0/0, `kernel_call_counts` 4/0/0, `one_padder`
+  9/0/0, `one_renderer` 36/0/0, `kernel_row_cells` 40/0/0, `kernel_planner_wire` 25/0/0 (27 at the land: three
+  override and hash refusals deleted, one unread-keys test added), `planner_classes` 75/0/10, `planner_invariants`
+  31/0/1, `cli_conformance` 7/0/0, `cli_json_matrix` 8/0/0, `fork_week_grid` 22/0/3, `planner_p56_cut` 19/0/3,
+  `tui_kernel_answers` 53/0/2, `kernel_break_union` 21/0/0, `cli_wall_pause` 13/0/0 (one added), `cli_break_place`
+  21/0/0, `kernel_planner_refusals` 22/0/0, `kernel_break_start` 22/0/0.  The FFI crate's own tests are check 5.
+* **`cli_latency --include-ignored`**, one run (22:22, load 3.9-5.3): 8 passed, every row inside its band — the stall
+  row (gap 4901) **683 ms** worst of 10 stalled days against its 1 s band, `review week` on the 3-year log 507 ms, the
+  reseal 324 ms, the later verb 71 ms (3-year logs 167 ms), T18's planner call 7.5 ms on the example tree and 69 ms on
+  the 3-year log, its rows call 3.1 and 47 ms.  Quoted as measurements; no band moved.
+* **The differential oracle, `run-oracle.sh` whole, as committed** (`scratchpad/repair-w47/oracle-sweep.log`,
+  archived; an oracle built from `4748911` by `build-oracle.sh` at 21:13 and re-stamped by the run; `512 4`;
+  22:23-22:53, load 3.0 → 1.2), **exit 0 — it no longer stops at set 3**: set 1 **138 compared, 43 with nothing to
+  report**; set 2 **2,048, 1,395**; set 3 **no disagreements beyond the recorded exceptions** over 469 logs, 8,442
+  `Replay` keys — P81 48 breaks in 23 inputs, P85 162 clock starts in 2, **P104 33 parts in 6, P105 29 breaks in 28**,
+  P21 on 49 day records each displaying the same load; set 4 **1,380** renderings read back, 2 P100 residue lines;
+  set 5 frozen grids **46 of 46**; set 6 frozen class, batch, driven and model lines **324 of 324**, P56 days **24 of
+  24**, `planner_invariants`' oracle arm **287 fresh draws, 0 the binary cannot hold, 287 compared** (P45 16, P46 5, P47
+  0, P51 188, P52 2, P56 9), the learned-model arm **96 fresh draws** (each again with no wake logged), 16 fresh P56
+  days; set 7 the whole workspace under `TM_ORACLE` **2,962 passed / 0 failed / 53 ignored over 169 result lines**,
+  plan-basic days 147 of 147, fixture days 4 of 4, conference days 3 of 3, renderings 3 of 3, D74's 128 draws, and the
+  capacity census **4,502 frozen-held requests, 1,339 of 1,339 frozen answer lines asked, 364 fresh, 0 failures**.
+* **The drives** (§5) and **the plants** (`plants.log`, `plants2.log`, `plants3.log`, each in the clone
+  `scratchpad/repair-w47/pclone`, porcelain shown before and after each, each reverted): the P105 credit half removed
+  (81 disagreements), the P104 pairs removed (7), the auditor's `read_plan` plant (both P56 arms fail by name, 34 s and
+  30 s), the critic's TUI bend (`the_apps_places_are_the_kernels_table` fails), and this repair's
+  `cli_wall_pause` test against the kernel and host of `3f93815` (fails, naming the `13:50-14:00` row).
+
+### 8. What lands, and where everything else is
+
+* **ONE commit on `rebuild-on-lean`**, fast-forwarded from the main checkout; its tree is the one measured above but
+  for this block's §7 and the gap 5027 sentence written during the runs (documentation only; `check.sh` re-run on the
+  final tree, all seventeen lines ok).
+* **This step's work-in-progress commits** are kept at `refs/archive/w47-repair/wip`; its drives, plants, logs, the
+  re-anchoring script and the oracle sweep at `refs/archive/w47-repair/evidence`; the tracks' scratch evidence at
+  `refs/archive/w47-repair/track-evidence` (gap 5039).
+* **Owed, by name.**  The owner: gap 5014's state half, 5026 (if a licensing reading is wrong), 5029 (= 4913, 4917),
+  5030, 5033, 5034, 5035, 5036 (= 3042), 5037, and the standing 4918's proof — the burn-down's one goal.  Steps:
+  5027 (the re-draw's cost), 5031 (= 1301, the divider), and track L's, H's and C's still-open gaps the land listed
+  (4950, 4951, 4953, 4955, 4957-4960, 4970, 4972-4975, 4977, 4978, 4990, 4993-4995, 4910, 4911, 4914, 5010, 5011, 5016).
+  W-48: D108 (`RuntimeIn.yesterday` among it).  Burn-down: **1**.

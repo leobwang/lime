@@ -128,12 +128,15 @@ fn p56_cut_is_the_in_tree_cut_on_every_frozen_p56_day() {
 #[test]
 fn every_frozen_p56_day_is_its_seeds_draw() {
     let lines = forkp56::p56_lines();
+    let mut zipped = 0usize;
     for (l, (d, w)) in lines.iter().zip(forkp56::p56_frozen_days(forkp56::P56_SEED)) {
+        zipped += 1;
         let who = l["name"].as_str().unwrap_or("?");
         assert_eq!(l["draw"].as_u64(), Some(d.index as u64), "{who}: the seed's next P56 day is another draw");
         assert_eq!(l["typed"].as_bool(), Some(d.typed), "{who}: the typed coin");
         assert_eq!(ClassWorld::of_json(&l["world"], tz()).expect("a stored world"), w, "{who}: the draw builds another world");
     }
+    assert_eq!(zipped, lines.len(), "the seed ran out of P56 days before the file's last line");
     let last = lines.iter().filter_map(|l| l["draw"].as_u64()).max().expect("a frozen line") as usize;
     let frozen: Vec<usize> = lines.iter().filter_map(|l| l["draw"].as_u64()).map(|d| d as usize).collect();
     let skipped: Vec<usize> = forkp56::p56_days(forkp56::P56_SEED)

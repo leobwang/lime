@@ -357,3 +357,34 @@ fn a_meeting_the_evening_before_is_paused_and_journaled_on_its_own_day() {
         assert!(!next.iter().any(|l| l.contains("pause ^t4")), "nothing in the next day's file: {next:?}");
     }
 }
+
+/// **A break begun inside the meeting and still running at its end keeps the block off the drawing**
+/// (W-47 repair, README gap 5020): `^t4` started 12:30, the meeting pauses it at 12:50, `tm break 30m` at
+/// 13:00, and at 14:00 — the break overrun, still running — the meeting's `unpause` (13:50) is logged.  The
+/// host's worked minutes net the running break (20, the stretch before the meeting); until this repair the
+/// kernel's day drew the block from 13:50 to `now` across the break's row, so the day held a Block over a
+/// Break on a log the binary wrote with a forward clock.  Now no `^t4` block lies across the break.
+#[test]
+fn a_block_unpaused_by_the_meetings_end_is_not_drawn_across_a_running_break() {
+    let tm = Tm::new();
+    tm.ok(&["wake", "06:05", "--slept", "8h10m"]);
+    tm.ok_at("2026-09-07T12:30:00-05:00", &["start", "^t4", "--energy", "4"]);
+    tm.ok_at("2026-09-07T13:00:00-05:00", &["break", "30m", "--where", "walk"]);
+    let plan = tm.json_at("2026-09-07T14:00:00-05:00", &["plan"]);
+    assert_eq!(
+        timer_marks(&tm),
+        vec![("pause".to_string(), WALL_START.to_string()), ("unpause".to_string(), WALL_END.to_string())],
+        "the meeting's pair is logged"
+    );
+    let segs = plan["segments"].as_array().cloned().unwrap_or_default();
+    let span = |s: &Value| (s["start"].as_str().unwrap_or_default().to_string(), s["end"].as_str().unwrap_or_default().to_string());
+    let breaks: Vec<(String, String)> = segs.iter().filter(|s| s["kind"] == "break").map(span).collect();
+    assert_eq!(breaks, vec![("13:00".to_string(), "14:00".to_string())], "the running break, overrun to now: {segs:?}");
+    let blocks: Vec<(String, String)> = segs.iter().filter(|s| s["kind"] == "block" && s["item"] == "t4").map(span).collect();
+    assert!(
+        blocks.iter().all(|(a, b)| b.as_str() <= "13:00" || a.as_str() >= "14:00"),
+        "no block of ^t4 lies across the running break: {blocks:?}"
+    );
+    assert!(blocks.contains(&("12:30".to_string(), "12:50".to_string())), "the stretch before the meeting stays drawn: {blocks:?}");
+    assert_eq!(active(&tm, "2026-09-07T14:00:00-05:00")["elapsed_min"], 20, "the host's minutes net the running break");
+}

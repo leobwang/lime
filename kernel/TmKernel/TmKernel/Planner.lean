@@ -82,9 +82,10 @@ and G3's, over the `dayPlan` P5 will have built.
 
 Bounded here, each with its constructor **and** its rejection theorem:
 `BatchIds` (`mkBatch?`), `Seg` (`mkSeg?`), `Capped` and its `IdList` instance
-(`Capped.ofList?`, `Capped.cons?`), `PlanHash` (`mkHash?`), `Budget` (`mkBudget?`),
+(`Capped.ofList?`, `Capped.cons?`), `Budget` (`mkBudget?`),
 `ActiveBlock` (`mkActive?`), `BreakState` (`mkBreak?`) — `InterruptState` has none since W-41 (D78) —
-yesterday's priorities (`mkYesterday?`) and `PlanOverrides` (`mkOverrides?`).
+and yesterday's priorities (`mkYesterday?`).  `PlanHash` (mkHash?) and `PlanOverrides` (mkOverrides?) had
+decoders until the W-47 repair, when the owner's D112 took `lastHash` and `overrides` off the wire (README gap 5021).
 
 **Reused rather than re-bounded** (design §9's own "reuse" column): `Look.WakeClock.wf` and
 its `badWake`; `Field.Clock` for a stored arrival and a stored window; `Field.parseDate`'s
@@ -94,7 +95,7 @@ for a stored `p`.  Five of §9's twelve rows are already `Look.Today`'s and are 
 
 ## D9-21, the recursion rule
 
-`Capped.ofList?`, `mkYesterday?` and `mkOverrides?` recurse over lists the wire can make
+`Capped.ofList?` and `mkYesterday?` recurse over lists the wire can make
 large, and each is a `List.length` test plus core's own `List` operations.  `Seg.items` is
 core `Subtype.val`/`Option.toList`.
 
@@ -520,26 +521,6 @@ abbrev PlanHash := { n : Nat // n < hashBound }
 /-- The digest of a day nothing has been placed in.  P8 replaces every use of this. -/
 def PlanHash.zero : PlanHash := ⟨0, by unfold hashBound; omega⟩
 
-/-- `state.last_plan_hash`, decoded: exactly `hashHexLen` hex digits, big-endian.  The hex
-reader is `hexDigit` — this kernel has one (R10, AGENTS §5.3). -/
-def mkHash? (cs : List Char) : Option PlanHash :=
-  if cs.length ≠ hashHexLen then none
-  else match cs.foldl (fun a c => a.bind (fun n => (hexDigit c).map (fun d => n * 16 + d)))
-      (some 0) with
-    | none => none
-    | some n => if h : n < hashBound then some ⟨n, h⟩ else none
-
-theorem mkHash?_refuses_a_short_digest (cs : List Char) (h : cs.length ≠ hashHexLen) :
-    mkHash? cs = none := by
-  unfold mkHash?
-  rw [if_pos h]
-
-theorem mkHash?_refuses_a_non_hex_digit :
-    mkHash? "00000000000000g0".toList = none := by decide
-
-theorem mkHash?_accepts :
-    (mkHash? "00000000000000ff".toList).map Subtype.val = some 255 := by decide
-
 /-! ## §9's runtime state, and the five rows `Look.Today` does not already carry
 
 `store::RuntimeState` has twelve fields.  **Seven of them already cross and are already
@@ -707,11 +688,10 @@ structure RuntimeIn where
   active    : Option ActiveBlock
   brk       : Option BreakState
   interrupt : Option InterruptState
-  lastHash  : Option PlanHash
   yesterday : Capped (Id × Fin 8)
   worked    : Option (Fin (Look.maxPlanMinutes + 1))  -- the host's worked minutes (W-36, gap 2920; W-41's width)
 /-- Nothing running, nothing planned yet. -/
-def RuntimeIn.empty : RuntimeIn := ⟨none, none, none, none, Capped.nil, none⟩
+def RuntimeIn.empty : RuntimeIn := ⟨none, none, none, Capped.nil, none⟩
 
 /-- The item the running block holds, if any — the exception five of §8.3's laws are restated
 around (design §6.3, D29). -/
@@ -735,29 +715,6 @@ def PlanOverrides.isEmpty (o : PlanOverrides) : Bool :=
   o.estMin.val.isEmpty && o.extraMin.val.isEmpty && o.drop.val.isEmpty
 
 theorem PlanOverrides.isEmpty_empty : PlanOverrides.empty.isEmpty = true := rfl
-
-/-- The decoder (R10).  Each list is bounded by the candidate cap. -/
-def mkOverrides? (est extra : List (Id × Nat)) (drop : List Id) : Option PlanOverrides := do
-  let e ← Capped.ofList? est
-  let x ← Capped.ofList? extra
-  let d ← Capped.ofList? drop
-  return ⟨e, x, d⟩
-
-theorem mkOverrides?_refuses_too_many_estimates (est extra : List (Id × Nat)) (drop : List Id)
-    (h : maxCands < est.length) : mkOverrides? est extra drop = none := by
-  unfold mkOverrides?
-  rw [Capped.ofList?_refuses_past_the_cap est h]
-  rfl
-
-theorem mkOverrides?_refuses_too_many_drops (est extra : List (Id × Nat)) (drop : List Id)
-    (h : maxCands < drop.length) : mkOverrides? est extra drop = none := by
-  unfold mkOverrides?
-  cases he : Capped.ofList? est with
-  | none => rfl
-  | some e =>
-    cases hx : Capped.ofList? extra with
-    | none => simp
-    | some x => simp [Capped.ofList?_refuses_past_the_cap drop h]
 
 /-! ## §8.2 step 2's input, declared here because the request carries it -/
 
@@ -6296,10 +6253,24 @@ because the kernel drew no open half.
 /-- **Where the worked stretch ends** — fork `open_block_segment`'s `end`: `now`, clipped to the
 day's end, and then to the start of whatever paused the block after it began (fork: an ad-hoc
 wall, `w.blocked_start > since`; since W-35 `PlanReq.pauseRows`, the running break's and a wall
-on `now`'s rows too — P45, P47, so the stretch is never drawn across the meeting that paused it). -/
+on `now`'s rows too — P45, P47, so the stretch is never drawn across the meeting that paused it).
+
+**And at `since` itself, under a row that stops the clock and covers it** (W-47 repair, README gap 5020): the running
+break's row or the running interruption's (any pause row that is not a wall's) begun at or before `since` and running
+past it leaves no stretch — the block's clock has not run since then, which is what the host's worked minutes already
+read (`RuntimeIn.worked`, P55: the running break netted).  Until this repair the clip read only rows that began AFTER
+`since`, so a block un-paused by a meeting's end (D61's `unpause`) while a break begun inside the meeting still ran
+was drawn from the meeting's end to `now` across that break — a Block across a Break on a log the binary writes with a
+forward clock, the last goal's subject.  A WALL's row covering `since` does not clip it: a wall stops the clock only
+through the marks D61 and D110 log, which `since` already reads (README gap 3042 is the owner's question of a block
+resumed inside one). -/
+def openClipStep (lo e : Nat) (w : Seg) : Nat :=
+  if lo < w.start then min e w.start
+  else if w.kind ≠ SegKind.wall ∧ lo < w.stop then min e lo
+  else e
+
 def PlanReq.openStop (r : PlanReq) (since : Nat) : Nat :=
-  r.pauseRows.foldl (fun e w => if since < w.start then min e w.start else e)
-    (min r.now.sec r.dayEnd)
+  r.pauseRows.foldl (openClipStep since) (min r.now.sec r.dayEnd)
 
 /-- **Fork `Planner::open_block_segment`** (`planner.rs:2002-2031`): the stretch of the block the
 log holds open, `[since, end)`, a `Block` carrying no slot energy and the running item; `▶`
@@ -6338,26 +6309,42 @@ def stepOneSegs (r : PlanReq) : List Seg :=
 /-! ### What the open row is -/
 
 /-- The interruption clip only ever shortens the stretch. -/
+theorem openClipStep_le (lo e : Nat) (w : Seg) : openClipStep lo e w ≤ e := by
+  unfold openClipStep
+  split
+  · exact Nat.min_le_left _ _
+  · split
+    · exact Nat.min_le_left _ _
+    · exact Nat.le_refl _
+
 theorem openClip_le (lo : Nat) : ∀ (ws : List Seg) (x : Nat),
-    ws.foldl (fun e w => if lo < w.start then min e w.start else e) x ≤ x
+    ws.foldl (openClipStep lo) x ≤ x
   | [], _ => Nat.le_refl _
   | w :: ws, x => by
     simp only [List.foldl_cons]
-    refine Nat.le_trans (openClip_le lo ws _) ?_
-    by_cases h : lo < w.start
-    · rw [if_pos h]; exact Nat.min_le_left _ _
-    · rw [if_neg h]; exact Nat.le_refl _
+    exact Nat.le_trans (openClip_le lo ws _) (openClipStep_le lo x w)
 
 /-- And it stops at every interruption that began after `lo`. -/
 theorem openClip_le_start (lo : Nat) : ∀ (ws : List Seg) (x : Nat) (w : Seg), w ∈ ws →
-    lo < w.start → ws.foldl (fun e w => if lo < w.start then min e w.start else e) x ≤ w.start
+    lo < w.start → ws.foldl (openClipStep lo) x ≤ w.start
   | [], _, _, hw, _ => absurd hw (by simp)
   | v :: ws, x, w, hw, hlt => by
     simp only [List.foldl_cons]
     rcases List.mem_cons.1 hw with rfl | hw
     · refine Nat.le_trans (openClip_le lo ws _) ?_
-      rw [if_pos hlt]; exact Nat.min_le_right _ _
+      unfold openClipStep; rw [if_pos hlt]; exact Nat.min_le_right _ _
     · exact openClip_le_start lo ws _ w hw hlt
+
+/-- **And it stops at `lo` under every row that is not a wall's and covers `lo`** (W-47 repair, gap 5020). -/
+theorem openClip_le_cover (lo : Nat) : ∀ (ws : List Seg) (x : Nat) (w : Seg), w ∈ ws →
+    w.kind ≠ SegKind.wall → w.start ≤ lo → lo < w.stop → ws.foldl (openClipStep lo) x ≤ lo
+  | [], _, _, hw, _, _, _ => absurd hw (by simp)
+  | v :: ws, x, w, hw, hk, h1, h2 => by
+    simp only [List.foldl_cons]
+    rcases List.mem_cons.1 hw with rfl | hw
+    · refine Nat.le_trans (openClip_le lo ws _) ?_
+      unfold openClipStep; rw [if_neg (by omega), if_pos ⟨hk, h2⟩]; exact Nat.min_le_right _ _
+    · exact openClip_le_cover lo ws _ w hw hk h1 h2
 
 /-- **The stretch ends at `now` and at the day's end**, whatever the clip did. -/
 theorem PlanReq.openStop_le (r : PlanReq) (since : Nat) :
@@ -8472,6 +8459,27 @@ theorem the_open_row_stops_where_the_running_break_starts (r : PlanReq) (t : Seg
   rw [hst] at hlt
   exact openClip_le_start s.1.sec r.pauseRows _ u
     (List.mem_append_left _ (List.mem_append_right _ hu)) hlt
+
+/-- **The worked stretch is never drawn across the running break** (W-47 repair, README gap 5020): whichever began first,
+the open row and the running break's row do not overlap — the half of `Goals.plan_places_no_block_over_a_break` the
+open row owes the running break, unconditional.  The case `the_open_row_stops_where_the_running_break_starts` did not
+reach is a break begun at or before the stretch's `since` (a block un-paused by a meeting's end inside a break), which
+`openClipStep`'s cover clip leaves no stretch for. -/
+theorem the_open_row_lies_under_no_running_break (r : PlanReq) (t : Seg)
+    (h : t ∈ openBlockRows r) (u : Seg) (hu : u ∈ breakRows r) :
+    t.stop ≤ u.start ∨ u.stop ≤ t.start := by
+  by_cases hlt : t.start < u.start
+  · exact Or.inl (the_open_row_stops_where_the_running_break_starts r t h u hu hlt)
+  · by_cases hs : u.stop ≤ t.start
+    · exact Or.inr hs
+    · exfalso
+      obtain ⟨b, s, -, -, hst, hstop, -, hne, -⟩ := mem_openBlockRows h
+      have hk : u.kind = SegKind.brk := (breakRows_are_running_breaks r u hu).1
+      have hc := openClip_le_cover s.1.sec r.pauseRows (min r.now.sec r.dayEnd) u
+        (List.mem_append_left _ (List.mem_append_right _ hu)) (by rw [hk]; intro hh; cases hh)
+        (by omega) (by omega)
+      have : r.openStop s.1.sec ≤ s.1.sec := hc
+      omega
 
 /-- **In OVERTIME the run ends at the free stretch's end or the block boundary** (D57 (2), P46):
 fork `active_run` returns `None` once `est_min − worked` is zero, so its current row is the next

@@ -26,8 +26,8 @@ and `prio`'s first four (`bins`, `safety`, `dflt`, `hyst`) are `CapReq.bins`/`sa
 and `CandReq.hysteresis`, which the capacity section already decodes.
 
 **Four values were on no wire at all**, and they are this module's subject: `state` (§9's
-`RuntimeIn`), `routines` (`Capped RoutineIn`), `overrides` (`Option PlanOverrides`) and
-`prio.batchMaxMin` (§16's `[priority] batch_max_min`, whose R10 statement has been owed since
+`RuntimeIn`), `routines` (`Capped RoutineIn`), `overrides` (`Option PlanOverrides`; off the wire again since the
+owner's D112, W-47 repair) and `prio.batchMaxMin` (§16's `[priority] batch_max_min`, whose R10 statement has been owed since
 stage 5 as README gap **801**).
 
 ## R10's table for this section — and every bound is one this wire already carries
@@ -38,7 +38,7 @@ a third name for a bound is the defect this kernel is named after.
 
 | wire value | bound | constructor | rejection theorem |
 |---|---|---|---|
-| every id (`active.id`, `interrupt.id`, a routine's `id` and `inst`, an override's id, a `yesterday` id) | `CapWire.maxCandId` | `EmitWire.idWithin` | `readActive_refuses_a_long_id`, `readInterrupt_refuses_a_long_id`, `readRoutine_refuses_a_long_id`, `readOverrides_refuses_a_long_drop_id` |
+| every id (`active.id`, `interrupt.id`, a routine's `id` and `inst`, a `yesterday` id) | `CapWire.maxCandId` | `EmitWire.idWithin` | `readActive_refuses_a_long_id`, `readInterrupt_refuses_a_long_id`, `readRoutine_refuses_a_long_id` |
 | `active.estMin` | `Look.maxPlanMinutes` (the fork's `u32`, D81 gap 3902), through the wf predicate | `Planner.mkActive?` | `readActive_refuses_an_estimate_past_the_width` |
 | `active.started`, `brk.started`, `interrupt.started`, a routine's `winLo`/`winHi` | `Cal.Instant.wf` | `Cal.mkInstant?`, through `EmitWire.secWithin` | `instantWithin_refuses_past_the_calendar`, `readRoutine_refuses_a_window_past_the_calendar` |
 | `active.started`, `interrupt.started` after `now` | NONE since W-41: D78 plans both as fork 4748911 does, from `now` | — | `readActive_accepts_a_start_after_now`, `readInterrupt_accepts_a_start_after_now` |
@@ -47,11 +47,9 @@ a third name for a bound is the defect this kernel is named after.
 | `active.workedMin` | `Look.maxPlanMinutes` (W-41, the width again) | `Planner.workedOf?` | `readOptWorked_refuses_a_reading_past_the_width` |
 | the day's evening (D80 (a), P71) | `LogStamp.yearEnd` | `Planner.PlanReq.eveningInsideTheCalendar`, in `planReqRefusal` | `planReqRefusal_names_an_evening_past_the_calendar` |
 | a candidate's wire `ci` (D80 (b), P72) | the plan's `ci` for the item | `Planner.PlanReq.ciDisagreement`, in `planReqRefusal` | `planReqRefusal_names_a_candidate_whose_ci_disagrees` |
-| `lastHash` | `Planner.hashBound`, exactly `hashHexLen` hex digits | `Planner.mkHash?` | `readHash_refuses_a_short_digest` |
 | a `yesterday` priority | `Fin 8`, through the one reader of a stored `p` | `Planner.mkYesterday?` | `readYesterday_refuses_a_priority_past_seven` |
 | the `yesterday` list | `Planner.maxCands` | `Planner.mkYesterday?` | `readYesterday_refuses_past_the_cap` |
-| a routine's `durMin`, an override's minutes | `CapWire.maxRemaining` (fork `u32`) | `EmitWire.u32Within` | `readRoutine_refuses_a_duration_past_the_width`, `readOverrides_refuses_an_estimate_past_the_width` |
-| the override lists | `Planner.maxCands` | `Planner.mkOverrides?` | `readOverrides_refuses_too_many_estimates`, `readOverrides_refuses_too_many_drops` |
+| a routine's `durMin` | `CapWire.maxRemaining` (fork `u32`) | `EmitWire.u32Within` | `readRoutine_refuses_a_duration_past_the_width` |
 | `prio.batchMaxMin` | `CapWire.maxRemaining` (fork `u32`) | `EmitWire.u32Within` | `readBatchMaxMin_refuses_past_the_width` |
 | the routine list, and each instance's rule | `Planner.maxCands`, `Planner.mkRoutine?` | `Planner.mkRoutines?` | already proved — `mkRoutines?_refuses_too_many`, and `PlannerWit.mkPlanReq?_refuses_a_routine_the_rule_refuses` carries it out |
 
@@ -62,7 +60,8 @@ is the guard and `CapWire.maxRemaining` is `Look.maxPlanMinutes` — one functio
 ## §10.3's family, and the two names that are deliberately NOT declared
 
 Design §10.3 reserves `planRefusal.*` for `badState`, badWindow, badBudget, `badActive`, `badBreak`, `badInterrupt`,
-`badHash`, `badOverride` and tooManyCands — three spelled without backticks because nothing declares them.
+badHash, badOverride and tooManyCands — five spelled without backticks because nothing declares them (badHash and
+badOverride were `PlannerRefusal` constructors until the W-47 repair took their keys off the wire, D112).
 
 **The type is `PlannerRefusal` and deliberately NOT PlanRefusal.**  Four ledger sentences and `Planner.dayPlan`'s own
 header cite PlanRefusal as a type that **does not exist**, because `dayPlan` is total (D28) and has no error type —
@@ -107,11 +106,10 @@ open Planner (RuntimeIn RoutineIn PlanOverrides ActiveBlock BreakState BreakPlac
 
 /-- A key of the `planner` section, or of one of its records. -/
 inductive PlanKey
-  | state | active | brk | interrupt | lastHash | yesterday
-  | routines | overrides | batchMaxMin
+  | state | active | brk | interrupt | yesterday
+  | routines | batchMaxMin
   | id | inst | started | estMin | paused | plannedMin | place
   | winLo | winHi | durMin | mandatory
-  | est | extra | drop | min
   | overtime | blocks | grown | remaining | workedMin
   /-- **The record's own well-formedness**, when `Planner.mkActive?` or `mkBreak?` answers `none` (and the
   interruption's, until D78 took its constructor away at W-41).  Those answer `Option` and not a named error, so the
@@ -122,13 +120,12 @@ deriving DecidableEq, Repr
 
 def PlanKey.name : PlanKey → String
   | .state => "state" | .active => "active" | .brk => "break"
-  | .interrupt => "interrupt" | .lastHash => "lastHash" | .yesterday => "yesterday"
-  | .routines => "routines" | .overrides => "overrides" | .batchMaxMin => "batchMaxMin"
+  | .interrupt => "interrupt" | .yesterday => "yesterday"
+  | .routines => "routines" | .batchMaxMin => "batchMaxMin"
   | .id => "id" | .inst => "inst" | .started => "started" | .estMin => "estMin"
   | .paused => "paused" | .plannedMin => "plannedMin" | .place => "place"
   | .winLo => "winLo" | .winHi => "winHi" | .durMin => "durMin"
-  | .mandatory => "mandatory" | .est => "est" | .extra => "extra"
-  | .drop => "drop" | .min => "min" | .wf => "wf"
+  | .mandatory => "mandatory" | .wf => "wf"
   | .overtime => "overtime" | .blocks => "blocks" | .grown => "grown" | .remaining => "remaining"
   | .workedMin => "workedMin"
 
@@ -146,18 +143,12 @@ inductive PlannerRefusal
   | badBreak (k : PlanKey)
   /-- A key of `state.interrupt`. -/
   | badInterrupt (k : PlanKey)
-  /-- `state.lastHash` is not `hashHexLen` hex digits. -/
-  | badHash
   /-- The `yesterday` record at this position. -/
   | badYesterday (i : Nat)
   /-- More stored priorities than the candidate cap, or a `p` past seven. -/
   | badYesterdayList
   /-- A key of the routine record at this position. -/
   | badRoutine (i : Nat) (k : PlanKey)
-  /-- A key of the `overrides` object, or of one of its records. -/
-  | badOverride (k : PlanKey)
-  /-- More overrides than the candidate cap. -/
-  | tooManyOverrides
   /-- §16's `[priority] batch_max_min` is absent or past the fork's `u32`. -/
   | badBatchMaxMin
   /-- The section needs the `capacity` section: `PlanReq.look` is `Look.mkInput?`'s answer for
@@ -212,12 +203,9 @@ def PlannerRefusal.text : PlannerRefusal → String
   | .badActive k => s!"badActive {k.name}"
   | .badBreak k => s!"badBreak {k.name}"
   | .badInterrupt k => s!"badInterrupt {k.name}"
-  | .badHash => "badHash"
   | .badYesterday i => s!"badYesterday {i}"
   | .badYesterdayList => "badYesterdayList"
   | .badRoutine i k => s!"badRoutine {i} {k.name}"
-  | .badOverride k => s!"badOverride {k.name}"
-  | .tooManyOverrides => "tooManyOverrides"
   | .badBatchMaxMin => "badBatchMaxMin"
   | .capacityAbsent => "capacityAbsent"
   | .runAbsent => "runAbsent"
@@ -342,14 +330,6 @@ def readOptInterrupt (v : JVal) : Except PlannerRefusal (Option InterruptState) 
   | .error e => .error e
   | .ok none => .ok none
   | .ok (some w) => (readInterrupt w).map some
-/-- `state.lastHash`, through `Planner.mkHash?` — the one hex reader (R10). -/
-def readHash (v : JVal) : Except PlannerRefusal (Option PlanHash) :=
-  match EmitWire.optStrAtP v "lastHash" (PlannerRefusal.badState PlanKey.lastHash) with
-  | .error e => .error e
-  | .ok none => .ok none
-  | .ok (some s) => match Planner.mkHash? s with
-    | some h => .ok (some h)
-    | none => .error PlannerRefusal.badHash
 /-- One `{"id": …, "p": …}` pair of `state.yesterday`, the id bounded and the `p` left to
 `mkYesterday?` — the one reader of a stored priority. -/
 def readYesterdayPair (i : Nat) (v : JVal) : Except PlannerRefusal (Id × Nat) := do
@@ -377,13 +357,12 @@ def readState (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal RuntimeIn
   let active ← readOptActive sec
   let brk ← readOptBreak now sec
   let interrupt ← readOptInterrupt sec
-  let lastHash ← readHash sec
   let ys ← match ← EmitWire.optAtP sec "yesterday" (PlannerRefusal.badState PlanKey.yesterday) with
     | none => pure []
     | some (.arr xs) => pure xs
     | some _ => throw (PlannerRefusal.badState PlanKey.yesterday)
   let yesterday ← readYesterday ys
-  pure ⟨active, brk, interrupt, lastHash, yesterday, ← readOptWorked sec⟩
+  pure ⟨active, brk, interrupt, yesterday, ← readOptWorked sec⟩
 /-! ## `routines` — §8.2 step 2's window instances, host-collected until F2 (K3) -/
 
 /-- One `RoutineIn`.  The cap and the per-instance rule are `Planner.mkRoutines?`' and are not
@@ -410,49 +389,13 @@ the second statement of one bound. -/
 def readRoutines (xs : List JVal) : Except PlannerRefusal (List RoutineIn) :=
   xs.zipIdx.mapM (fun p => readRoutine p.2 p.1)
 
-/-! ## `overrides` — §9.1's what-if inputs, alive for one call -/
+/-! ## `overrides` — no longer on the wire (the owner's D112, W-47 repair, README gap 5021)
 
-/-- One `{"id": …, "min": …}` record of `est` or `extra`. -/
-def readOverridePair (k : PlanKey) (v : JVal) : Except PlannerRefusal (Id × Nat) := do
-  let idS ← EmitWire.strAtP v "id" (PlannerRefusal.badOverride k)
-  let id ← EmitWire.idWithin (PlannerRefusal.badOverride k) idS
-  let mN ← EmitWire.natAtP v "min" (PlannerRefusal.badOverride k)
-  let m ← EmitWire.u32Within (PlannerRefusal.badOverride k) mN
-  pure (id, m)
-
-/-- An array at `k`, absent being empty. -/
-def readOverrideList (v : JVal) (key : String) (k : PlanKey) : Except PlannerRefusal (List JVal) :=
-  match EmitWire.optAtP v key (PlannerRefusal.badOverride k) with
-  | .error e => .error e
-  | .ok none => .ok []
-  | .ok (some (.arr xs)) => .ok xs
-  | .ok (some _) => .error (PlannerRefusal.badOverride k)
-
-/-- The `drop` list: ids and nothing else, each through `EmitWire.idWithin`.  A name of its
-own, so the two cap theorems below can quantify over its answer without restating its body. -/
-def readDropIds (xs : List JVal) : Except PlannerRefusal (List Id) :=
-  xs.mapM (fun w => match w with
-    | .str s => EmitWire.idWithin (PlannerRefusal.badOverride PlanKey.drop) s
-    | _ => throw (PlannerRefusal.badOverride PlanKey.drop))
-
-/-- The three lists, each capped by `Planner.mkOverrides?` and not by a guard written here. -/
-def readOverrides (v : JVal) : Except PlannerRefusal PlanOverrides := do
-  let estJ ← readOverrideList v "est" PlanKey.est
-  let est ← estJ.mapM (readOverridePair PlanKey.est)
-  let extraJ ← readOverrideList v "extra" PlanKey.extra
-  let extra ← extraJ.mapM (readOverridePair PlanKey.extra)
-  let dropJ ← readOverrideList v "drop" PlanKey.drop
-  let drop ← readDropIds dropJ
-  match Planner.mkOverrides? est extra drop with
-  | some o => pure o
-  | none => throw PlannerRefusal.tooManyOverrides
-
-/-- An absent or `null` `overrides` is no what-if. -/
-def readOptOverrides (sec : JVal) : Except PlannerRefusal (Option PlanOverrides) :=
-  match EmitWire.optAtP sec "overrides" (PlannerRefusal.badOverride PlanKey.est) with
-  | .error e => .error e
-  | .ok none => .ok none
-  | .ok (some w) => (readOverrides w).map some
+`planner.overrides` was decoded here until the W-47 repair (readOverrides, readOptOverrides and their laws) and
+written by no request the binary builds: the TUI's one what-if, `PlanOverrides::extending`, crosses as the `overtime`
+key (D58, `readOvertime`), and `Planner.PlanReq.overrides` is set only by the kernel's own what-if
+(`PlanDiff`'s `PlanReq.extending`).  D112 takes the key off the wire; a request that still carries it is read as one
+that does not (an unread key, as every reader of this wire treats one). -/
 
 /-! ## `prio.batchMaxMin` — README gap 801, discharged
 
@@ -481,6 +424,7 @@ section itself owns and nothing it would be a second reader of. -/
 structure PlannerIn where
   state     : RuntimeIn
   routines  : List RoutineIn
+  /-- Always `none` from the wire since D112 (W-47 repair): the kernel's own what-if sets `PlanReq.overrides`. -/
   overrides : Option PlanOverrides
 
 /-- The section: `state`, `routines`, `overrides`.  All three are optional and each absence is
@@ -494,8 +438,7 @@ def readPlannerSection (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal 
     | none => pure []
     | some (.arr xs) => readRoutines xs
     | some _ => throw (PlannerRefusal.badRoutine 0 PlanKey.routines)
-  let ov ← readOptOverrides sec
-  pure ⟨st, rs, ov⟩
+  pure ⟨st, rs, none⟩
 
 /-! ## The laws
 
@@ -505,41 +448,37 @@ def readPlannerSection (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal 
 the test that reads it fails, rather than the wire quietly changing. -/
 theorem planKey_names_are_the_wire_keys :
     (PlanKey.state.name, PlanKey.active.name, PlanKey.brk.name, PlanKey.interrupt.name,
-     PlanKey.lastHash.name, PlanKey.yesterday.name, PlanKey.routines.name,
-     PlanKey.overrides.name, PlanKey.batchMaxMin.name)
-      = ("state", "active", "break", "interrupt", "lastHash", "yesterday", "routines",
-         "overrides", "batchMaxMin") := rfl
+     PlanKey.yesterday.name, PlanKey.routines.name, PlanKey.batchMaxMin.name)
+      = ("state", "active", "break", "interrupt", "yesterday", "routines", "batchMaxMin") := rfl
 
 /-- And the record keys. -/
 theorem planKey_record_names_are_the_wire_keys :
     (PlanKey.id.name, PlanKey.inst.name, PlanKey.started.name, PlanKey.estMin.name,
      PlanKey.paused.name, PlanKey.plannedMin.name, PlanKey.place.name, PlanKey.winLo.name,
-     PlanKey.winHi.name, PlanKey.durMin.name, PlanKey.mandatory.name, PlanKey.est.name,
-     PlanKey.extra.name, PlanKey.drop.name, PlanKey.min.name)
+     PlanKey.winHi.name, PlanKey.durMin.name, PlanKey.mandatory.name)
       = ("id", "inst", "started", "estMin", "paused", "plannedMin", "place", "winLo",
-         "winHi", "durMin", "mandatory", "est", "extra", "drop", "min") := rfl
+         "winHi", "durMin", "mandatory") := rfl
 
 /-- **Every refusal spells itself, with its position and its key** — the sentence a host reads
 when the request is refused. -/
 theorem the_refusals_spell_themselves :
     (PlannerRefusal.shape.text, (PlannerRefusal.badState PlanKey.active).text,
      (PlannerRefusal.badActive PlanKey.id).text, (PlannerRefusal.badBreak PlanKey.place).text,
-     (PlannerRefusal.badInterrupt PlanKey.wf).text, PlannerRefusal.badHash.text,
+     (PlannerRefusal.badInterrupt PlanKey.wf).text,
      (PlannerRefusal.badYesterday 3).text, PlannerRefusal.badYesterdayList.text,
      (PlannerRefusal.badRoutine 2 PlanKey.winLo).text,
-     (PlannerRefusal.badOverride PlanKey.drop).text, PlannerRefusal.tooManyOverrides.text,
      PlannerRefusal.badBatchMaxMin.text, PlannerRefusal.capacityAbsent.text)
       = ("shape", "badState active", "badActive id", "badBreak place",
-         "badInterrupt wf", "badHash", "badYesterday 3", "badYesterdayList",
-         "badRoutine 2 winLo", "badOverride drop", "tooManyOverrides",
+         "badInterrupt wf", "badYesterday 3", "badYesterdayList",
+         "badRoutine 2 winLo",
          "badBatchMaxMin", "capacityAbsent") := rfl
 
 /-- **And the shape it goes out in**: `{"err":{"planner":"<name> <key>"}}`, beside — and not
 inside — `EmitWire`'s `{"err":{"plan":…}}`.  A host that sees `planner` knows the request could
 not be *built*; a host that sees `plan` knows a row could not be *read*. -/
 theorem plannerRefusalJson_is_the_err_planner_shape :
-    plannerRefusalJson PlannerRefusal.badHash
-      = jone "err" (jone "planner" (.str "badHash".toList)) := rfl
+    plannerRefusalJson PlannerRefusal.badYesterdayList
+      = jone "err" (jone "planner" (.str "badYesterdayList".toList)) := rfl
 
 /-- **The two families' wire keys are different words**, which is what lets one `plan` object
 carry both R3's keys and W-24's without a reader having to guess. -/
@@ -673,22 +612,6 @@ theorem readInterrupt_accepts_an_open_interruption :
       ("id".toList, .str "m1".toList)])
       = .ok ⟨some ⟨900, 0⟩, some "m1".toList⟩ := by rfl
 
-/-- **A `lastHash` that is not `hashHexLen` hex digits is refused**, through `Planner.mkHash?` —
-the kernel's one hex reader. -/
-theorem readHash_refuses_a_short_digest (v : JVal) (s : List Char)
-    (hs : EmitWire.optStrAtP v "lastHash" (PlannerRefusal.badState PlanKey.lastHash)
-      = .ok (some s)) (h : s.length ≠ Planner.hashHexLen) :
-    readHash v = .error PlannerRefusal.badHash := by
-  simp only [readHash, hs, Planner.mkHash?_refuses_a_short_digest s h]
-
-/-- And sixteen hex digits read, so the refusal is not the only outcome. -/
-theorem readHash_accepts_sixteen_hex_digits :
-    (readHash (.obj [("lastHash".toList, .str "00000000000000ff".toList)])).map
-        (fun o => o.map (fun h => h.val)) = .ok (some 255) := by rfl
-
-/-- **An absent `lastHash` is no hash**, which is the field's own `none` and not a zero. -/
-theorem readHash_of_an_absent_hash : readHash (.obj []) = .ok none := rfl
-
 /-- **A stored `p` past seven is refused**, through `Planner.mkYesterday?` — the one reader. -/
 theorem readYesterday_refuses_a_priority_past_seven :
     readYesterday [.obj [("id".toList, .str "m1".toList), ("p".toList, .num 8)]]
@@ -719,7 +642,8 @@ theorem readState_of_an_empty_object (now : Cal.Instant) :
 had to: `readState_of_an_empty_object` above is satisfied by a reader that answers `none`
 whatever it is given, and the three optional readers all came back **SURVIVED** at `:= default`
 until a request with `active`, `break`, `interrupt`, `lastHash` and `yesterday` all present was
-written down.  An absence proves an optional reader nothing (AGENTS §9.2). -/
+written down.  Since the owner's D112 (W-47 repair) `lastHash` is no field of `RuntimeIn`: the request below still
+carries it, and the reader leaves it unread.  An absence proves an optional reader nothing (AGENTS §9.2). -/
 theorem readState_accepts_a_running_day :
     (readState ⟨1000, 0⟩ (.obj
       [("active".toList, .obj [("id".toList, .str "m2".toList),
@@ -731,12 +655,12 @@ theorem readState_accepts_a_running_day :
        ("lastHash".toList, .str "00000000000000ff".toList),
        ("yesterday".toList, .arr [.obj [("id".toList, .str "m1".toList),
           ("p".toList, .num 3)]])])).map (fun st =>
-        (st.active, st.brk, st.interrupt, st.lastHash.map (fun h => h.val),
+        (st.active, st.brk, st.interrupt,
          st.yesterday.val.map (fun q => (q.1, q.2.val))))
       = .ok (some ⟨"m2".toList, ⟨900, 0⟩, 60, false⟩,
              some ⟨some ⟨940, 0⟩, 10, some BreakPlace.walk⟩,
              some ⟨some ⟨950, 0⟩, some "m1".toList⟩,
-             some 255, [("m1".toList, 3)]) := by rfl
+             [("m1".toList, 3)]) := by rfl
 
 /-! ### `routines`' rejection theorems (R10) -/
 
@@ -801,80 +725,14 @@ theorem readRoutines_accepts_two_instances :
       = .ok [⟨"lunch".toList, none, 1000, 2000, 30, false⟩,
              ⟨"shower".toList, none, 3000, 4000, 20, true⟩] := by rfl
 
-/-! ### `overrides`' rejection theorems (R10) -/
+/-! ### `overrides` is not read (D112, W-47 repair) -/
 
-/-- **An override's minutes past the fork's `u32` is refused.** -/
-theorem readOverrides_refuses_an_estimate_past_the_width :
-    readOverrides (.obj [("est".toList, .arr [.obj [("id".toList, .str "m1".toList),
-      ("min".toList, .num 4294967296)]])])
-      = .error (PlannerRefusal.badOverride PlanKey.est) := by rfl
-
-/-- **A `drop` entry that is not a string is refused by name**, never skipped. -/
-theorem readOverrides_refuses_a_drop_that_is_not_an_id :
-    readOverrides (.obj [("drop".toList, .arr [.num 3])])
-      = .error (PlannerRefusal.badOverride PlanKey.drop) := by rfl
-
-/-- **A `drop` id past the bound is refused**, through `EmitWire.idWithin`. -/
-theorem readOverrides_refuses_a_long_drop_id (v : JVal) (s : List Char)
-    (he : readOverrideList v "est" PlanKey.est = .ok [])
-    (hx : readOverrideList v "extra" PlanKey.extra = .ok [])
-    (hd : readOverrideList v "drop" PlanKey.drop = .ok [.str s])
-    (h : CapWire.maxCandId < s.length) :
-    readOverrides v = .error (PlannerRefusal.badOverride PlanKey.drop) := by
-  have hdrop : readDropIds [.str s] = .error (PlannerRefusal.badOverride PlanKey.drop) := by
-    simp only [readDropIds, List.mapM, List.mapM.loop,
-      EmitWire.idWithin_refuses_a_long_id (PlannerRefusal.badOverride PlanKey.drop) s h]
-    rfl
-  simp only [readOverrides, he, hx, hd, bind, Except.bind, hdrop]
-  rfl
-
-/-- **More estimate overrides than the candidate cap is refused**, through
-`Planner.mkOverrides?` — `Planner.maxCands`, not a number written here.  Stated over whatever
-the three readers return, so it is a fact about the decoder and not about one JSON object. -/
-theorem readOverrides_refuses_too_many_estimates (v : JVal) (estJ extraJ dropJ : List JVal)
-    (est extra : List (Id × Nat)) (drop : List Id)
-    (he : readOverrideList v "est" PlanKey.est = .ok estJ)
-    (hx : readOverrideList v "extra" PlanKey.extra = .ok extraJ)
-    (hd : readOverrideList v "drop" PlanKey.drop = .ok dropJ)
-    (hme : estJ.mapM (readOverridePair PlanKey.est) = .ok est)
-    (hmx : extraJ.mapM (readOverridePair PlanKey.extra) = .ok extra)
-    (hmd : readDropIds dropJ = .ok drop)
-    (h : Planner.maxCands < est.length) :
-    readOverrides v = .error PlannerRefusal.tooManyOverrides := by
-  simp only [readOverrides, he, hx, hd, bind, Except.bind, hme, hmx, hmd,
-    Planner.mkOverrides?_refuses_too_many_estimates est extra drop h]
-  rfl
-
-/-- **And more drops than the cap**, through the same constructor's other rejection theorem. -/
-theorem readOverrides_refuses_too_many_drops (v : JVal) (estJ extraJ dropJ : List JVal)
-    (est extra : List (Id × Nat)) (drop : List Id)
-    (he : readOverrideList v "est" PlanKey.est = .ok estJ)
-    (hx : readOverrideList v "extra" PlanKey.extra = .ok extraJ)
-    (hd : readOverrideList v "drop" PlanKey.drop = .ok dropJ)
-    (hme : estJ.mapM (readOverridePair PlanKey.est) = .ok est)
-    (hmx : extraJ.mapM (readOverridePair PlanKey.extra) = .ok extra)
-    (hmd : readDropIds dropJ = .ok drop)
-    (h : Planner.maxCands < drop.length) :
-    readOverrides v = .error PlannerRefusal.tooManyOverrides := by
-  simp only [readOverrides, he, hx, hd, bind, Except.bind, hme, hmx, hmd,
-    Planner.mkOverrides?_refuses_too_many_drops est extra drop h]
-  rfl
-
-/-- The empty `overrides` object reads as the empty what-if. -/
-theorem readOverrides_of_an_empty_object :
-    (readOverrides (.obj [])).map (fun o => o.isEmpty) = .ok true := by rfl
-
-/-- **An absent `overrides` is no what-if** — the field's own `none`. -/
-theorem readOptOverrides_of_an_absent_key : readOptOverrides (.obj []) = .ok none := rfl
-
-/-- **A present `overrides` reads**, which `readOptOverrides_of_an_absent_key` does not show:
-that reader too came back **SURVIVED** at `:= default`, whose answer is the absence. -/
-theorem readOptOverrides_accepts_a_what_if :
-    (readOptOverrides (.obj [("overrides".toList, .obj
-      [("est".toList, .arr [.obj [("id".toList, .str "m1".toList), ("min".toList, .num 90)]]),
-       ("drop".toList, .arr [.str "m2".toList])])])).map
-        (fun o => o.map (fun q => (q.estMin.val, q.extraMin.val, q.drop.val)))
-      = .ok (some ([("m1".toList, 90)], [], ["m2".toList])) := by rfl
+/-- **A request that still carries `overrides` plans no what-if** — the key is unread, so the section reads as the
+same section without it (the owner's D112; README gap 5021).  `PlanReq.overrides` is the kernel's own what-if's. -/
+theorem readPlannerSection_leaves_overrides_unread (now : Cal.Instant) :
+    readPlannerSection now (.obj [("overrides".toList, .obj
+      [("drop".toList, .arr [.str "m2".toList])])])
+      = .ok ⟨RuntimeIn.empty, [], none⟩ := rfl
 
 /-! ### `prio.batchMaxMin` — README gap 801's four lines, answered -/
 
@@ -1075,8 +933,8 @@ def diagJson (d : Planner.Diagnostics) : JVal :=
 def priosJson (c : Planner.Capped (Id × Fin 8)) : JVal :=
   .arr (c.val.map (fun p => .obj [("id".toList, .str p.1), ("p".toList, .num p.2.val)]))
 
-/-- `state.last_plan_hash`'s sixteen lowercase hex digits, big-endian — the digits `Planner.mkHash?` reads
-(`hashHex_of_zero_reads_back`), through `Json.hexChar`, which is this kernel's one hex writer. -/
+/-- `state.last_plan_hash`'s sixteen lowercase hex digits, big-endian — the digits the big-endian base-16 fold reads
+back (`hashHex_digits_read_back`), through `Json.hexChar`, which is this kernel's one hex writer. -/
 def hashHex (h : Planner.PlanHash) : List Char :=
   (List.range Planner.hashHexLen).map
     (fun i => hexChar (h.val / 16 ^ (Planner.hashHexLen - 1 - i) % 16))
@@ -1714,14 +1572,10 @@ fail here. -/
 theorem the_two_candidate_caps_are_one_number :
     CapWire.maxCandidates = Planner.maxCands := rfl
 
-/-- **The hash is sixteen digits**, which is the length `Planner.mkHash?` requires. -/
+/-- **The hash is sixteen digits** (`Planner.hashHexLen`). -/
 theorem hashHex_length (h : Planner.PlanHash) : (hashHex h).length = Planner.hashHexLen := by
   simp [hashHex]
 
-/-- **And it reads back through the kernel's own reader** at zero — the value every day carried
-until W-34's emitter; `hashHex_reads_back` is the law at every digest, this is its oldest case. -/
-theorem hashHex_of_zero_reads_back :
-    Planner.mkHash? (hashHex Planner.PlanHash.zero) = some Planner.PlanHash.zero := by decide
 
 /-- **`EmitWire.readKind` reads back every kind `kindName` writes** — the eleven names are one
 table, not two, so a kind renamed on one side fails here rather than on a host. -/
@@ -1745,14 +1599,14 @@ theorem callExport_is_callPlanner (input : String) : callExport input = callPlan
 
 /-! ### The digest's sixteen digits read back (W-34 track H)
 
-`Planner.dayPlan` carries `Planner.planDigest` since W-34, so the value `hashHex` writes is no
-longer the constant zero `hashHex_of_zero_reads_back` was about.  The law below is at EVERY
-digest: `Planner.mkHash?` — the one hex reader, `state.lastHash`'s decoder on this very wire —
-reads back exactly the `PlanHash` `hashHex` wrote.  So the value a host stores from `plan.hash`
-and hands back as `state.lastHash` reads back as it was stored (not "the value the kernel
-compares": nothing here compares it, the host does — W-34 repair, README gap 2734). -/
+`Planner.dayPlan` carries `Planner.planDigest` since W-34.  The law below is at EVERY digest: the big-endian base-16
+fold of `Json.hexDigit` over the sixteen digits `hashHex` writes is the digest's own number, so `hashHex` loses
+nothing.  **Until the W-47 repair it was stated through Planner.mkHash?**, `state.lastHash`'s decoder on this wire;
+the owner's D112 took `lastHash` off the wire (README gap 5021), the decoder went with it, and the law is restated over
+the fold that decoder ran, written in the statement — the same digits, the same number, and no definition the export
+does not reach (check 12).  The host compares `plan.hash` with the hash it stored (W-34 repair, README gap 2734). -/
 
-/-- The big-endian base-16 fold `Planner.mkHash?` runs, over the digits `hashHex` writes, is the
+/-- The big-endian base-16 fold, over the digits `hashHex` writes, is the
 number: `n` digits of `h < 16^n` fold back to `h`. -/
 theorem hexFold_digits : ∀ (n h : Nat), h < 16 ^ n →
     ((List.range n).map (fun i => h / 16 ^ (n - 1 - i) % 16)).foldl (fun a d => a * 16 + d) 0 = h
@@ -1773,15 +1627,13 @@ theorem hexFold_digits : ∀ (n h : Nat), h < 16 ^ n →
       Nat.add_sub_cancel, Nat.sub_self, Nat.pow_zero, Nat.div_one]
     omega
 
-/-- **Every digest `hashHex` writes, `Planner.mkHash?` reads back** — the round trip at every
-`PlanHash`, not only at zero. -/
-theorem hashHex_reads_back (h : Planner.PlanHash) : Planner.mkHash? (hashHex h) = some h := by
+/-- **Every digest `hashHex` writes reads back** — the big-endian base-16 fold of `Json.hexDigit` over its sixteen
+digits is the digest's own number (W-47 repair: hashHex_reads_back's round trip, restated over the fold its reader
+Planner.mkHash? ran, the reader having left the wire with `state.lastHash` under D112). -/
+theorem hashHex_digits_read_back (h : Planner.PlanHash) :
+    (hashHex h).foldl (fun acc c => acc.bind (fun n => (hexDigit c).map (fun d => n * 16 + d))) (some 0)
+      = some h.val := by
   obtain ⟨v, hv⟩ := h
-  have hlen : (hashHex ⟨v, hv⟩).length = Planner.hashHexLen := hashHex_length _
-  have hdig : ∀ i ∈ List.range Planner.hashHexLen,
-      hexDigit (hexChar (v / 16 ^ (Planner.hashHexLen - 1 - i) % 16))
-        = some (v / 16 ^ (Planner.hashHexLen - 1 - i) % 16) :=
-    fun i _ => hexDigit_hexChar _ (Nat.mod_lt _ (by decide))
   have hfold : ∀ (l : List Nat) (a : Nat), (∀ d ∈ l, d < 16) →
       (l.map hexChar).foldl
           (fun acc c => acc.bind (fun n => (hexDigit c).map (fun d => n * 16 + d))) (some a)
@@ -1799,8 +1651,6 @@ theorem hashHex_reads_back (h : Planner.PlanHash) : Planner.mkHash? (hashHex h) 
   have hbound : v < 16 ^ Planner.hashHexLen := by
     have : Planner.hashBound = 16 ^ Planner.hashHexLen := by decide
     rw [← this]; exact hv
-  unfold Planner.mkHash?
-  rw [if_neg (by rw [hlen]; exact fun h => h rfl)]
   have hmapc : hashHex ⟨v, hv⟩ = ((List.range Planner.hashHexLen).map
       (fun i => v / 16 ^ (Planner.hashHexLen - 1 - i) % 16)).map hexChar := by
     simp [hashHex, List.map_map]
@@ -1809,7 +1659,13 @@ theorem hashHex_reads_back (h : Planner.PlanHash) : Planner.mkHash? (hashHex h) 
       obtain ⟨i, -, rfl⟩ := List.mem_map.1 hd
       exact Nat.mod_lt _ (by decide)),
     hexFold_digits Planner.hashHexLen v hbound]
-  simp only [hv, dif_pos]
+
+/-- **So `hashHex` is injective**: two digests that write the same digits are one digest. -/
+theorem hashHex_injective (h h' : Planner.PlanHash) (e : hashHex h = hashHex h') : h = h' := by
+  have := congrArg (fun cs : List Char =>
+    cs.foldl (fun acc c => acc.bind (fun n => (hexDigit c).map (fun d => n * 16 + d))) (some 0)) e
+  simp only [hashHex_digits_read_back] at this
+  exact Subtype.ext (Option.some.inj this)
 
 
 /-! ## W-34: the `overtime` key's laws, and the twelfth note
@@ -1839,7 +1695,7 @@ theorem readOvertime_refuses_a_missing_id :
 
 /-- **An id past the bound is refused**, through `EmitWire.idWithin`, at every id — stated over
 whatever the section's two lookups return, so it is a fact about the decoder and not about one
-JSON object (the shape of `readOverrides_refuses_a_long_drop_id`). -/
+JSON object (the shape of readOverrides_refuses_a_long_drop_id, deleted with its reader at the W-47 repair). -/
 theorem readOvertime_refuses_a_long_id (sec v : JVal) (s : List Char)
     (hv : EmitWire.optAtP sec "overtime" (PlannerRefusal.badOvertime PlanKey.overtime)
       = .ok (some v))
@@ -2650,11 +2506,9 @@ theorem readPlannerSection_routines_close_inside_the_calendar {now : Cal.Instant
     obtain ⟨_, -, h⟩ := capBind_ok_elim h
     split at h
     · obtain ⟨rs, hrs, h⟩ := capBind_ok_elim h
-      obtain ⟨_, -, h⟩ := capBind_ok_elim h
       cases h; cases hrs
       intro x hx; cases hx
     · obtain ⟨rs, hrs, h⟩ := capBind_ok_elim h
-      obtain ⟨_, -, h⟩ := capBind_ok_elim h
       cases h
       intro x hx
       unfold readRoutines at hrs

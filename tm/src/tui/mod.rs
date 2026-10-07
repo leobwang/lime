@@ -272,7 +272,7 @@ fn at(g: &Globals, now: DateTime<Tz>) -> Globals {
 
 /// Read the plan directory into the shape [`App`] wants. `week_cut` is the
 /// heat grid's cut, which [`reload`] reads where the Review screen is shown.
-fn data_of(ctx: &Ctx, week_cut: PauseCut) -> AppData {
+fn data_of(ctx: &Ctx, week_cut: PauseCut) -> Result<AppData, CliError> {
     // §12.2/§12.3 read §7's numbers, and they are the day's own: the App's first
     // replan ([`App::new`]) asks the kernel for the day and takes its candidates,
     // priorities and lookahead from that one answer (`app::Asked::ranking`), and so
@@ -289,8 +289,8 @@ fn data_with(
     prios: Vec<Prio>,
     caps: Vec<UnitCapacity>,
     week_cut: PauseCut,
-) -> AppData {
-    AppData {
+) -> Result<AppData, CliError> {
+    Ok(AppData {
         cfg: ctx.cfg.clone(),
         model: ctx.model.clone(),
         state: ctx.state.clone(),
@@ -305,13 +305,14 @@ fn data_with(
         now: ctx.now_tz,
         planner: kernel_planner(ctx),
         // The kernel's table of places (the owner's D111), asked once per
-        // process. A kernel that cannot answer it leaves the `b` chord nothing to
-        // offer — and the App's own planner, which asks the same kernel, then
-        // ends the TUI loudly.
+        // process. **A kernel that cannot answer it ends the TUI loudly, here**
+        // (W-47 repair, README gap 5024): until the repair the failure was
+        // swallowed into an empty table (unwrap_or_default), so the `b` chord
+        // silently offered no place and every suite stayed green.
         places: app::Places::new(
-            crate::cli::kernel_log::places().map(<[String]>::to_vec).unwrap_or_default(),
+            crate::cli::kernel_log::places().map(<[String]>::to_vec).map_err(CliError::msg)?,
         ),
-    }
+    })
 }
 
 /// The replay scope the TUI asks for on `screen` (design §11.1, step R13;
@@ -348,7 +349,7 @@ fn tui_scope(
 /// date change re-collects from (D84, [`recollect`]).
 fn load(g: &Globals) -> Result<(Ctx, App), CliError> {
     let ctx = Ctx::load_scoped(g, true, |state, today| tui_scope(Screen::default(), state, today))?;
-    let app = App::new(data_of(&ctx, PauseCut::default())).map_err(unplanned_error)?;
+    let app = App::new(data_of(&ctx, PauseCut::default())?).map_err(unplanned_error)?;
     Ok((ctx, app))
 }
 
@@ -447,7 +448,7 @@ fn advance(ctx: &mut Ctx, now: DateTime<Tz>) -> Result<Option<String>, CliError>
 /// the read itself raised (an automatic close it could not hold, D91), shown when
 /// nothing above it is.
 fn adopt_read(app: &mut App, read: &Ctx, week_cut: PauseCut, cut_refused: Option<String>, said: Option<String>) -> Result<(), CliError> {
-    let data = data_with(read, app.candidates.clone(), app.prios.clone(), app.caps.clone(), week_cut);
+    let data = data_with(read, app.candidates.clone(), app.prios.clone(), app.caps.clone(), week_cut)?;
     // The App's replan is the only thing in `adopt` that writes the status line: a sentence
     // there afterwards is the refusal's, and it stands.
     let before = app.message.take();
@@ -1763,7 +1764,7 @@ mod tests {
         }
         let at = at_str(&g, "2026-09-07T09:59:00-05:00");
         let mut read = Ctx::load_scoped(&at, true, |state, today| tui_scope(Screen::default(), state, today)).expect("the TUI's read");
-        let mut data = data_of(&read, PauseCut::default());
+        let mut data = data_of(&read, PauseCut::default()).expect("the App's data");
         let asked: std::sync::Arc<std::sync::Mutex<Vec<Option<(String, u32)>>>> = std::sync::Arc::default();
         let seen = asked.clone();
         let real = std::mem::replace(&mut data.planner, Box::new(|_: &app::Ask<'_>| unreachable!()));
@@ -1808,8 +1809,20 @@ mod tests {
         }
         let at = at_str(&g, "2026-09-07T09:05:00-05:00");
         let ctx = Ctx::load_scoped(&at, true, |state, today| tui_scope(Screen::default(), state, today)).expect("the TUI's read");
-        let data = data_of(&ctx, PauseCut::default());
+        let data = data_of(&ctx, PauseCut::default()).expect("the App's data");
         (tmp, g, ctx, data)
+    }
+
+    /// **The App's places are the kernel's table** (the owner's D111; W-47 repair, README gap 5024): the
+    /// `b` chord offers exactly the words `cli::kernel_log::places` answers. The reuse critic emptied the
+    /// table at `data_with` and every suite stayed green; this is the test that bend fails.
+    #[test]
+    fn the_apps_places_are_the_kernels_table() {
+        let _env = kernel_env();
+        let (_tmp, _g, _ctx, data) = running_data();
+        let table = crate::cli::kernel_log::places().expect("the kernel's table of places");
+        assert!(!table.is_empty(), "the kernel answers a table");
+        assert_eq!(data.places.words(), table, "the TUI offers the kernel's places, in its order");
     }
 
     /// **A day the kernel refuses at a tick keeps the last day and says why; a FAULT is held for the

@@ -393,8 +393,8 @@ fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 /// reader read the cache, and the writer's commit moved the CLI to the log. So: the only call to
 /// the cache's reading (`BreakState::started_at`) in `tm/src` and `tm-core/src` is the logged
 /// reading's own fallback (`BreakState::started_at_logged`), and the logged reading is called by
-/// the four readers there are — `Ctx::running_break` (every CLI verb), `App::running_break` (the
-/// TUI's timer and break-overrun prompt), `planwire::state_json` (the planner request) and, since
+/// the readers there are — `Ctx::running_break` (every CLI verb) and `App::running_break` (the
+/// TUI's timer and break-overrun prompt), one body since the W-47 repair (`RuntimeState::running_break_at`, README gap 5025), `planwire::state_json` (the planner request) and, since
 /// the W-46 repair, `planwire::running_worked_min` (the running block's worked minutes the binary's
 /// request and every harness's send — one function both call, README gap 4875; until it the
 /// harnesses placed the break by the cache's clock).
@@ -424,9 +424,22 @@ fn a_running_breaks_start_has_one_reading() {
         "a reader of a running break's start reads the cache's clock and not the ONE reading"
     );
     logged.sort();
+    // Since the W-47 repair (README gap 5025) the CLI's and the TUI's reader are one body,
+    // `RuntimeState::running_break_at` in `store.rs`, which each calls: three call sites of the logged
+    // reading, and the two readers named by their call of the one body.
     assert_eq!(
         logged,
-        vec!["tm-core/src/planwire.rs", "tm-core/src/planwire.rs", "tm/src/cli/ctx.rs", "tm/src/tui/app.rs"],
-        "the readers of a running break's start are not the four there are"
+        vec!["tm-core/src/planwire.rs", "tm-core/src/planwire.rs", "tm-core/src/store.rs"],
+        "the readers of a running break's start are not the ones there are"
     );
+    let mut callers = Vec::new();
+    for f in &files {
+        let text = fs::read_to_string(f).expect("a source file");
+        let rel = f.strip_prefix(&root).expect("under the root").display().to_string();
+        if non_test_lines(&text).into_iter().map(str::trim).filter(|l| !l.starts_with("//")).any(|l| l.contains(".running_break_at(")) {
+            callers.push(rel);
+        }
+    }
+    callers.sort();
+    assert_eq!(callers, vec!["tm/src/cli/ctx.rs", "tm/src/tui/app.rs"], "the CLI and the TUI read a running break through the one body");
 }
