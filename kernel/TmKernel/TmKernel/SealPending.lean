@@ -89,7 +89,12 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         exact Or.inr (Or.inl (pending_none_of_pendLines _ (Replay.cut_obs dy m t).2.2.2))
       · simp at hm
     · simp at hm
-  case extend id by_ => simp [Effect.machineOf?] at hm
+  case extend id by_ =>
+    -- D108: the open block's `ext` grown, its pending observation untouched.
+    simp only [List.filterMap_cons, Effect.machineOf?] at hm
+    obtain ⟨b, hb, rfl⟩ := Replay.extendFx_machines m id by_.val m' hm
+    left
+    simp [hb]
   case done id est actual went tags ci isPartial =>
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm

@@ -20,7 +20,7 @@
 //! steps, read back by `tm_core::planwire::read_plan`); everything around them —
 //! the files written, the events logged, the renderings — belongs to this layer.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use tm_core::capacity::{self, Exact, UnitCapacity};
@@ -311,10 +311,21 @@ pub fn write_plan(ctx: &mut Ctx, plan: &DayPlan, prios: &[Prio]) -> Result<Vec<S
     let hash = plan.hash();
     let drift = diff(&new_stored, previous.as_ref()).drift_min;
     if ctx.state.last_plan_hash.as_deref() != Some(hash.as_str()) {
+        // **The day's FIRST `plan` carries §7.4's hysteresis input** (the owner's D108, README
+        // gap 4893, parity P119): yesterday's `p` per item, the map this function stores in
+        // `.tm/state.json` below, so D42's rebuild reads it back out of the log
+        // (`DayReplay::priorities_yesterday`) and deleting the cache re-ranks nothing. Every
+        // later `plan` of the day carries none — the map is the day's, read from its first.
+        let yesterday = if ctx.plans_today() == 0 {
+            ctx.hysteresis_input().into_iter().map(|(id, p)| (id.to_string(), p)).collect()
+        } else {
+            BTreeMap::new()
+        };
         ctx.append_event(Event::Plan {
             hash: hash.clone(),
             replans_today: ctx.plans_today(),
             drift_min: drift,
+            yesterday,
         })?;
     }
     // §7.4: today's priorities become tomorrow's comparison; the map in

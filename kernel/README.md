@@ -97538,3 +97538,613 @@ archived commit onto the land, renumber, re-derive the two census reasons, full 
 
 The owner: gaps 5130 and 5131 (track R).  A later step: gap 5150 (with 5071); D108; gap 4918's goal.  Not done here: a
 TUI drive; a per-commit rebuild for reach's history scope (H's gap 5111).
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **track A** —
+     the owner's D108 (README gaps 4893 and 4876) and gap 5027 (D99's
+     re-draw cost).  Gaps 5160-5179 are this track's; parity P119 (issued as `P124`, renumbered at W-48 Land 2; `P119`-`P123`
+     are declared holes, other tracks' this run — whoever lands renumbers).
+     Cheats 320 onward (whoever lands renumbers).
+     ===================================================================== -->
+
+## Stage 6 — W-48 track A: `.tm/state.json`'s two remaining host-only values derived from the log (D108)
+
+### 1. The parity number
+
+**Parity P119 taken**: the day's FIRST `plan` line carries §7.4's hysteresis input — `"yesterday": {"<id>": <p>, …}`, yesterday's `p` per item, the map `.tm/state.json`'s `priorities_yesterday` caches — written by the kernel (`Log.Kind.schema`'s `plan` row, `FTy.prios`) and replayed (`Replay.DayAcc.yesterday`, `tm_core::log::DayReplay::priorities_yesterday`), and the replay holds the open block's own `extend` minutes since its `start` (`Replay.Block.ext`, `OpenBlock::extended_min`), so D42's rebuild restores `priorities_yesterday` and rebuilds `active.est_min` as `tm start` and `tm extend` computed it (`Ctx::rebuilt_block_minutes`) — deleting the cache after the day's first plan or mid-extend re-ranks nothing, moves no minutes and logs no `plan` line, and the rebuild's notice says RESTORED for both; fork 4748911 writes no `yesterday` key (and ignores one on read: its `define_events!` denies no unknown field), keeps no extend per block, and rebuilds no `.tm/state.json` at all (the owner's D108, W-48 track A, README gaps 4893 and 4876)
+
+### 2. What D108 is, built
+
+**The log carries the hysteresis input.**  `Log.Kind.schema`'s `plan` row gains a fourth field, `yesterday`, of a new
+field type `FTy.prios` — serde's `BTreeMap<String, u8>` with `#[serde(default, skip_serializing_if =
+"BTreeMap::is_empty")]`: absent is the empty map, an object of `u8`s is read in order (`Log.allPrios`), anything else
+is `badField yesterday`, and the empty map is not written, so every `plan` line but the day's first is the line fork
+4748911 writes (`Log.an_empty_hysteresis_input_is_not_written`).  The host writes it on the day's FIRST `plan` only
+(`planning::write_plan`: `ctx.plans_today() == 0`), carrying `Ctx::hysteresis_input` — the map `.tm/state.json`
+stores beside it — through the kernel's one writer (D16).  The replay keeps the day's first `plan`'s map
+(`Replay.DayOp.plan`, `Replay.DayAcc.yesterday`; `Replay.a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first`),
+the sealed day record carries it (`Seal.cDayAcc`'s thirtieth field), and the host decodes it
+(`DayReplay::priorities_yesterday`, field 29 of the record).  D42's rebuild reads it (`ctx::derived_state`), so
+`priorities_yesterday` leaves `HOST_ONLY_STATE` and the notice says RESTORED.
+
+**The replay holds the open block's own extends.**  `Replay.Block.ext` — the minutes its `extend` lines have added
+since its `start` — is set to 0 by a `start` (`Replay.startedMachine`) and grown by an `extend` of the open block's id
+(`Replay.extendFx`); an `extend` of any other id writes no machine.  `Replay.OpenBlock.ext` carries it to the answer
+(`SealWire.cOpenBlock`'s seventh element) and the host decodes it (`OpenBlock::extended_min`).  D42's rebuild of
+`active.est_min` is `Ctx::rebuilt_block_minutes`: `Ctx::planned_block` of the item's estimate LESS those minutes
+(each `tm extend` wrote its minutes onto the line, D62) plus the minutes — `round(r·m) + by`, which is what `tm start`
+and `tm extend` wrote, where until D108 it was `round((r + by)·m)` (gap 4876).  `active.est_min` STAYS in
+`HOST_ONLY_STATE`, its reason restated: the log still cannot fix it when the item's estimate is edited while the block
+runs, or the duration model is refitted after its start (gap 5160).  Taking it out was tried and measured: check 13's
+frozen class worlds hold an `est_min` the harness drew independently of the line (156 of them failed clause 5, e.g.
+`running/home`'s 160 against a line that plans 10), so the table, not the derivation, is what those worlds stand on.
+
+### 3. Laws restated (D5)
+
+* **an_extend_changes_only_the_bookkeeping_and_its_extended_minutes** (D14's): its effects were the four keys `[day,
+  global, day, item]`.  **Refuted as written** (`…_is_refuted`: with `a`'s block open an `extend` of `a` writes the
+  machine too).  **Restated** as `an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks`: the four
+  keys `++ (extendFx …).map Effect.key` (empty, or the machine alone, `extendFx_keys`), the item's `extended_min` as
+  before, the machine the old one or — when the open block is the item's — that block's `ext` grown (a disjunction over
+  `extendFx`'s own effects; a proof-only `def` of that machine was written first and check 12 found it emitted and
+  reached by nothing, so it is gone), and nothing outside `[day, global, item, machine]` moves.  **New implies old
+  on its subdomain**: `…_with_no_block_of_it_open` is D14's statement verbatim under the hypothesis that no open block
+  is the item's, derived from the restatement.
+* Every other law the two changes touch keeps its statement and is re-proved over the new constructors: the
+  conservation law (`conserves_arm`'s `extend` case), the late-binding law (`arm_sleptOk`), the observation laws
+  (`arm_obs`, `SealLaw`'s duration case), the block-only split (`arm_split_of_not_brk`), and the seal's machine laws —
+  `SealStep`'s `arm_mi_of_not_brk` and `arm_brks`, `SealPending`'s pending observation, `SealCutMachine`'s
+  `arm_lastCut`, `arm_interrupt` and `arm_brkOpen` — each through `Replay.extendFx_machines` (the machine an `extend`
+  writes is the old one with its open block's `ext` grown).  The codec round trips (`Seal.cDayAcc`, `Seal.cBlock`,
+  `SealWire.cOpenBlock`, `readCkpt_emitCkpt`, the day record's) hold by their generic `rt`.  The log's grammar laws
+  (`readF_renderF`, `readArgs_of_agrees`, `the_log_reads_what_it_renders`, `lineTooLong_bounds_every_string`,
+  `allFiniteO_renderArgs`, `readF_readable`) gain the `prios` arm, statements unchanged.
+* Witness constructors outside this track's files gained the new field and nothing else: three `OpenBlock`s in
+  `Planner.openWorkedMin_is_the_banked_minutes_and_the_running_stretch`, one in
+  `PlannerWit.the_open_row_carries_the_logs_worked_minutes_is_refuted` (track G's files this run; the edit is `, 0` in
+  four anonymous constructors and moves no line), three in `WallTimer`'s witnesses.
+
+### 4. Driven: deleting `.tm/state.json` at three instants, the old binary and this one
+
+Both binaries on the same steps (`eef6732`'s, built at the land, and this tree's), each world a `tm init --example`
+tree at `--now` stamps in 2026-09-07/08 (`-05:00`); the comparison is the rebuilt `.tm/state.json` against the deleted
+one (`diff`), `tm now`'s text, `tm --json plan`'s bytes and the log's lines, all asked at one instant before and after
+`rm .tm/state.json`.  Load average 6-10 throughout (a mutation run in a clone).
+
+* **After the day's first plan, the damping binding** (gap 4893's world, rebuilt): `backlog.md` gains `- [ ] 3 1b Grant
+  report  due:2026-09-11 ^hy1`; `tm plan` at 09-07 09:00; the line hand-edited to `9b` overnight; `tm plan` at 09-08
+  09:00 (the day's first plan: §7.4 holds `hy1` at p5 against yesterday's p6).
+  * `eef6732`: before `hash 0c52566d0999ab16 hy1 p 5`, the 13:00 row `m4`; after the deletion `hash fc4fea2de547478b
+    hy1 p 3`, the 13:00 row `hy1`, a fifth log line `{"ev":"plan","hash":"fc4fea2de547478b",…}`, the notice `RESET,
+    both deliberately: priorities_yesterday …` and `.tm/state.json` differing by the 27-item map and the hash.
+  * this tree: the 09-08 `plan` line carries `"yesterday":{"Factorio":5,…,"hy1":6,…}` (27 items); after the deletion
+    `hash 0c52566d0999ab16 hy1 p 5`, the 13:00 row `m4`, 4 log lines, the notice `RESTORED from the log:
+    priorities_yesterday — 27 item(s), from the day's first plan line (D108)`, and `.tm/state.json`, `tm now` and
+    `tm --json plan` **identical**.
+* **Mid-extend, under a learned multiplier** (gap 4876's world): `.tm/model.json` `{"duration": {"_default": 1.3}}`;
+  `tm start ^t3` 09:00 (its line `est:1b`: 78 minutes planned), `tm extend 25m` 09:20 (`now 103m`), `tm extend 1b`
+  09:40 (`now 163m`, the line `est:145m`); asked at 09:50.
+  * `eef6732`: the rebuild says `est_min` 189 (`round(145 × 1.3)`), `tm now` `50m of 189m … running · 139m left`, the
+    plan hash `fea849e174b7f1a9` → `fb465accbf464d35` and a fifth log line, a `plan` event.
+  * this tree: `est_min` 163 (`round((145 − 85) × 1.3) + 85`), the notice `RESTORED from the log: active.est_min is
+    163m — the minutes tm start planned plus the 85m its logged extend lines added (D108)`; state, `tm now`, the plan
+    and the log **identical**.
+* **Mid-break** (the extend world, `tm extend 25m` 09:20 and `tm break 15m` 09:30, asked at 09:35): `eef6732` rebuilds
+  `est_min` 111 where the cache held 103 and `tm now` says `30m of 111m · paused`; this tree rebuilds 103, the break and
+  the pause (D105) and the state, `tm now`, the plan and the log are **identical**.
+
+### 5. Gaps (5160-5179 are this track's)
+
+**Gap 5160 — `active.est_min` is still host-only where the item's estimate moves mid-block (A).**  1. *What.*  D108's
+rebuild computes `active.est_min` as `tm start` and `tm extend` did: the item's estimate less the block's logged extends,
+through the multiplier, plus the extends (`Ctx::rebuilt_block_minutes`).  The cache is written by those two verbs
+alone, so an estimate edited while the block runs (`tm edit ^id est=…` writes the line and not the cache) or a duration
+model refitted after its start (`tm model --fit`) moves the rebuild and not the cache, and deleting `.tm/state.json`
+then moves `tm now`'s minutes, the plan and the log (a `plan` line).  2. *Why not taken.*  Following the verb all the
+way means replaying every writer of the line (the `edit` event carries `from`/`to` text, not minutes) and freezing the
+multiplier at the start (no event carries it); and taking `active.est_min` out of `HOST_ONLY_STATE` was measured to fail
+check 13's clause 5 on 156 frozen class worlds whose cached `est_min` the harness drew independently of the line.
+3. *Cost.*  The three drives of §4 move nothing; a mid-block estimate edit or refit followed by a deletion does.
+4. *Clears it.*  A step that logs the planned minutes on `start` (a log-format change, D16's writer, a parity number) and
+re-draws the class worlds under D64(b).
+
+**Gap 5161 — `RuntimeIn.yesterday`'s decoder exit is not taken; the host-value half already was (A).**  1. *What.*
+The brief scheduled "`RuntimeIn.yesterday` leaves the wire as a host value (D112 deferred that exit to D108) and the
+matching inputs-exempt line goes."  Measured: the host has sent no `state.yesterday` since W-34's repair
+(`tm_core::planwire`'s module header: "it writes none of `state.lastHash`, `state.yesterday` or `overrides`"), so the
+host-value half was true before this step.  What remains is the decoder: `PlanWire.readYesterday`/`readYesterdayPair`
+and their four laws, `Planner.mkYesterday?` and its two laws, the field `Planner.RuntimeIn.yesterday` (which
+`inputs-exempt.txt`'s line and `written-exempt.txt`'s `planner.state.yesterday` line answer), `PlanDiff`'s extension law's
+conjunct and two `RuntimeIn` constructors in `PlannerWit`.  2. *Why not taken.*  It cannot be "PlanWire's decoder exit
+only": with the reader gone, `mkYesterday?` is emitted and reached by nothing (check 12 fails, and `reach-exempt.txt` may
+only shrink), and check 13's line stands until the FIELD leaves `Planner.RuntimeIn` — so the exit is `Planner.lean`,
+`PlannerWit.lean` and `PlanDiff.lean` as well, the first two track G's this run, and deleting ~30 lines of `Planner.lean`
+drifts every pin site below them in `mutations.txt` (129 rows) for a re-verification of hours.  Gap 4956's recipe for
+`lastHash` is the recipe.  3. *Cost.*  None silent: both exemption lines stand, dated, naming the exit.  4. *Clears it.*
+The step after track G lands, on gap 4956's recipe.
+
+**Gap 5162 — a day whose first `plan` an older binary wrote carries no hysteresis input (A).**  1. *What.*  The replay
+keeps the day's FIRST `plan`'s map (`Replay.DayAcc.yesterday`); a binary before D108 wrote that line without the key, so
+on that day the rebuild restores an empty map, as before D108.  The day's first plan is the ledger day's (the day index
+`dy`), the same day the rebuild reads `last_plan_hash` from.  2. *Why.*  A log line is not rewritten.  3. *Cost.*  The
+day the binary is upgraded, a deletion after its first plan still resets the map; from the next day on it does not.
+4. *Clears it.*  Nothing owed.
+
+**Gap 5163 — before the day's first plan §7.4 still reads `.tm/last_plan.json` (A).**  1. *What.*
+`Ctx::hysteresis_input` answers the previous day's priorities from `.tm/last_plan.json` until the day's first plan writes
+them into the log; deleting THAT cache before the day's first plan resets the hysteresis input as deleting
+`.tm/state.json` used to.  2. *Why.*  D108 names `.tm/state.json`'s values; the previous day's own priorities are written
+nowhere in the log (no `plan` line carries today's `p`).  3. *Cost.*  Deleting `.tm/last_plan.json` (not `state.json`)
+before the day's first plan re-ranks a damped item.  4. *Clears it.*  The owner, if `last_plan.json` is to be derivable:
+then the day's last `plan` would carry the day's own priorities.
+
+### 6. What else moved, named (RULE M)
+
+Every expectation of the binary's own output that moved is P119's, each named:
+* `tm/tests/cli_switch_acceptance.rs`: `deleting_the_runtime_state_changes_nothing` — the rebuilt `.tm/state.json` IS the
+  deleted one (it was "the deleted one minus the hysteresis map"; the cache's map holds 27 items there, asserted as the
+  bite), and the notice names `priorities_yesterday` as RESTORED (it named it RESET);
+  `deleting_the_runtime_state_keeps_the_last_arrival_of_the_day` — the same whole-record equality where it set the map
+  to `{}`; `the_rebuild_notice_names_only_what_did_not_come_back` — the notice says `RESTORED from the log:
+  active.est_min` where it said RECOMPUTED.
+* `tm/tests/fixtures/fork-4748911-week-grid.jsonl`: 27 of its 46 lines re-drawn under D64(b) (`TM_GRID_BLESS=1`,
+  `TM_GRID_BLESS_REDRAW` naming `P124`, now P119, an oracle built fresh from `4748911`): each line's `world` moved, and only its
+  `.tm/log.jsonl`, and only by a `"yesterday":{…}` key on 37 `plan` lines (the day's first after a day planned before
+  it; checked by a script over both versions: no other key, line or file moved); the fork's grid and the cells moved on
+  none (the gate refuses a moved `fork` field).  The 27: `cli/week`, `cli/week-sealed`, week draws 1, 3, 6, 7, 9-16,
+  19, 21-27, 29-31, midnight draws 4 and 7.
+* `kernel/tm-kernel-ffi/tests/kernel.rs`' `the_log_op_answers_the_day_facts` and `stack.rs`' two pins of an empty day
+  record gain the record's thirtieth field, `[]` — the wire, not a user's output.
+* `tm/tests/kernel_replay_parity.rs`' harness reads the record's thirtieth field and asserts it EMPTY on every log it
+  compares with fork 4748911 (none of them carries a `yesterday` key).
+* The behaviour rows: `tm/tests/cli_runtime_state_d108.rs`, three tests — §4's three worlds, each asserting the bite
+  (the plan line's map and the binding `p5`; `tm extend`'s `now 163m` and the line's `est:145m`; the running break),
+  then the rebuilt file equal to the deleted one, `tm now`, `tm plan --json` and the log byte-identical, and the notice.
+* `tm/tests/planner_invariants.proptest-regressions` gained a seed during this step's first workspace run
+  (`the_kernel_plans_every_fresh_class_draw`: "no what-if was asked in 80 fresh draws") while `active.est_min` was,
+  for one build, out of `HOST_ONLY_STATE` (gap 5160's measurement): most fresh draws were refused as worlds the binary
+  could not hold.  Replayed against the committed code the seed passes (the second run replays it first); it is
+  deleted deliberately, the D46 way, and named here.
+
+### 7. Brief corrections
+
+1. "`RuntimeIn.yesterday` leaves the wire as a host value": it left in W-34's repair — the host sends no
+   `state.yesterday` (`tm_core::planwire`'s header) — and what is left, the decoder and the field, is not
+   `PlanWire.lean`-only (gap 5161).
+2. "the matching inputs-exempt line goes": it cannot while the field is in `Planner.RuntimeIn`, a track G file (gap
+   5161).
+3. The brief's file list says `Planner.lean` and `PlannerWit.lean` are not this track's; the field `Replay.OpenBlock.ext`
+   forced `, 0` into four anonymous `OpenBlock` constructors there (§3) — no line moved, no statement changed.
+4. "Deleting `state.json` at ANY instant then changes nothing": true at the three instants driven; not at an instant
+   after a mid-block estimate edit or model refit (gap 5160), and not for `.tm/last_plan.json` (gap 5163).
+
+### 8. Acceptance of the first commit (capped, `MemoryMax=40G`)
+
+* `check.sh`: all seventeen lines `ok` — the axiom audit 6,614 theorems; Negative.lean rejected (cheats 320-323 each
+  refused by its stated reason, read off the error lines); the FFI 97 tests; corpus 29/37 files and 4/5 whole plans;
+  stage goals 1 (`plan_places_no_block_over_a_break`, gap 4918: no goal added or deleted); citations 65,208 (0
+  unresolved); new definitions mutated 828 rostered, 0 owed; parity `P1-P124` (5 declared holes, next free `P125`, on the track's branch before W-48 Land 2 renumbered); twins
+  0 UNANSWERED; reach 1,621 reachable, 1,097 exempt (no entry added; the `## Log.lean` and `## Replay.lean` census
+  reasons re-derived: 56 of 108 and 101 of 241); checks 13 and 14 ok.
+* `cargo test --workspace --no-fail-fast`, THREE runs: 2,969 passed / 0 failed / 53 ignored over 162 result lines each
+  (18 m 0 s, 18 m 5 s, 18 m 4 s; load average 3.6-8.1 at their starts and ends); no `.proptest-regressions` file moved.
+* `kernel/tm-kernel-ffi`'s `cargo test`: 105 passed (8 corpus, 90 kernel, 7 stack).
+* D40, in a clone (`git clone --shared`, never this worktree): the step's new and changed definitions —
+  `Log.prioStep`, `Log.allPrios`, `Log.Event.isStateChange` (its `plan` arm), `Replay.extendFx`,
+  `Replay.arrivalsAndPlans`, `SealWire.cOpenBlock` — each PINNED, `cOpenBlock` UNFOLDABLE as before; and the 196 roster
+  rows whose pin site the inserted lines moved (Log 18, Replay 56, Seal 11, SealStep 2 definitions) re-verified with
+  `--verify --write`: 0 failed.  The first run found `Event.isStateChange` SURVIVED at `fun _ => false` (nothing told it
+  from the constant once its `plan` arm changed shape) and then ALONE behind an `rfl` witness;
+  `Log.a_wake_is_a_state_change_and_a_plan_is_not`, decided, pins it.
+
+### 9. Gap 5027 — D99's re-draw, compiled linear per mark (the second commit)
+
+**What was slow, measured before touching it** (callgrind over `tm now` at 150 and 400 pause/unpause pairs on one open
+block): `pieces` was ~70% of the instructions — the instant order's two decisions under `lift`'s `find?` and
+`nextStart`'s fold, once per piece over every span, so `k²` per settle and `k³` over a day of `k` marks — and `redraw`'s
+`find?`/`filter` another ~10%, also `k²`.  With `pieces` compiled, the next 28% was `Seal.settleReads`' `redrawReads`
+(the same `filter` the seal's cut rule asks at every mark), and after that `mergeSort` (51% inclusive: the spans sorted
+at every settle though a block's own pauses are already in order).
+
+**Three `@[csimp]` twins, each proved equal to the definition every theorem reads** (so no law moved, and D99's laws
+are untouched):
+* `Replay.pieces_eq_piecesFast`: `piecesFast` takes the nonempty spans as given (`spanOk`), or sorted by start
+  (core's merge sort, the comparison written in place: gap 5165), and when they are `apart` — each ending at or before the next one starts — draws the
+  pieces in one pass (`sweep`); otherwise it is `pieces`.  The proof (`piecesGo_eq_sweep`) is an induction over the
+  sorted spans with the slow fold's fuel as the invariant's bound, through `lift_of_cover` (the one span covering an
+  instant decides `lift`), `liftGo_succ` (one more jump changes nothing once fuel suffices), `nextStart_of_least` and
+  `nextStart_none_of` (the earliest candidate is the next span's start, or there is none).
+* `Replay.redraw_eq_redrawFast`: when the old pieces' and the new spans' starts strictly increase (`startsUp`),
+  `redrawWalk` merges them once — kept, un-drawn and drawn in their orders — `redrawWalkGo_spec` proving the merge is
+  `redraw`'s three lists; fuelled one step per element, so a `decide` reads it.
+* `Seal.redrawReads_eq_redrawReadsFast`: the merge's third list, for the seal's cut rule.
+
+**Witnessed** (D40: `mutate.py` found `piecesFast`, `redrawWalk` and `redrawFast` told from a constant by their csimp
+proofs ALONE until each was run): `piecesFast_answers_through_the_pass`,
+`the_merge_keeps_unmoved_pieces_and_redraws_moved_ones`, `redrawFast_answers_through_the_merge_and_else_through_redraw`,
+`Seal.redrawReadsFast_reads_through_the_merge_and_else_through_redrawReads`; the guards both ways
+(`the_pass_is_guarded`, `the_merge_is_guarded`); cheats 324-325.
+
+**Measured — `tm now` over N pause/unpause pairs on one open block, one day** (`drive/perf.sh`, the gap's shape: a
+`tm init --example` tree, `wake` 06:05, `start ^t3` 07:00, the pairs 40 s and 20 s apart, the cache deleted, one cold
+call, then three timed calls at 22:00; debug-profile binaries; `uptime` load 5.2-7.1 throughout, 2026-10-11 13:00-13:05):
+
+| N pairs | before (D108's binary, no twins), ms | after, ms |
+|---:|---|---|
+| 50 | 48, 49, 49 | 42, 41, 39 |
+| 100 | 121, 122, 122 | 58, 58, 57 |
+| 200 | 617, 619, 613 | 113, 108, 106 |
+| 400 | 5,017, 5,130, 5,017 | 258, 267, 248 |
+| 800 | 42,496, 42,621, 46,429 | 691, 681, 695 |
+| 1,600 | not run (cubic: ~6 min by the trend) | 2,393, 2,439, 2,353 |
+
+Doubling N multiplied the time by ~2.5, 5, 8 and 8.5 before (cubic in the marks) and by ~1.4, 1.9, 2.4, 2.7 and 3.5
+after: **each mark's settle is now linear in the block's pieces** (one pass, one merge, one ordered check; a sort only
+when the spans arrive out of order), so a day of `k` marks is quadratic in `k`, not cubic.  It is not linear over the
+whole day: every mark still re-draws the whole open block (gap 5164).
+
+*The world, so it can be rebuilt* (the script stays in scratch): `tm --dir T --now 2026-09-07T06:00:00-05:00 init
+--example`; `.tm/log.jsonl` replaced by a `wake` at 06:05 (`slept_min` 480), a `start` of `t3` at 07:00, then N pairs
+`pause`/`unpause` of `t3` 40 s and 20 s apart (one pair a minute); `.tm/cache` and `.tm/state.json` deleted; one
+`tm --dir T --now 2026-09-07T22:00:00-05:00 now` (genesis), then three timed.  At one pair a minute only 900 pairs
+fall before 22:00, so the 1,600 row also holds 700 pairs stamped after `now` (the log's own marks, read as written).
+
+*Re-measured on the committed binary* (after the comparator was written in place, gap 5165; 14:44, load 4.6-4.9):
+N = 50: 44, 40, 39 ms; 100: 57, 55, 56; 200: 105, 98, 99; 400: 229, 226, 227; 800: 644, 648, 646.
+
+*The answers did not move* (a twin is proved equal; this drives it): on the world above at N = 30 and N = 200, `tm now`,
+`tm --json plan` and `tm review day` at 22:00 through the pre-twin binary and the committed one are byte-identical —
+28,635 and 106,326 bytes (`cmp` silent).
+
+*Acceptance of the second commit* (capped): `check.sh` seventeen lines ok — axiom audit 6,636; FFI 97; corpus 29/37 and
+4/5; goals 1; citations ok; mutated 838 rostered, 0 owed; parity `P1-P124`, 5 holes; reach 1,630 reachable, 1,097
+exempt; fields 17/17; inputs 33 read, 3 exempt; sent 174/173; written 212/207; replay 96.  `cargo test --workspace
+--no-fail-fast` **three runs**, each 2,969 passed / 0 failed / 53 ignored over 162 result lines (17m43s, 17m7s, 17m5s;
+load 3.1-6.4).  `kernel/tm-kernel-ffi` `cargo test` 105 passed.  Mutations (D40, in a clone): the twelve new
+definitions all PINNED once the witnesses ran them (`piecesFast`, `redrawWalk` and `redrawFast` were ALONE before);
+the fixture spanAt and the comparator spanLe were removed rather than exempted (gap 5165).
+
+### 10. Gaps closed and opened by the two commits
+
+* **Closed**: **4893** (D108: `priorities_yesterday` derived from the day's first `plan` line); **4876** (D108:
+  `active.est_min` rebuilt as `tm start` and `tm extend` computed it); **5027** (each mark's re-draw linear in the
+  block's pieces, §9 — its whole-day half is 5164).
+* **Open**: 5160, 5161, 5162, 5163 (§5) and:
+
+**Gap 5164 — a day of `k` marks on one open block still costs `k²` (A).**  1. *What.*  `Replay.settle` re-draws the
+whole open block at every mark (`openPieces`, `redraw`, and the seal's `settleReads` beside them), so a mark costs the
+block's pieces, now linearly (§9), and `k` marks cost `k²`: 2.4 s at 1,600 pause pairs on one day.  2. *Why not
+taken.*  A linear day needs a settle that re-draws only the pieces a mark meets — the gap's other suggestion — which is
+a change to `settle`'s definition and so to every D99 law that reads it (D5 re-proves them), not a twin; the twins were
+the step that leaves every law untouched.  3. *Cost.*  A block kept open for days with hundreds of pauses costs every
+verb the quadratic term (0.7 s at 800 pairs, 2.4 s at 1,600); an ordinary day (a handful of pauses) is ~40 ms.  4.
+*Clears it.*  An incremental settle, its laws re-proved.
+
+**Gap 5165 — check 12 does not follow a named comparator handed to `mergeSort` (A).**  1. *What.*  The compiler
+passes a named comparison to core's merge sort as a static closure object (`…___closed__0_value = {.m_fun =
+(void*)…___boxed}`), and `callgraph.py`'s walk does not read those initialisers, so the comparison is emitted and
+reached by nothing to check 12 — which is why `Replay.obsLe`, `Replay.segLe` and `Planner.rowLe` are grandfathered entries of
+`reach-exempt.txt`.  This step's spanLe met it, and since the file is shrink-only the comparison is written in place
+in `piecesFast` instead (a lifted lambda is no source definition).  Likewise a witness fixture `def` (the step's
+spanAt) is emitted and unreached; its spans are written out.  2. *Why not fixed.*  `callgraph.py` is check 12's,
+not this track's, and a walk that follows static closures would move the census of every section.  3. *Cost.*  A
+comparator cannot be named, witnessed or mutated as its own definition (the merge sort's order only chooses between
+the one pass and `pieces`, both proved equal, so no answer depends on it).  4. *Clears it.*  A step that teaches
+`callgraph.py` the static closure initialisers and re-derives the census; the three grandfathered comparators then
+leave the file.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **track G** —
+     the last goal, `Goals.plan_places_no_block_over_a_break` (README gap 4918).
+     Gaps 5180-5199 are this track's (5180 and 5181 used).  No parity number is
+     issued.  Files held: Goals.lean, PlanCheck.lean, PlannerWit.lean and the
+     append-only files.
+     ===================================================================== -->
+
+## Stage 6 — W-48 track G: the last goal reduced to three facts about the replay, and a third world it fails on
+
+**The burn-down stays 1.**  The goal was neither proved as written over the runs the decoder builds nor refuted on a
+world with one reading, so it stays in `Goals.lean` (AGENTS §3.2) with its doc comment brought to what this step
+leaves.  What landed is the reduction of the goal to three facts about the replay's answer, its witnesses both ways, and
+a third world — written by the shipped binary, with a forward clock — on which the goal is false and which stands on a
+kernel reading (gap 5180), so it is no refutation either.
+
+### 1. The reduction (`PlanCheck.lean`, appended)
+
+`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` is the goal's statement **as written** — every Block
+row of `dayPlan r` against every Break row — with the calendar bound every law of `PlanCheck` carries (`hnowcal`) and
+three hypotheses, each a decidable fact about today's record in the replay's answer (`PlanReq.todayRecord`, D24's
+seam) and the runtime's running break, in seconds, with nothing about the planner in them:
+
+* `hrec` — no Block segment of today's record lies across a Break segment of it;
+* `hopen` — the open block's `since` is at or after the end of every Break segment of it;
+* `hrun` — every Block segment of it ends by the instant the running break (`RuntimeIn.brk`) began.
+
+Each is stated over the segments that are nonempty in seconds, which is every segment a row is drawn from (a replayed
+row is a nonempty clip of its segment, `Planner.pastSpans`): the replay's own pieces avoid only nonempty spans
+(`Replay.piecesGo_avoids`), and a zero-minute `break` line — `tm break` ended at once — would otherwise fail `hopen`
+on a day with nothing wrong in it.
+
+Every other pair of rows was already a theorem and the proof composes them: the Block rows from `now`
+(`PlanCheck.a_block_row_from_now_clears_a_break_row`; the reservation starts at `now`, an assigned row at or after it),
+the open row against the running break (`Planner.the_open_row_lies_under_no_running_break`, gap 5020) and any Block
+against a kept break (`Planner.a_block_row_clears_a_kept_break`).  The three hypotheses are what the replayed rows owe:
+a replayed row lies inside its record segment (`PlanCheck.a_past_row_lies_inside_its_segment`, through
+`Planner.clipCut_within`), the running break's row starts where the break started
+(`PlanCheck.the_running_break_row_starts_where_it_started`), and rows apart in seconds stay apart through `segOf`
+(`PlanCheck.segOf_apart`).  It replaces `PlanCheck.PastPays`' row-level `offBreak` for this law: a statement about the
+replay's record rather than about the day's rows, which is what gap 4918 asked the goal to be stated over ("a
+statement of which runs the decoder builds").
+
+The replay's half of `hopen`, for the breaks the machine holds, is `PlanCheck.settle_runs_after_every_span_it_nets`:
+after `Replay.settle` the open block's clock runs from at or after the end of every nonempty span it nets (its idle
+spans and the held breaks of its ledger days), from `Replay.runFrom_step_ge`.  The closed side's step half of `hrec` is
+`PlanCheck.netOne_draws_beside_the_break`: every Block segment `Replay.netOne` writes for a late `break` `[s, e)` lies
+beside it (D100), as `Replay.settle_avoids_every_span_it_nets` already said of the open block.
+
+**Laws restated: none.**  No theorem's statement changed; the goal's statement is unchanged.
+
+### 2. A third world: a block closed while a logged break runs (gap 5180) — driven
+
+Two machines on one synced plan directory (the clock-skew world D78 already treats as real, with no skew at all):
+machine A runs `tm break 15m` at 07:30 while `^t1` runs; machine B, which has not yet seen A's line, runs `tm done` at
+08:05; the sync appends B's line after A's.  Driven on this branch's binary (`cargo build -p tm` from `eef6732`'s tree,
+scratch target directory), `tm init --example`, America/Chicago:
+
+```
+$ tm --dir A --now 2026-09-09T06:30:00-05:00 wake        → wake 06:30 · slept 0m
+$ tm --dir A --now 2026-09-09T07:00:00-05:00 arrive lounge
+$ tm --dir A --now 2026-09-09T07:05:00-05:00 start ^t1    → ▶ ^t1 Read ch.6 §1–2 · 07:05 · pred 3
+$ cp -a A B
+$ tm --dir A --now 2026-09-09T07:30:00-05:00 break 15m    → break 15m
+     A's log: {"t":"2026-09-09T07:30:00-05:00","ev":"break_start","planned_min":15}
+$ tm --dir B --now 2026-09-09T08:05:00-05:00 done         → ✓ ^t1 Read ch.6 §1–2 · 60m/60m
+     B's log: {"t":"2026-09-09T08:05:00-05:00","ev":"done","id":"t1","est_min":60,"actual_min":60,"tags":[],"ci":5}
+$ tail -1 B/.tm/log.jsonl >> A/.tm/log.jsonl; rm A/.tm/state.json
+$ tm --dir A --now 2026-09-09T09:00:00-05:00 plan
+tm: RESTORED from the log: `break` — began 07:30, 15m planned — from the `break_start` `tm break` logged (D105).
+07:05  5 p3 ✓ Read ch.6 §1–2               @m3  1b  (60m)
+07:30  ·      break 1h30m
+$ tm --dir A --json --now 2026-09-09T09:00:00-05:00 plan     → segments[0] 07:05–08:05 block t1, segments[1] 07:30–09:00 break
+$ tm --dir A --json --now 2026-09-09T09:00:00-05:00 review day   → "block_min": 60, "load": 60.0
+```
+
+Then the break is ended (`tm --now 09:00 break`, which writes `{"t":"2026-09-09T07:30:00-05:00","ev":"break",
+"planned_min":15,"actual_min":90}`) and **the same block reads differently with nothing new said about it**: `review
+day` `block_min` **25**, load 25.0, and `tm plan` draws `07:05 … ✓ Read ch.6 §1–2 (25m)` — the owner's D100 nets the
+break from the closed block once its line arrives.  And on ONE machine (`tm done` on A at 08:05) the binary ends the
+break first, writing `break … actual_min 35` and `done … actual_min 25` (`break ended · 35m of 15m · ✓ ^t1 … 25m/60m`).
+So while the break runs, 07:30–08:05 is read as block AND as break (the plan's two rows, the review's 60), the reading
+D87 and D94 declined; once it ends, one way.
+
+The kernel's computation of the same day is `PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break`
+(`decide`, probed at 8 GB / 120 s): `witLines`' wake, arrival and `m1`'s 07:05 `start`, a `break_start` at 07:30 and
+`m1`'s 08:05 `done` after it (`PlannerWit.closeUnderBreakLines`, resumed by `Seal.resumeRun` from the empty
+checkpoint, `PlannerWit.closeUnderBreakRun_resumes_ok`), the runtime the binary rebuilds from that log
+(`PlannerWit.closeUnderBreakState`, which `BreakState.wf` accepts): the replay's running break is 07:30, the day's rows
+before `now` are `m1`'s Block 07:05–08:05 and the running Break 07:30–14:00 (and the meeting under it), `hrec` and
+`hopen` hold and `hrun` fails.  **So the goal is false on a request the decoder builds from a log the binary writes —
+and it is not refuted here**, because the falsifying span is read two ways and the mechanism is a kernel reading:
+`Replay.cut` and `Replay.doneClose` draw a block's pieces over `Replay.blockSpans`, which holds the block's idle spans
+and the held breaks but not the running one (`Replay.Machine.brkOpen`).  A refutation standing on it would be the
+campaign's lesson 4.
+
+### 3. The witnesses both ways (`PlannerWit.lean`, appended)
+
+* `PlannerWit.the_apart_replay_holds_at_the_mid_break_request` — all three hold at the mid-break day (D100's cut
+  pieces), and `PlannerWit.the_break_law_holds_whole_at_the_mid_break_request` applies the reduction to that day's
+  every Block and Break row, the replayed ones included — the goal's statement at a request, through the theorem and
+  not by computing the day (non-vacuity: `the_mid_break_day_cuts_its_block_around_the_break` lists its two replayed
+  Block rows and its replayed Break row).
+* `PlannerWit.the_apart_replay_fails_at_the_pre_d100_request` — `hrec` bites (AGENTS §5.8) at the pre-D100 run (a
+  run the decoder does not build).
+* `PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break` — `hrun` bites, at a run it does build
+  (§2).
+
+The new `decide` witnesses carry the file's own `set_option maxRecDepth 400000 in` (the value the module's 434 other
+uses carry; without it the elaborator stops at its default depth on these days, measured): no bound was raised beyond
+the module's existing one.  Each was probed under `MemoryMax=8G timeout 120` (§5.10a): the whole scratch file of all
+five elaborated in 2.4 s.
+
+### 4. What remains of the goal, exactly (gap 5181)
+
+The goal is discharged by three things, in order.
+
+1. **Gap 5180 closes** — the kernel stops reading a block closed under a running break two ways.  A definition of
+   `Replay.lean`'s, which this track does not hold; recorded for the land and, if it needs one, the owner.
+2. **The fold invariant over the runs `Seal.resumeRun` builds**, in two halves:
+   * *the machine's geometry* — for the state after every step, every piece the open block has drawn
+     (`Replay.Block.drawn`) lies beside every nonempty span in `Replay.blockSpans` of it, and every piece a held closed
+     block has drawn (`Replay.Closed.drawn`) lies beside every nonempty held break of a ledger day at or after its own.
+     Each arm's step half is a theorem already — `Replay.settle_avoids_every_span_it_nets`,
+     `Replay.cut_avoids_every_span_it_nets`, `PlanCheck.netOne_draws_beside_the_break` — and pruning
+     (`Replay.pruneBrks`, `Replay.pruneClosed`) only drops obligations; what is not written is the induction through
+     `Replay.arm`'s arms and `Replay.stepWith`;
+   * *the accounting* — every Block segment of a day record is, as a multiset, a drawn piece of the open block or of a
+     held closed block filed under that day, or a piece of a block no longer held; and every Break segment of a day
+     record is a break the machine holds on that ledger day.  With that, a break's arrival re-draws every Block it lies
+     across (`Replay.brkFx`'s `settle` and `netClosed`), and `hrec`/`hopen` follow — EXCEPT for a block no longer
+     held, or a break no longer held, which are README gaps 4917 and 4914: those bounds must be named in the
+     invariant's hypotheses or removed by an owner decision (gap 4917's "key it on `now`").  Then the two halves are
+     carried across a checkpoint (`Seal.resumeRun` resumes a machine the checkpoint holds) by the window laws.
+3. **`hrun` against the run's own running break** — stated over `Seal.Answer.openBreak` rather than
+   `RuntimeIn.brk`, which needs README gap 4761 (the planner reads the host's copy of the running break), and true
+   once step 1 has closed: no Block segment of today's record then ends after the running break began.
+
+### 5. Mutations (D40)
+
+Five definitions are new, all fixtures of `PlannerWit.lean` (the theorems added are theorems, and `PlanCheck.lean` gained
+none), each mutated by `kernel/mutate.py --write` in a `git clone --shared` of this tree (scratch `w48/g/mclone`, capped
+16 GB), five rows appended to `kernel/mutations.txt`:
+
+| definition | constants | verdict |
+|---|---|---|
+| `PlannerWit.closeUnderBreakStartLine` | `default` (no `Inhabited Log.Line`), `⟨0, none⟩` | PINNED by `⟨0, none⟩`: `the_close_under_a_running_break_lays_its_block_across_the_break`, its statement decided false |
+| `PlannerWit.closeUnderBreakLines` | `default`, `[]` | PINNED by both, the same theorem |
+| `PlannerWit.closeUnderBreakRun` | `default` | UNFOLDABLE (no `Inhabited Seal.Run`), a witness fixture |
+| `PlannerWit.closeUnderBreakState` | `default` | UNFOLDABLE (no `Inhabited RuntimeIn`), a witness fixture |
+| `PlannerWit.theCloseUnderBreakRequest` | `default` | UNFOLDABLE (no `Inhabited PlanReq`), a witness fixture |
+
+The mutation clone ran on the tree before the hypotheses were guarded to nonempty segments (§1); that edit kept
+`PlannerWit.lean`'s line count and every definition's body, so the five rows' body hashes and pinned line (13190) are
+this tree's.  One in-place `mutate.py --gate` was started in the worktree by mistake and stopped by its own signal
+handler; its sidecar held `PlannerWit.lean`'s original bytes, which were byte-identical to the file it left (checked),
+and the sidecar and lock were removed before anything was built or committed.
+
+### 6. Acceptance
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16 GB for the mutation run),
+from the worktree `w48-g` over the tree this commit holds (base `eef6732`).  The machine was shared with track A's
+builds throughout.
+
+* **`check.sh`** (`scratchpad/w48/g/check-3.log`; 10:44:27-10:44:59, warm, load 6.23 → 6.17; the first full run over this
+  Lean, `check-1.log`, 6m27s at load 3.64 → 4.98, every line ok; `check-2.log` was red on check 10 alone, a `P119` this
+  block spelled across a line break, repaired) — **seventeen lines, every one ok, exit 0**: the build; totality;
+  the axiom audit **6,607** theorems (eleven appended by this block); `Negative.lean` rejected; FFI **96** tests; the
+  corpus 29/37 files and 4/5 whole plans; stage goals **1** (`Goals.plan_places_no_block_over_a_break`, all stage 6);
+  prose citations 65,165 (61,354 resolved, 3,811 allowed, 0 allow entries unused); new definitions mutated **828 rostered, 0 owed**; parity **P1-P118** (none issued
+  here), next free P119; no two names for one definition, 0 unanswered; reach 1,618 reachable, 1,097 exempt, 0
+  unanswered; the four field and key checks 0 unanswered; the kernel replays 96 modules.
+* **`cargo test --workspace --no-fail-fast`, three runs** (`scratchpad/w48/g/ws-a.log` … `ws-c.log`, each with its
+  `uptime`): **2,966 passed / 0 failed / 53 ignored over 161 result lines, three runs** (09:48-10:06, load 3.78 →
+  9.39, 18m16s; 10:06-10:24, load 9.39 → 11.61, 18m15s; 10:24-10:43, load 11.61 → 12.54, 18m22s).  No
+  `.proptest-regressions` file moved in any of the three.  `cli_latency` 7 passed (1 ignored) in each, every
+  band held under that load.
+* **The FFI crate, `cargo test` in `kernel/tm-kernel-ffi`**: 104 passed / 0 failed (corpus 8, kernel 89, stack 7).
+* **The drive** (§2): `cargo build -p tm` into `scratchpad/w48/g/target` from this tree's base, the trees in
+  `scratchpad/w48/g/drive` (`A` the merged log, `A1` one machine, `A2` the break ended).
+
+### 7. Gaps 5180-5181
+
+**Gap 5180 — a block closed while a logged break runs is credited and drawn across the break until the break's line
+arrives.**  1. *What.*  A `done` or `stop` (or the `start` of another block) logged while a `break_start` has no `break`
+line yet closes the block with the pieces and minutes of `Replay.cutPieces` over `Replay.blockSpans` — its idle spans
+and the held breaks — which do not hold the running break (`Replay.Machine.brkOpen`); a `pause` under it draws the same
+way (`Replay.openPieces`).  So the closed block's pieces lie across the running break's start and its credit includes
+the overlap (`tm review day` `block_min` 60 in §2) while the planner draws the running break from 07:30; when the
+break's line arrives, D100's `Replay.netClosed` re-draws the block around it and takes the overlap off (25).  2. *Why.*
+D105 holds the running break in the machine and deliberately moves no clock (`Replay.a_running_break_moves_no_clock`),
+and the binary never writes the shape on one machine — every verb that ends a block ends a running break first (D101)
+— so it arises only when two machines append to one synced log (or by a hand edit).  3. *Cost.*  On that log, while the
+break runs, one span is read as block and as break by the plan's rows and by the review (§5.3), and
+`Goals.plan_places_no_block_over_a_break` is false on a request the decoder builds (§2) — which is why the goal cannot
+be proved as written until this closes.  4. *Clears it.*  A `Replay.lean` change (track A's file this phase, so recorded
+for the land): net the running break's span to the close — `[brkOpen.s, t)` among the spans a cut, a `done`'s close and
+a settle net (`Replay.blockSpans`) — so the block reads now what it will read once the break ends; with D94's and
+D100's reading ("a block and a break are read one way on every log") as the standing decision, a parity number from
+next free and a behaviour row for `tm review day`'s minutes and the plan's past rows on that log, every replay and seal
+law it touches re-proved (D5).  If the owner reads it otherwise (the running break nets nothing until it ends), `hrun`
+becomes a hypothesis the goal must name.
+
+**Gap 5181 — the last goal is reduced, not discharged.**  1. *What.*  `Goals.plan_places_no_block_over_a_break` stays,
+burn-down 1; `PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` proves its statement under the three
+facts of §1.  2. *Why.*  `hrun` is false on a run the decoder builds (gap 5180), and `hrec`/`hopen` over the runs
+`Seal.resumeRun` builds is the fold invariant of §4, which this run did not reach.  3. *Cost.*  The planner's past
+half still carries a hypothesis wherever a lift reaches the whole day (`PlanCheck.PastPays`), now one stated over the
+replay's record; gap 4918's statement is superseded by this one's §4.  4. *Clears it.*  §4's three steps, in order.
+
+### 8. Owed, by name
+
+Gap 5180 (the land and track A, then the owner if it needs a decision), gap 5181 (§4), gaps 4914, 4917 and 4761 (as
+recorded).  Not done: the fold invariant; a TUI drive.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **Land 2** —
+     tracks A (the owner's D108; gap 5027) and G (the last goal reduced)
+     composed onto `eef6732`.  Gaps 5200-5209 are this step's; none is used.
+     Parity: A's D108 renumbered to P119.  No cheat, goal or theorem added.
+     ===================================================================== -->
+
+## Stage 6 — W-48 Land 2: tracks A and G composed, D108 is P119
+
+### 1. What was landed, checked against `git log`, not against the reports
+
+Base `eef6732` (W-48 Land 1).  Each report was compared with `git log rebuild-on-lean..<branch>` and the worktree's
+`git status`; both worktrees were clean and both branches fork at `eef6732`, so nothing uncommitted was left behind.
+
+* **Track A** (`w48-a`, tip `6707152`): two commits, as reported — `655164f` (the owner's D108: the day's first `plan`
+  carries §7.4's hysteresis input and the replay holds the open block's own extends) and `6707152` (gap 5027: D99's
+  re-draw compiled linear per mark by `@[csimp]` twins).  Landed.
+* **Track G** (`w48-g`, tip `b3e578a`): one commit, as reported (the last goal reduced to three facts about the replay;
+  gaps 5180 and 5181 opened).  Landed.
+
+### 2. The merges, and every conflict
+
+Merged A then G into `w48-land2`.  Three files conflicted, each append-only, and both sides were kept whole:
+`kernel/README.md` (A's block, then G's — the HTML banner opener the two blocks shared was repeated for G's, and each
+block was diffed against its branch's own text, identical); `kernel/TmKernel/Check.lean` (A's two banners, 40 audit
+lines net, 41 added and one rewritten in place; G's banner, 11); `kernel/mutations.txt` (each side's new rows).  The one library file both tracks wrote,
+`PlannerWit.lean`, merged clean (A's forced `, 0` in one `OpenBlock` literal, G's appended witnesses — none of which writes an
+`OpenBlock` literal, so none needed the new field).  The composed tree builds, and
+G's decided witnesses (`PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break` among them) still
+decide over A's replay, whose `Block` and `OpenBlock` each gained a field for the open block's extends.
+
+### 3. Parity renumbered down to contiguous
+
+Before the land: P1-P118 at `eef6732`; A issued D108 as `P124` beside five declared holes `P119`-`P123`; G issued
+none.  So **D108 is P119**: its canonical line (A's block, still at README.md:97554), its `parity.txt` row (the five
+`hole` lines deleted), the three behaviour-row tests in `tm/tests/cli_runtime_state_d108.rs` (renamed `…_p119`), the
+`d64b` reason text of the 27 re-drawn lines of `tm/tests/fixtures/fork-4748911-week-grid.jsonl` (the reason only; no
+`world` or answer byte moved — those moved on A's branch under the same number, and `fork_week_grid` passes on every
+run below), and every reference in the Lean, Rust and test sources A touched.  A's measurement sentences (`P1-P124`,
+next free `P125`) are kept as measurements of its branch, in backticks.  `parity.py`: **119 registered (P1-P119),
+next free P120**.  G's block records "next free P119" on its branch, which was true there.
+
+### 4. The burn-down
+
+**1 before, 1 after** — `Goals.plan_places_no_block_over_a_break` (gap 4918).  G did not delete it: it edited the
+goal's doc comment only (the statement is byte-identical to `eef6732`'s), and proved
+`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` beside it, audited in G's `Check.lean` banner.  A
+neither added nor deleted a goal.  Check 7 reads 1.
+
+### 5. Driven on the land's binary (`target/debug/tm` of this tree, `TZ=America/Chicago`, `tm init --example`)
+
+* **A, mid-extend under a learned multiplier** (`.tm/model.json` `{"duration": {"_default": 1.3}}`): `start ^t3` at
+  09-07 09:00 (`▶ ^t3 Exercises 5.3–5.5 · 09:00 · pred 5`), `extend 25m` 09:20 (`now 103m`), `extend 1b` 09:40 (`now
+  163m`); at 09:50 `tm now`, `tm --json plan` and `.tm/state.json` taken, the state deleted, the same two asked again:
+  `RESTORED from the log: active.est_min is 163m …`; `tm now`'s text, the plan's bytes and the rebuilt state are
+  identical to before, and the log holds 4 lines before and after (no `plan` event written by the deletion).
+* **G's third world, gap 5180** (two directories on one log: `break 15m` at 07:30 on A, `done` at 08:05 on B, B's
+  line appended to A's log, A's state deleted, asked at 09:00): `tm plan` still draws `07:05 … ✓ Read ch.6 §1–2 (60m)`
+  beside `07:30 · break 1h30m`, and `review day` `"block_min": 60` — the span read as block and as break, as G recorded
+  it on `eef6732`.  A's replay changes did not touch it; gap 5180 stands.
+* Not re-driven here: A's 800-pause `tm now` timing (gap 5027) and its hysteresis world; no TUI drive.
+
+### 6. Acceptance, on the tree the land commit holds (capped, D46)
+
+* **`check.sh`**, cold (14:47-15:01, load 0.6 → 1.7, 14 m 17 s): **seventeen lines, every one ok** — lake build;
+  totality; axiom audit **6,647** (6,596 at `eef6732` + 40 of A + 11 of G); `Negative.lean` rejected; FFI 97 tests;
+  corpus 29/37 files and 4/5 whole plans; stage goals **1**; prose citations (65,442, 61,623 resolved, 3,819 allowed,
+  0 allow entries unused); new definitions mutated (843 rostered, 0 owed); parity (P1-P119, next free P120); no two
+  names (0 unanswered); reached (1,630 reachable, 1,097 exempt in 66 sections, 0 unanswered); field writers (17 of
+  17); decoded fields read (33 read, 3 exempt); sent keys (174, 0 unanswered); decoded keys written (212, 0
+  unanswered); the kernel replays 96 modules.  Again on the final tree with this block written (warm, 15:55, load 2.1,
+  32 s): red on check 10 alone, this block spelling a bare `P120` above the register's top in §8; repaired (the number
+  now follows the words next free P120 on one line), and run a third time — figures in the land commit's message.
+* **`cargo test --workspace --no-fail-fast`, THREE runs** — run 1 (15:01-15:20, load 1.7 → 3.2, 18 m 27 s):
+  **2,969 passed / 0 failed / 53 ignored over 162 result lines** (2,966 at `eef6732` + A's 3 behaviour rows in their
+  new binary); run 2 (15:20-15:37, load 3.2 → 5.1, 17 m 5 s) and run 3 (15:37-15:54, load 5.1 → 2.3, 17 m 5 s) the same,
+  **2,969 / 0 / 53 over 162** each.  `cli_latency` passed in each (7 passed, 1 ignored).  No `.proptest-regressions` file
+  moved.
+* **The FFI crate** (`cd kernel/tm-kernel-ffi && cargo test`): (15:54, load 1.7) **105 passed, 0 failed** over 5 result lines (104 at `eef6732`; A's one new
+  wire test).
+
+### 7. Gaps
+
+None opened (5200-5209 unused); none closed by the land.  **Closed by the landed tracks** (their blocks): 4893, 4876,
+5027 (A).  **Open, carried by name**: A's 5160-5165; G's 5180, 5181; 4918; and from Land 1: 5150 (with 5071), H's
+5110-5113, R's 5130-5134 (5130 and 5131 the owner's).
+
+### 8. Owed, by name
+
+* **Gap 5180** — the kernel netting a running break from a block closed under it is a `Replay.lean` definition;
+  A held that file this phase and G could not touch it.  Both are now on the branch, so the next step that holds
+  `Replay.lean` owns it (the owner if D94/D100 do not already license the reading).  Then gap 5181's fold invariant.
+* **Gap 5161** — `RuntimeIn.yesterday`'s decoder exit and its `inputs-exempt.txt` line needed G's files
+  (`Planner.lean`, `PlannerWit.lean`, `PlanDiff.lean`); both tracks are landed, so it is now one step's work.
+* **Gap 5150** — track K's held D115/D116/D119 (`refs/archive/w48-k/held-d115-d116-d119`): it must now take parity
+  numbers from the next free P120 (not P119, which D108 took here), re-derive its `## Replay.lean` and `## SealResume.lean`
+  census reasons over this tree's `reach-exempt.txt` (A re-derived both: 109 of 249 and 33 of 50), and rebase over
+  A's `Replay.lean` (the `Block.ext` field, `extendFx`, the `@[csimp]` twins) — and G's reduction may need re-proving
+  over the arms it changes.
+* The owner: gaps 5130 and 5131.  Not done here: a TUI drive.

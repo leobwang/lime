@@ -486,9 +486,12 @@ fn deleting_the_runtime_state_changes_nothing() {
         "the rebuild said nothing: {:?}",
         first.stderr
     );
+    // **Since the owner's D108 (parity P119) the hysteresis map is RESTORED**, from the day's
+    // first `plan` line, and the rebuild names it so. Until D108 it was the one field it named as
+    // RESET.
     assert!(
-        first.stderr.contains("priorities_yesterday"),
-        "the rebuild did not name what it could not restore: {:?}",
+        first.stderr.contains("RESTORED from the log: `priorities_yesterday`"),
+        "the rebuild did not name the hysteresis map it restored: {:?}",
         first.stderr
     );
 
@@ -509,15 +512,15 @@ fn deleting_the_runtime_state_changes_nothing() {
     let after_bytes = fs::read_to_string(state_path(&tm)).expect("the runtime state was never rebuilt");
     let after_state: serde_json::Value =
         serde_json::from_str(&after_bytes).expect("the rebuilt .tm/state.json is not JSON");
-    let mut expected = before_state.clone();
-    // §7.4's hysteresis map is the one §10.2 field with no event behind it: no log line carries a
-    // `p`. It comes back empty, the rebuild says so by name, and `tm plan` then ranks without
-    // yesterday's damping — which on this tree moves no answer, and on another could.
-    expected["priorities_yesterday"] = serde_json::json!({});
-    assert_eq!(
-        after_state, expected,
-        "the rebuilt runtime state is not the deleted one minus the hysteresis map:\n{after_bytes}"
+    // §7.4's hysteresis map was the one §10.2 field with no event behind it until the owner's
+    // D108 (parity P119): the day's first `plan` line carries it now, so it comes back too — the
+    // rebuilt file IS the deleted one. The bite: a map with nothing in it would come back empty
+    // whatever the log said.
+    assert!(
+        before_state["priorities_yesterday"].as_object().is_some_and(|m| !m.is_empty()),
+        "the cache holds no hysteresis map, so its rebuild would prove nothing: {before_bytes}"
     );
+    assert_eq!(after_state, before_state, "the rebuilt runtime state is not the deleted one:\n{after_bytes}");
 
     // The verb the defect was actually reported as: `tm done` exited **1** with "nothing is
     // running" while `tm plan` drew the same block with `▶`.
@@ -526,8 +529,8 @@ fn deleting_the_runtime_state_changes_nothing() {
     assert_eq!(done.json()["id"], "p1", "`tm done` closed something else: {}", done.stdout);
 
     eprintln!(
-        "runtime-state deletion: {} `--json` spellings identical, every §10.2 field but \
-         `priorities_yesterday` came back out of {} log lines, `tm done` exit {}",
+        "runtime-state deletion: {} `--json` spellings identical, every §10.2 field came back out \
+         of {} log lines (`priorities_yesterday` since D108), `tm done` exit {}",
         before.len(),
         log_lines(&tm).len(),
         done.code
@@ -635,12 +638,9 @@ fn deleting_the_runtime_state_keeps_the_last_arrival_of_the_day() {
             before_state[key], after_state[key]
         );
     }
-    let mut expected = before_state.clone();
-    expected["priorities_yesterday"] = serde_json::json!({});
-    assert_eq!(
-        after_state, expected,
-        "the rebuilt runtime state is not the deleted one minus the hysteresis map:\n{after_bytes}"
-    );
+    // Since the owner's D108 (parity P119) the hysteresis map comes back from the day's first
+    // `plan` line, so the rebuilt record is the deleted one whole.
+    assert_eq!(after_state, before_state, "the rebuilt runtime state is not the deleted one:\n{after_bytes}");
 
     let after = answers(&tm, INSIDE, JSON_SPELLINGS);
     same(&before, &after, "deleting the runtime state after a second arrival moved an answer");
@@ -1012,9 +1012,11 @@ fn the_rebuild_notice_names_only_what_did_not_come_back() {
         "the notice does not say the pause was restored: {:?}",
         first.stderr
     );
+    // Since the owner's D108 (parity P119) `active.est_min` is RESTORED — `tm start`'s planned
+    // minutes plus the block's logged extends — where until then it was RECOMPUTED from the line.
     assert!(
-        first.stderr.contains("RECOMPUTED"),
-        "`active.est_min` came back from another source and the notice calls it lost: {:?}",
+        first.stderr.contains("RESTORED from the log: `active.est_min`"),
+        "`active.est_min` came back from the log and the notice does not say so: {:?}",
         first.stderr
     );
 }

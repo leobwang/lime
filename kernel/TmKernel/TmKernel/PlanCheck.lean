@@ -6417,5 +6417,165 @@ theorem plan_never_batches_past_an_equal_ci_candidate (r : PlanReq) (s : WfSeg) 
   exact plan_is_monotone_in_rank r j i hahead x hx hcal hfit s hs hw
     (a_batch_row_carries_a_slots_energy r s ids hs hk) hst hitems
 
+/-! ### W-48 track G — `Goals.plan_places_no_block_over_a_break`, reduced to three facts about the replay
+
+The goal quantifies over every Block row and every Break row of the day.  `plan_places_no_block_over_a_break` above
+proves it for the Block rows from `now`; `Planner.the_open_row_lies_under_no_running_break` for the open row against
+the running break; `Planner.a_block_row_clears_a_kept_break` for every Block row against a break the cut keeps.  What
+no theorem reached is the replayed half against the replayed half and against the running break, and the theorem below
+says exactly what it needs of them — three facts about TODAY'S RECORD in the replay's answer (D24's seam) and the
+runtime's running break, in seconds and over the segments nonempty in seconds (every segment a row is drawn from),
+with nothing about the planner left in them:
+
+* `hrec` — no Block segment of today's record lies across a Break segment of it;
+* `hopen` — the open block's clock runs from at or after the end of every Break segment of today's record (the replay's
+  half for the breaks the machine holds is `settle_runs_after_every_span_it_nets`, below);
+* `hrun` — every Block segment of today's record ends by the instant the running break began.
+
+So the goal holds on every request whose replay is apart in these three ways, and what remains of it is a statement
+about the runs `Seal.resumeRun` builds (README "Stage 6 — W-48 track G", gaps 5180 and 5181).  It is NOT the goal: two
+of the three fail on a day the decoder builds — `hrun` at `PlannerWit.theCloseUnderBreakRequest` (a block closed while
+a logged break ran, which the replay credits and draws across the break until the break's own line arrives; README gap
+5180, a kernel reading, so no refutation stands on it), and `hrec` on the bounded logs of README gaps 4914 and 4917 —
+and `PlannerWit.the_apart_replay_fails_at_the_pre_d100_request` shows `hrec` bites. -/
+
+/-- Two rows apart in seconds stay apart once each is forced into the calendar (`segOf`). -/
+theorem segOf_apart (t u : Seg) (ht : t.start ≤ t.stop) (h : t.stop ≤ u.start) :
+    (Planner.segOf t).val.stop ≤ (Planner.segOf u).val.start := by
+  show max (clampSec t.start) (clampSec t.stop) ≤ clampSec u.start
+  simp only [clampSec, LogStamp.yearEnd]; omega
+
+/-- A replayed row of the closed half lies inside the segment it was drawn from, in seconds. -/
+theorem a_past_row_lies_inside_its_segment {r : PlanReq} {t : Seg} (h : t ∈ pastRows r) :
+    ∃ g ∈ (r.todayRecord.map (·.segments)).getD [], t.kind = (pastKind g.kind).1 ∧
+      g.start.1.sec ≤ t.start ∧ t.start < t.stop ∧ t.stop ≤ g.stop.1.sec := by
+  obtain ⟨d, hd, g, hg, q, hq, rfl⟩ := mem_pastRows.1 h
+  refine ⟨g, by rw [hd]; exact hg, rfl, ?_⟩
+  have := clipCut_within hq
+  simp only [pastRowOf]
+  omega
+
+/-- The running break's row starts where the break started, or at the day's start. -/
+theorem the_running_break_row_starts_where_it_started {r : PlanReq} {u : Seg} (h : u ∈ breakRows r) :
+    ∃ bs tb, r.state.brk = some bs ∧ bs.started = some tb ∧ u.start = max tb.sec r.dayStart := by
+  unfold breakRows at h
+  cases hb0 : r.state.brk with
+  | none => rw [hb0] at h; cases h
+  | some x =>
+    cases hx : x.started with
+    | none => rw [hb0] at h; simp [hx] at h
+    | some y =>
+      rw [hb0] at h
+      simp only [hx, Option.bind_some, Option.map_some] at h
+      split at h
+      · cases h
+      · simp only [List.mem_singleton] at h
+        subst h
+        exact ⟨x, y, rfl, hx, rfl⟩
+
+/-- **`Goals.plan_places_no_block_over_a_break` as written, on a request whose replay is apart** (W-48 track G, README
+gap 5181): every Block row of the day — replayed, open, reserved or assigned — lies beside every Break row — replayed,
+running or kept — given the three facts of the section header about today's record and the running break, and the
+calendar bound every law of this module carries.  Each other pair is a theorem already: the rows from `now`
+(`a_block_row_from_now_clears_a_break_row`), the open row against the running break
+(`Planner.the_open_row_lies_under_no_running_break`) and any Block against a kept break
+(`Planner.a_block_row_clears_a_kept_break`).  Applied at `PlannerWit.theMidBreakRequest`, whose day holds replayed
+Block and Break rows (`PlannerWit.the_break_law_holds_whole_at_the_mid_break_request`). -/
+theorem plan_places_no_block_over_a_break_on_an_apart_replay (r : PlanReq)
+    (hnowcal : r.now.sec + 1 < LogStamp.yearEnd)
+    (hrec : ∀ g ∈ (r.todayRecord.map (·.segments)).getD [], ∀ k ∈ (r.todayRecord.map (·.segments)).getD [],
+      (pastKind g.kind).1 = SegKind.block → (pastKind k.kind).1 = SegKind.brk →
+        g.start.1.sec < g.stop.1.sec → k.start.1.sec < k.stop.1.sec →
+          g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec)
+    (hopen : ∀ b ∈ r.run.answer.openBlock.toList, ∀ s ∈ b.since.toList,
+      ∀ k ∈ (r.todayRecord.map (·.segments)).getD [], (pastKind k.kind).1 = SegKind.brk →
+        k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec)
+    (hrun : ∀ bs ∈ r.state.brk.toList, ∀ t ∈ bs.started.toList,
+      ∀ g ∈ (r.todayRecord.map (·.segments)).getD [], (pastKind g.kind).1 = SegKind.block →
+        g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec)
+    (b k : WfSeg) (hb : b ∈ (dayPlan r).segments) (hk : k ∈ (dayPlan r).segments)
+    (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :
+    b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start := by
+  by_cases hnow : r.now.sec ≤ b.val.start
+  · exact a_block_row_from_now_clears_a_break_row r hnowcal b k hb hbk hk hkk hnow
+  have hb' : b ∈ dayRows r := dayPlan_segments r ▸ hb
+  rcases a_block_row_is_replayed_reserved_or_assigned r b hb' hbk with
+    ⟨t, ht, rfl⟩ | ⟨t, ht, rfl⟩ | ⟨t, ht, rfl⟩
+  rotate_left
+  · -- the reservation starts at `now`
+    exfalso; apply hnow
+    obtain ⟨q, hq, hst, -⟩ := r.mem_activeRow t ht
+    obtain ⟨-, -, -, -, hs0, -⟩ := r.activeRun_spec q hq
+    show r.now.sec ≤ clampSec t.start
+    rw [hst, hs0]; simp only [clampSec, LogStamp.yearEnd] at hnowcal ⊢; omega
+  · exfalso; apply hnow
+    have := r.an_assigned_row_starts_at_or_after_now t ht
+    show r.now.sec ≤ clampSec t.start
+    simp only [clampSec, LogStamp.yearEnd] at hnowcal ⊢; omega
+  · obtain ⟨-, htlt, -⟩ := replayedRows_end_at_now r t ht
+    rcases a_break_row_is_replayed_running_or_kept r k (dayPlan_segments r ▸ hk) hkk with
+      ⟨u, hu, rfl⟩ | ⟨u, hu, rfl⟩ | ⟨u, hu, rfl⟩
+    · obtain ⟨-, hult, -⟩ := pastRows_end_at_now r u hu
+      obtain ⟨gk, hgk, hku, hk1, hk12, hk2⟩ := a_past_row_lies_inside_its_segment hu
+      have hkb : (pastKind gk.kind).1 = SegKind.brk := hku ▸ (segOf_kind u ▸ hkk)
+      rcases mem_replayedRows.1 ht with ht | ht
+      · obtain ⟨gb, hgb, htb, hb1, hb12, hb2⟩ := a_past_row_lies_inside_its_segment ht
+        have hbb : (pastKind gb.kind).1 = SegKind.block := htb ▸ (segOf_kind t ▸ hbk)
+        rcases hrec gb hgb gk hgk hbb hkb (by omega) (by omega) with h | h
+        · exact Or.inl (segOf_apart t u (by omega) (by omega))
+        · exact Or.inr (segOf_apart u t (by omega) (by omega))
+      · obtain ⟨ob, s, hob, hs, hst, -⟩ := mem_openBlockRows ht
+        have := hopen ob (by rw [hob]; simp) s (by rw [hs]; simp) gk hgk hkb (by omega)
+        exact Or.inr (segOf_apart u t (by omega) (by omega))
+    · rcases mem_replayedRows.1 ht with ht | ht
+      · obtain ⟨gb, hgb, htb, hb1, hb12, hb2⟩ := a_past_row_lies_inside_its_segment ht
+        have hbb : (pastKind gb.kind).1 = SegKind.block := htb ▸ (segOf_kind t ▸ hbk)
+        obtain ⟨bs, tb, hbs, htb, hus⟩ := the_running_break_row_starts_where_it_started hu
+        have := hrun bs (by rw [hbs]; simp) tb (by rw [htb]; simp) gb hgb hbb (by omega)
+        exact Or.inl (segOf_apart t _ (by omega) (by rw [hus]; omega))
+      · obtain ⟨-, -, hst, -⟩ := mem_openBlockRows ht
+        rcases the_open_row_lies_under_no_running_break r t ht u hu with h | h
+        · exact Or.inl (segOf_apart t u (by omega) h)
+        · have hu2 := (breakRows_are_running_breaks r u hu).2.2.2
+          exact Or.inr (segOf_apart u t (by omega) h)
+    · exact a_block_row_clears_a_kept_break r _ hb' hbk u hu
+
+/-- **A settled open block's clock runs from at or after the end of every span it nets** (the owner's D94 and D99): every
+nonempty break of its ledger days the machine holds, and every one of its own idle spans, ends at or before the instant
+its clock runs from — the replay's half of the open-row clause of
+`plan_places_no_block_over_a_break_on_an_apart_replay` (`hopen`), for the breaks the machine still holds. -/
+theorem settle_runs_after_every_span_it_nets (dy : Cal.Instant → Nat) (m : Replay.Machine) (b : Replay.Block)
+    (hb : m.block = some b) (x : Replay.At) (hx : (Replay.settle dy m).1.block.bind (·.since) = some x) :
+    ∀ p ∈ Replay.blockSpans b m, p.1.1 < p.2.1 → p.2.1 ≤ x.1 := by
+  unfold Replay.settle at hx
+  rw [hb] at hx
+  simp only [Option.bind_some] at hx
+  split at hx
+  · cases hx
+  · cases hx; exact (Replay.runFrom_step_ge _ _).2
+
+/-- **A late break re-draws a held closed block beside itself** (the owner's D100): every `Block` segment
+`Replay.netOne` writes for a `break` `[s, e)` ends at or before `s` or starts at or after `e` — the closed side's step
+half of `plan_places_no_block_over_a_break_on_an_apart_replay`'s `hrec`, beside `Replay.settle_avoids_every_span_it_nets`
+for the open block.  What it does not reach is a closed block the machine no longer holds, or one of a later ledger
+day (README gap 4917): `Replay.netOne` draws nothing for those. -/
+theorem netOne_draws_beside_the_break (dy : Cal.Instant → Nat) (s e : Replay.At) (d : Nat) (C : Replay.Closed)
+    (hse : s.1 < e.1) :
+    ∀ x ∈ (Replay.netOne dy s e d C).2.1, ∀ dd g, x = .dayAdd dd (.segment g) → g.stop.1 ≤ s.1 ∨ e.1 ≤ g.start.1 := by
+  intro x hx dd g hxg
+  unfold Replay.netOne at hx
+  split at hx
+  · simp at hx
+  · simp only [List.mem_append] at hx
+    rcases hx with hx | hx
+    · obtain ⟨hq, -⟩ := Replay.redraw_draws_its_spans dy C.id C.drawn _ x hx dd g hxg
+      unfold Replay.cutOut at hq
+      obtain ⟨q, -, hq⟩ := List.mem_flatMap.1 hq
+      exact Replay.piecesGo_avoids _ _ _ _ _ hq (s, e) (List.mem_singleton_self _) hse
+    · split at hx
+      · simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+        rcases hx with rfl | rfl | rfl <;> simp at hxg
+      · simp at hx
+
 end PlanCheck
 end Tm

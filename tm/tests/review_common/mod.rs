@@ -584,6 +584,7 @@ pub fn entries() -> Vec<LogEntry> {
                     hash: p.hash.to_string(),
                     replans_today: p.replans_today,
                     drift_min: p.drift_min,
+                    yesterday: Default::default(),
                 },
             ));
         }

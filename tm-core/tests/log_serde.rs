@@ -20,7 +20,7 @@
 //!   both over `FsStore::append_text`, which **is** the writer `Ctx::append_entry`
 //!   calls. `Log::append` never was.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, FixedOffset};
 use serde_json::{Map, Value};
@@ -124,8 +124,18 @@ fn every_event_kind_has_the_spec_field_names() {
         ),
         (Event::Skip { item: s("lunch"), inst: s("2026-09-07") }, &["t", "ev", "item", "inst"]),
         (
-            Event::Plan { hash: s("a91f"), replans_today: 4, drift_min: 75 },
+            Event::Plan { hash: s("a91f"), replans_today: 4, drift_min: 75, yesterday: BTreeMap::new() },
             &["t", "ev", "hash", "replans_today", "drift_min"],
+        ),
+        // D108 (parity P119): the day's first `plan` carries §7.4's hysteresis input, last.
+        (
+            Event::Plan {
+                hash: s("a91f"),
+                replans_today: 1,
+                drift_min: 0,
+                yesterday: BTreeMap::from([(s("d1"), 1), (s("m2"), 3)]),
+            },
+            &["t", "ev", "hash", "replans_today", "drift_min", "yesterday"],
         ),
         (Event::Named { name: s("reply"), id: None }, &["t", "ev", "name"]),
         (

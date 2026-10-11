@@ -1702,3 +1702,11 @@ with_minute
 4 tooManyOverrides
 7 mkHash?
 4 mkOverrides?
+
+# W-48 TRACK A (README "Stage 6 — W-48 track A" §3): the owner's D108 refutes D14's `extend` law as written -- an
+# `extend` of the open block's item writes the machine too -- as `an_extend_changes_only_the_bookkeeping_and_its_
+# extended_minutes_is_refuted`, restated beside it and kept on its subdomain.  Every citation counted here names the D14
+# form as it stood: in the append-only README blocks of stage 5 C3 and C5, in two comments of the append-only
+# `Check.lean`, and in `Goals.lean`'s stage-5 notes (track G's file this run); every sentence since writes it unbackticked.
+5 an_extend_changes_only_the_bookkeeping_and_its_extended_minutes
+1 Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes

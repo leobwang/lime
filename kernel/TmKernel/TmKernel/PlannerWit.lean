@@ -9496,7 +9496,7 @@ theorem the_open_row_carries_the_logs_worked_minutes_is_refuted :
   intro h
   have hb : theHostWorkedRequest.run.answer.openBlock =
       some ⟨['m','1'], (⟨63924570000, 0⟩, ⟨true, 18000⟩), 0,
-        some (⟨63924570000, 0⟩, ⟨true, 18000⟩), false, 739867⟩ := by decide
+        some (⟨63924570000, 0⟩, ⟨true, 18000⟩), false, 739867, 0⟩ := by decide
   have hrow : { theOpenRow with note := some (.soFar 90) } ∈ openBlockRows theHostWorkedRequest := by
     decide
   exact absurd (h _ _ hrow _ hb) (by decide)
@@ -13079,6 +13079,115 @@ section 14's census request applies it.  The debt, as `Goals.lean` states it: cl
 its closed half the owner's), then prove the goal over the runs the decoder builds or refute it on a world with ONE
 reading.  W-47 track K closed both halves (the owner's D99 and D100, README gaps 4520a and 4520b); the proof or the
 refutation is what is left, and `Goals.lean` says why neither was written. -/
+
+/-! ############################################################################
+## W-48 track G — the last goal, reduced to three facts about the replay
+
+`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` proves `Goals.plan_places_no_block_over_a_break` as
+written on every request whose replay is apart in three ways (today's record's Block and Break segments, the open
+block's clock against those Breaks, and those Blocks against the running break).  Here: the three hold at the mid-break
+day and the law applies to its whole day, replayed rows included; the first bites at the pre-D100 run; and a day the
+decoder builds from a log the binary writes — two machines on one synced log, one taking a break while the other closes
+the block — fails the third, which is README gap 5180 (a kernel reading; no refutation stands on it).  Each `decide`
+was probed under `MemoryMax=8G timeout 120` (§5.10a). -/
+
+set_option maxRecDepth 400000 in
+/-- **The mid-break day's replay is apart in all three ways** (W-48 track G): `m1`'s pieces either side of the break
+(D100), no open block, no running break. -/
+theorem the_apart_replay_holds_at_the_mid_break_request :
+    (∀ g ∈ (theMidBreakRequest.todayRecord.map (·.segments)).getD [],
+      ∀ k ∈ (theMidBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → (pastKind k.kind).1 = SegKind.brk → g.start.1.sec < g.stop.1.sec → k.start.1.sec < k.stop.1.sec →
+          g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec) ∧
+    (∀ b ∈ theMidBreakRequest.run.answer.openBlock.toList, ∀ s ∈ b.since.toList,
+      ∀ k ∈ (theMidBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind k.kind).1 = SegKind.brk → k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec) ∧
+    (∀ bs ∈ theMidBreakRequest.state.brk.toList, ∀ t ∈ bs.started.toList,
+      ∀ g ∈ (theMidBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec) :=
+  ⟨by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **The goal's statement holds on the mid-break day, whole** — every Block row against every Break row, the replayed
+`m1` pieces and the replayed break among them (`the_mid_break_day_cuts_its_block_around_the_break` lists them), through
+the reduction and not by computing the day. -/
+theorem the_break_law_holds_whole_at_the_mid_break_request (b k : WfSeg)
+    (hb : b ∈ (dayPlan theMidBreakRequest).segments) (hk : k ∈ (dayPlan theMidBreakRequest).segments)
+    (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :
+    b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start :=
+  PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay theMidBreakRequest
+    (by decide) the_apart_replay_holds_at_the_mid_break_request.1
+    the_apart_replay_holds_at_the_mid_break_request.2.1 the_apart_replay_holds_at_the_mid_break_request.2.2
+    b k hb hk hbk hkk
+
+set_option maxRecDepth 400000 in
+/-- **The record clause bites** (AGENTS §5.8): at the pre-D100 run — a run the decoder does not build — `m1`'s one
+piece lies across the break. -/
+theorem the_apart_replay_fails_at_the_pre_d100_request :
+    ¬ (∀ g ∈ (thePreD100MidBreakRequest.todayRecord.map (·.segments)).getD [],
+      ∀ k ∈ (thePreD100MidBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → (pastKind k.kind).1 = SegKind.brk → g.start.1.sec < g.stop.1.sec → k.start.1.sec < k.stop.1.sec →
+          g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec) := by
+  decide
+
+/-- **A `break_start` at 07:30**, fifteen minutes planned — the line `tm break 15m` writes (D105). -/
+def closeUnderBreakStartLine : Log.Line := ⟨4, some ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','9','T','0','7',':','3','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','b','r','e','a','k','_','s','t','a','r','t','"',',','"','p','l','a','n','n','e','d','_','m','i','n','"',':','1','5','}']⟩
+
+/-- **Two machines on one synced log** (README gap 5180): `witLines`' wake, arrival and `m1`'s 07:05 `start`; machine A's
+`break_start` at 07:30; and machine B's `done` of `m1` at 08:05 — sixty minutes, written by a binary that had not yet
+seen the break — appended after it.  Driven on the shipped binary at W-48 track G (README block, §2). -/
+def closeUnderBreakLines : List Log.Line :=
+  witLines.take 3 ++ [closeUnderBreakStartLine] ++ ((witLines.drop 3).take 1).map (fun l => ⟨l.n + 1, l.text⟩)
+
+set_option maxRecDepth 400000 in
+theorem closeUnderBreakRun_resumes_ok : runOk Cal.chicago 739867 closeUnderBreakLines = true := by decide
+
+def closeUnderBreakRun : Seal.Run :=
+  match h : Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) closeUnderBreakLines with
+  | .ok run => run
+  | .error _ => absurd closeUnderBreakRun_resumes_ok (by simp [runOk, h])
+
+/-- **The runtime the binary rebuilds from that log** (D42, D105): the break begun at 07:30 is still running, and no
+block is. -/
+def closeUnderBreakState : RuntimeIn :=
+  { RuntimeIn.empty with brk := some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 450).sec, 0⟩, 15, none⟩ }
+
+/-- The census request with that log and that runtime behind it, and nothing else changed. -/
+def theCloseUnderBreakRequest : PlanReq :=
+  { theCensusRequest with run := closeUnderBreakRun, state := closeUnderBreakState }
+
+set_option maxRecDepth 400000 in
+/-- **A block closed while a logged break runs is drawn across the break** (W-48 track G, README gap 5180), computed: the
+replay's running break is the 07:30 `break_start`, the runtime's break passes the decoder's check (`BreakState.wf`), and
+the day's rows before `now` are `m1`'s replayed Block 07:05-08:05 across the running Break 07:30-14:00 (and the
+meeting, which the running break's row also covers).  The record is apart and there is no open block; the running-break
+clause fails.  So `Goals.plan_places_no_block_over_a_break` is false on this request — and it is NOT refuted here: the
+replay's `cut` and `doneClose` draw a block's pieces over the spans it nets (`Replay.blockSpans`), which do not hold the
+running break (`Replay.Machine.brkOpen`), so the block's 07:30-08:05 is read as block AND as break until the break's own
+line arrives, when the owner's D100 nets it from the closed block and the same block reads twenty-five minutes (driven,
+README block §2).  A refutation standing on that reading is not a discharge (the campaign's lesson 4). -/
+theorem the_close_under_a_running_break_lays_its_block_across_the_break :
+    closeUnderBreakRun.answer.openBreak.map (fun o => o.s.1.sec)
+      = some (Cal.instantOf Cal.chicago 739867 450).sec ∧
+    (closeUnderBreakState.brk.map (BreakState.wf theCloseUnderBreakRequest.now)) = some true ∧
+    ((dayPlan theCloseUnderBreakRequest).segments.filter (fun s => decide (s.val.start < theCloseUnderBreakRequest.now.sec))).map
+        (fun s => (s.val.start, s.val.stop, s.val.kind, s.val.item))
+      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec, SegKind.block,
+          some (['m','1'] : Id)),
+         ((Cal.instantOf Cal.chicago 739867 450).sec, (Cal.instantOf Cal.chicago 739867 840).sec, SegKind.brk, none),
+         ((Cal.instantOf Cal.chicago 739867 770).sec, (Cal.instantOf Cal.chicago 739867 830).sec, SegKind.wall,
+          some (['g','1'] : Id))] ∧
+    (∀ g ∈ (theCloseUnderBreakRequest.todayRecord.map (·.segments)).getD [],
+      ∀ k ∈ (theCloseUnderBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → (pastKind k.kind).1 = SegKind.brk → g.start.1.sec < g.stop.1.sec → k.start.1.sec < k.stop.1.sec →
+          g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec) ∧
+    (∀ b ∈ theCloseUnderBreakRequest.run.answer.openBlock.toList, ∀ s ∈ b.since.toList,
+      ∀ k ∈ (theCloseUnderBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind k.kind).1 = SegKind.brk → k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec) ∧
+    ¬ (∀ bs ∈ theCloseUnderBreakRequest.state.brk.toList, ∀ t ∈ bs.started.toList,
+      ∀ g ∈ (theCloseUnderBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec) :=
+  ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
 
 end PlannerWit
 end Tm

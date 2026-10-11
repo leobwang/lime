@@ -172,7 +172,7 @@ fn day_note(ctx: &Ctx, text: impl Into<String>) -> Result<(), CliError> {
 /// `routines.md` and `optional.md`, whose occurrences live in the log as
 /// §10.1 `routine`/`skip` events. Writing `[x]` into one would end the
 /// recurrence for good (§5.1: "a recurring item never changes its line").
-fn is_stateless(item: &tm_core::model::Item) -> bool {
+pub(super) fn is_stateless(item: &tm_core::model::Item) -> bool {
     matches!(item.horizon, Horizon::Routine | Horizon::Optional)
 }
 

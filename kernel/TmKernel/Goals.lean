@@ -1272,7 +1272,22 @@ what the record knows of still.  The goal therefore needs a statement of which r
 decoder builds (an invariant over `Seal.resumeRun`'s fold that no day record draws a Block piece across a Break piece,
 and the same of the open block's row) and those bounds named in it, or the bounds removed.  README gap 4918.
 `PlanCheck.plan_places_no_block_over_a_break`, the law over the Block rows that start at or after `now`, stays proved
-beside it. -/
+beside it.
+
+**W-48 track G reduced it, and found a third world it fails on** (README "Stage 6 — W-48 track G", gaps 5180 and
+5181).  `PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` proves this statement AS WRITTEN on every
+request whose replay is apart in three ways, each a fact about today's record in the replay's answer and the runtime's
+running break and nothing about the planner: (hrec) no Block segment of the record lies across a Break segment of it;
+(hopen) the open block's clock runs from at or after the end of every Break segment of it; (hrun) every Block segment
+of it ends by the instant the running break began.  So what is owed is exactly those three over the runs the decoder
+builds — and (hrun) is FALSE on one: two machines on one synced log, one taking a break while the other closes the
+block (`PlannerWit.theCloseUnderBreakRequest`; driven on the shipped binary).  The replay credits and draws the closed
+block across the running break until the break's own line arrives, when D100 nets it and the block reads twenty-five
+minutes where it read sixty — the span read two ways, a kernel reading (gap 5180), so it is NOT a refutation (the
+campaign's lesson 4), and the goal stays.  It is discharged by: the kernel netting a running break from a block closed
+under it (gap 5180, a definition of `Replay.lean`'s, not this track's), then the fold invariant that gives (hrec) and
+(hopen) over `Seal.resumeRun`'s runs with gaps 4914's and 4917's bounds in its hypotheses or removed, and (hrun)
+stated against the run's own running break (`Seal.Answer.openBreak`) — README gap 5181. -/
 theorem plan_places_no_block_over_a_break (r : PlanReq) (b k : WfSeg)
     (hb : b ∈ (dayPlan r).segments) (hk : k ∈ (dayPlan r).segments)
     (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :

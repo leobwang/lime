@@ -187,6 +187,10 @@ fn is_false(b: &bool) -> bool {
     !*b
 }
 
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
 // ---------------------------------------------------------------------------
 // Events
 // ---------------------------------------------------------------------------
@@ -430,6 +434,13 @@ define_events! {
         replans_today: u32,
         /// Minutes segments moved by this replan.
         drift_min: u32,
+        /// **§7.4's hysteresis input** — yesterday's `p` per item — carried by the day's FIRST
+        /// `plan` only (the owner's **D108**, README gap 4893, parity **P119**), so the log
+        /// derives `.tm/state.json`'s `priorities_yesterday` and deleting the cache re-ranks
+        /// nothing. Empty on every other `plan`, and then not written. Fork 4748911 writes no
+        /// such key and ignores it on read.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        yesterday: BTreeMap<String, u8>,
     },
     /// `tm event <name> [^id]` (the `ev` tag is `event`).
     Named => "event" {
@@ -1046,6 +1057,12 @@ pub struct OpenBlock {
     pub since: Option<DateTime<FixedOffset>>,
     /// Paused.
     pub paused: bool,
+    /// **The minutes its `extend` lines have added since its `start`** (the owner's **D108**,
+    /// README gaps 4876 and 4893; the kernel's `Replay.OpenBlock.ext`): what `tm extend` adds to
+    /// `.tm/state.json`'s `active.est_min`, which D42's rebuild reads here. Fork `OpenBlock` has
+    /// no such field, so it is not serialised at zero.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub extended_min: u32,
 }
 
 impl OpenBlock {
@@ -1131,6 +1148,13 @@ pub struct DayReplay {
     pub drift_min: u32,
     /// Hash of the last plan.
     pub last_plan_hash: Option<String>,
+    /// **§7.4's hysteresis input as the day's first `plan` carries it** (the owner's **D108**,
+    /// the kernel's `Replay.DayAcc.yesterday`): what D42's rebuild puts back into
+    /// `.tm/state.json`'s `priorities_yesterday`. Fork `DayReplay` has no such field, so it is
+    /// not serialised when empty — every log a binary before D108 wrote, and T5's comparison
+    /// with the fork, read none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub priorities_yesterday: BTreeMap<String, u8>,
     /// Actual segments (blocks, pauses, interruptions, breaks, routines,
     /// idle gaps), by start time.
     pub segments: Vec<LogSegment>,

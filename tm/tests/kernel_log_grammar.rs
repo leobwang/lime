@@ -768,8 +768,11 @@ fn any_event() -> impl Strategy<Value = Event> {
         (s(), s(), s(), any::<Option<u32>>())
             .prop_map(|(item, inst, status, actual_min)| Event::Routine { item, inst, status, actual_min }),
         (s(), s()).prop_map(|(item, inst)| Event::Skip { item, inst }),
-        (s(), any::<u32>(), any::<u32>())
-            .prop_map(|(hash, replans_today, drift_min)| Event::Plan { hash, replans_today, drift_min }),
+        // D108 (parity P119): the day's first `plan` carries §7.4's hysteresis input; every
+        // other carries none, which is not written.
+        (s(), any::<u32>(), any::<u32>(), prop::collection::btree_map(s(), any::<u8>(), 0..4)).prop_map(
+            |(hash, replans_today, drift_min, yesterday)| Event::Plan { hash, replans_today, drift_min, yesterday }
+        ),
         (s(), prop::option::of(s())).prop_map(|(name, id)| Event::Named { name, id }),
         (s(), s(), s(), any::<u32>()).prop_map(|(id, from, to, est_min)| Event::Demote { id, from, to, est_min }),
         s().prop_map(|id| Event::Readopt { id }),

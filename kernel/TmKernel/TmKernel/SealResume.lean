@@ -35,6 +35,26 @@ filed under and is read nowhere. -/
 def redrawReads (old : List Replay.Piece) (P : List (Replay.At × Replay.At)) : List Cal.Instant :=
   (P.filter (fun q => !old.any (fun p => Replay.samePiece p q))).map (·.1.1)
 
+/-- **`redrawReads`, compiled** (README gap 5027, W-48 track A): the spans `Replay.redrawWalk`'s one merge leaves
+undrawn, when the old pieces' and the new spans' starts strictly increase; `redrawReads` itself otherwise.  The day the
+merge would file a new piece under is not read here, so it is asked with any. -/
+def redrawReadsFast (old : List Replay.Piece) (P : List (Replay.At × Replay.At)) : List Cal.Instant :=
+  if Replay.startsUp (old.map (fun p => (p.s, p.e))) && Replay.startsUp P then
+    (Replay.redrawWalk (fun _ => 0) old P).2.2.map (·.1.1)
+  else redrawReads old P
+
+/-- **`redrawReads` is `redrawReadsFast`** (README gap 5027): `@[csimp]`, by the merge's third list
+(`Replay.redrawWalkGo_spec`). -/
+@[csimp] theorem redrawReads_eq_redrawReadsFast : @redrawReads = @redrawReadsFast := by
+  funext old P
+  unfold redrawReadsFast
+  split
+  · rename_i h
+    simp only [Bool.and_eq_true] at h
+    rw [Replay.redrawWalk, Replay.redrawWalkGo_spec (fun _ => 0) _ old P (Nat.le_refl _) h.1 h.2]
+    rfl
+  · rfl
+
 /-- **The instants settling the open block reads the index at** (D99): its new pieces' starts. -/
 def settleReads (m : Machine) : List Cal.Instant :=
   match m.block with
@@ -461,6 +481,15 @@ def resume (z : Cal.Tz) (T : Nat) (k : Ckpt) (b : List Log.Line) (terminated : B
   match resumeRun z T k b with
   | .error e => .error e
   | .ok r => .ok (r.answer, p.bind (fun q => resealOf z T k b terminated q r))
+
+/-- **`redrawReadsFast` reads through the merge, and else through `redrawReads`** (README gap 5027): over the merge's
+case the one new span's start; over old pieces out of order (the fallback) every new span's start not drawn before. -/
+theorem redrawReadsFast_reads_through_the_merge_and_else_through_redrawReads :
+    redrawReadsFast [⟨((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).1, ((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).2, 7⟩, ⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).1,
+        ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).2, 7⟩] [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At), (((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)] = [((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 600, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).1.1] ∧
+    redrawReadsFast [⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).2, 7⟩, ⟨((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).1,
+        ((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).2, 7⟩] [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At), (((⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)] = [((((⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).1.1] := by
+  decide
 
 end Seal
 end Tm

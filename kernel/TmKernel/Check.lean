@@ -3410,7 +3410,7 @@ open Tm
 #print axioms Tm.Replay.allFifths_foldl
 #print axioms Tm.Replay.load_is_exact_fifths
 #print axioms Tm.Replay.worked_minutes_floor_each_subsegment
-#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes
+#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes_is_refuted
 #print axioms Tm.Replay.a_start_cuts_any_open_block_even_the_same_id
 #print axioms Tm.Replay.a_block_cut_by_start_is_never_replaced_by_done
 #print axioms Tm.Replay.a_stop_then_done_replaces_the_cut_credit
@@ -8660,3 +8660,75 @@ the binary sends back. -/
 #print axioms Tm.EmitWire.dividerPairs_with_the_inputs
 #print axioms Tm.EmitWire.withPlan_of_no_extra
 #print axioms Tm.EmitWire.dividerPairs_on_the_wire
+
+-- ===========================================================================
+-- APPENDED 2026-10-11: stage 6, run W-48, TRACK A — the owner's D108 (README
+-- gaps 4893 and 4876, parity P119): the day's first `plan` carries §7.4's
+-- hysteresis input (`Log`, `Replay.DayAcc.yesterday`) and the replay holds the
+-- open block's own extends (`Replay.Block.ext`).  D14's `extend` law is
+-- refuted as written and restated beside it; its audit line above (line 3413)
+-- names the refutation now, the restatement and its subdomain form are here.
+-- ===========================================================================
+#print axioms Tm.Log.allPrios_map
+#print axioms Tm.Log.allPrios_mem
+#print axioms Tm.Log.a_plan_line_carries_its_hysteresis_input
+#print axioms Tm.Log.a_plan_line_without_it_carries_none
+#print axioms Tm.Log.an_empty_hysteresis_input_is_not_written
+#print axioms Tm.Log.a_malformed_hysteresis_input_is_refused
+#print axioms Tm.Log.every_hysteresis_input_is_read_back
+#print axioms Tm.Replay.extendFx_keys
+#print axioms Tm.Replay.applyEffects_extendFx
+#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks
+#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes_with_no_block_of_it_open
+#print axioms Tm.Replay.extendFx_obs
+#print axioms Tm.Replay.extendFx_machines
+#print axioms Tm.Replay.an_open_blocks_extends_are_its_own
+#print axioms Tm.Replay.a_start_begins_the_extends_again
+#print axioms Tm.Replay.a_day_keeps_its_first_plans_hysteresis_input
+#print axioms Tm.Replay.a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first
+#print axioms Tm.Log.a_wake_is_a_state_change_and_a_plan_is_not
+
+-- ===========================================================================
+-- APPENDED 2026-10-11: stage 6, run W-48, TRACK A, second commit — README gap
+-- 5027: D99's re-draw made linear per mark by `@[csimp]` twins proved equal to
+-- the definitions every theorem reads (`pieces`, `redraw`, `Seal.redrawReads`).
+-- `countP_lt_of_witness` moved up the file (its audit line stands above).
+-- ===========================================================================
+#print axioms Tm.Replay.apart_spec
+#print axioms Tm.Replay.liftGo_of_uncovered
+#print axioms Tm.Replay.liftGo_succ
+#print axioms Tm.Replay.lift_of_cover
+#print axioms Tm.Replay.nextStart_none_of
+#print axioms Tm.Replay.nextStart_of_least
+#print axioms Tm.Replay.piecesGo_congr
+#print axioms Tm.Replay.piecesGo_of_uncovered
+#print axioms Tm.Replay.piecesGo_eq_sweep
+#print axioms Tm.Replay.pieces_eq_piecesFast
+#print axioms Tm.Replay.samePiece_start
+#print axioms Tm.Replay.startsUp_cons
+#print axioms Tm.Replay.redrawWalkGo_spec
+#print axioms Tm.Replay.redraw_eq_redrawFast
+#print axioms Tm.Replay.the_one_pass_answers_as_pieces
+#print axioms Tm.Replay.the_pass_is_guarded
+#print axioms Tm.Replay.the_merge_is_guarded
+#print axioms Tm.Replay.piecesFast_answers_through_the_pass
+#print axioms Tm.Replay.the_merge_keeps_unmoved_pieces_and_redraws_moved_ones
+#print axioms Tm.Replay.redrawFast_answers_through_the_merge_and_else_through_redraw
+#print axioms Tm.Seal.redrawReads_eq_redrawReadsFast
+#print axioms Tm.Seal.redrawReadsFast_reads_through_the_merge_and_else_through_redrawReads
+/-! APPENDED 2026-10-11 (stage 6, run W-48, track G; README "Stage 6 — W-48 track G"): `Goals.plan_places_no_block_over_a_break` reduced to three
+facts about the replay's answer and the running break (`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay`),
+the replay's half of the open-row clause and the closed side's step half of the record clause, and the witnesses — the law applied whole at the mid-break day, the record
+clause biting at the pre-D100 run, and a day the decoder builds that fails the running-break clause (README gap 5180).
+The goal stays in `Goals.lean`. -/
+#print axioms Tm.PlanCheck.segOf_apart
+#print axioms Tm.PlanCheck.a_past_row_lies_inside_its_segment
+#print axioms Tm.PlanCheck.the_running_break_row_starts_where_it_started
+#print axioms Tm.PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay
+#print axioms Tm.PlanCheck.settle_runs_after_every_span_it_nets
+#print axioms Tm.PlannerWit.the_apart_replay_holds_at_the_mid_break_request
+#print axioms Tm.PlannerWit.the_break_law_holds_whole_at_the_mid_break_request
+#print axioms Tm.PlannerWit.the_apart_replay_fails_at_the_pre_d100_request
+#print axioms Tm.PlannerWit.closeUnderBreakRun_resumes_ok
+#print axioms Tm.PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break
+#print axioms Tm.PlanCheck.netOne_draws_beside_the_break

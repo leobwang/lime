@@ -461,12 +461,12 @@ def cDayAcc : Codec DayAcc :=
       <| tCons cOptStr <| tCons (cOpt (cPair cStr cStr) (cPair_nonnull cStr cStr)) <| tCons cOptNat
       <| tCons (cList maxList (cPair cAt cStr)) <| tCons cNat <| tCons cNat <| tCons (cList maxList cIdleRec)
       <| tCons (cList maxList cBreakRec) <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr
-      <| tCons (cList maxList (cPair cNat cNat))
+      <| tCons (cList maxList (cPair cNat cNat)) <| tCons (cList maxList (cPair cStr cU8))
       <| tNil)
     (fun a => (a.firstStart, a.starts, a.blockMin, a.blocksDone, a.loadFifths, a.byCi, a.ciUnknown, a.done, a.lostMin,
       a.dropped, a.segments, a.wake, a.sleptMin, a.onsetMin, a.arrival, a.loc, a.window, a.budget, a.locChanges,
       a.leakMin, a.longestLeak, a.idle, a.breaks, a.routineMin, a.plans, a.replansToday, a.driftMin, a.lastPlanHash,
-      a.durNet, ()))
+      a.durNet, a.yesterday, ()))
     (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
@@ -476,7 +476,8 @@ def cDayAcc : Codec DayAcc :=
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
-      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩)
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩)
     (fun _ => rfl)
 theorem cDayAcc_nonnull : cDayAcc.NonNull := fun _ => nofun
 
@@ -499,10 +500,11 @@ def cBlock : Codec Block :=
       <| tCons (cList maxList (cPair cAt cAt))
       <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
           (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
+      <| tCons cNat
       <| tNil)
-    (fun b => (b.id, b.started, b.since, b.paused, b.pausedAt, b.workedMin, b.obs, b.day, b.idle, b.drawn, ()))
+    (fun b => (b.id, b.started, b.since, b.paused, b.pausedAt, b.workedMin, b.obs, b.day, b.idle, b.drawn, b.ext, ()))
     (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
-      p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1⟩)
+      p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.1⟩)
     (fun _ => rfl)
 theorem cBlock_nonnull : cBlock.NonNull := fun _ => nofun
 

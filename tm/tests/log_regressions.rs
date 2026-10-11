@@ -320,11 +320,11 @@ fn absurd_minute_counts_are_refused_by_name_not_saturated() {
         ),
         e(
             "2026-09-07T15:00:00-05:00",
-            Event::Plan { hash: "x".into(), replans_today: 1, drift_min: huge },
+            Event::Plan { hash: "x".into(), replans_today: 1, drift_min: huge, yesterday: Default::default() },
         ),
         e(
             "2026-09-07T15:01:00-05:00",
-            Event::Plan { hash: "x".into(), replans_today: 2, drift_min: huge },
+            Event::Plan { hash: "x".into(), replans_today: 2, drift_min: huge, yesterday: Default::default() },
         ),
     ]);
     let why = r.expect_err("the kernel saturated a minute sum instead of refusing it");
