@@ -9644,7 +9644,7 @@ set_option maxRecDepth 400000 in
 /-- **One written mark, rendered**: the pause D61 writes at `^g1`'s 12:50 on the §4.3 Monday — the
 line is the log writer's bytes (`Log.emitLine`), and the entry names the event and the wall. -/
 theorem the_pause_is_rendered_as_the_log_writes_it :
-    (match WallTimer.entryJson Cal.chicago ['t','4'] (Cal.instantOf Cal.chicago 739865 720) [(((Cal.instantOf Cal.chicago 739865 770).sec,
+    (match WallTimer.entryJson Cal.chicago ['t','4'] (Cal.instantOf Cal.chicago 739865 720) [] [(((Cal.instantOf Cal.chicago 739865 770).sec,
         (Cal.instantOf Cal.chicago 739865 830).sec), [['g','1']])]
       (true, (Cal.instantOf Cal.chicago 739865 770).sec, (Cal.instantOf Cal.chicago 739865 830).sec) with
       | .ok v =>

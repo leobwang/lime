@@ -371,10 +371,14 @@ fn a_block_unpaused_by_the_meetings_end_is_not_drawn_across_a_running_break() {
     tm.ok_at("2026-09-07T12:30:00-05:00", &["start", "^t4", "--energy", "4"]);
     tm.ok_at("2026-09-07T13:00:00-05:00", &["break", "30m", "--where", "walk"]);
     let plan = tm.json_at("2026-09-07T14:00:00-05:00", &["plan"]);
+    // **Moved at W-48 track K under parity P115 (the owner's D114, README gap 5014)**: the meeting's `unpause`
+    // is NOT logged while the break that began inside it still runs — the break holds the block — and is
+    // logged when the break ends (`a_running_break_past_the_meeting_holds_the_block_until_it_ends`). Until
+    // W-48 this line read the pause AND the unpause at 14:00.
     assert_eq!(
         timer_marks(&tm),
-        vec![("pause".to_string(), WALL_START.to_string()), ("unpause".to_string(), WALL_END.to_string())],
-        "the meeting's pair is logged"
+        vec![("pause".to_string(), WALL_START.to_string())],
+        "the meeting's pause is logged, its unpause held by the running break"
     );
     let segs = plan["segments"].as_array().cloned().unwrap_or_default();
     let span = |s: &Value| (s["start"].as_str().unwrap_or_default().to_string(), s["end"].as_str().unwrap_or_default().to_string());
@@ -387,4 +391,90 @@ fn a_block_unpaused_by_the_meetings_end_is_not_drawn_across_a_running_break() {
     );
     assert!(blocks.contains(&("12:30".to_string(), "12:50".to_string())), "the stretch before the meeting stays drawn: {blocks:?}");
     assert_eq!(active(&tm, "2026-09-07T14:00:00-05:00")["elapsed_min"], 20, "the host's minutes net the running break");
+}
+
+/// **A break still running when the meeting ends holds the block paused** — the owner's **D114** (README gap
+/// **5014**, stage 6 W-48 track K, parity **P115**). Driven at `1a37997`: `^t4` started 12:30, the meeting pauses it
+/// at 12:50, `tm break 30m` at 13:00, and at 14:00 — the break overrun, still running — the meeting's `unpause`
+/// (13:50) was logged and `tm now` headed `20m of 60m` running beside a running break. Now the unpause waits: at
+/// 14:00 the block reads paused, and the verb that ends the break (here `tm start ^t4`, D107's continue) logs the
+/// unpause stamped at the meeting's end, after the break's own line, once.
+#[test]
+fn a_running_break_past_the_meeting_holds_the_block_until_it_ends() {
+    let tm = Tm::new();
+    tm.ok(&["wake", "06:05", "--slept", "8h10m"]);
+    tm.ok_at("2026-09-07T12:30:00-05:00", &["start", "^t4", "--energy", "4"]);
+    tm.ok_at("2026-09-07T13:00:00-05:00", &["break", "30m", "--where", "walk"]);
+    let during = active(&tm, "2026-09-07T14:00:00-05:00");
+    assert_eq!(during["paused"], true, "the running break holds the block past the meeting: {during}");
+    assert_eq!(during["elapsed_min"], 20, "the stretch before the meeting: {during}");
+    assert_eq!(timer_marks(&tm), vec![("pause".to_string(), WALL_START.to_string())], "no unpause yet");
+    tm.ok_at("2026-09-07T14:05:00-05:00", &["start", "^t4"]);
+    assert_eq!(
+        timer_marks(&tm),
+        vec![("pause".to_string(), WALL_START.to_string()), ("unpause".to_string(), WALL_END.to_string())],
+        "the break's end logs the meeting's unpause"
+    );
+    let evs: Vec<String> = tm.log().iter().map(|e| e["ev"].as_str().unwrap_or_default().to_string()).collect();
+    let brk = evs.iter().rposition(|e| e == "break").expect("the break's line");
+    let unp = evs.iter().rposition(|e| e == "unpause").expect("the unpause");
+    assert!(brk < unp, "the unpause follows the line that ends the break: {evs:?}");
+    let after = active(&tm, "2026-09-07T14:06:00-05:00");
+    assert_eq!(after["paused"], false, "{after}");
+    assert_eq!(after["elapsed_min"], 21, "twenty before the meeting and one since the break ended: {after}");
+    let stop = tm.ok_at("2026-09-07T14:30:00-05:00", &["stop"]);
+    assert!(stop.stdout.contains("after 45m"), "{}", stop.stdout);
+    assert_eq!(timer_marks(&tm).len(), 2, "nothing was written twice");
+}
+
+/// **A block resumed inside a meeting is paused until it ends** — the owner's **D117** (README gaps **5036** and
+/// **3042**, stage 6 W-48 track K, parity **P116**), D110's rule for a resume. Driven at `1a37997`: `^t4` started
+/// 12:00, `tm interrupt` 12:40, `tm resume` 13:00 inside the 12:50–13:50 meeting, `tm stop` 14:00 — `after 100m`,
+/// the meeting counted as work, because the interruption across the wall's start stood for the wall's stop and
+/// nothing was written. Now the next verb logs a `pause` stamped at the resume and the `unpause` at the wall's end.
+#[test]
+fn a_block_resumed_inside_the_wall_is_paused_until_it_ends() {
+    let tm = running_before_the_meeting();
+    tm.ok_at("2026-09-07T12:40:00-05:00", &["interrupt"]);
+    tm.ok_at("2026-09-07T13:00:00-05:00", &["resume"]);
+    let during = active(&tm, "2026-09-07T13:30:00-05:00");
+    assert_eq!(during["paused"], true, "{during}");
+    assert_eq!(during["elapsed_min"], 40, "only the forty minutes before the interruption: {during}");
+    assert_eq!(
+        timer_marks(&tm),
+        vec![("pause".to_string(), "2026-09-07T13:00:00-05:00".to_string())],
+        "the pause is stamped at the resume, not at the wall's start"
+    );
+    let stop = tm.ok_at("2026-09-07T14:00:00-05:00", &["stop"]);
+    assert!(stop.stdout.contains("after 50m"), "forty before the interruption, ten after the meeting: {}", stop.stdout);
+    assert_eq!(
+        timer_marks(&tm),
+        vec![
+            ("pause".to_string(), "2026-09-07T13:00:00-05:00".to_string()),
+            ("unpause".to_string(), WALL_END.to_string()),
+        ]
+    );
+    let review = tm.json_at("2026-09-07T14:01:00-05:00", &["review", "day"]);
+    assert_eq!(review["review"]["block_min"].as_u64(), Some(50), "{review}");
+}
+
+/// **An interruption inside a meeting the wall paused leaves the wall's end its unpause** (the owner's D117: a block
+/// resumed inside a wall is paused only until the wall ends). The wall's pause logged at 12:50, `tm interrupt` 13:05,
+/// `tm resume` 13:10: until W-48 the `resume` became the last word on the timer, the wall's end logged no unpause,
+/// and `tm stop` at 14:20 said `after 50m` — the block held paused past the meeting. Now the unpause is logged at
+/// 13:50 and the thirty minutes since count.
+#[test]
+fn an_interruption_inside_the_meeting_leaves_the_walls_end_its_unpause() {
+    let tm = running_before_the_meeting();
+    tm.ok_at("2026-09-07T13:00:00-05:00", &["now"]);
+    tm.ok_at("2026-09-07T13:05:00-05:00", &["interrupt"]);
+    tm.ok_at("2026-09-07T13:10:00-05:00", &["resume"]);
+    let after = active(&tm, "2026-09-07T14:10:00-05:00");
+    assert_eq!(after["paused"], false, "{after}");
+    assert_eq!(
+        timer_marks(&tm),
+        vec![("pause".to_string(), WALL_START.to_string()), ("unpause".to_string(), WALL_END.to_string())]
+    );
+    let stop = tm.ok_at("2026-09-07T14:20:00-05:00", &["stop"]);
+    assert!(stop.stdout.contains("after 80m"), "{}", stop.stdout);
 }

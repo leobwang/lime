@@ -96806,3 +96806,105 @@ verb's message at 08:50, the cache's `paused`, `tm now`'s header and running row
 toggle at 09:35 (`pause` where `unpause`), and `tm stop`'s `35m` where `40m`.  No committed expectation moved: the
 workspace's tests that read the flag (`cli_start_paused`, `cli_break_in_block`, `cli_interruption_at_start`,
 `cli_wall_pause`) hold on logs whose every pause lies inside its block, where the two readings were one.
+
+### 2. D114 — a break still running when a wall ends holds the block (gap 5014)
+
+**Before** (`d114.head.out`, `1a37997`; the example tree, Monday): `start ^t4` 12:30, `tm break 30m --where walk` 13:00
+(the housekeeping first logs the meeting's `pause` at 12:50), and at 14:00 — the break overrun, still running — `tm now`
+logs the meeting's `unpause` at 13:50 and heads `▶ ^t4 … 20m of 60m` running, `.tm/state.json` holds `paused: false`
+beside a running break, and the replay reads the block running from 13:50 under the break.
+
+**The rule.**  `WallTimer.unpauseIfDone` gains one conjunct, `!breakHolds brk hi`: a break running since before the
+wall's end (`WallTimer.breakHolds`, the request's running break begun before `hi`) holds the wall's unpause; one begun at
+or after `hi` began once the wall had ended and holds nothing.  The unpause is written when the break ends, by whichever
+verb ends it: `day::end_break_at` — the one writer of the line that ends a break (D97's class: `tm break`, `tm start`,
+`tm stop`, `tm done`, `tm interrupt`, `tm resume`) — runs the wall rule again at the break's end once its line is logged,
+so the unpause follows the break's line in file order and the replay nets the break from the block (D87, D94) and runs it
+from the break's end.  Laws: `a_break_running_past_the_walls_end_holds_the_block` (no unpause while such a break runs,
+whatever the marks) and `a_running_break_holds_the_walls_unpause_until_it_ends` (run: held at 2500 with the break
+running since 1200; written once the break is logged ended; written for a break begun at 2100, after the wall).
+
+**After** (`d114.wt.out`): at 14:00 `tm now` heads `20m of 60m · paused`, the log holds the pause alone, the cache
+`paused: true`; `tm plan` draws no `^t4` piece after 13:50 (until W-48 `20m so far` from 13:50 under the break); `tm start
+^t4` at 14:05 (D107's continue) prints `break ended · 65m of 30m …` and logs `break` then `unpause@13:50`; `tm now` at
+14:06 `21m of 60m` running; `tm stop` at 14:30 `after 45m` (unchanged: the minutes were right before, the reading of the
+state was not).
+
+**Parity P115 taken**: a calendar wall that ends while a break that began before its end is still running does not write its `unpause` — the break holds the block paused, and the unpause at the wall's end is written when the break ends, by the verb that ends it (`WallTimer.breakHolds`, `day::end_break_at`); fork 4748911 logs nothing at a wall (P53), and D61's rule as W-36 to W-47 ran it wrote the unpause at the wall's end under the running break, so `tm now` and the replay read the block working and on break at once (the owner's D114, W-48 track K, README gap 5014)
+
+**Behaviour row** (P115): `d114.head.out` against `d114.wt.out`: at 14:00 the header gains `· paused`, the log loses the
+13:50 `unpause` (it appears after the 14:05 `break` line instead), the cache `paused: true`.  **The one committed
+expectation it moves**: `cli_wall_pause.rs`'s `a_block_unpaused_by_the_meetings_end_is_not_drawn_across_a_running_break`
+read the pause AND the unpause at 14:00; it now reads the pause alone, named there under P115.
+
+### 3. D117 — a block resumed inside a wall is paused until the wall ends (gaps 5036 and 3042)
+
+**Before** (`d117.head.out`, `1a37997`): `start ^t4` 12:00, `interrupt` 12:40, `resume` 13:00 inside the 12:50–13:50
+meeting: `tm now` at 13:30 `70m of 60m` running, nothing logged at the wall; `tm stop` at 14:00 `after 100m`, review
+`block_min 100`.  The interruption across the wall's start stood for the wall's stop (`stoppedAt`), and once it ended
+nothing stopped the timer.  The same block started at 13:00 instead stops at `10m` (D110).
+
+**The rule.**  `WallTimer.pauseSec` — the second a span's pause is stamped at — is D110's (`startSec`, renamed from the
+old `pauseSec`) unless an interruption the log closes (`WallTimer.intSpans`, `spanStep`'s interruption half) covers it
+and its `resume`'s first whole second falls inside the wall: then that second.  So a block resumed inside a wall is
+paused from its resume until the wall ends, with D61's marks, exactly as one begun inside it is.  **And the class:**
+`lastTimerMark` — whether the wall's pause is still the last word — reads the pause stop's own marks, passing over an
+interruption's (`isIntMark`) as it passed over a break's: until W-48 an interruption taken and resumed inside a meeting
+the wall had already paused made its `resume` the last word, the wall's end wrote no unpause, and the block stayed paused
+PAST the meeting (driven `d117c.sh`: `start` 12:00, the wall's pause at 12:50, `interrupt` 13:05, `resume` 13:10, `stop`
+14:20 — `after 50m`; now `after 80m`).  A `resume` ends the interruption, never the pause (`spanStep`,
+`Replay.resumeBlock`).  The rows `answer` renders are given the interruptions taken apart first (`answerRows`): a decided
+witness over a whole replay (`PlannerWit.the_open_wednesdays_wall_is_answered_on_its_index`) otherwise read the log again
+at every comparison the zone table made with a pause's second and ran past its heartbeat budget (measured in a scratch
+copy: 450,000-700,000 heartbeats against 100,000-150,000 at `1a37997`, and under 150,000 with the list taken apart; the
+budget was not raised).
+
+**After** (`d117.wt.out`): `tm now` at 13:30 prints `tm: paused ^t4 for Meeting w/ host 12:50–13:50` and heads `40m of
+60m · paused`; the log gains `pause@13:00` and, at `tm stop` 14:00, `unpause@13:50`; `after 50m`, review `block_min 50`,
+the plan's second piece from 13:50.
+
+**Parity P116 taken**: a block resumed inside a calendar wall — an interruption across the wall's start closed by a `resume` inside it — is paused from its resume until the wall ends (`WallTimer.pauseSec` over `WallTimer.intSpans`), and an interruption taken and resumed inside a meeting the wall already paused leaves the wall's end its `unpause` (`WallTimer.lastTimerMark` passes over an interruption's marks); fork 4748911 logs nothing at a wall (P53), and D61/D110's rule as W-36 to W-47 ran it wrote nothing for the first, so the meeting after the resume counted as work, and no unpause for the second, so the block stayed paused past the meeting (the owner's D117, W-48 track K, README gaps 5036 and 3042)
+
+**Behaviour row** (P116): `d117.head.out` against `d117.wt.out` and `d117c.head.out` against `d117c.wt.out`, line for
+line above.  **The committed expectations it moves, each named (RULE M):** three frozen week-grid lines,
+`tm/tests/fixtures/fork-4748911-week-grid.jsonl`'s `week draw 11`, `week draw 27` and `midnight draw 2`, re-drawn under the
+owner's D64(b) — their steps now build another world, so the frozen world is one the shipped binary can no longer build
+(`every_frozen_week_is_the_world_its_steps_build` named all three) — each line carrying its dated `d64b` reason and the
+fork's own answer on the new world (`TM_GRID_BLESS=1`, `TM_GRID_BLESS_BECAUSE=115,116`, oracle `4748911` built fresh by
+`build-oracle.sh`).  All three are D117's second half: a block begun inside a meeting (D110's pause at its start), an
+`interrupt` taken inside it, and the meeting's end — until W-48 the interruption's mark was the last word on the timer and
+no `unpause` was written (draw 27's `done` logged `actual_min: 0`); now the wall's end writes it (draw 11 `01:19`, draw 27
+`15:24`, midnight draw 2 `13:50`).  In midnight draw 2 the generator's later `tm pause` at 15:28 therefore pauses a running
+block where it had resumed a held one, and its `done` logs 84 minutes where it logged 32; draw 11's interruption stays open,
+so its cache keeps `paused: true` (the wall housekeeping's cache now reads every stop it holds, D118's direction,
+`day::stop_the_timer_at_walls`).  The fork's own grid moved on draws 27 and midnight 2 only because their logs did.
+
+**Laws restated at D114 and D117** (D5: re-proved; each statement it breaks is refuted as written beside the restated
+law): `a_wall_that_starts_while_a_block_runs_stops_its_timer` (the unpause now also needs `breakHolds brk hi = false`;
+`…_as_d61_wrote_it_is_refuted`), `a_span_whose_pause_second_has_come_is_paused` (over D117's pause second, and the
+unpause under `breakHolds`; `…_as_d110_wrote_it_is_refuted`), `a_block_started_inside_a_wall_is_paused_from_its_start`
+(the unpause under `breakHolds`; `…_as_d110_wrote_it_is_refuted`), `the_walls_end_restarts_the_timer_it_stopped` (the
+pause at the pause second, no break holding it; `…_as_d61_wrote_it_is_refuted`), `a_timer_already_stopped_at_the_wall_is_left_alone`,
+`a_timer_mark_after_the_walls_start_stands` and `a_user_who_resumed_during_the_meeting_keeps_their_timer` (each over
+D117's pause second; each `…_as_d110_wrote_it_is_refuted` by an interruption 900–1200 across the wall `[1000, 2000)`),
+`pauseSec_of_lt` (with no interruption the log closes covering the wall's start; `…_as_d110_wrote_it_is_refuted`), and
+`step_of_running`, `step_written`, `mem_writes`, `pauseSec_ge`, `pausedFor_eq_find`,
+`pausedFor_is_a_meeting_the_timer_is_paused_for` and the two-run `after_one_wall_a_second_verb_writes_nothing_more`
+(over the new pause second; `mem_writes` and `step_written` imply their old statements, D117's second never being earlier
+than D110's: `startSec_le_pauseSec`).  New: `a_block_resumed_inside_a_wall_is_paused_from_its_resume` and its run.
+Cheats 304-305.
+
+**Gap 3042's break half, measured and found already closed** (`scratchpad/w48/k/drive/g5070.sh` on this commit's binary):
+`start ^t4` 12:00, `tm break 30m` 12:40, the break ended 13:00 inside the 12:50–13:50 meeting, `stop` 14:00 — the log
+gains the wall's `pause@12:50` and `unpause@13:50` once the break is logged ended (a logged break is not the user's stop,
+`spanStep`, the W-44 repair), and `tm stop` says `after 50m`: the meeting is not counted.  Gap 3042 named it open; it
+closed at W-44 without saying so.
+
+**Gaps closed by this block so far**: 5030 (D118), 5014 (D114), 5036 and 3042 (D117; 3042's break half closed at W-44,
+above).
+
+**Acceptance of the D114/D117 commit** (capped, `scratchpad/w48/k/acc-c2-*.log`): `check.sh` seventeen lines ok — axiom
+audit 6,572 theorems, stage goals 1, parity P1-P116, check 9 814 new or changed and 0 owed (the WallTimer rows re-run by
+`mutate.py --verify --write --only WallTimer.lean`: 23 rows whose pin site had drifted rewritten, 0 failed; 7 new rows, 7
+PINNED) — 03:39-03:45, load 8.3; FFI crate ok; `cargo test --workspace --no-fail-fast` **2,959 passed / 0 failed / 53
+ignored over 161 result lines, three runs** (03:45, 04:03, 04:20; load 3.5-8.3).

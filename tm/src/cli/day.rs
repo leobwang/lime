@@ -256,6 +256,18 @@ fn end_break_at(ctx: &mut Ctx, end: DateTime<chrono_tz::Tz>) -> Result<Option<u3
         },
     );
     ctx.append_entry(&entry)?;
+    // **The owner's D114** (README gap 5014, stage 6 W-48 track K, parity
+    // P115): a calendar wall that ended while this break ran had its `unpause`
+    // held — a break running since before a wall's end holds the block
+    // (`WallTimer.breakHolds`), so a block is never working and on break at
+    // once — and the break's end is when it is written, by whichever verb
+    // ends the break, as of the end it ends at. With the break's line logged
+    // and none running, the kernel's wall rule answers that unpause
+    // (`WallTimer.writes`); with no wall ended inside the break it answers
+    // nothing.
+    if ctx.state.active.is_some() && stop_the_timer_at_walls(ctx, end)? {
+        ctx.reload()?;
+    }
     Ok(Some(actual))
 }
 
@@ -547,8 +559,14 @@ pub(crate) fn stop_the_timer_at_walls(ctx: &mut Ctx, at: DateTime<chrono_tz::Tz>
             say_wall_pause(ctx, &active.id, &m.walls, m.from, m.to);
         }
     }
+    // The cache reads the stops the kernel holds, never the last mark alone
+    // (the owner's D118, README gap 5030): a wall's `unpause` ends the wall's
+    // pause and no other stop — an interruption still open, or a break still
+    // running, holds the block (D117, D114) — as `ctx::derived_state` reads it.
+    let interrupted = ctx.state.interrupt.is_some();
+    let on_break = ctx.state.break_.is_some();
     if let Some(a) = ctx.state.active.as_mut() {
-        a.paused = paused;
+        a.paused = paused || interrupted || on_break;
     }
     ctx.save_state()?;
     Ok(true)
