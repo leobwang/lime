@@ -340,6 +340,12 @@ pub struct DayPlan {
     /// drawing.
     #[serde(skip)]
     pub cells: Vec<crate::emit::RowCells>,
+    /// **The `window ends` divider, the kernel's** (W-48 track R, README gaps 5031 and
+    /// 1301): its position among [`DayPlan::cells`] (a row index, or their number when it
+    /// comes last) and its cells, asked with the rows (`planwire::read_divider`). `None` on
+    /// a day with no divider and on a day nobody asked rows for.
+    #[serde(skip)]
+    pub divider: Option<(usize, crate::emit::RowCells)>,
 }
 
 impl DayPlan {
@@ -357,6 +363,7 @@ impl DayPlan {
             diagnostics: Diagnostics::default(),
             priorities: Vec::new(),
             cells: Vec::new(),
+            divider: None,
         }
     }
 

@@ -140,6 +140,37 @@ fn plan_json_has_the_documented_shape() {
     insta::assert_json_snapshot!("plan_schema", schema(&json));
 }
 
+/// **`tm plan --json` carries the `window ends` divider, and it is the day file's line**
+/// (README gap 1301; W-48 track R; parity P122, licensed by the owner's D112 and D30 Q5:
+/// every surface prints the one renderer's rows). Until W-48 the JSON had one entry per
+/// segment and the divider was no segment's, so a consumer could rebuild every line of the
+/// day section but this one; fork 4748911's `tm plan --json` carried no divider.
+#[test]
+fn plan_json_carries_the_day_files_divider_p122() {
+    let tm = Tm::new();
+    tm.ok(&["arrive", "lounge"]);
+    let json = tm.json(&["plan"]);
+    let divider = &json["divider"];
+    assert!(divider.is_object(), "the example day has a divider: {json}");
+    let text = divider["text"].as_str().expect("text");
+    let before = divider["before"].as_u64().expect("before") as usize;
+    let segs = json["segments"].as_array().expect("segments");
+    assert!(before <= segs.len(), "{before} past {} segments", segs.len());
+    assert!(text.contains("───") && text.contains("window ends"), "{text}");
+    assert!(text.starts_with(divider["time"].as_str().expect("time")), "{text}");
+    // The day file's section is the segments' rows with the divider spliced in at `before`.
+    let day = tm.read("day/2026-09-07.md");
+    let section: Vec<&str> = day
+        .lines()
+        .skip_while(|l| !l.starts_with("<!-- tm:plan start"))
+        .skip(1)
+        .take_while(|l| !l.starts_with("<!-- tm:plan end"))
+        .collect();
+    let mut rebuilt: Vec<&str> = segs.iter().map(|s| s["text"].as_str().expect("row text")).collect();
+    rebuilt.insert(before, text);
+    assert_eq!(section, rebuilt, "the JSON rebuilds the day file's section line for line");
+}
+
 /// §8.5's prior is a step function of hours since wake, and `tm wake` is
 /// optional: arriving without it is a normal day. Both the planner and `Ctx`
 /// take the weekday's expected arrival for the wake nobody logged (§8.4, §16's

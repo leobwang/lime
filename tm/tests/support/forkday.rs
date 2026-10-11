@@ -71,8 +71,8 @@
 //!   writes `↓ slot E, item C` into `flags.note`, and the kernel's
 //!   `Planner.assignedSeg` writes no note (its `assignedSeg_note` is a law
 //!   about NOT writing one) because the renderer derives that sentence from
-//!   the row's own energy and the item's `ci` (`emit::note_cell`, and
-//!   `Emit.underusedCell` on the kernel's side). Matched as a fork row marked
+//!   the row's own energy and the item's `ci` (`Emit.underusedCell`, the
+//!   row's note cell since the owner's D112). Matched as a fork row marked
 //!   `underused` whose note is `↓ slot <its energy>, item <n>` and whose kernel
 //!   twin is equal with no note; not digested. `support/forkclass.rs` checks
 //!   that the renderer derives the fork's exact sentence for each.

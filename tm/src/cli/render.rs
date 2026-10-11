@@ -88,11 +88,32 @@ pub fn rows(plan: &DayPlan) -> Vec<Row> {
         .collect()
 }
 
+/// **The `window ends` divider, as `tm plan --json` carries it** (README gap 1301, W-48
+/// track R): the day section's one line that is no segment's. Until W-48 `--json` had no
+/// counterpart, so a consumer could rebuild every line of the section but this one.
+#[derive(Clone, Debug, Serialize)]
+pub struct DividerOut {
+    /// The position among `segments` it stands before — their number when it comes last.
+    pub before: usize,
+    /// `HH:MM` — the instant the budget runs out or the window ends, the kernel's.
+    pub time: String,
+    /// The whole line, exactly as the day file has it.
+    pub text: String,
+}
+
+/// The divider of a plan, from the day section's own lines ([`emit::day_lines`]): its
+/// position, its time cell and its text, so `tm plan --json` and the day file print one line.
+pub fn divider(plan: &DayPlan) -> Option<DividerOut> {
+    let (before, cells) = plan.divider.as_ref()?;
+    let text = emit::day_lines(plan, &emit::Layout::default()).into_iter().find(|l| l.segment.is_none())?.text;
+    Some(DividerOut { before: *before, time: cells.time.clone(), text })
+}
+
 /// The body of the day file's `tm:plan` section (§4.3) — the timeline, and
 /// only the timeline. §8.2 step 8's diagnostics and §11's warnings go to
 /// `tm plan`'s own output ([`diagnostics`]), not into the file.
-pub fn timeline(plan: &DayPlan, cfg: &Config, now: DateTime<Tz>) -> String {
-    emit::render_plan_section(plan, cfg, now).1
+pub fn timeline(plan: &DayPlan, now: DateTime<Tz>) -> String {
+    emit::render_plan_section(plan, now).1
 }
 
 /// §8.2 step 8's diagnostics and §11's warnings — the "plan honesty {h} —

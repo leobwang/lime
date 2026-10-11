@@ -96754,3 +96754,207 @@ record.
   5027 (the re-draw's cost), 5031 (= 1301, the divider), and track L's, H's and C's still-open gaps the land listed
   (4950, 4951, 4953, 4955, 4957-4960, 4970, 4972-4975, 4977, 4978, 4990, 4993-4995, 4910, 4911, 4914, 5010, 5011, 5016).
   W-48: D108 (`RuntimeIn.yesterday` among it).  Burn-down: **1**.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **track R**
+     — the rows and the divider, owed by W-47.  Gaps 5130-5149 are this
+     track's (5130-5134 used).  Parity: P122 taken; P114-P121 are declared
+     holes in `parity.txt` (the other W-48 tracks' pre-allocated numbers),
+     which the W-48 Land deletes as their rows land; the track's second
+     pre-allocated number is left free.
+     ===================================================================== -->
+
+## Stage 6 — W-48 track R: the `window ends` divider is a kernel row, the note reader by value is gone, and the one-call rows refused by name
+
+Branch `w48-r`, worktree `.claude/worktrees/w48-r`, from `rebuild-on-lean` at `1a37997`.  Every command capped
+(`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16 GB for measurements and mutations, 8 GB for the
+new `decide` witnesses and the drives).  The machine was shared: load 5-20 throughout, `uptime` beside every figure.
+
+### 0. The brief, measured before it was acted on
+
+* HEAD `1a37997`, clean; `check.sh` all seventeen lines ok on it (axiom audit 6,549, goals 1, parity P1-P113, next
+  free P114), 00:45, load 1.6.  As the brief said.
+* **Step 1's premise was incomplete, and that is the finding of §1**: gap 4954's remedy deletes the binary's only
+  sender of the `plan` section, and the brief did not price what checks 12 and 13 say about a request section nothing
+  sends.  Both say no, and both answer with a file that may only shrink.
+* **Step 3's "if the one-call shape makes it removable"** was a condition that does not bind: `emit::note_cell` was a
+  reader of `plan.cells` whose one caller could read the cells by position on any shape of the call (§3).
+
+### 1. Gap 4954 — ONE CALL: built, driven byte-identical, and REFUSED by checks 12 and 13 (gap 5130)
+
+Built in full (archived at `refs/archive/w48-r/one-call-probe`, `fe40433`, its message says NOT GREEN; the names below
+written without backticks are the probe's and exist on no branch):
+`PlanWire.runPlanner` answered the day's `rows` beside its seven keys (EmitWire.dayRowsJson of the day it planned,
+proved `Emit.rowsOf` zipped with the segments), a planWithPlanner refusal for a request carrying both sections, the
+three success laws re-proved with the key (D5), `planwire::read_plan` reading `plan.rows` with the day, and
+`planwire::rows_request` and `read_day`'s second call deleted, with `kernel_call_counts`' `rows` column pinned to 0
+and T18/T19 restated over one call.
+
+* **Driven** (plan-basic, `--now 2026-09-07T10:42:00-05:00`, the pre-change binary against the probe's, both built
+  from source in this worktree): `tm plan`, `tm now`, `tm --json plan`, `tm --json now`, `tm check` and the day file's
+  `tm:plan` block **byte-identical**, every exit code 0.
+* **Measured** (`cli_latency` T18/T19, `kernel_call_counts`; before at 00:48, load 14.5 → 12.2; the probe at 01:24,
+  load 19.9 → 15.5 — a loaded machine, so these are one run each and not a band): calls per verb fell by exactly the
+  planned days (`tm check` 5 → 4, `tm plan` 5 → 4, `tm now` 3 → 2, `arrive` 11 → 9, `resume` 12 → 11); T11's tree: the
+  planner call 77.6 ms and a rows call 44.2 ms before, the planner call with its rows 99.9 ms after; T19's tick on
+  T11's tree best 129.0 / median 131.9 ms before (build + planner + rows), 97.6 / 110.7 ms after (build + one call);
+  T14 ten years out 241.3 / 249.9 → 210.8 / 214.5 ms.  (The before run's example-tree lines were lost to this step's
+  own filter; W-47 track L measured that rows call at 3.1 ms.)
+* **Refused, on the gates**: with the binary sending no `plan` section, check 12 reports **21 UNANSWERED** — the
+  section's readers, among them `EmitWire.readRowSection`, `readSegs`, `readSeg`, `readKind`, `readFlags`, `readNote`,
+  `readOptNote`, `readPrio`, `readPrios`, `rowsOfReq`, `rowsJson`, `withPlan`, `rowRefusalJson`, `RowRefusal.text`,
+  `RowKey.name`, `segErrName`, `Planner.mkSeg?`, `Planner.mkBatch?` and `Planner.Seg.wf`, are emitted and no request
+  the binary builds reaches them — and check 13's written half reports **`plan.bed` UNWRITTEN**.  Both are
+  right: since W-47 the `plan` section is ALSO the door every hand-built test day gets its kernel rows through
+  (`rowwire::with_kernel_cells`: the `emit_*` snapshots, `kernel_row_cells`, `tui_today_render`, `one_renderer`,
+  `planner_invariants`' claim 2, the FFI crate's tests), so after one call it is a door only the harness enters.  The
+  answers each file offers are growth — a `CLASS unsent plan` line (W-47 track L deleted it when the binary began
+  sending the section) and a `plan.bed` line — and `reach-exempt.txt` is strictly shrink-only (D51, gaps 3953, 4043:
+  "growth is the owner's to grant in the commit that changes reach.py").  A first cut also met check 12's scanner: a
+  `match jget j "plan"` inside `runPlanner` made it the `plan` section's DISPATCHER (`sections.py`), and the cut of an
+  unsent section's dispatcher to its absent arms called the whole planner unreached; the probe reads the collision off
+  the answer `runRowsP` wrote (answersRows) instead.
+
+### 2. Gaps 5031 and 1301 — the `window ends` divider is a kernel row (LANDED)
+
+* **The kernel** (`Emit.lean`, appended): `dividerGlyph`, `budgetStep`/`budgetSpentAt` (fork divider_instant's walk:
+  the work rows' minutes, `Seg.minutes`, against the budget in minutes, to the end of the row that reaches it; a zero
+  budget runs out nowhere), `dividerAt` (spent inside the window, there; else the window's end when a row starts at or
+  after it; else none — or the spent instant), `dividerBefore` (before the first row starting at or after it, else
+  last), `dividerRow` (its clock, `───` in the `ci` cell, an EMPTY mark — which is what puts the title at fork
+  divider_row's column, `ci` being three columns where `CI_W` is two — and `window ends <the window's end>`) and
+  `divider`.  **The budget is the planner's**: the binary sends back the planner answer's own `budgetBlocks` and
+  `window.hi` with the segments (`planwire::rows_request`, two keys), counted in the request's `blockMin`; no budget is
+  recomputed anywhere.  Laws: `dividerRow_cells`, `dividerAt_where_the_budget_ran_out`, `dividerAt_unspent`,
+  `dividerAt_is_the_window_end_or_the_spent_instant`, `dividerBefore_le_length`, `budgetStep_*`, and five decided
+  witnesses on a five-row day (spent at the second block's end, before row 2; unspent, at the window's end before row
+  4; nothing past the window, none; spent past the window, at its end; a zero budget, nowhere).
+* **The wire** (`EmitWire.lean`): `RowReq.div` (both of `budgetBlocks` — `u32Within` — and `windowEnd` — `secWithin`
+  — or neither; one alone refused by the missing key's name), `dividerJson` (its position `before`, the nine cells
+  under `rowKeys`, an empty `batchNames`), `dividerPairs` (the `divider` key — `null` on a day with none — and nothing
+  for a section that sent neither, so a W-24-shaped request is answered as before), and `withPlan` taking the extra
+  pairs.  Laws: `readRowSection_reads_the_budget_and_the_window_end`, `…_without_them_reads_no_divider`,
+  `…_refuses_one_without_the_other`, `…_refuses_a_budget_past_the_width_and_an_end_past_the_calendar`,
+  `dividerJson_is_its_position_then_the_nine_cells`, `dividerPairs_without_the_inputs`, `…_with_the_inputs`,
+  `dividerPairs_on_the_wire`, `withPlan_of_no_extra`.  `withPlan_appends_the_plan_key` holds unchanged.
+* **The host**: divider_instant, divider_row and `emit.rs`' glyph constant are deleted; `DayPlan::divider` holds the
+  kernel's position and cells (`planwire::read_divider`, through the one `RowCells` builder, `cells_of`, which
+  `row_cells_of` now calls); `emit::day_lines` splices it and pads it with `render_row` at a title width its words fit
+  (fork divider_row never cut them; a narrower pane clips the whole line where it clips every row) and no longer takes
+  a `Config`, nor do `render_plan_section(_with)` and `render::timeline`.  **`tm plan --json` gains `divider`**
+  (`{before, time, text}`, `null` on a day with none) — gap 1301's counterpart, read off the day section's own lines.
+* **RULE M.**  No printed divider moved: every snapshot and frozen comparand holding one passes unchanged (the
+  `emit_day_section`, `emit_planner`, `tui_today_render` and `tui_today_prompts` snapshots, `cli_plan`'s §4.3 grid, the
+  `fork-4748911-planner-*` and week-grid fixtures).  ONE expectation of the binary's output moved, the `--json` schema
+  snapshot `cli_plan__plan_schema.snap` (the `divider` key, its three fields), and it is accounted for:
+
+**Parity P122 taken**: `tm plan --json` carries the day section's `window ends` divider — `divider: {before, time, text}`, `null` on a day with none, `text` the day file's own line and `before` its position among `segments` — so a consumer rebuilds the section line for line; fork 4748911's `tm plan --json` had one entry per segment and no divider (README gap 1301, W-48 track R; licensed by the owner's D112 — every surface's bytes the kernel's rows — and D30 Q5's one row renderer whose output every surface, `tm plan --json` named among them, prints)
+
+  The behaviour row is `cli_plan.rs`' `plan_json_carries_the_day_files_divider_p122` (the JSON's rows with the divider
+  spliced at `before` ARE the day file's section).  Nothing else the user sees moves: the divider's instant, position
+  and bytes are fork divider_instant's and divider_row's, now computed once, in the kernel.
+* **Driven** (the pre-change binary against this step's, plan-basic copied per run, four worlds): plan-basic at 10:42
+  (`19:42  ───    window ends 19:42`, before row 11), `budget_ratio = 0.3` at 10:42 (`15:50  ───    window ends 19:42`
+  — the budget spent mid-window, before row 6), `0.75` at 07:00 (`16:00 … window ends 16:00`, before row 14), `0.1` at
+  13:00 (`19:50 … window ends 19:50`, before row 10): `tm plan`, the day file's block, `tm now`, `tm --json now`, `tm
+  check` and every exit code **byte-identical**; `tm --json plan` differs by the `divider` key alone.
+* **Plants** (`plants.py`, in a clone `scratchpad/w48/r/mclone` with its own target directory; `git status
+  --porcelain` 22 lines before and after; each plant alone, its tests run, the file restored), every one caught: P1
+  `fn divider_instant(` restored in `emit.rs` → `one_renderer` `the_host_does_not_place_or_word_the_divider`; P2 the
+  words `window ends` in a shipped Rust string → the same test; P3 `read_day` dropping the kernel's divider →
+  `cli_plan`'s P122 row, the schema snapshot and `the_generated_section_is_the_spec_4_3_grid`; P4 the divider spliced
+  one row late → ten tests in `emit_day_section` and `cli_plan`; P5 the divider fitted at the row's title width → the
+  narrow `emit_day_section` snapshot and three `tui_today_render` snapshots.
+* **D40** (`mutate.py`, run in the clone, never in this tree): 15 definitions audited, 13 pinned (8 by a synthesised
+  constant, 2 by an identity), `readRowSection` unfoldable and pinned by nothing (`Except RowRefusal RowReq` has no
+  `Inhabited`, as before this step); `dividerPairs := []` was first pinned by ONE theorem alone, and
+  `dividerPairs_on_the_wire` was written for it.  The witnesses' rows were first two fixture definitions, which check
+  12 reported emitted and unreached; they are written into each statement now, and their roster rows went with them.
+  Pin sites the edits moved were re-anchored by the declaration that encloses them (`scratchpad/w48/r/shift_sites.py`:
+  43 in `EmitWire.lean`, 5 in `Emit.lean`), and the two rows whose witness theorem was restated were re-run by a
+  build (`mutate.py --verify --write --only Tm.Emit.budgetSpentAt`, `… Tm.Emit.dividerBefore`: verdicts unchanged, the
+  site three lines down); `mutate.py --gate` re-resolves every one.
+* **Exemption files, shrunk** (check 12 failed them STALE): `Tm.Emit.Row.cells` and `Tm.EmitWire.rowKeys` are reached
+  now (through `dividerJson`), so their entries left `reach-exempt.txt`, its `EXEMPT` count 1099 → 1097, and the two
+  sections' censuses were corrected to the measurement (Emit 39 of 40, EmitWire 24 of 39).  These are track H's file
+  this run: **the Land re-checks the two deletions against track H's edits**.
+
+### 3. Gap 4952 — the note reader by value is gone (LANDED)
+
+`emit::note_cell` found a segment in `plan.segments` by equality and read the cell at that position, for one caller,
+`support/forkclass.rs`' under-used-note comparison.  That caller now reads `k.day.cells` at the segment's own index
+(gap 1197's rule) and names a day carrying no cells for the row as a finding rather than skipping it; the function is
+deleted, and `one_renderer.rs`' `the_note_reader_by_value_is_gone` keeps it deleted.  No shape of the call was needed.
+
+### 4. Gap 4976 — the example tree's `^t3`: NOT landed, unlicensed (gap 5131)
+
+Read with gap 4749.  The four-line template change is not licensed by any standing decision for every line it moves:
+D56 and D62 rule what `tm edit`, `tm extend`, `tm stop` and `tm done --partial` WRITE on a line, not what `tm init
+--example` ships; and the eight frozen comparands whose worlds are `plan-basic`'s files by value meet neither D64(a)
+(no registered number changes the fork's day on them — the change is to the WORLD, which the fork would have to be
+asked again, by `tm-oracle`) nor D64(b) (a two-estimate line is a world the binary can still build: a user types it).
+Not re-driven here; gap 4976's measurement (33 failing tests in 19 binaries on W-47 track H's tree) is that step's.
+
+### 5. Gaps
+
+**Gap 5130 — the one-call rows (gap 4954) are refused by checks 12 and 13 (§1).**  1. *What.*  A planned day still
+costs the planner call and a rows call over the same documents.  2. *Why.*  Deleting the binary's rows call leaves
+the `plan` section a door only the test harness enters; check 12 then finds 21 definitions no binary request reaches
+and check 13 finds `plan.bed` written nowhere, and the only answers either file offers are growth, which D51 makes the
+owner's.  3. *Cost.*  The figures in §1: on T11's tree the rows call is ~40 ms of a ~130 ms tick; inside every band.
+4. *Clears it.*  The owner: grant `CLASS unsent plan` and a `plan.bed` written-exempt line (the hand-built-day door
+named as the harness's), or retire the `plan` section and give hand-built days another door (frozen cells, at the cost
+of the kernel's coverage on shapes the planner rarely draws); then the probe at `refs/archive/w48-r/one-call-probe`
+lands as built.
+
+**Gap 5131 — gap 4976 stays unlicensed (§4).**  1. *What.*  `tm init --example`'s `^t3` carries two estimates.
+2. *Why.*  No standing decision covers the template or the eight frozen worlds it moves.  3. *Cost.*  Gap 4749's.
+4. *Clears it.*  An owner ruling that the one-estimate rule reaches the shipped templates, with a D64 clause for
+worlds a user can still type.
+
+**Gap 5132 — the divider's budget crosses the wire twice.**  1. *What.*  The binary sends the planner answer's
+`budgetBlocks` and `window.hi` back in the rows request, as it sends its segments.  2. *Why.*  The rows are a second
+call (gap 5130), and that call's request is the only place the kernel sees the day's rows.  3. *Cost.*  None silent:
+the values are copied verbatim, and `planner_invariants`' claim 2 compares the codec.  4. *Clears it.*  Gap 5130: in
+one call the planner answer computes the divider from its own `DayPlan`.
+
+**Gap 5133 — `[day] bed` crosses the wire twice per planned day.**  It reaches the kernel in the capacity
+section (`day.bed`, the planner's) and again in the rows request (`plan.bed`, the rows'), both from `config.toml`; the
+rows' wind-down title reads the second.  Pre-existing since D112 (W-47); gap 5130 removes it.
+
+**Gap 5134 — `tm now --json` has no divider.**  `tm now` prints a window of the rows (`emit::now_window`) and never
+the divider, so neither surface carries it; gap 1301 named `tm plan --json` alone.  Not a defect; recorded so the
+next reader does not look for one.
+
+**Closed:** 5031 and 1301 (§2), 4952 (§3).  **Open, carried:** 4954 (as 5130), 4976 (as 5131).
+
+### 6. Acceptance, on the tree this commit holds
+
+* **`check.sh`**, capped, all seventeen lines ok: build; totality; axiom audit **6,573** (6,549 at `1a37997`, +24 this
+  step's laws); `Negative.lean` rejected; FFI 96; corpus 29/37 and 4/5; stage goals **1**
+  (`plan_places_no_block_over_a_break`, untouched); prose citations; new definitions mutated (816 rostered, 0 owed);
+  parity (P1-P122, 8 declared holes, next free P123); no two names; reached (1,097 exempt, 0 unanswered); the four of
+  check 13 (sent 174 key paths over 11 sections — `plan` 5, the two new keys among them; written 212, 173 written, 0
+  unanswered); the kernel replays every module.  The first full run (02:46, load 3.4 → 8.6) failed check 8 on three
+  names of the §1 probe this block had backticked; written without backticks since.
+* **`cargo test --workspace --no-fail-fast`, THREE runs** (D46): run 1 (02:52-03:12, load 8.6 → 13.0, peaking 15.8)
+  2,955 passed / **1 failed** / 53 ignored over 160 result lines — `cli_latency`'s T19 set-up, `tm drop ^a1` on
+  T11's three-year tree, "still running after 5s" (`FIRST_VERB`): the first verb's genesis, which this step does not
+  touch, missed its band under load, gap 4901's class, a measurement and never a band to move; runs 2 (03:12-03:30,
+  load 13.0 → 7.1) and 3 (03:30-03:49, load 7.1 → 8.0) **2,956 passed / 0 failed / 53 ignored** over 160 each (2,953 +
+  3 at `1a37997`: `plan_json_carries_the_day_files_divider_p122`, `the_host_does_not_place_or_word_the_divider`,
+  `the_note_reader_by_value_is_gone`).  `cli_latency` alone again at 03:49 (load 7.9 → 6.5): 7 passed, 0 failed, the
+  three-year first verb 3.36 s.
+* **The FFI crate** (`cd kernel/tm-kernel-ffi && cargo test`): 104 passed, 0 failed.
+* **The rows call this step leaves in place, measured** (that `cli_latency` run, one run, load ~8): T18 the planner
+  call 8.0 ms and the rows call 3.1 ms on the example tree, 75.1 / 49.5 ms on T11's tree, 97.7 / 44.8 and 199.0 / 45.6
+  ms on T14's; T19's tick on T11's tree, build + planner + rows, priced in §1 against the probe's one call.
+
+### 7. What lands, and what is owed
+
+* **ONE commit on `w48-r`** (this block's §2 and §3, and the record of §1 and §4).  The probe of §1 is at
+  `refs/archive/w48-r/one-call-probe` and is not an ancestor of anything.
+* **Owed, by name.**  The owner: gap 5130 (the one-call rows need a `CLASS unsent plan` line and a `plan.bed`
+  written-exempt line, or the hand-built-day door retired) and 5131 (the example tree's `^t3`).  The Land: the two
+  `reach-exempt.txt` deletions of §2 (track H's file this run), the parity holes P114-P121 (`parity.txt`, one per
+  other track's number), and `forkclass.rs`' and `forkday.rs`' edits of §3 (track C's files at W-47).

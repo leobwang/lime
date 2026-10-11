@@ -2026,6 +2026,7 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
         // The rows are asked of the kernel in a second call over this very day
         // (`rows_request`, `read_rows`; the owner's D112).
         cells: Vec::new(),
+        divider: None,
     };
     let hash = text(&plan["hash"], "plan.hash")?.to_string();
     let ours = day.hash();
@@ -2052,7 +2053,10 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
 /// trip (W-27), so no field of a segment is re-encoded on this side. The request carries the
 /// planner request's own documents, zone and block length, and `now` is the planned day, the
 /// day a HOT row's deadline is told against (`EmitDue.hotCell`, fork `hot_note`'s
-/// `plan.date`). `bed` is §16's, the wind-down row's clock.
+/// `plan.date`). `bed` is §16's, the wind-down row's clock. **And the planner answer's own
+/// `budgetBlocks` and window's end** (W-48 track R, README gaps 5031 and 1301), so the kernel
+/// answers the `window ends` divider beside the rows ([`read_divider`]) from the budget the
+/// planner spent — the host no longer walks the rows against it.
 pub fn rows_request(docs: &Value, tz: &Value, block_min: u32, date: NaiveDate, bed: NaiveTime, plan: &Value) -> String {
     json!({
         "docs": docs,
@@ -2063,6 +2067,8 @@ pub fn rows_request(docs: &Value, tz: &Value, block_min: u32, date: NaiveDate, b
             "bed": fmt_time(bed),
             "priorities": plan["priorities"].clone(),
             "segments": plan["segments"].clone(),
+            "budgetBlocks": plan["budgetBlocks"].clone(),
+            "windowEnd": plan["window"]["hi"].clone(),
         },
     })
     .to_string()
@@ -2087,18 +2093,42 @@ pub fn read_rows(resp: &Value, segments: &[Segment]) -> W<Vec<RowCells>> {
         .collect()
 }
 
+/// **The `window ends` divider of a day's rows** (W-48 track R, README gaps 5031 and 1301) — the
+/// kernel's (`Emit.divider`, through `EmitWire.dividerJson`): where it goes among the rows (`before`,
+/// a row index, or the number of rows when it comes last) and its cells, which `emit::render_row`
+/// pads as it pads a row. `None` where the day has none (`null`). A response that sent no budget
+/// carries no `divider` key, and that is a defect here: the binary sends the budget with every day.
+pub fn read_divider(resp: &Value, segments: &[Segment]) -> W<Option<(usize, RowCells)>> {
+    let v = match resp["ok"]["plan"].get("divider") {
+        None => return Err(WireDefect::at("plan.divider: absent from an answer to a section that sent its budget")),
+        Some(Value::Null) => return Ok(None),
+        Some(v) => v,
+    };
+    let before = nat32(&v["before"], "plan.divider.before")? as usize;
+    if before > segments.len() {
+        return Err(WireDefect::at(format!("plan.divider.before: {before} past {} rows", segments.len())));
+    }
+    Ok(Some((before, cells_of(v, false, "plan.divider")?)))
+}
+
 /// One row's cells (`EmitWire.rowJson`).
 fn row_cells_of(v: &Value, seg: &Segment, what: &str) -> W<RowCells> {
+    cells_of(v, matches!(seg.kind, SegKind::Batch(_)), what)
+}
+
+/// The nine cells and the members of one row (`EmitWire.rowJson`) or of the divider
+/// (`EmitWire.dividerJson`, which carries none) — the one `RowCells` this side builds.
+fn cells_of(v: &Value, batch: bool, what: &str) -> W<RowCells> {
     let cell = |k: &str| text(&v[k], &format!("{what}.{k}")).map(str::to_string);
     let names = array(&v["batchNames"], &format!("{what}.batchNames"))?
         .iter()
         .enumerate()
         .map(|(i, n)| text(n, &format!("{what}.batchNames[{i}]")).map(str::to_string))
         .collect::<W<Vec<String>>>()?;
-    let batch_names = match &seg.kind {
-        SegKind::Batch(_) => Some(names),
-        _ if names.is_empty() => None,
-        _ => return Err(WireDefect::at(format!("{what}: members on a row that is not a batch's"))),
+    let batch_names = match batch {
+        true => Some(names),
+        false if names.is_empty() => None,
+        false => return Err(WireDefect::at(format!("{what}: members on a row that is not a batch's"))),
     };
     Ok(RowCells {
         time: cell("time")?,

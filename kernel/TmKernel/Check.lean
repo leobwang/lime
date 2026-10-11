@@ -8604,3 +8604,31 @@ mkHash?'s and mkOverrides?'s) left this file with them. -/
 #print axioms Tm.PlanWire.hashHex_digits_read_back
 #print axioms Tm.PlanWire.hashHex_injective
 #print axioms Tm.PlanWire.readPlannerSection_leaves_overrides_unread
+
+/-! APPENDED 2026-10-11 (stage 6, run W-48, track R): the `window ends` divider is a kernel row (README gaps 5031 and
+1301) — `Emit.divider` over the rows the `plan` section is sent, answered beside them from the budget and window's end
+the binary sends back. -/
+#print axioms Tm.Emit.dividerGlyph_is_three_rules
+#print axioms Tm.Emit.dividerRow_cells
+#print axioms Tm.Emit.budgetStep_of_a_row_that_is_not_work
+#print axioms Tm.Emit.budgetStep_keeps_the_instant
+#print axioms Tm.Emit.dividerAt_where_the_budget_ran_out
+#print axioms Tm.Emit.dividerAt_unspent
+#print axioms Tm.Emit.dividerAt_is_the_window_end_or_the_spent_instant
+#print axioms Tm.Emit.divider_eq
+#print axioms Tm.Emit.dividerBefore_le_length
+#print axioms Tm.Emit.the_budget_runs_out_at_the_second_blocks_end
+#print axioms Tm.Emit.an_unspent_budget_divides_at_the_window_end
+#print axioms Tm.Emit.nothing_past_the_window_and_nothing_spent_is_no_divider
+#print axioms Tm.Emit.a_budget_spent_past_the_window_divides_at_its_end
+#print axioms Tm.Emit.a_zero_budget_runs_out_nowhere
+#print axioms Tm.EmitWire.rowKey_names_the_divider_keys
+#print axioms Tm.EmitWire.readRowSection_reads_the_budget_and_the_window_end
+#print axioms Tm.EmitWire.readRowSection_without_them_reads_no_divider
+#print axioms Tm.EmitWire.readRowSection_refuses_one_without_the_other
+#print axioms Tm.EmitWire.readRowSection_refuses_a_budget_past_the_width_and_an_end_past_the_calendar
+#print axioms Tm.EmitWire.dividerJson_is_its_position_then_the_nine_cells
+#print axioms Tm.EmitWire.dividerPairs_without_the_inputs
+#print axioms Tm.EmitWire.dividerPairs_with_the_inputs
+#print axioms Tm.EmitWire.withPlan_of_no_extra
+#print axioms Tm.EmitWire.dividerPairs_on_the_wire

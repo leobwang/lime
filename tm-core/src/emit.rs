@@ -150,9 +150,9 @@ pub enum EmitError {
 // vocabulary, and a row's cells are the kernel's since the owner's D112
 // (`Emit.markCell`, `Emit.ciCell`), so nothing on this side writes one.
 
-/// The window-end divider row's glyph — the one line of the day section that
-/// is not a segment's, and so not a kernel cell.
-pub const DIVIDER: &str = "───";
+// The window-end divider's glyph (`───`) stood here until W-48 track R: the
+// divider's cells are the kernel's since then (`Emit.dividerRow`, README gaps 5031
+// and 1301), so nothing on this side writes it either.
 
 // ---------------------------------------------------------------------------
 // Column widths (§4.3)
@@ -576,26 +576,6 @@ fn key_id(seg: &Segment) -> Option<&Id> {
     }
 }
 
-/// **The note cell the kernel wrote for `seg`** — a READER of [`DayPlan::cells`],
-/// never a builder: the Rust builder of a row's cells was deleted at W-47 (the
-/// owner's **D112**: the binary's rows are the kernel's cells). The row is the
-/// one at the segment's position in `plan.segments` (the first equal segment —
-/// two equal segments have equal cells); `""` answers a segment the day does not
-/// hold, or a day nobody asked rows for.
-///
-/// **Kept under fork `note_cell`'s name and signature for its one remaining
-/// caller**, track C's `tm/tests/support/forkclass.rs`, which compares the
-/// under-used note the binary prints with the fork's sentence; README gap 4952
-/// asks the W-47 Land to read `plan.cells` there and delete this.
-pub fn note_cell(seg: &Segment, _tree: &Tree, plan: &DayPlan) -> String {
-    plan.segments
-        .iter()
-        .position(|s| s == seg)
-        .and_then(|i| plan.cells.get(i))
-        .map(|c| c.note.clone())
-        .unwrap_or_default()
-}
-
 /// The `kind` word `tm plan --json` and `tm now --json` give a row:
 /// [`kind_label`](crate::dayplan::kind_label)'s, but `pause` for a replayed
 /// pause ([`Segment::is_pause`]) — the owner's **D68** (parity P59): a typed
@@ -623,14 +603,14 @@ pub const PAUSE_KIND: &str = "pause";
 /// marker, for `Store::replace_generated_stamped` — and `body` is the rows,
 /// each newline-terminated.
 ///
-/// A `───     window ends HH:MM` divider is inserted where the day stops being
-/// budgeted work: at the end of the `Block`/`Batch` segment whose minutes take
-/// the running total to `budget_blocks × block_min`, or at the window end,
-/// whichever comes first. The row is placed before the first segment that
-/// starts at or after that instant, and carries that instant's time with the
-/// window's own end in its text (§4.3 shows `15:10  ───  window ends 16:00`).
-pub fn render_plan_section(plan: &DayPlan, cfg: &Config, now: DateTime<Tz>) -> (String, String) {
-    render_plan_section_with(plan, cfg, now, &Layout::default())
+/// A `───     window ends HH:MM` divider stands where the day stops being
+/// budgeted work (§4.3 shows `15:10  ───  window ends 16:00`): the KERNEL's
+/// ([`DayPlan::divider`], `Emit.divider`, W-48 track R) — at the end of the
+/// `Block`/`Batch` segment whose minutes take the running total to the
+/// planner's budget, or at the window end, whichever comes first, before the
+/// first segment that starts at or after it.
+pub fn render_plan_section(plan: &DayPlan, now: DateTime<Tz>) -> (String, String) {
+    render_plan_section_with(plan, now, &Layout::default())
 }
 
 /// **The day's rows, one per segment, in the day's order** — the list every
@@ -684,97 +664,54 @@ pub struct DayLine {
 
 /// **The whole day section, line by line, each carrying its provenance.**
 ///
-/// [`plan_rows`] with the `window ends` divider spliced in where
-/// [`divider_instant`] puts it: at the end of the `Block`/`Batch` segment whose
-/// minutes take the running total to `budget_blocks × block_min`, or at the
-/// window end, whichever comes first, before the first segment that starts at
-/// or after that instant.
+/// [`plan_rows`] with the `window ends` divider spliced in where the kernel
+/// put it ([`DayPlan::divider`]: `Emit.divider`, W-48 track R, README gaps 5031
+/// and 1301) — before the row it names, or after the last — and padded by
+/// [`render_row`], the one padder, at a title width its words fit: fork
+/// divider_row never cut `window ends HH:MM`, and a pane narrower than the words
+/// clips the whole line where it clips every row.
+///
+/// Until W-48 the host computed the divider itself, re-summing the work rows'
+/// minutes against `budget_blocks × block_min` (divider_instant) and formatting
+/// the line (divider_row): a second reader of where the planner's budget ends.
 ///
 /// **Every surface that needs to know which segment a line belongs to takes it
 /// from here** (README gap **1197**). The TUI used to re-derive the mapping by
 /// looking for `───` at a fixed offset in the rendered text and counting
 /// around it — a second answer to a question this function settles, and one
 /// that a title containing the glyph at the right column could have moved.
-pub fn day_lines(plan: &DayPlan, cfg: &Config, layout: &Layout) -> Vec<DayLine> {
+pub fn day_lines(plan: &DayPlan, layout: &Layout) -> Vec<DayLine> {
     let rows = plan_rows(plan, layout);
-    let divider_at = divider_instant(plan, cfg);
-    let mut out: Vec<DayLine> = Vec::with_capacity(rows.len() + 1);
-    let mut divider_done = divider_at.is_none();
-    for (i, (seg, row)) in plan.segments.iter().zip(rows).enumerate() {
-        if let Some(at) = divider_at {
-            if !divider_done && seg.start >= at {
-                out.push(DayLine {
-                    text: divider_row(&at, &plan.window.1),
-                    segment: None,
-                });
-                divider_done = true;
+    let n = rows.len();
+    let divider = plan.divider.as_ref().map(|(before, cells)| {
+        let fit = Layout::new(layout.title_w.max(display_width(&cells.title)));
+        (*before, render_row(cells, &fit))
+    });
+    let mut out: Vec<DayLine> = Vec::with_capacity(n + 1);
+    for (i, row) in rows.into_iter().enumerate() {
+        if let Some((before, text)) = &divider {
+            if *before == i {
+                out.push(DayLine { text: text.clone(), segment: None });
             }
         }
-        out.push(DayLine {
-            text: row,
-            segment: Some(i),
-        });
+        out.push(DayLine { text: row, segment: Some(i) });
     }
-    if let (false, Some(at)) = (divider_done, divider_at) {
-        out.push(DayLine {
-            text: divider_row(&at, &plan.window.1),
-            segment: None,
-        });
+    if let Some((before, text)) = divider {
+        if before >= n {
+            out.push(DayLine { text, segment: None });
+        }
     }
     out
 }
 
 /// [`render_plan_section`] with an explicit title width.
-pub fn render_plan_section_with(
-    plan: &DayPlan,
-    cfg: &Config,
-    now: DateTime<Tz>,
-    layout: &Layout,
-) -> (String, String) {
+pub fn render_plan_section_with(plan: &DayPlan, now: DateTime<Tz>, layout: &Layout) -> (String, String) {
     let mut body = String::new();
-    for line in day_lines(plan, cfg, layout) {
+    for line in day_lines(plan, layout) {
         body.push_str(&line.text);
         body.push('\n');
     }
     (fmt_clock(now), body)
-}
-
-/// Where the budget runs out, or the window ends — whichever is earlier.
-fn divider_instant(plan: &DayPlan, cfg: &Config) -> Option<DateTime<Tz>> {
-    let budget_min = plan.budget_blocks.saturating_mul(cfg.block_min());
-    let mut used = 0u32;
-    let mut spent: Option<DateTime<Tz>> = None;
-    for seg in &plan.segments {
-        if is_work(&seg.kind) {
-            // The minutes the day actually spends, not what was set aside for
-            // the item: an overrunning block eats the budget it overran into.
-            used = used.saturating_add(seg.minutes());
-            if budget_min > 0 && used >= budget_min {
-                spent = Some(seg.end);
-                break;
-            }
-        }
-    }
-    let end = plan.window.1;
-    match spent {
-        Some(t) if t < end => Some(t),
-        _ => {
-            // Only worth a row when something is planned past the window.
-            if plan.segments.iter().any(|s| s.start >= end) {
-                Some(end)
-            } else {
-                spent
-            }
-        }
-    }
-}
-
-/// `15:10  ───     window ends 16:00`.
-fn divider_row(at: &DateTime<Tz>, window_end: &DateTime<Tz>) -> String {
-    let head = format!("{}  {}", fmt_clock(*at), DIVIDER);
-    let mut row = pad(&head, TITLE_COL);
-    row.push_str(&format!("window ends {}", fmt_clock(*window_end)));
-    row
 }
 
 /// **§4.3's nine cells, before anything measures a column** — the Lean

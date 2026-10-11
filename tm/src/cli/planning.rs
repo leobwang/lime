@@ -72,6 +72,9 @@ pub struct PlanOut {
     pub hash: String,
     /// The timeline.
     pub segments: Vec<SegOut>,
+    /// **The `window ends` divider** (README gap 1301, W-48 track R) — the one line of
+    /// the day section that is no segment's: `null` on a day with none.
+    pub divider: Option<render::DividerOut>,
     /// §8.2 step 8.
     pub diagnostics: Diagnostics,
     /// Every candidate's `p` (§7).
@@ -278,7 +281,7 @@ pub fn write_plan(ctx: &mut Ctx, plan: &DayPlan, prios: &[Prio]) -> Result<Vec<S
     let previous = ctx.last_plan();
     let mut wrote = Vec::new();
 
-    let body = render::timeline(plan, &ctx.cfg, ctx.now_tz);
+    let body = render::timeline(plan, ctx.now_tz);
     // §4.3: a day file the CLI creates gets the whole skeleton, not just the
     // front matter — `# Pinned`, `## Log` and `## Notes` are the human half.
     let day_path = super::dayfile::ensure(ctx, plan.date)?;
@@ -359,6 +362,7 @@ pub fn plan(g: &Globals, args: &super::PlanArgs) -> Result<i32, CliError> {
         blocks_done: ctx.replay.blocks_done(ctx.today),
         hash: plan.hash(),
         segments: seg_out(&plan),
+        divider: render::divider(&plan),
         diagnostics: plan.diagnostics.clone(),
         priorities: prios.clone(),
         wrote,
@@ -372,7 +376,7 @@ pub fn plan(g: &Globals, args: &super::PlanArgs) -> Result<i32, CliError> {
             if let Some(e) = &explain {
                 return e.clone();
             }
-            let body = render::timeline(&plan, &ctx.cfg, ctx.now_tz);
+            let body = render::timeline(&plan, ctx.now_tz);
             s.push_str(&format!(
                 "{} · window {}–{} · budget {} blocks\n",
                 plan.date, out.window[0], out.window[1], plan.budget_blocks

@@ -886,6 +886,7 @@ impl App {
             // The arrival's ghost row is drawn in the day bar alone (D112:
             // rows are asked of the kernel for a day it planned).
             cells: Vec::new(),
+            divider: None,
         })
     }
 
@@ -957,7 +958,7 @@ impl App {
     /// answers it once, where the divider is spliced in.
     pub fn timeline_rows(&self, title_w: usize) -> Vec<TimelineRow> {
         let layout = emit::Layout::new(title_w);
-        emit::day_lines(&self.plan, &self.cfg, &layout)
+        emit::day_lines(&self.plan, &layout)
             .into_iter()
             .map(|l| TimelineRow {
                 text: l.text,

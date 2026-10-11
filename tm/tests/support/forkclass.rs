@@ -2719,13 +2719,19 @@ pub fn compare_line(line: &Value, t: &mut ClassTally) -> Vec<String> {
         };
         findings.extend(forkday::compare_day_with_fork(&key, &k, fork, now, &mut t.day));
         // The under-used note the kernel leaves to the renderer (by design,
-        // `forkday`'s fourth class): the renderer must derive the fork's exact
-        // sentence from the kernel's own row.
+        // `forkday`'s fourth class): the row's note cell — the kernel's since the
+        // owner's D112, read at the segment's own position in the day's cells (W-48
+        // track R, README gap 4952: the reader emit::note_cell stood here, finding
+        // the position by value) — must be the fork's exact sentence.
         let fork_rows = fork["day"]["segments"].as_array().map(Vec::as_slice).unwrap_or_default();
-        for seg in k.day.segments.iter().filter(|s| s.flags.underused && s.flags.note.is_none()) {
+        for (i, seg) in k.day.segments.iter().enumerate().filter(|(_, s)| s.flags.underused && s.flags.note.is_none()) {
             let sv = serde_json::to_value(seg).expect("a row serialises");
             let twin = fork_rows.iter().find(|f| f["start"] == sv["start"] && f["end"] == sv["end"] && f["item"] == sv["item"]);
-            let derived = tm_core::emit::note_cell(seg, &b.tree, &k.day);
+            let Some(cells) = k.day.cells.get(i) else {
+                findings.push(format!("{key}: the kernel's day carries no cells for its under-used row at {}", sv["start"]));
+                continue;
+            };
+            let derived = cells.note.clone();
             match twin.and_then(|f| f["flags"]["note"].as_str()) {
                 Some(note) if note == derived => t.notes_rendered += 1,
                 other => findings.push(format!(
