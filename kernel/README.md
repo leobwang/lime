@@ -97538,3 +97538,218 @@ archived commit onto the land, renumber, re-derive the two census reasons, full 
 
 The owner: gaps 5130 and 5131 (track R).  A later step: gap 5150 (with 5071); D108; gap 4918's goal.  Not done here: a
 TUI drive; a per-commit rebuild for reach's history scope (H's gap 5111).
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **track G** —
+     the last goal, `Goals.plan_places_no_block_over_a_break` (README gap 4918).
+     Gaps 5180-5199 are this track's (5180 and 5181 used).  No parity number is
+     issued.  Files held: Goals.lean, PlanCheck.lean, PlannerWit.lean and the
+     append-only files.
+     ===================================================================== -->
+
+## Stage 6 — W-48 track G: the last goal reduced to three facts about the replay, and a third world it fails on
+
+**The burn-down stays 1.**  The goal was neither proved as written over the runs the decoder builds nor refuted on a
+world with one reading, so it stays in `Goals.lean` (AGENTS §3.2) with its doc comment brought to what this step
+leaves.  What landed is the reduction of the goal to three facts about the replay's answer, its witnesses both ways, and
+a third world — written by the shipped binary, with a forward clock — on which the goal is false and which stands on a
+kernel reading (gap 5180), so it is no refutation either.
+
+### 1. The reduction (`PlanCheck.lean`, appended)
+
+`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` is the goal's statement **as written** — every Block
+row of `dayPlan r` against every Break row — with the calendar bound every law of `PlanCheck` carries (`hnowcal`) and
+three hypotheses, each a decidable fact about today's record in the replay's answer (`PlanReq.todayRecord`, D24's
+seam) and the runtime's running break, in seconds, with nothing about the planner in them:
+
+* `hrec` — no Block segment of today's record lies across a Break segment of it;
+* `hopen` — the open block's `since` is at or after the end of every Break segment of it;
+* `hrun` — every Block segment of it ends by the instant the running break (`RuntimeIn.brk`) began.
+
+Each is stated over the segments that are nonempty in seconds, which is every segment a row is drawn from (a replayed
+row is a nonempty clip of its segment, `Planner.pastSpans`): the replay's own pieces avoid only nonempty spans
+(`Replay.piecesGo_avoids`), and a zero-minute `break` line — `tm break` ended at once — would otherwise fail `hopen`
+on a day with nothing wrong in it.
+
+Every other pair of rows was already a theorem and the proof composes them: the Block rows from `now`
+(`PlanCheck.a_block_row_from_now_clears_a_break_row`; the reservation starts at `now`, an assigned row at or after it),
+the open row against the running break (`Planner.the_open_row_lies_under_no_running_break`, gap 5020) and any Block
+against a kept break (`Planner.a_block_row_clears_a_kept_break`).  The three hypotheses are what the replayed rows owe:
+a replayed row lies inside its record segment (`PlanCheck.a_past_row_lies_inside_its_segment`, through
+`Planner.clipCut_within`), the running break's row starts where the break started
+(`PlanCheck.the_running_break_row_starts_where_it_started`), and rows apart in seconds stay apart through `segOf`
+(`PlanCheck.segOf_apart`).  It replaces `PlanCheck.PastPays`' row-level `offBreak` for this law: a statement about the
+replay's record rather than about the day's rows, which is what gap 4918 asked the goal to be stated over ("a
+statement of which runs the decoder builds").
+
+The replay's half of `hopen`, for the breaks the machine holds, is `PlanCheck.settle_runs_after_every_span_it_nets`:
+after `Replay.settle` the open block's clock runs from at or after the end of every nonempty span it nets (its idle
+spans and the held breaks of its ledger days), from `Replay.runFrom_step_ge`.  The closed side's step half of `hrec` is
+`PlanCheck.netOne_draws_beside_the_break`: every Block segment `Replay.netOne` writes for a late `break` `[s, e)` lies
+beside it (D100), as `Replay.settle_avoids_every_span_it_nets` already said of the open block.
+
+**Laws restated: none.**  No theorem's statement changed; the goal's statement is unchanged.
+
+### 2. A third world: a block closed while a logged break runs (gap 5180) — driven
+
+Two machines on one synced plan directory (the clock-skew world D78 already treats as real, with no skew at all):
+machine A runs `tm break 15m` at 07:30 while `^t1` runs; machine B, which has not yet seen A's line, runs `tm done` at
+08:05; the sync appends B's line after A's.  Driven on this branch's binary (`cargo build -p tm` from `eef6732`'s tree,
+scratch target directory), `tm init --example`, America/Chicago:
+
+```
+$ tm --dir A --now 2026-09-09T06:30:00-05:00 wake        → wake 06:30 · slept 0m
+$ tm --dir A --now 2026-09-09T07:00:00-05:00 arrive lounge
+$ tm --dir A --now 2026-09-09T07:05:00-05:00 start ^t1    → ▶ ^t1 Read ch.6 §1–2 · 07:05 · pred 3
+$ cp -a A B
+$ tm --dir A --now 2026-09-09T07:30:00-05:00 break 15m    → break 15m
+     A's log: {"t":"2026-09-09T07:30:00-05:00","ev":"break_start","planned_min":15}
+$ tm --dir B --now 2026-09-09T08:05:00-05:00 done         → ✓ ^t1 Read ch.6 §1–2 · 60m/60m
+     B's log: {"t":"2026-09-09T08:05:00-05:00","ev":"done","id":"t1","est_min":60,"actual_min":60,"tags":[],"ci":5}
+$ tail -1 B/.tm/log.jsonl >> A/.tm/log.jsonl; rm A/.tm/state.json
+$ tm --dir A --now 2026-09-09T09:00:00-05:00 plan
+tm: RESTORED from the log: `break` — began 07:30, 15m planned — from the `break_start` `tm break` logged (D105).
+07:05  5 p3 ✓ Read ch.6 §1–2               @m3  1b  (60m)
+07:30  ·      break 1h30m
+$ tm --dir A --json --now 2026-09-09T09:00:00-05:00 plan     → segments[0] 07:05–08:05 block t1, segments[1] 07:30–09:00 break
+$ tm --dir A --json --now 2026-09-09T09:00:00-05:00 review day   → "block_min": 60, "load": 60.0
+```
+
+Then the break is ended (`tm --now 09:00 break`, which writes `{"t":"2026-09-09T07:30:00-05:00","ev":"break",
+"planned_min":15,"actual_min":90}`) and **the same block reads differently with nothing new said about it**: `review
+day` `block_min` **25**, load 25.0, and `tm plan` draws `07:05 … ✓ Read ch.6 §1–2 (25m)` — the owner's D100 nets the
+break from the closed block once its line arrives.  And on ONE machine (`tm done` on A at 08:05) the binary ends the
+break first, writing `break … actual_min 35` and `done … actual_min 25` (`break ended · 35m of 15m · ✓ ^t1 … 25m/60m`).
+So while the break runs, 07:30–08:05 is read as block AND as break (the plan's two rows, the review's 60), the reading
+D87 and D94 declined; once it ends, one way.
+
+The kernel's computation of the same day is `PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break`
+(`decide`, probed at 8 GB / 120 s): `witLines`' wake, arrival and `m1`'s 07:05 `start`, a `break_start` at 07:30 and
+`m1`'s 08:05 `done` after it (`PlannerWit.closeUnderBreakLines`, resumed by `Seal.resumeRun` from the empty
+checkpoint, `PlannerWit.closeUnderBreakRun_resumes_ok`), the runtime the binary rebuilds from that log
+(`PlannerWit.closeUnderBreakState`, which `BreakState.wf` accepts): the replay's running break is 07:30, the day's rows
+before `now` are `m1`'s Block 07:05–08:05 and the running Break 07:30–14:00 (and the meeting under it), `hrec` and
+`hopen` hold and `hrun` fails.  **So the goal is false on a request the decoder builds from a log the binary writes —
+and it is not refuted here**, because the falsifying span is read two ways and the mechanism is a kernel reading:
+`Replay.cut` and `Replay.doneClose` draw a block's pieces over `Replay.blockSpans`, which holds the block's idle spans
+and the held breaks but not the running one (`Replay.Machine.brkOpen`).  A refutation standing on it would be the
+campaign's lesson 4.
+
+### 3. The witnesses both ways (`PlannerWit.lean`, appended)
+
+* `PlannerWit.the_apart_replay_holds_at_the_mid_break_request` — all three hold at the mid-break day (D100's cut
+  pieces), and `PlannerWit.the_break_law_holds_whole_at_the_mid_break_request` applies the reduction to that day's
+  every Block and Break row, the replayed ones included — the goal's statement at a request, through the theorem and
+  not by computing the day (non-vacuity: `the_mid_break_day_cuts_its_block_around_the_break` lists its two replayed
+  Block rows and its replayed Break row).
+* `PlannerWit.the_apart_replay_fails_at_the_pre_d100_request` — `hrec` bites (AGENTS §5.8) at the pre-D100 run (a
+  run the decoder does not build).
+* `PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break` — `hrun` bites, at a run it does build
+  (§2).
+
+The new `decide` witnesses carry the file's own `set_option maxRecDepth 400000 in` (the value the module's 434 other
+uses carry; without it the elaborator stops at its default depth on these days, measured): no bound was raised beyond
+the module's existing one.  Each was probed under `MemoryMax=8G timeout 120` (§5.10a): the whole scratch file of all
+five elaborated in 2.4 s.
+
+### 4. What remains of the goal, exactly (gap 5181)
+
+The goal is discharged by three things, in order.
+
+1. **Gap 5180 closes** — the kernel stops reading a block closed under a running break two ways.  A definition of
+   `Replay.lean`'s, which this track does not hold; recorded for the land and, if it needs one, the owner.
+2. **The fold invariant over the runs `Seal.resumeRun` builds**, in two halves:
+   * *the machine's geometry* — for the state after every step, every piece the open block has drawn
+     (`Replay.Block.drawn`) lies beside every nonempty span in `Replay.blockSpans` of it, and every piece a held closed
+     block has drawn (`Replay.Closed.drawn`) lies beside every nonempty held break of a ledger day at or after its own.
+     Each arm's step half is a theorem already — `Replay.settle_avoids_every_span_it_nets`,
+     `Replay.cut_avoids_every_span_it_nets`, `PlanCheck.netOne_draws_beside_the_break` — and pruning
+     (`Replay.pruneBrks`, `Replay.pruneClosed`) only drops obligations; what is not written is the induction through
+     `Replay.arm`'s arms and `Replay.stepWith`;
+   * *the accounting* — every Block segment of a day record is, as a multiset, a drawn piece of the open block or of a
+     held closed block filed under that day, or a piece of a block no longer held; and every Break segment of a day
+     record is a break the machine holds on that ledger day.  With that, a break's arrival re-draws every Block it lies
+     across (`Replay.brkFx`'s `settle` and `netClosed`), and `hrec`/`hopen` follow — EXCEPT for a block no longer
+     held, or a break no longer held, which are README gaps 4917 and 4914: those bounds must be named in the
+     invariant's hypotheses or removed by an owner decision (gap 4917's "key it on `now`").  Then the two halves are
+     carried across a checkpoint (`Seal.resumeRun` resumes a machine the checkpoint holds) by the window laws.
+3. **`hrun` against the run's own running break** — stated over `Seal.Answer.openBreak` rather than
+   `RuntimeIn.brk`, which needs README gap 4761 (the planner reads the host's copy of the running break), and true
+   once step 1 has closed: no Block segment of today's record then ends after the running break began.
+
+### 5. Mutations (D40)
+
+Five definitions are new, all fixtures of `PlannerWit.lean` (the theorems added are theorems, and `PlanCheck.lean` gained
+none), each mutated by `kernel/mutate.py --write` in a `git clone --shared` of this tree (scratch `w48/g/mclone`, capped
+16 GB), five rows appended to `kernel/mutations.txt`:
+
+| definition | constants | verdict |
+|---|---|---|
+| `PlannerWit.closeUnderBreakStartLine` | `default` (no `Inhabited Log.Line`), `⟨0, none⟩` | PINNED by `⟨0, none⟩`: `the_close_under_a_running_break_lays_its_block_across_the_break`, its statement decided false |
+| `PlannerWit.closeUnderBreakLines` | `default`, `[]` | PINNED by both, the same theorem |
+| `PlannerWit.closeUnderBreakRun` | `default` | UNFOLDABLE (no `Inhabited Seal.Run`), a witness fixture |
+| `PlannerWit.closeUnderBreakState` | `default` | UNFOLDABLE (no `Inhabited RuntimeIn`), a witness fixture |
+| `PlannerWit.theCloseUnderBreakRequest` | `default` | UNFOLDABLE (no `Inhabited PlanReq`), a witness fixture |
+
+The mutation clone ran on the tree before the hypotheses were guarded to nonempty segments (§1); that edit kept
+`PlannerWit.lean`'s line count and every definition's body, so the five rows' body hashes and pinned line (13190) are
+this tree's.  One in-place `mutate.py --gate` was started in the worktree by mistake and stopped by its own signal
+handler; its sidecar held `PlannerWit.lean`'s original bytes, which were byte-identical to the file it left (checked),
+and the sidecar and lock were removed before anything was built or committed.
+
+### 6. Acceptance
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16 GB for the mutation run),
+from the worktree `w48-g` over the tree this commit holds (base `eef6732`).  The machine was shared with track A's
+builds throughout.
+
+* **`check.sh`** (`scratchpad/w48/g/check-3.log`; 10:44:27-10:44:59, warm, load 6.23 → 6.17; the first full run over this
+  Lean, `check-1.log`, 6m27s at load 3.64 → 4.98, every line ok; `check-2.log` was red on check 10 alone, a `P119` this
+  block spelled across a line break, repaired) — **seventeen lines, every one ok, exit 0**: the build; totality;
+  the axiom audit **6,607** theorems (eleven appended by this block); `Negative.lean` rejected; FFI **96** tests; the
+  corpus 29/37 files and 4/5 whole plans; stage goals **1** (`Goals.plan_places_no_block_over_a_break`, all stage 6);
+  prose citations 65,165 (61,354 resolved, 3,811 allowed, 0 allow entries unused); new definitions mutated **828 rostered, 0 owed**; parity **P1-P118** (none issued
+  here), next free P119; no two names for one definition, 0 unanswered; reach 1,618 reachable, 1,097 exempt, 0
+  unanswered; the four field and key checks 0 unanswered; the kernel replays 96 modules.
+* **`cargo test --workspace --no-fail-fast`, three runs** (`scratchpad/w48/g/ws-a.log` … `ws-c.log`, each with its
+  `uptime`): **2,966 passed / 0 failed / 53 ignored over 161 result lines, three runs** (09:48-10:06, load 3.78 →
+  9.39, 18m16s; 10:06-10:24, load 9.39 → 11.61, 18m15s; 10:24-10:43, load 11.61 → 12.54, 18m22s).  No
+  `.proptest-regressions` file moved in any of the three.  `cli_latency` 7 passed (1 ignored) in each, every
+  band held under that load.
+* **The FFI crate, `cargo test` in `kernel/tm-kernel-ffi`**: 104 passed / 0 failed (corpus 8, kernel 89, stack 7).
+* **The drive** (§2): `cargo build -p tm` into `scratchpad/w48/g/target` from this tree's base, the trees in
+  `scratchpad/w48/g/drive` (`A` the merged log, `A1` one machine, `A2` the break ended).
+
+### 7. Gaps 5180-5181
+
+**Gap 5180 — a block closed while a logged break runs is credited and drawn across the break until the break's line
+arrives.**  1. *What.*  A `done` or `stop` (or the `start` of another block) logged while a `break_start` has no `break`
+line yet closes the block with the pieces and minutes of `Replay.cutPieces` over `Replay.blockSpans` — its idle spans
+and the held breaks — which do not hold the running break (`Replay.Machine.brkOpen`); a `pause` under it draws the same
+way (`Replay.openPieces`).  So the closed block's pieces lie across the running break's start and its credit includes
+the overlap (`tm review day` `block_min` 60 in §2) while the planner draws the running break from 07:30; when the
+break's line arrives, D100's `Replay.netClosed` re-draws the block around it and takes the overlap off (25).  2. *Why.*
+D105 holds the running break in the machine and deliberately moves no clock (`Replay.a_running_break_moves_no_clock`),
+and the binary never writes the shape on one machine — every verb that ends a block ends a running break first (D101)
+— so it arises only when two machines append to one synced log (or by a hand edit).  3. *Cost.*  On that log, while the
+break runs, one span is read as block and as break by the plan's rows and by the review (§5.3), and
+`Goals.plan_places_no_block_over_a_break` is false on a request the decoder builds (§2) — which is why the goal cannot
+be proved as written until this closes.  4. *Clears it.*  A `Replay.lean` change (track A's file this phase, so recorded
+for the land): net the running break's span to the close — `[brkOpen.s, t)` among the spans a cut, a `done`'s close and
+a settle net (`Replay.blockSpans`) — so the block reads now what it will read once the break ends; with D94's and
+D100's reading ("a block and a break are read one way on every log") as the standing decision, a parity number from
+next free and a behaviour row for `tm review day`'s minutes and the plan's past rows on that log, every replay and seal
+law it touches re-proved (D5).  If the owner reads it otherwise (the running break nets nothing until it ends), `hrun`
+becomes a hypothesis the goal must name.
+
+**Gap 5181 — the last goal is reduced, not discharged.**  1. *What.*  `Goals.plan_places_no_block_over_a_break` stays,
+burn-down 1; `PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` proves its statement under the three
+facts of §1.  2. *Why.*  `hrun` is false on a run the decoder builds (gap 5180), and `hrec`/`hopen` over the runs
+`Seal.resumeRun` builds is the fold invariant of §4, which this run did not reach.  3. *Cost.*  The planner's past
+half still carries a hypothesis wherever a lift reaches the whole day (`PlanCheck.PastPays`), now one stated over the
+replay's record; gap 4918's statement is superseded by this one's §4.  4. *Clears it.*  §4's three steps, in order.
+
+### 8. Owed, by name
+
+Gap 5180 (the land and track A, then the owner if it needs a decision), gap 5181 (§4), gaps 4914, 4917 and 4761 (as
+recorded).  Not done: the fold invariant; a TUI drive.

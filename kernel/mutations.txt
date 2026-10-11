@@ -967,3 +967,8 @@ f0730f49d98d TmKernel/TmKernel/Emit.lean Tm.Emit.dividerBefore 0,1,t Emit.lean:8
 ba10fabd0db8 TmKernel/TmKernel/Emit.lean Tm.Emit.divider default,none Emit.lean:790 divider_eq also Emit.lean:792 divider_eq; Emit.lean:790 divider_eq also Emit.lean:792 divider_eq
 6f527525eb68 TmKernel/TmKernel/EmitWire.lean Tm.EmitWire.dividerJson default EmitWire.lean:1250 dividerJson_is_its_position_then_the_nine_cells also EmitWire.lean:1253 dividerJson_is_its_position_then_the_nine_cells
 c320279a284f TmKernel/TmKernel/EmitWire.lean Tm.EmitWire.dividerPairs default,[] EmitWire.lean:1257 dividerPairs_without_the_inputs also EmitWire.lean:1264 dividerPairs_with_the_inputs; EmitWire.lean:1264 dividerPairs_with_the_inputs also EmitWire.lean:1275 dividerPairs_on_the_wire
+086f65032cdc TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.closeUnderBreakStartLine unfoldable,⟨0,none⟩ no Inhabited Log.Line; PlannerWit.lean:13190 the_close_under_a_running_break_lays_its_block_across_the_break (its statement, decided false)
+cf19ecc1a25c TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.closeUnderBreakLines default,[] PlannerWit.lean:13190 the_close_under_a_running_break_lays_its_block_across_the_break (its statement, decided false); PlannerWit.lean:13190 the_close_under_a_running_break_lays_its_block_across_the_break (its statement, decided false)
+b41a7224916a TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.closeUnderBreakRun unfoldable no Inhabited Seal.Run
+97672c5e0ae7 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.closeUnderBreakState unfoldable no Inhabited RuntimeIn
+1d897704da17 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theCloseUnderBreakRequest unfoldable no Inhabited PlanReq

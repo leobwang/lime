@@ -8660,3 +8660,20 @@ the binary sends back. -/
 #print axioms Tm.EmitWire.dividerPairs_with_the_inputs
 #print axioms Tm.EmitWire.withPlan_of_no_extra
 #print axioms Tm.EmitWire.dividerPairs_on_the_wire
+
+/-! APPENDED 2026-10-11 (stage 6, run W-48, track G; README "Stage 6 — W-48 track G"): `Goals.plan_places_no_block_over_a_break` reduced to three
+facts about the replay's answer and the running break (`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay`),
+the replay's half of the open-row clause and the closed side's step half of the record clause, and the witnesses — the law applied whole at the mid-break day, the record
+clause biting at the pre-D100 run, and a day the decoder builds that fails the running-break clause (README gap 5180).
+The goal stays in `Goals.lean`. -/
+#print axioms Tm.PlanCheck.segOf_apart
+#print axioms Tm.PlanCheck.a_past_row_lies_inside_its_segment
+#print axioms Tm.PlanCheck.the_running_break_row_starts_where_it_started
+#print axioms Tm.PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay
+#print axioms Tm.PlanCheck.settle_runs_after_every_span_it_nets
+#print axioms Tm.PlannerWit.the_apart_replay_holds_at_the_mid_break_request
+#print axioms Tm.PlannerWit.the_break_law_holds_whole_at_the_mid_break_request
+#print axioms Tm.PlannerWit.the_apart_replay_fails_at_the_pre_d100_request
+#print axioms Tm.PlannerWit.closeUnderBreakRun_resumes_ok
+#print axioms Tm.PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break
+#print axioms Tm.PlanCheck.netOne_draws_beside_the_break
