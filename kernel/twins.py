@@ -1438,6 +1438,24 @@ def read_verdicts(path, text=None):
     return entries, bad
 
 
+def group_pairs(names):
+    """The unordered pairs of a group's members: what one verdict over `names`
+    says of them, two at a time (D121's scope, README gap 5037)."""
+    names = sorted(names)
+    return {frozenset((a, b)) for i, a in enumerate(names) for b in names[i + 1:]}
+
+
+def not_one_pairs(entries):
+    """The SCOPE of a verdict file (D121): every pair a NOT ONE CONCEPT verdict
+    exempts.  A ONE CONCEPT verdict is a debt with an EXIT, not an exemption, and
+    contributes nothing."""
+    out = set()
+    for names, (verdict, _lineno) in entries.items():
+        if verdict.startswith("NOT ONE CONCEPT"):
+            out |= group_pairs(names)
+    return out
+
+
 def committed_verdicts(path):
     """The sentences as `git` has them at HEAD: the text, `""` when the file is
     not at HEAD yet (its first landing), or None when git cannot say."""
@@ -1665,25 +1683,44 @@ def main(argv):
         # whose two shapes are two concepts is answered in CODE -- one member
         # written through the other, or both through a carrier E5 then reads as
         # wrappers -- or put to the owner; never by a new sentence.
-        for names in sorted(set(entries) - set(prev_entries), key=lambda k: entries[k][1]):
-            if entries[names][0].startswith("NOT ONE CONCEPT"):
-                bad.append("RATCHET: %s:%d is a NEW NOT ONE CONCEPT verdict -- this file "
-                           "may only SHRINK, and the one verdict with no EXIT cannot be "
-                           "added: answer the group in code (a carrier E5 reads as "
-                           "wrappers) or adjudge it ONE CONCEPT with an EXIT: %s"
-                           % (EXEMPT_FILE.name, entries[names][1], " ".join(sorted(names))))
-        for names in set(entries) & set(prev_entries):
-            if prev_entries[names][0].startswith("ONE CONCEPT") and \
-                    entries[names][0].startswith("NOT ONE CONCEPT"):
+        #
+        # MEASURED BY SCOPE, NEVER BY LINE (the owner's D121, W-48 track H, README
+        # gap 5037).  What a NOT ONE CONCEPT verdict exempts is every PAIR of its
+        # group's members -- "these two are not one concept" -- so the file's scope
+        # is the union of those pairs (`not_one_pairs`), and growth is a pair the
+        # committed file's verdicts did not hold.  Until W-48 the key was the whole
+        # group, so a verdict re-written over a SUBSET of a held group (a member
+        # deleted, the group re-formed one name narrower) failed as NEW although it
+        # exempts less, while the rule it was meant to state -- a NEW permanent
+        # exemption -- is exactly a pair no held verdict covers.  The ONE CONCEPT ->
+        # NOT ONE CONCEPT rewrite is one case of it (a ONE CONCEPT group's pairs are
+        # in no held NOT ONE CONCEPT verdict, groups being disjoint), kept under its
+        # own message because the message says what to do instead.
+        held_pairs = not_one_pairs(prev_entries)
+        for names in sorted(entries, key=lambda k: entries[k][1]):
+            if not entries[names][0].startswith("NOT ONE CONCEPT"):
+                continue
+            new = sorted(" ".join(sorted(p)) for p in group_pairs(names) - held_pairs)
+            if not new:
+                continue
+            if names in prev_entries and prev_entries[names][0].startswith("ONE CONCEPT"):
                 bad.append("RATCHET: %s:%d was ONE CONCEPT at HEAD and is NOT ONE CONCEPT now "
                            "-- a debt leaves when its group does, not when its sentence is "
                            "rewritten: %s" % (EXEMPT_FILE.name, entries[names][1],
                                               " ".join(sorted(names))))
+            else:
+                bad.append("RATCHET: %s:%d is a NOT ONE CONCEPT verdict over %d pair(s) no "
+                           "verdict at HEAD held (%s) -- this file may only SHRINK, measured "
+                           "by the pairs it exempts (D121), and the one verdict with no EXIT "
+                           "cannot grow: answer the group in code (a carrier E5 reads as "
+                           "wrappers) or adjudge it ONE CONCEPT with an EXIT: %s"
+                           % (EXEMPT_FILE.name, entries[names][1], len(new), "; ".join(new),
+                              " ".join(sorted(names))))
     # And every COMMITTED step since `ratchet.BASE` (the W-41 repair, README gap
-    # 4132): a NOT ONE CONCEPT verdict a commit added is growth HEAD can no longer see.
+    # 4132): a NOT ONE CONCEPT verdict a commit added is growth HEAD can no longer see --
+    # keyed by the PAIRS it exempts since D121, as the comparand above is.
     def not_one(t):
-        return {" ".join(sorted(k)) for k, (v, _l) in read_verdicts(EXEMPT_FILE, t)[0].items()
-                if v.startswith("NOT ONE CONCEPT")}
+        return {" ".join(sorted(p)) for p in not_one_pairs(read_verdicts(EXEMPT_FILE, t)[0])}
     hist = ratchet.grown(EXEMPT_FILE, not_one)
     if hist is None:
         bad.append("RATCHET UNCHECKED: git cannot read %s's committed history (README gap 4132)"

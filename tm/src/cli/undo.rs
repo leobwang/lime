@@ -31,10 +31,11 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use tm_core::log::Event;
 use tm_core::model::Id;
-use tm_core::store::{RuntimeState, Store, StoreError, StoreExt};
+use tm_core::grammar::parse_file;
+use tm_core::store::{edit, RuntimeState, Store, StoreError, StoreExt};
 
 use super::ctx::{Ctx, LogHeader};
-use super::out::{CliError, LaterWriter};
+use super::out::{CliError, FirstDifference, LaterWriter};
 
 /// `.tm/undo.json`.
 pub const UNDO_PATH: &str = ".tm/undo.json";
@@ -254,6 +255,49 @@ pub(crate) fn rebase_underneath(
     stack.save(ctx)
 }
 
+/// **Does `path` still hold what the undone command left, outside its
+/// generated blocks?** (the owner's D122, README gaps 4750 and 5110). Byte
+/// equality answers first; otherwise both texts are read by the one parser
+/// and compared through [`edit::outside_generated`], so a replan's rewrite of
+/// a block is not a conflict and anything else is. A file that exists on one
+/// side only is a conflict whatever it holds.
+fn holds_what_it_left(ctx: &Ctx, path: &str, now: Option<&str>, left: Option<&str>) -> bool {
+    match (now, left) {
+        (Some(a), Some(b)) => a == b || user_text(ctx, path, a) == user_text(ctx, path, b),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// `text` as [`edit::outside_generated`] reads it.
+fn user_text(ctx: &Ctx, path: &str, text: &str) -> String {
+    edit::outside_generated(&parse_file(path, text, &ctx.cfg))
+}
+
+/// The first line OUTSIDE the generated blocks at which the undone command's
+/// text and the file's differ, numbered as the file holds it now (as the
+/// command left it, past the file's end) — what the refusal names, since a
+/// difference inside a block is not what refused (D122). `None` when one side
+/// is absent or they differ in line endings alone; the renderer then says
+/// what it always said.
+fn first_outside(ctx: &Ctx, path: &str, ours: Option<&str>, theirs: Option<&str>) -> Option<FirstDifference> {
+    const EOF: &str = "(end of file)";
+    let lines = |t: &str| edit::outside_generated_lines(&parse_file(path, t, &ctx.cfg));
+    let (o, t) = (lines(ours?), lines(theirs?));
+    for k in 0..o.len().max(t.len()) {
+        let (a, b) = (o.get(k), t.get(k));
+        if a.map(|x| &x.1) == b.map(|x| &x.1) {
+            continue;
+        }
+        return Some(FirstDifference {
+            line: b.or(a).map_or(0, |x| x.0),
+            ours: a.map_or_else(|| EOF.to_string(), |x| x.1.clone()),
+            theirs: b.map_or_else(|| EOF.to_string(), |x| x.1.clone()),
+        });
+    }
+    None
+}
+
 /// Records what one command changed.
 pub struct Recorder {
     verb: String,
@@ -352,13 +396,23 @@ pub fn undo(ctx: &mut Ctx) -> Result<Undone, CliError> {
     //    what the undone command left, or another writer's work would be
     //    silently discarded. A mismatch is a `Conflict` (§13's exit code 3),
     //    with both texts, and the entry stays on the stack.
+    //
+    //    **Outside the generated blocks** (the owner's D122, README gaps 4750
+    //    and 5110). A generated block is derived — tm rewrites it on every
+    //    replan and the user never edits it (§1.3) — so a `tm plan` between the
+    //    command and its undo moved the block's `start HH:MM` and its rows and
+    //    nothing the user owns, and refusing on it left the commonest sequence
+    //    (finish a block, look at the plan, undo) unable to undo. The guard
+    //    compares [`edit::outside_generated`]: every line outside a block
+    //    byte for byte, and each block's presence, place and name. A change
+    //    anywhere outside a block is still a conflict.
     for f in &entry.files {
         let current = ctx
             .store
             .exists(&f.path)
             .then(|| ctx.store.read_text(&f.path))
             .transpose()?;
-        if current != f.after {
+        if !holds_what_it_left(ctx, &f.path, current.as_deref(), f.after.as_deref()) {
             // **And it says who wrote it** (README gap 887). The refusal
             // itself is unchanged — D37: never clobber — but a refusal that
             // blames an external editor for tm's own automatic close is a
@@ -366,6 +420,7 @@ pub fn undo(ctx: &mut Ctx) -> Result<Undone, CliError> {
             // through the one reader and names the close; the entry stays on
             // the stack either way.
             let blame = later_writer(ctx, &entry);
+            let first = first_outside(ctx, &f.path, f.after.as_deref(), current.as_deref());
             return Err(CliError::UndoBlocked {
                 conflict: StoreError::Conflict {
                     id: Id::new(""),
@@ -374,6 +429,7 @@ pub fn undo(ctx: &mut Ctx) -> Result<Undone, CliError> {
                     theirs: current.unwrap_or_default(),
                 },
                 blame,
+                first,
             });
         }
     }

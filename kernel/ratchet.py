@@ -23,6 +23,29 @@ later one.  A commit whose growth the owner grants is the owner's to grant by
 moving `BASE` past it, in the commit that does -- a line in a diff, as a
 heading never was.
 
+**"SHRINK" IS MEASURED BY SCOPE, NEVER BY LINE** (the owner's D121, W-48 track
+H, README gap 5037).  A file shrinks when the SET it exempts -- definitions,
+fields, key paths, pairs -- is no larger; its line count is formatting.  So every
+gate's key reader returns SCOPE ATOMS, and a commit's `allowed` hook answers an
+atom its parent's file already covered by a wider line.  The seven files, found
+by the property "a gate holds it against itself at HEAD" (`git show HEAD:`
+beside this module's walk), and what one line of each exempts:
+
+  reach-exempt.txt       an entry: one definition; a `CLASS` line: every
+                         definition its class answers, measured on this tree
+                         (the class scope reach.py's `main` computes).  An entry
+                         a class held is not growth; a
+                         NEW class line is, because a class is a rule that answers
+                         definitions not yet written.
+  twins-exempt.txt       a NOT ONE CONCEPT verdict: every PAIR of its members
+                         (`twins.not_one_pairs`); a ONE CONCEPT line is a debt
+                         with an EXIT and exempts nothing permanently.
+  written-exempt.txt,    a key path and every path under it (`fields.under`):
+  sent-exempt.txt        `plan` -> `plan.segments` + `plan.priorities` is narrower.
+  fields-exempt.txt,     one line, one field / one declaration: the key IS the
+  inputs-exempt.txt,     scope, and no line can be split.
+  kernel-decide-exempt.txt
+
 **WHAT IT CANNOT SEE, declared.**  A step BEFORE `BASE`, when growth under a
 dated section was the rule (W-31 to W-40).  A track's own commit off the line
 (it is judged by the merge that brings it, the net change).  A history git

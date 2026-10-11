@@ -610,3 +610,94 @@ fn an_undo_of_a_verb_that_logged_nothing_says_it_cannot_tell() {
     let doc = failure_doc(&tm, "2026-09-07T09:08:00-05:00", &["--json", "undo"]);
     assert_eq!(doc["detail"]["laterWriter"]["anchored"], true, "{doc}");
 }
+
+/// The gap-4750 sequence on the example tree: arrive, start a block, finish it, look at the plan.
+/// Returns the day file as it stood before `tm done` — what an undo of the done must put back.
+fn finish_then_plan(tm: &Tm) -> String {
+    tm.ok(&["wake", "06:05", "--slept", "8h"]);
+    tm.ok_at("2026-09-07T09:01:00-05:00", &["arrive"]);
+    tm.ok_at("2026-09-07T09:02:00-05:00", &["start", "^t4", "--energy", "4"]);
+    let before = tm.read("day/2026-09-07.md");
+    tm.ok_at("2026-09-07T09:50:00-05:00", &["done", "^t4"]);
+    let after_done = tm.read("day/2026-09-07.md");
+    tm.ok_at("2026-09-07T09:51:00-05:00", &["plan"]);
+    let after_plan = tm.read("day/2026-09-07.md");
+    // The precondition the gap needs: the replan rewrote the generated block.
+    assert!(
+        after_done.contains("<!-- tm:plan start 09:01 -->")
+            && after_plan.contains("<!-- tm:plan start 09:51 -->"),
+        "the generated block's start marker moved: {after_done}\n---\n{after_plan}"
+    );
+    before
+}
+
+/// **`tm undo` right after `tm plan` undoes the user's last step** (the owner's D122, README gaps
+/// 4750 and 5110). Before D122 this exited 3, `conflict in day/2026-09-07.md`, its first
+/// difference the plan block's `<!-- tm:plan start … -->` line: the guard demanded the whole day
+/// file byte for byte, and a replan rewrites the generated block, which the user never edits. It
+/// now compares the text outside the generated blocks, so the done is undone — and the day file
+/// comes back exactly as the done found it, generated block included: undo restores, it does not
+/// replan, and the next replan redraws the block from the restored state.
+#[test]
+fn undo_after_a_replan_undoes_the_last_step_p120() {
+    let tm = Tm::new();
+    let before = finish_then_plan(&tm);
+    let json = tm.json_at("2026-09-07T09:55:00-05:00", &["undo"]);
+    assert_eq!(json["verb"], "done", "{json}");
+    assert!(tm.line("week/2026-W37.md", "t4").starts_with("- [>]"));
+    assert_eq!(tm.state()["active"]["id"], "t4");
+    assert_eq!(tm.read("day/2026-09-07.md"), before, "the day file is the one the done found");
+    assert_eq!(undone(&tm), vec!["done"]);
+}
+
+/// **And a change OUTSIDE a generated block still refuses** (D122's other direction): after the
+/// same replan, a line written into the day file by another writer is §13's exit code 3, the
+/// refusal names that line — the first difference outside tm's generated blocks, not the plan
+/// block's marker — and nothing is written.
+#[test]
+fn undo_after_a_replan_still_refuses_a_change_outside_the_generated_blocks() {
+    let tm = Tm::new();
+    finish_then_plan(&tm);
+    let path = tm.plan.join("day/2026-09-07.md");
+    let mut text = std::fs::read_to_string(&path).expect("read day");
+    text.push_str("- [ ] 2 20m Written by hand in the day file\n");
+    std::fs::write(&path, &text).expect("write day");
+    let lines = text.lines().count();
+
+    let out = tm.run_at("2026-09-07T09:55:00-05:00", &["undo"]);
+    assert_eq!(out.code, 3, "{}{}", out.stdout, out.stderr);
+    assert!(
+        out.stderr
+            .contains(&format!("first difference outside tm's generated blocks, line {lines}:")),
+        "{}",
+        out.stderr
+    );
+    assert!(
+        out.stderr.contains("theirs: - [ ] 2 20m Written by hand in the day file"),
+        "{}",
+        out.stderr
+    );
+    assert!(!out.stderr.contains("tm:plan start"), "the block's marker is not what refused: {}", out.stderr);
+    assert_eq!(std::fs::read_to_string(&path).expect("read day"), text);
+    assert!(tm.line("week/2026-W37.md", "t4").starts_with("- [x]"), "nothing was half-undone");
+}
+
+/// **A generated block's place and name are compared, its contents are not** (D122): an undo
+/// after another writer deleted the day file's whole plan block — markers and rows — refuses,
+/// because what the guard compares keeps one line per block where it stood.
+#[test]
+fn undo_refuses_when_a_generated_block_was_removed() {
+    let tm = Tm::new();
+    finish_then_plan(&tm);
+    let path = tm.plan.join("day/2026-09-07.md");
+    let text = std::fs::read_to_string(&path).expect("read day");
+    let start = text.find("<!-- tm:plan start").expect("a plan block");
+    let end = text.find("<!-- tm:plan end -->").expect("its end") + "<!-- tm:plan end -->\n".len();
+    let cut = format!("{}{}", &text[..start], &text[end..]);
+    std::fs::write(&path, &cut).expect("write day");
+
+    let out = tm.run_at("2026-09-07T09:55:00-05:00", &["undo"]);
+    assert_eq!(out.code, 3, "{}{}", out.stdout, out.stderr);
+    assert!(out.stderr.contains("ours:   <!-- tm:plan -->"), "{}", out.stderr);
+    assert_eq!(std::fs::read_to_string(&path).expect("read day"), cut);
+}

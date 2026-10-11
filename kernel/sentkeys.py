@@ -301,6 +301,27 @@ class Param:
         self.name = name
 
 
+class Copy:
+    """**A caller's JSON value, indexed by literal keys and copied WHOLE** (W-48
+    track H, README gap 4959): `plan["segments"].clone()` in `rows_request`, where
+    `plan` is a `&Value` parameter.  What it writes is whatever the caller handed
+    in, at that key path -- so no key under it is a literal this reader sees, and
+    until W-48 it was a leaf with every key under it unwritten.  its copy_sources
+    follows it to the program's calls of `fn`, and `fields.written_main` reads the
+    keys under it off the kernel's own serialiser when every call hands in a key
+    path of the kernel's PARSED ANSWER.  It is a leaf to `flatten`: the key it sits
+    under is written, and nothing under it is, by this reader."""
+    def __init__(self, enc, fn, param, keys):
+        self.enc = enc
+        self.fn = fn
+        self.param = param
+        self.keys = keys
+
+    def __repr__(self):
+        return "Copy(%s::%s %s%s)" % (self.enc.module, self.fn, self.param,
+                                      "".join('["%s"]' % k for k in self.keys))
+
+
 class Text:
     """**A JSON value a function builds as TEXT** (W-40 track E, README gap 3717): the
     fragments it appends, in source order -- `('lit', s, offset)` for a string literal
@@ -508,6 +529,12 @@ class RustEncoder:
             toks = toks[2:] if len(toks) > 1 and toks[1].val == "mut" else toks[1:]
         if not toks:
             return None
+        # A caller's value indexed by literal keys and copied whole (README gap 4959):
+        # `plan["segments"].clone()`.  A `Copy`, never a `Param` -- `put`'s rule for a
+        # caller's value (`<key>_json` or nothing) is about a value handed in WHOLE.
+        cp = self.copy_of(toks, env, fn)
+        if cp is not None:
+            return cp
         if len(toks) == 1 and toks[0].kind == "ident" and toks[0].val in env:
             return env[toks[0].val]
         # `format!(..)` is TEXT (W-40: the `log` section and its splice).
@@ -583,6 +610,20 @@ class RustEncoder:
             if far is not None:
                 return far
         return None
+
+    def copy_of(self, toks, env, fn):
+        """`<param>["k"]..["k"]` with an optional `.clone()` and nothing else, where
+        `<param>` is a caller's JSON value: a `Copy`; else `None`."""
+        if not toks or toks[0].kind != "ident" or not isinstance(env.get(toks[0].val), Param):
+            return None
+        keys, i = [], 1
+        while i + 2 < len(toks) and toks[i].kind == "punct" and toks[i].val == "[" \
+                and toks[i + 1].kind == "str" and toks[i + 2].kind == "punct" and toks[i + 2].val == "]":
+            keys.append(toks[i + 1].val)
+            i += 3
+        if not keys or [t.val for t in toks[i:]] not in ([], [".", "clone", "(", ")"]):
+            return None
+        return Copy(self, fn, toks[0].val, keys)
 
     def format_frags(self, args, env, fn):
         """The fragments of `format!(<template>, args..)`: the template's text with
@@ -970,7 +1011,10 @@ class RustEncoder:
         target[key] = v
 
     def resolve(self, v, seen=()):
-        """A tree with every `Link`, `Foreign` and `Text` resolved."""
+        """A tree with every `Link`, `Foreign` and `Text` resolved; a `Copy` stays a
+        `Copy` (a leaf the written half follows, README gap 4959)."""
+        if isinstance(v, Copy):
+            return v
         if isinstance(v, Text):
             if ("text", id(v)) in seen:
                 return None
@@ -1132,9 +1176,11 @@ def has_docs(inner):
 
 
 def host_sections(root, sections):
-    """`({section: sorted key paths}, {section: [site]}, complaints)` -- every key path
-    the program writes under each of `sections`, read at every request site, the
-    codec's `<section>_json` and its `&mut Value` writers.
+    """`({section: sorted key paths}, {section: [site]}, complaints, {section: [(key
+    path, Copy)]})` -- every key path the program writes under each of `sections`,
+    read at every request site, the codec's `<section>_json` and its `&mut Value`
+    writers; and every value a site copies whole from a caller (README gap 4959),
+    for `fields.written_main` to follow (`RustProgram`, its copy_sources).
 
     A SITE is a request the program builds: a `json!` object carrying `docs`, wherever
     it is written -- bound, returned, or a call's own argument (`call(&json!({"docs":
@@ -1240,7 +1286,8 @@ def host_sections(root, sections):
     paths = {sec: sorted(set(flatten(trees[sec], sec))) for sec in sections}
     for enc in dict.fromkeys(roots_seen):
         complaints.extend(enc.complaints)
-    return paths, dict(where), complaints
+    copies = {sec: copies_in(trees[sec], sec) for sec in sections}
+    return paths, dict(where), complaints, copies
 
 
 def merge(into, tree):
@@ -1250,6 +1297,241 @@ def merge(into, tree):
             merge(into[k], v)
         elif k not in into or into[k] is None:
             into[k] = v
+
+
+# ===========================================================================
+# A VALUE COPIED WHOLE FROM A KERNEL ANSWER (W-48 track H, README gap 4959)
+#
+# `planwire::rows_request` sends the planner answer's own `segments` and
+# `priorities` back in the `plan` section, `plan["segments"].clone()`: no key
+# under them is a literal anything reads, so the written half had every key the
+# kernel decodes under them unwritten, and `written-exempt.txt` answered them by
+# two lines.  What the two arrays hold is what the kernel's own serialiser
+# wrote, and that is a fact this reader can establish by PROPERTY, in two halves:
+#
+#   * HERE, the host half -- a `Copy` (a caller's `&Value` indexed by literal keys,
+#     copied whole) is traced to EVERY call of its function in the program, and
+#     each call must hand in, for that parameter, a literal key path into a
+#     binding whose value is the kernel's PARSED ANSWER: the result of a call to
+#     a function whose declared return type mentions `Value` and which reaches the
+#     FFI door -- a function calling a name an `extern "C"` block of the program
+#     declares (the shim's `tm_kernel_call_c`) -- through the program's calls.  No
+#     function is named: the door is the `extern "C"` block, the answer is a
+#     `Value`, and the key path starts at the response's `ok` (AGENTS 2.4: one `ok`
+#     shape).  Its copy_sources answers the response key paths, one per call.
+#   * In `fields.py`, the kernel half -- the keys the kernel EMITS under that
+#     response key path, read off the library's JVal serialisers
+#     (`fields.Serialisers`).
+#
+# WHAT IT CANNOT SEE, declared: a copy whose argument is not a literal key path
+# into a binding of the calling function (a value passed through a second
+# parameter, a field of a struct, a `match` arm) is not traced, and its keys stay
+# unwritten -- the loud direction; a copy built as TEXT is a hole `skeleton` reads
+# as nothing.  A call from a TEST item is not the program's and is not asked.
+# ===========================================================================
+
+def copies_in(tree, prefix):
+    """`[(key path, Copy)]` for every `Copy` leaf of a host tree."""
+    out = []
+    if not isinstance(tree, dict):
+        return out
+    for k, v in tree.items():
+        p = prefix + "[]" if k == ARRAY else "%s.%s" % (prefix, k)
+        if isinstance(v, Copy):
+            out.append((p, v))
+        elif isinstance(v, dict):
+            out.extend(copies_in(v, p))
+    return out
+
+
+def crate_name(src_dir):
+    """The `name` of the crate whose `src` directory is src_dir, as Rust spells it in
+    a path (`tm-kernel-ffi` -> `tm_kernel_ffi`); `None` when there is no manifest."""
+    man = pathlib.Path(src_dir).parent / "Cargo.toml"
+    if not man.exists():
+        return None
+    m = re.search(r'(?m)^name[ \t]*=[ \t]*"([^"]+)"', man.read_text(errors="replace"))
+    return m.group(1).replace("-", "_") if m else None
+
+
+def fn_returns(toks):
+    """`{fn: [return type tokens]}` for every `fn` outside a test item (`[]` for none)."""
+    tests = test_spans(toks)
+    out = {}
+    for i in range(len(toks) - 2):
+        if toks[i].kind == "ident" and toks[i].val == "fn" and toks[i + 1].kind == "ident" \
+                and not any(a <= i <= b for a, b in tests):
+            k = i + 2
+            while k < len(toks) and not (toks[k].kind == "punct" and toks[k].val == "("):
+                k += 1
+            if k >= len(toks):
+                continue
+            j = close_of(toks, k) + 1
+            ret = []
+            if j + 1 < len(toks) and toks[j].val == "-" and toks[j + 1].val == ">":
+                j += 2
+                while j < len(toks) and toks[j].val not in ("{", ";", "where"):
+                    ret.append(toks[j])
+                    j += 1
+            out[toks[i + 1].val] = ret
+    return out
+
+
+def extern_c(toks):
+    """The function names every `extern "C" { .. }` block of a file declares."""
+    names = set()
+    for i in range(len(toks) - 2):
+        if toks[i].val == "extern" and toks[i + 1].kind == "str" and toks[i + 1].val == "C" \
+                and toks[i + 2].val == "{":
+            c = close_of(toks, i + 2)
+            for k in range(i + 3, c - 1):
+                if toks[k].val == "fn" and toks[k + 1].kind == "ident":
+                    names.add(toks[k + 1].val)
+    return names
+
+
+def calls_in(body):
+    """`[(index, qualifier or None, name)]`: every call `q::name(` or `name(` of a body
+    (never a method call `.name(`)."""
+    out = []
+    for j in range(len(body) - 1):
+        if body[j].kind != "ident" or body[j + 1].val != "(":
+            continue
+        if j >= 1 and body[j - 1].val == ".":
+            continue
+        q = None
+        if j >= 3 and body[j - 1].val == ":" and body[j - 2].val == ":" and body[j - 3].kind == "ident":
+            q = body[j - 3].val
+        out.append((j, q, body[j].val))
+    return out
+
+
+class RustProgram:
+    """Every non-test function of the program's files, with the names a call may
+    qualify it by (its module's, and its crate's for a crate root), what it calls
+    and what it returns -- read once for its copy_sources."""
+
+    def __init__(self, root):
+        self.fns = {}       # (file, fn) -> (params, body)
+        self.rets = {}      # (file, fn) -> return type tokens
+        self.names = {}     # file -> {names a call may qualify it by}
+        self.externs = {}   # file -> extern "C" names
+        for d in program_roots(root):
+            crate = crate_name(d)
+            for f in sorted(leanfiles.rust_files(d)):
+                toks = rust_tokens(f.read_text(errors="replace"))
+                mod = f.stem if f.stem != "mod" else f.parent.name
+                names = {mod}
+                if f.stem in ("lib", "main") and crate:
+                    names.add(crate)
+                self.names[f] = names
+                self.externs[f] = extern_c(toks)
+                for name, pb in rust_fns(toks).items():
+                    self.fns[(f, name)] = pb
+                for name, ret in fn_returns(toks).items():
+                    self.rets[(f, name)] = ret
+        self._answers = None
+
+    def targets(self, f, q, name):
+        """The program functions a call `q::name(` (or `name(`) written in file `f` names."""
+        if q is None:
+            return [(f, name)] if (f, name) in self.fns else []
+        return [(g, name) for g, ns in self.names.items() if q in ns and (g, name) in self.fns]
+
+    def answers(self):
+        """`{(file, fn)}`: the functions whose value is the kernel's PARSED ANSWER --
+        a declared return type mentioning `Value`, and a call chain to a function
+        that calls an `extern "C"` name (the FFI door)."""
+        if self._answers is not None:
+            return self._answers
+        reach = {key for key, (_ps, body) in self.fns.items()
+                 if any(q is None and n in self.externs[key[0]] for _j, q, n in calls_in(body))}
+        grew = True
+        while grew:
+            grew = False
+            for key, (_ps, body) in self.fns.items():
+                if key in reach:
+                    continue
+                if any(t in reach for _j, q, n in calls_in(body) for t in self.targets(key[0], q, n)):
+                    reach.add(key)
+                    grew = True
+        self._answers = {k for k in reach if any(t.val == "Value" for t in self.rets.get(k, []))}
+        return self._answers
+
+    def binding_rhs(self, body, upto, var):
+        """The right-hand side of the LAST `let` before index `upto` whose pattern binds
+        `var` (`let var = ..;`, `let (var, _) = ..;`, `let var: T = ..;`), or `None`."""
+        def depth0_end(a, stops):
+            depth = 0
+            for k in range(a, len(body)):
+                v = body[k].val if body[k].kind == "punct" else None
+                if depth == 0 and v in stops:
+                    return k
+                if v in OPEN:
+                    depth += 1
+                elif v in (")", "]", "}"):
+                    depth -= 1
+            return len(body)
+        found = None
+        for i in range(upto):
+            if body[i].val != "let":
+                continue
+            k = depth0_end(i + 1, ("=", ";"))
+            if k >= upto or body[k].val != "=":
+                continue
+            pat = body[i + 1:k]
+            colon = next((n for n, t in enumerate(pat) if t.kind == "punct" and t.val == ":"
+                          and not (n + 1 < len(pat) and pat[n + 1].val == ":")
+                          and not (n and pat[n - 1].val == ":")), None)
+            names = pat[:colon] if colon is not None and pat[0].kind == "ident" else pat
+            if any(t.kind == "ident" and t.val == var for t in names):
+                found = body[k + 1:depth0_end(k + 1, (";",))]
+        return found
+
+    def copy_sources(self, cp):
+        """`(chains, failures)` for a `Copy`: the response key path each call of its
+        function hands in (the call's literal keys, then the copy's own), and a
+        sentence for every call that does not hand in a key path of the kernel's
+        parsed answer."""
+        src = getattr(cp.enc, "path", None)
+        params = cp.enc.fns[cp.fn][0]
+        if src is None or cp.param not in params:
+            return [], ["`%s` is not a function of the program this reader indexed" % cp.fn]
+        at = params.index(cp.param)
+        chains, failures, ncalls = [], [], 0
+        answers = self.answers()
+        for (f, caller), (_ps, body) in self.fns.items():
+            for j, q, n in calls_in(body):
+                if n != cp.fn or (src, cp.fn) not in self.targets(f, q, n):
+                    continue
+                ncalls += 1
+                args = split_top(body[j + 2:close_of(body, j + 1)])
+                arg = args[at] if at < len(args) else []
+                while arg and arg[0].val == "&":
+                    arg = arg[1:]
+                keys, i = [], 1
+                while i + 2 < len(arg) and arg[i].val == "[" and arg[i + 1].kind == "str" \
+                        and arg[i + 2].val == "]":
+                    keys.append(arg[i + 1].val)
+                    i += 3
+                if not arg or arg[0].kind != "ident" or i != len(arg) or not keys:
+                    failures.append("`%s` hands `%s` a %s that is not a literal key path into a "
+                                    "binding" % (caller, cp.fn, cp.param))
+                    continue
+                rhs = self.binding_rhs(body, j, arg[0].val)
+                if rhs is None or not any(t in answers for _k, q2, n2 in calls_in(rhs)
+                                          for t in self.targets(f, q2, n2)):
+                    failures.append("`%s` hands `%s` a key path into `%s`, which is not bound to "
+                                    "the kernel's parsed answer" % (caller, cp.fn, arg[0].val))
+                    continue
+                if keys[0] != "ok":
+                    failures.append("`%s` hands `%s` the kernel's answer at `%s`, not under its "
+                                    "`ok` object" % (caller, cp.fn, ".".join(keys)))
+                    continue
+                chains.append(tuple(keys + list(cp.keys)))
+        if not ncalls:
+            failures.append("nothing in the program calls `%s`" % cp.fn)
+        return chains, failures
 
 
 # ---------------------------------------------------------------------------

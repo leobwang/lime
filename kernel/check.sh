@@ -909,7 +909,11 @@ fi
 #     parameter, a shared constructor short name); a NEW NOT ONE CONCEPT line
 #     FAILS as RATCHET (driven: spanPer plus a dated NOT ONE line was green);
 #     and a ONE CONCEPT line that says CARRIED BY `X` is counted carried, after
-#     the gate checks every member is headed by `X`.
+#     the gate checks every member is headed by `X`.  SINCE W-48 (the owner's
+#     D121, README gap 5037) "new" is measured by SCOPE: a NOT ONE CONCEPT
+#     verdict exempts every PAIR of its members, and it fails when it holds a
+#     pair no verdict at HEAD held -- so a verdict re-written over a narrower
+#     group passes, and one widened while another line is deleted fails.
 #
 #     W-34 TRACK A CLOSES THE FOUR (README gaps 2577, 2601, 2604, 2605), each by
 #     a PROPERTY and each driven in a `git clone --no-hardlinks` with the W-33
@@ -1105,6 +1109,14 @@ fi
 #     and re-added with a date and an EXIT -- rc=0 on the old ratchet, rc=1 by name
 #     on this one.  Growth is the owner's to grant, in the commit that changes
 #     reach.py.
+#
+#     AND SINCE W-48 "SHRINK" IS MEASURED BY SCOPE, NEVER BY LINE (the owner's
+#     D121, README gap 5037; `ratchet.py`'s header holds the rule for all seven
+#     files).  What this file exempts is its entries and every definition its
+#     `CLASS` lines answer, so a class line split into its members, each named
+#     under a dated reason, passes -- it exempts no more -- while an entry in the
+#     scope of nothing held at HEAD fails whatever line it replaced.  A NEW `CLASS`
+#     line still fails: a class is a rule that answers definitions not yet written.
 #
 #     AND THE ROOT IS MEASURED BEFORE ANY VERDICT IS TAKEN FROM IT (W-32 repair,
 #     gaps 2413 and 2414).  `sections.py` DISCARDED a request region carrying a
@@ -1307,7 +1319,16 @@ fi
 #     a key path or a whole section, and neither file may grow: a line HEAD
 #     does not hold fails RATCHET whatever heading it sits under (D51; README
 #     gap 3953, the W-40 repair, which removed W-40 track E's dated-heading
-#     escape).
+#     escape).  SINCE W-48 (D121, README gap 5037) "grow" is measured by the key
+#     paths a file exempts, and a value the program COPIES WHOLE from the
+#     kernel's parsed answer (README gap 4959) is written where the kernel's own
+#     serialiser emits it: every call of the copying function must hand in a
+#     literal key path under the `ok` object of a binding whose value comes from
+#     a function returning `Value` that reaches the FFI door (an `extern "C"`
+#     name), and the keys under it are the ones every reached library emitter of
+#     the path's last key writes (`fields.copied_paths`).  Driven both ways in a
+#     clone: a renamed `segJson` key, a forged host `Value`, an `err` object and
+#     a non-kernel function each make the copy's keys UNWRITTEN.
 out=$( python3 fields.py 2>&1 )
 if [ $? -eq 0 ]; then
   say "every emitted field has a writer" "ok  ($( printf '%s\n' "$out" | tail -4 | head -1 ))"

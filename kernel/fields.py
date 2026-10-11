@@ -704,6 +704,16 @@ SENT_EXEMPT_FILE = HERE / "sent-exempt.txt"
 # no longer decoded, RATCHET when the committed file did not hold it: W-27's
 # shape, the file may only SHRINK.
 #
+# AND A VALUE COPIED WHOLE FROM THE KERNEL'S ANSWER IS THE KERNEL'S SERIALISER'S
+# (W-48 track H, README gap 4959).  `planwire::rows_request` sends the planner
+# answer's own `segments` and `priorities` back, `plan["segments"].clone()`; no
+# key under them is a literal, so 35 decoded paths were unwritten and two lines
+# of `written-exempt.txt` answered them.  A key under such a copy is WRITTEN when
+# the host half (`sentkeys.RustProgram`, its copy_sources) traces every call to a key
+# path of the kernel's parsed answer and the kernel half (`Serialisers`, above
+# `answered`) finds the key emitted there by every reached serialiser -- both by
+# property, both said in their own headers.  `copied_paths` joins them.
+#
 # WHAT IT CANNOT SEE: whether the binary CALLS the writer.  `add_worked_min`
 # writes `state.active.workedMin`, and until the W-41 repair had no caller in
 # `tm/src` (README gap 3043; its first is `tm check`'s planner request, gap
@@ -775,7 +785,7 @@ def ratchet_file(path, shallow, under, why_stale, bad, sections):
             if any(under(e, q) for q in held):
                 continue
             bad.append("RATCHET: %s:%d  `%s` is a NEW exemption, under no key exempt at HEAD -- "
-                       "this file may only SHRINK (D51), whatever heading it sits under "
+                       "this file may only SHRINK (D51), measured by the key paths it exempts (D121), whatever heading it sits under "
                        "(README gap 3953)" % (path.name, entries[e], e))
     # And every COMMITTED step since `ratchet.BASE` (the W-41 repair, README gap 4132),
     # by this rule: a line under a key its parent already exempted is not growth.
@@ -789,6 +799,211 @@ def ratchet_file(path, shallow, under, why_stale, bad, sections):
     else:
         bad.extend(hist)
     return entries
+
+
+# ===========================================================================
+# THE KERNEL'S OWN SERIALISER, READ (W-48 track H, README gap 4959).
+#
+# The host half of a copied value is `sentkeys.RustProgram` (its copy_sources): every call
+# hands in a key path of the kernel's parsed answer, under its `ok` object.  This is
+# the kernel half: the key paths the library's JVal serialisers EMIT at the last key
+# of that path.  A key a copy carries is WRITTEN when the kernel's own serialiser
+# writes it -- the bytes the host sends back are bytes the kernel wrote, untouched --
+# and only then.  By PROPERTY, naming no definition:
+#
+#   * THE EMITTERS of a key `k` are every library `def` the export reaches (check
+#     12's call graph, `callgraph.reachable`) whose body pairs the literal `k` with
+#     a value -- `("k".toList, <value>)` -- found by the KEY as `emitter` finds the
+#     diagnostics', whatever the definition is called.  A key with no reached
+#     emitter writes nothing.  Several emitters are INTERSECTED: a path is written
+#     only where every one of them emits it, so an unrelated object that shares
+#     the key name can only make the copy LESS written (the loud direction).
+#   * A VALUE'S KEY PATHS are read off its expression: `.obj [("k".toList, v), ..]`
+#     is an object of those keys (a member spelled any other way, or `.obj` over a
+#     list that is not a literal, contributes no key); `.arr <e>` an array of what
+#     `e` emits; any other name a library `def` whose result is `JVal` or `List
+#     JVal` -- `segJson` handed to `.map`, `flagsJson f`, `CapWire.optNatJson n` --
+#     what that definition's body emits, resolved by its qualified name's suffix
+#     (an ambiguous name contributes nothing); every arm of a `match` and both
+#     branches of an `if` are read, so a key one arm writes is emitted.
+#
+# WHAT IT CANNOT SEE, declared: a key spelled by a variable (`jone k v`'s `k`), a
+# pair list assembled by `++` or a `List.map` of pairs, and a value built by a
+# definition whose result type is not spelled `JVal` / `List JVal` -- each
+# contributes nothing, so its keys stay unwritten (loud).  "Can emit" is a union
+# over arms: a key only one constructor's arm writes reads as written for every
+# value, the same floor as `sentkeys`' merged `match` arms on the host side.
+# ===========================================================================
+
+JPAIR = re.compile(r'\(\s*"[^"]*"\.toList\s*,')
+JREF = re.compile(r"(?<![\w'.?!])(\.(?:obj|arr)\b|[A-Za-z_][\w'?!]*(?:\.[A-Za-z_][\w'?!]*)*)")
+JSON_ARRAY = "[]"
+
+
+def close_at(code, i):
+    """The index of the bracket closing the one at `code[i]`."""
+    pairs = {"(": ")", "[": "]", "{": "}", "\u27e8": "\u27e9"}
+    depth = 0
+    for k in range(i, len(code)):
+        c = code[k]
+        if c in pairs:
+            depth += 1
+        elif c in pairs.values():
+            depth -= 1
+            if depth == 0:
+                return k
+    return len(code)
+
+
+def jmerge(a, b):
+    """The union of two emitted trees (`None` a leaf)."""
+    if not isinstance(a, dict):
+        return b if isinstance(b, dict) else a
+    if not isinstance(b, dict):
+        return a
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = jmerge(out.get(k), v) if k in out else v
+    return out
+
+
+def jsuffixes(tree):
+    """Every key path of an emitted tree, relative to it: `""`, `.k`, `[]`, `[].k`."""
+    out = {""}
+    if isinstance(tree, dict):
+        for k, v in tree.items():
+            step = JSON_ARRAY if k == JSON_ARRAY else "." + k
+            out |= {step + x for x in jsuffixes(v)}
+    return out
+
+
+class Serialisers:
+    """The library's JVal serialisers, read once for its emitted_suffixes."""
+
+    def __init__(self, files, texts, codes, reached):
+        self.texts, self.codes, self.reached = texts, codes, reached
+        self.defs = collections.defaultdict(list)   # short name -> [(path, qualified, a, b)]
+        self.chunks = []                            # (path, qualified, a, b): every def
+        for p in files:
+            code = codes[p]
+            pairs, _ = leanfiles.qualified_names(p, "def", code=code)
+            qual = {}
+            for w, q in pairs:
+                qual.setdefault(w, q)
+            for n, a, b in chunks(code):
+                q = qual.get(n, n)
+                self.chunks.append((p, q, a, b))
+                head, body_at = self.split(code, a, b)
+                res = result_type(head).split("\u2192")[-1].strip()
+                if res in ("JVal", "List JVal"):
+                    self.defs[n.split(".")[-1]].append((p, q, body_at, b))
+
+    @staticmethod
+    def split(code, a, b):
+        """`(signature, body start)` of the def spanning `code[a:b]`: the signature ends
+        at the first depth-zero `:=`, or at a pattern-matching definition's first arm."""
+        depth = 0
+        for i in range(a, b):
+            c = code[i]
+            if c in "([{\u27e8":
+                depth += 1
+            elif c in ")]}\u27e9":
+                depth -= 1
+            elif depth == 0 and code.startswith(":=", i):
+                return code[a:i], i + 2
+            elif depth == 0 and c == "|" and code[a:i].rstrip(" \t").endswith("\n"):
+                return code[a:i], i
+        return code[a:b], b
+
+    def resolve(self, ref, here):
+        """The one serialiser a reference names, by its qualified name's suffix; `None`
+        when there is none or more than one (and none in the referring file)."""
+        cands = [d for d in self.defs.get(ref.split(".")[-1], ())
+                 if d[1] == ref or d[1].endswith("." + ref)]
+        if len(cands) > 1:
+            cands = [d for d in cands if d[0] == here] or cands
+        return cands[0] if len(cands) == 1 else None
+
+    def tree(self, p, a, b, seen=()):
+        """What the expression `code[a:b]` of file `p` emits: a dict of keys (`[]` an
+        array's elements), or `None` for a leaf."""
+        code, raw = self.codes[p], self.texts[p]
+        out, i = None, a
+        while i < b:
+            m = JREF.search(code, i, b)
+            if not m:
+                break
+            tok = m.group(1)
+            j = m.end()
+            while j < b and code[j] in " \t\r\n":
+                j += 1
+            if tok == ".obj":
+                obj = {}
+                if j < b and code[j] == "[":
+                    c = close_at(code, j)
+                    for start, stop in self.items(code, j + 1, c):
+                        q = JPAIR.match(code, start)
+                        if not q or q.end() > stop:
+                            continue
+                        lit = code.index('"', start)
+                        key = raw[lit + 1:code.index('"', lit + 1)]
+                        close = close_at(code, start)
+                        obj[key] = jmerge(obj.get(key), self.tree(p, q.end(), min(close, stop), seen))
+                    i = c + 1
+                else:
+                    i = j
+                out = jmerge(out, obj)
+                continue
+            if tok == ".arr":
+                if j < b and code[j] in "([":
+                    c = close_at(code, j)
+                    elem = self.tree(p, j + 1, c, seen)
+                    i = c + 1
+                else:
+                    e = JREF.match(code, j) if j < b else None
+                    elem = self.tree(p, e.start(), e.end(), seen) if e else None
+                    i = e.end() if e else j
+                out = jmerge(out, {JSON_ARRAY: elem})
+                continue
+            d = self.resolve(tok, p)
+            if d is not None and d[1] not in seen:
+                out = jmerge(out, self.tree(d[0], d[2], d[3], seen + (d[1],)))
+            i = m.end()
+        return out
+
+    @staticmethod
+    def items(code, a, b):
+        """`[(start, stop)]` of the depth-zero comma-separated items of `code[a:b]`."""
+        out, depth, start = [], 0, a
+        for k in range(a, b):
+            c = code[k]
+            if c in "([{\u27e8":
+                depth += 1
+            elif c in ")]}\u27e9":
+                depth -= 1
+            elif c == "," and depth == 0:
+                out.append((start, k))
+                start = k + 1
+        out.append((start, b))
+        return [(x + len(code[x:y]) - len(code[x:y].lstrip()), y) for x, y in out if code[x:y].strip()]
+
+    def emitted_suffixes(self, key):
+        """`(suffixes, emitters)`: the key paths every reached emitter of `key` emits
+        under it (relative: `""`, `[]`, `[].start`), and the emitters' names."""
+        got, names = None, []
+        for p, q, a, b in self.chunks:
+            if callgraph.symbol(q) not in self.reached:
+                continue
+            code, raw = self.codes[p], self.texts[p]
+            for m in JPAIR.finditer(code, a, b):
+                lit = code.index('"', m.start())
+                if raw[lit + 1:code.index('"', lit + 1)] != key:
+                    continue
+                close = close_at(code, m.start())
+                sfx = jsuffixes(self.tree(p, m.end(), min(close, b), (q,)))
+                got = sfx if got is None else got & sfx
+                names.append(q)
+        return (got or set()), names
 
 
 def answered(p, entries, under):
@@ -817,22 +1032,63 @@ def section_paths(files, codes):
     lib = reqsec.Lib(LIB, defs=defs)
     secs, _, _ = reqsec.spine(lib)
     names = sorted(secs)
-    host_raw, where, complaints = sentkeys.host_sections(HERE.parent, names)
+    host_raw, where, complaints, copies = sentkeys.host_sections(HERE.parent, names)
     reader = sentkeys.LeanReader(files, codes)
     host, kernel = {}, {}
     for sec in names:
         host[sec] = sentkeys.normalized(host_raw.get(sec, ()), sec)
         kernel[sec] = sentkeys.normalized(sentkeys.kernel_paths(files, sec, codes, reader), sec)
-    return names, host, kernel, where, complaints
+    copied = copied_paths(files, codes, names, kernel, copies)
+    return names, host, kernel, where, complaints, copied
 
 
-def written_main(names, host, kernel):
-    """The written half: every decoded key path has a writer where a request is built."""
+def copied_paths(files, codes, names, kernel, copies):
+    """`{section: {key path: (response key path, emitters) or a reason}}` for every value a
+    request copies whole (README gap 4959), and `{section: set of decoded key paths}`
+    it WRITES: those at or under the copy's key path that every call's response key
+    path carries, by every reached serialiser of that path's last key."""
+    import sentkeys
+    report, written = {}, {sec: set() for sec in names}
+    if not any(copies.get(sec) for sec in names):
+        return {"report": report, "written": written}
+    prog = sentkeys.RustProgram(HERE.parent)
+    texts = {p: pathlib.Path(p).read_text() for p in files}
+    reached = callgraph.reachable(callgraph.ir_root(files[0]))[0]
+    ser = Serialisers(files, texts, codes, reached)
+    for sec in names:
+        for path, cp in copies.get(sec, ()):
+            chains, failures = prog.copy_sources(cp)
+            if failures or not chains:
+                report[path] = "not traced: " + "; ".join(failures or ["no call"])
+                continue
+            got, emitters = None, set()
+            for chain in sorted(set(chains)):
+                sfx, ems = ser.emitted_suffixes(chain[-1])
+                emitters.update(ems)
+                got = sfx if got is None else got & sfx
+            under_it = {p for p in kernel[sec] if p == path or under(p, path)}
+            hit = {p for p in under_it if p[len(path):] in got}
+            written[sec] |= hit
+            report[path] = ("%s <- the kernel's answer at %s, emitted by %s: %d of %d decoded key "
+                            "path(s)" % (path, " / ".join(".".join(c) for c in sorted(set(chains))),
+                                         ", ".join(sorted(emitters)) or "nothing reached",
+                                         len(hit), len(under_it)))
+    return {"report": report, "written": written}
+
+
+def written_main(names, host, kernel, copied=None):
+    """The written half: every decoded key path has a writer where a request is built --
+    a literal the program spells, or, under a value the program copies whole from the
+    kernel's parsed answer, a key the kernel's own serialiser emits there (README gap
+    4959, `copied_paths`)."""
     bad = []
-    unwritten = sorted(p for sec in names for p in kernel[sec] if p not in host[sec])
+    by_copy = (copied or {}).get("written", {})
+    wrote = {sec: set(host[sec]) | by_copy.get(sec, set()) for sec in names}
+    unwritten = sorted(p for sec in names for p in kernel[sec] if p not in wrote[sec])
     shallow = [p for p in unwritten if not any(under(p, q) for q in unwritten)]
     allk = set().union(*kernel.values()) if kernel else set()
-    allh = set().union(*host.values()) if host else set()
+    allh = set().union(*wrote.values()) if wrote else set()
+    ncopied = sum(len(by_copy.get(sec, set()) - host[sec]) for sec in names)
     entries = ratchet_file(
         WRITTEN_EXEMPT_FILE, shallow, under,
         lambda p: ("WRITTEN now" if p in allh else "not a key the kernel decodes"
@@ -847,14 +1103,16 @@ def written_main(names, host, kernel):
     for line in bad:
         print(line)
     print("written: %d key path(s) the kernel decodes over %d section(s), %d written where a "
-          "request is built, %d unwritten (%d shallow, %d answered by %d exemption(s)), %d UNANSWERED"
-          % (len(allk), len(names), len(allk) - len(unwritten), len(unwritten), len(shallow),
+          "request is built (%d of them under %d value(s) copied whole from the kernel's answer), "
+          "%d unwritten (%d shallow, %d answered by %d exemption(s)), %d UNANSWERED"
+          % (len(allk), len(names), len(allk) - len(unwritten), ncopied,
+             len((copied or {}).get("report", {})), len(unwritten), len(shallow),
              sum(1 for p in shallow if answered(p, entries, under)), len(entries), len(bad)))
     return 1 if bad else 0
 
 
 def sent_main(audit, files, codes=None):
-    names, host, kernel, where, complaints = section_paths(files, codes)
+    names, host, kernel, where, complaints, copied = section_paths(files, codes)
     bad = list(complaints)
     if not host.get(SENT_SECTION):
         bad.append("NO HOST KEYS: nothing the program builds writes `%s` -- the half would "
@@ -893,7 +1151,11 @@ def sent_main(audit, files, codes=None):
                                                if host[sec]),
              len(allh) - len(unread), len(unread), len(shallow),
              sum(1 for p in shallow if answered(p, entries, under)), len(entries), len(bad)))
-    written_rc = written_main(names, host, kernel)
+    if audit:
+        for path, line in sorted(copied["report"].items()):
+            print("  copied %s" % (line if not line.startswith("not traced") else
+                                   "%s -- %s" % (path, line)))
+    written_rc = written_main(names, host, kernel, copied)
     return 1 if bad or written_rc else 0
 
 

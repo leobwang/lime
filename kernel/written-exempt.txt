@@ -9,9 +9,10 @@
 # the committed file does not hold FAILS as RATCHET, whatever heading it sits under (D51; README
 # gap 3953, the W-40 repair, which removed a dated-heading escape).  One line per key path or
 # section, at its SHALLOWEST unwritten path: `<section.key.path> -- <dated reason naming its EXIT>`.
+# Since W-48 (README gap 4959) a key under a value the program copies WHOLE from the kernel's parsed
+# answer is written when the kernel's own serialiser emits it there (`fields.copied_paths`): the
+# `plan` section's `segments` and `priorities`, whose two lines left this file then.
 planner.state.yesterday -- 2026-09-28: decoded and read by no definition of the day (inputs-exempt.txt's `RuntimeIn.yesterday`); ranking reads each candidate's `Look.Cand.yesterday` (inputs-exempt.txt: a second wire spelling of one fact). EXIT: the day reads it and the codec writes it, or PlanWire stops decoding it.
 
 ## W-40 track E (2026-09-30): the written half asks every section at every place a request is built (README gap 3717)
 cmds[].min -- 2026-09-30: the `est` op's MINUTES form, which `Boundary.parseCmd` keeps beside D56's `value` form and refuses together with it (`estValueAndMin`); no function of the program writes it since W-35 (`kernel_bridge`'s `est` sends `value` and `blockMin`), only FFI tests do (README gap 3906). EXIT: the kernel retires the minutes form (a wire change), or a verb sends it again.
-plan.segments -- 2026-10-06 (W-47 track L, the owner's D112; narrowed from the section's 2026-09-30 line, whose reason -- no function of the program builds the section -- stopped being true when `planwire::rows_request` began asking it for the rows of every day the binary plans): the segments are the planner answer's own `segments` array, copied whole as the kernel wrote it (`PlanWire.segJson`), so no key under them is a literal this half reads and every one is unwritten to it. EXIT: the written half learns that a value copied from a kernel answer is the kernel's own serialiser's (README gap 4959), or the binary's rows ride the planner answer and the section's segments leave the request (README gap 4954).
-plan.priorities -- 2026-10-06 (W-47 track L, the owner's D112; narrowed as `plan.segments` was): the planner answer's own `priorities` array (`PlanWire.planJson`), copied whole by `planwire::rows_request`. EXIT: as `plan.segments`.
