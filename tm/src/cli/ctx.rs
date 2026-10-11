@@ -166,16 +166,20 @@ fn roll_day(state: &mut RuntimeState, today: NaiveDate) -> bool {
 /// `break_start` line): the cache's copy is kept while the file exists
 /// ([`Ctx::reconcile_state`]'s cached branch), and it is gone with the file —
 /// README gap 4760.
+/// **`priorities_yesterday` is NOT here any more** — the owner's **D108** (README
+/// gap 4893, parity P124): §7.4's hysteresis map, which the day's first `plan`
+/// line now carries (`DayReplay::priorities_yesterday`). A day whose first `plan`
+/// a binary before D108 wrote carries none, and its map comes back empty.
 /// * **`active.est_min`** — `Event::Start` carries `pred`, `hsw`, `slept_min`,
-///   `loc`, `blocks_done` and `since_break_min`, and **no estimate**; `tm
-///   extend` then adds its minutes to the cached number, so two `extend`s and
-///   a multiplier are not reconstructible from `Event::Extend{by_min}` either.
-///   The rebuild puts [`Ctx::planned_block`] there — the same one function
-///   `tm start` writes from, never a second copy of its arithmetic (AGENTS
-///   §5.3) — which is the estimate the item carries **now**, not the one the
-///   block was started with.
-/// * **`priorities_yesterday`** — §7.4's hysteresis map. No event carries a
-///   `p`; the host rolls it out of `.tm/last_plan.json`.
+///   `loc`, `blocks_done` and `since_break_min`, and **no estimate**. Since the
+///   owner's **D108** (README gap 4876, closed) the rebuild computes it as `tm
+///   start` and `tm extend` did — [`Ctx::planned_block`] of the estimate the
+///   item had before the block's logged extends, plus their minutes
+///   (`OpenBlock::extended_min`, [`Ctx::rebuilt_block_minutes`]) — so deleting
+///   the cache mid-extend moves nothing. It stays in this table because the log
+///   still does not fix it: an estimate edited while the block runs (`tm edit
+///   est=`, which writes the line and not the cache) or a duration model refitted
+///   since the start moves the rebuild and not the cache (README gap 5160).
 /// * **`closed`** — §6.3's stamps plus `closed.swept`, which is a fact about
 ///   whether a kernel `autoClose` has swept this tree and not about anything
 ///   that happened. Its absence is load-bearing in the safe direction (it
@@ -188,12 +192,10 @@ fn roll_day(state: &mut RuntimeState, today: NaiveDate) -> bool {
 /// lost, so the entries below say that and the notice computes the rest.
 pub const HOST_ONLY_STATE: &[(&str, &str)] = &[
     ("`active.est_min`",
-     "recomputed by `Ctx::planned_block` from the item's line — no `start` event \
-      carries an estimate — so a `tm extend` that ran before the file was \
-      deleted is in it as the line's new estimate times the learned multiplier, \
-      which can differ from the cached minutes by the rounding (README gap 4876)"),
-    ("`priorities_yesterday`",
-     "§7.4's hysteresis map, and no event carries a `p`"),
+     "rebuilt as `tm start` and `tm extend` computed it — the item's estimate before the \
+      block's logged extends, through the learned multiplier, plus their minutes (D108) — \
+      but an estimate edited while the block runs, or a model refitted since its start, \
+      is in the line and not in the cache (README gap 5160)"),
     ("`closed`",
      "`swept` is a fact about a sweep, not an event, and its absence makes the \
       automatic close sweep run once more, which is the safe direction"),
@@ -225,11 +227,12 @@ fn host_only(field: &str) -> &'static str {
 /// | `loc` | the last of `DayReplay::loc_changes`, else `DayReplay::loc` |
 /// | `window` | the arrival record's own payload — `DayReplay::window`, read back verbatim — on a day with **one** arrival; [`Ctx::arrival_window`] and a LOUD line on a day with more (**D45**, README gap 1306) |
 /// | `budget` | `DayReplay::budget` with `window`, and recomputed with it |
-/// | `active` | `Replay::open_block` — id, `started`, `paused`; **not** `est_min` |
+/// | `active` | `Replay::open_block` — id, `started`, `paused`; `est_min` is [`Ctx::rebuilt_block_minutes`] (the owner's **D108**: `tm start`'s planned minutes plus the block's logged `extend`s, `OpenBlock::extended_min`), still host-only where the item's estimate moved mid-block ([`HOST_ONLY_STATE`]) |
 /// | `interrupt` | `Replay::open_interrupt` — `started`, `id` |
 /// | `last_plan_hash` | `DayReplay::last_plan_hash` (`Event::Plan`) |
 /// | `break` | `Replay::open_break` — the `break_start` no `break` has ended (the owner's **D105**, parity P100): its start's `HH:MM`, `planned_min` and `where`, and the `active.paused` it sets; a break a binary before D105 began logged no `break_start` and is kept from the cache while the file exists (README gap 4760) |
-/// | `priorities_yesterday`, `closed` | **nothing** ([`HOST_ONLY_STATE`]); both come back empty, and `closed`'s emptiness is load-bearing in the safe direction |
+/// | `priorities_yesterday` | the day's first `plan` line (the owner's **D108**, parity P124): `DayReplay::priorities_yesterday`; empty on a day with no `plan` yet, when §7.4 reads `.tm/last_plan.json`'s anyway ([`Ctx::hysteresis_input`]) |
+/// | `closed` | **nothing** ([`HOST_ONLY_STATE`]); it comes back empty, which is load-bearing in the safe direction |
 ///
 /// **The one residue inside a derivable field, measured rather than waved at.**
 /// `tm plan` appends its `Event::Plan` only when the hash *moved*, so a day
@@ -513,7 +516,10 @@ fn derived_state(replay: &Replay, tz: Tz, today: NaiveDate, running_break: bool)
             id: i.id.as_deref().map(Id::new),
         }),
         last_plan_hash: day.and_then(|d| d.last_plan_hash.clone()),
-        priorities_yesterday: BTreeMap::new(),
+        // **The day's first `plan` line carries it** (the owner's D108, parity P124).
+        priorities_yesterday: day
+            .map(|d| d.priorities_yesterday.iter().map(|(k, v)| (Id::new(k), *v)).collect())
+            .unwrap_or_default(),
         closed: Closed::default(),
     }
 }
@@ -1093,7 +1099,7 @@ impl Ctx {
                     );
                 }
                 self.state.active = derived.active.clone().map(|mut a| {
-                    a.est_min = self.planned_block(&a.id).0;
+                    a.est_min = self.rebuilt_block_minutes(&a.id);
                     a
                 });
             }
@@ -1201,13 +1207,13 @@ impl Ctx {
         let before = self.state.clone();
         self.state = RuntimeState {
             // The running break is the log's since D105 (`derived.break_`, from
-            // `Replay::open_break`); the two below are host-only: an absent
-            // file cannot have held them, so they are `Default` — and the
-            // notice below says which they were.
-            priorities_yesterday: before.priorities_yesterday.clone(),
+            // `Replay::open_break`), and `priorities_yesterday` since D108
+            // (`derived`, from the day's first `plan`); `closed` is host-only:
+            // an absent file cannot have held it, so it is `Default` — and the
+            // notice below says so.
             closed: before.closed.clone(),
             active: derived.active.clone().map(|mut a| {
-                a.est_min = self.planned_block(&a.id).0;
+                a.est_min = self.rebuilt_block_minutes(&a.id);
                 a
             }),
             ..derived
@@ -1347,11 +1353,28 @@ impl Ctx {
                     .to_string(),
             );
         }
+        // **`active.est_min` is RESTORED since the owner's D108** (README gaps
+        // 4876 and 4893, parity P124): `tm start`'s planned minutes plus the
+        // minutes the block's logged `extend` lines added, as the two verbs
+        // computed them. Until D108 this line said RECOMPUTED: the rebuild read
+        // the extended line times the multiplier, and differed by the rounding.
         if let Some(a) = self.state.active.as_ref() {
+            let ext = self.open_block_extended(&a.id);
             out.push(format!(
-                "RECOMPUTED rather than restored: `active.est_min` is {}m — {}.",
+                "RESTORED from the log: `active.est_min` is {}m — the minutes `tm start` planned{} (D108); \
+                 {}.",
                 a.est_min,
+                if ext > 0 { format!(" plus the {ext}m its logged `extend` lines added") } else { String::new() },
                 host_only("`active.est_min`")
+            ));
+        }
+        // **`priorities_yesterday` is RESTORED since D108**: the day's first
+        // `plan` line carries it. On a day with no `plan` yet the map is empty,
+        // and §7.4 reads `.tm/last_plan.json`'s anyway (`Ctx::hysteresis_input`).
+        if self.plans_today() > 0 {
+            out.push(format!(
+                "RESTORED from the log: `priorities_yesterday` — {} item(s), from the day's first `plan` line (D108).",
+                self.state.priorities_yesterday.len()
             ));
         }
         // **The day with two arrivals, named rather than regenerated in
@@ -1377,12 +1400,7 @@ impl Ctx {
                 b.format("%H:%M")
             ));
         }
-        out.push(format!(
-            "RESET, both deliberately: `priorities_yesterday` ({}) and \
-             `closed` ({}).",
-            host_only("`priorities_yesterday`"),
-            host_only("`closed`")
-        ));
+        out.push(format!("RESET, deliberately: `closed` ({}).", host_only("`closed`")));
         out
     }
 
@@ -1393,18 +1411,24 @@ impl Ctx {
     /// `tm start` writes this into `state.active.est_min` and **D42**'s rebuild
     /// puts the same number back when the cache is gone. It is one function
     /// because two would be AGENTS §5.3 — the defect this rebuild exists to
-    /// stop having an instance of. It is also the one number in `active` that
-    /// the log cannot return: `Event::Start` carries no estimate
-    /// ([`HOST_ONLY_STATE`]), so after a rebuild this is the estimate the item
-    /// carries **now**: a `tm extend` that ran before the file was deleted is in
-    /// it through the line the extend rewrote, multiplied — `round((r + by)·m)`
-    /// where the cache held `round(r·m) + by` (README gap 4876, open: the two
-    /// differ by the rounding under a learned multiplier).
+    /// stop having an instance of. `Event::Start` carries no estimate, so the
+    /// rebuild asks this of the estimate the item had before the block's logged
+    /// extends and adds them, as `tm extend` did ([`Ctx::rebuilt_block_minutes`],
+    /// the owner's D108 — README gap 4876, closed: until then the rebuild read
+    /// the extended line multiplied, `round((r + by)·m)` where the cache held
+    /// `round(r·m) + by`).
     /// Returns the minutes **and** the multiplier they were computed with,
     /// because `tm start --json` prints the multiplier beside them
     /// (`StartOut::multiplier`) and reading it off a second call would be the
     /// same two-definitions mistake one step smaller.
     pub fn planned_block(&self, id: &Id) -> (u32, f64) {
+        self.planned_block_of(id, self.tree.remaining(id))
+    }
+
+    /// [`Ctx::planned_block`] over a given remaining estimate — the one body of
+    /// §8.5's arithmetic, which [`Ctx::rebuilt_block_minutes`] asks with the
+    /// estimate the item had before its block's extends (AGENTS §5.3).
+    fn planned_block_of(&self, id: &Id, remaining: Option<u32>) -> (u32, f64) {
         // `tm start` has already refused a missing line, so the `unwrap_or` is
         // reached only from the rebuild — a block the log holds whose line the
         // other writers have since removed (§1.3). `duration_multiplier` looks
@@ -1413,12 +1437,43 @@ impl Ctx {
         let ci = self.tree.get(id).map(|i| i.ci).unwrap_or(0);
         let tags = self.tree.tags_effective(id);
         let multiplier = energy::duration_multiplier(&self.model, ci, &tags);
-        let remaining = self
-            .tree
-            .remaining(id)
-            .filter(|m| *m > 0)
-            .unwrap_or_else(|| self.block_min());
+        let remaining = remaining.filter(|m| *m > 0).unwrap_or_else(|| self.block_min());
         (energy::planned_minutes(remaining, multiplier), multiplier)
+    }
+
+    /// The minutes the open block of `id` has had added by its logged `extend`
+    /// lines since its `start` (the kernel's `Replay.OpenBlock.ext`, D108); `0`
+    /// when no block of `id` is open.
+    fn open_block_extended(&self, id: &Id) -> u32 {
+        self.replay
+            .open_block
+            .as_ref()
+            .filter(|b| b.id == id.as_str())
+            .map_or(0, |b| b.extended_min)
+    }
+
+    /// **`active.est_min` as the verbs that wrote it computed it** — the
+    /// owner's **D108** (README gaps 4876 and 4893, parity P124): `tm start`
+    /// wrote [`Ctx::planned_block`] of the item's estimate, and every `tm
+    /// extend` since added its minutes to that number. The kernel's replay holds
+    /// those minutes (`OpenBlock::extended_min`), and `tm extend` also wrote
+    /// each of them onto the item's line (D62, a line it rewrites: not a
+    /// routine's or an optional's), so the estimate `tm start` read is the
+    /// line's less them. The derivation follows the verb (D45's direction):
+    /// until D108 the rebuild read the extended line times the multiplier,
+    /// `round((r + by)·m)` where the verbs wrote `round(r·m) + by`.
+    pub fn rebuilt_block_minutes(&self, id: &Id) -> u32 {
+        let ext = self.open_block_extended(id);
+        if ext == 0 {
+            return self.planned_block(id).0;
+        }
+        let wrote = self.tree.get(id).is_some_and(|i| !super::day::is_stateless(i));
+        let before = if wrote {
+            Some(self.tree.remaining(id).unwrap_or(0).saturating_sub(ext))
+        } else {
+            self.tree.remaining(id)
+        };
+        self.planned_block_of(id, before).0.saturating_add(ext)
     }
 
     /// Re-read files, tree, log and replay after a write, in the same scope — or, while this context
@@ -2198,8 +2253,9 @@ mod tests {
     /// rebuilt file came back byte-identical on all four — and stayed the
     /// *documentation* of which §10.2 fields the log cannot answer for.
     /// [`Ctx::rebuild_notice`] computes the sentence instead. This is what still
-    /// ties the two together: three entries since the owner's D105 (five before
-    /// it; `break` and `active.paused` became derivable), each leading with the
+    /// ties the two together: two entries since the owner's D108 (three after
+    /// D105, five before it; `break`, `active.paused` and `priorities_yesterday`
+    /// became derivable), each leading with the
     /// field it is about, in the spelling the notice uses.
     ///
     /// **What it cannot check**: that the notice still *prints* each of them.
@@ -2208,12 +2264,9 @@ mod tests {
     #[test]
     fn every_host_only_field_leads_its_own_entry() {
         // `break` and `active.paused` left the table with the owner's D105 (parity P100):
-        // the `break_start` `tm break` logs makes both derivable.
-        let fields = [
-            "`active.est_min`",
-            "`priorities_yesterday`",
-            "`closed`",
-        ];
+        // the `break_start` `tm break` logs makes both derivable; `priorities_yesterday` left
+        // it with the owner's D108 (parity P124): the day's first `plan` line carries it.
+        let fields = ["`active.est_min`", "`closed`"];
         assert_eq!(
             HOST_ONLY_STATE.len(),
             fields.len(),

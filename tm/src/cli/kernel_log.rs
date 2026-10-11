@@ -1998,7 +1998,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         let date = d_date(dn, "a day's number")?;
         let rec = d_at(p, 1, "a day record")?;
         if !rec.is_null() {
-            let a = d_tuple(rec, 29, "a day record")?;
+            let a = d_tuple(rec, 30, "a day record")?;
             let g = |i: usize, what: &'static str| -> D<&Value> { d_at(a, i, what) };
             // Field 28, `durNet` (the owner's D100, README gap 4520b, parity P105): the minutes a break logged after a
             // `done` took off that `done`'s duration observation, by the observation's line.  The kernel nets the
@@ -2007,6 +2007,17 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 let c = d_tuple(c, 2, "a durNet pair")?;
                 d_u64(d_at(c, 0, "a durNet line")?, "a durNet line")?;
                 d_u32(d_at(c, 1, "a durNet minute")?, "a durNet minute")?;
+            }
+            // Field 29, `yesterday` (the owner's D108, README gap 4893, parity P124): §7.4's hysteresis input as the
+            // day's first `plan` line carries it, `[id, p]` in the line's order — a repeated id's last wins, as serde's
+            // map reads the line.
+            let mut priorities_yesterday = BTreeMap::new();
+            for c in d_arr(g(29, "yesterday")?, "yesterday")? {
+                let c = d_tuple(c, 2, "a yesterday pair")?;
+                priorities_yesterday.insert(
+                    d_str(d_at(c, 0, "a yesterday id")?, "a yesterday id")?,
+                    d_u8(d_at(c, 1, "a yesterday priority")?, "a yesterday priority")?,
+                );
             }
             let mut ci_unknown = BTreeMap::new();
             for c in d_arr(g(6, "ciUnknown")?, "ciUnknown")? {
@@ -2093,6 +2104,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 replans_today: d_u32(g(25, "replansToday")?, "replansToday")?,
                 drift_min: d_u32(g(26, "driftMin")?, "driftMin")?,
                 last_plan_hash: d_opt(g(27, "lastPlanHash")?, |x| d_str(x, "lastPlanHash"))?,
+                priorities_yesterday,
                 segments: d_arr(g(10, "segments")?, "segments")?
                     .iter()
                     .map(|s| {
@@ -2325,7 +2337,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
 
     let open = v.get("open").unwrap_or(&Value::Null);
     let open_block = d_opt(open.get("block").unwrap_or(&Value::Null), |o| {
-        let o = d_tuple(o, 6, "the open block")?;
+        let o = d_tuple(o, 7, "the open block")?;
         // `day`, its `start`'s ledger day (the owner's D99, README gap 4616): the first day the kernel's wall rule reads
         // the block's marks from (`WallTimer.answer`). Read and checked here; not kept, because `OpenBlock` is fork
         // 4748911's shape, which T5 compares key for key, and no host reader asks for it.
@@ -2336,6 +2348,9 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
             worked_min: d_u32(d_at(o, 2, "the open block's minutes")?, "the open block's minutes")?,
             since: d_opt(d_at(o, 3, "the open block's since")?, |x| d_when(x, "the open block's since"))?,
             paused: d_bool(d_at(o, 4, "the open block's paused bit")?, "the open block's paused bit")?,
+            // `ext` (the owner's D108, README gaps 4876 and 4893): the minutes its `extend` lines added since its
+            // `start`, which D42's rebuild of `active.est_min` reads (`Ctx::rebuilt_block_minutes`).
+            extended_min: d_u32(d_at(o, 6, "the open block's extended minutes")?, "the open block's extended minutes")?,
         })
     })?;
     let open_interrupt = d_opt(open.get("interrupt").unwrap_or(&Value::Null), |o| d_interruption(o).map(|p| p.1))?;

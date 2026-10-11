@@ -855,7 +855,14 @@ theorem arm_mi_of_not_brk (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
         exact Or.inl (cut_mi dy m t q hq)
       · simp at hm
     · simp at hm
-  case extend id by_ => simp [Effect.machineOf?] at hm
+  case extend id by_ =>
+    -- D108: the old machine, its open block's `ext` grown — no instant moves.
+    simp only [List.filterMap_cons, Effect.machineOf?] at hm
+    obtain ⟨b, hb, rfl⟩ := Replay.extendFx_machines m id by_.val m' hm
+    left
+    have he : machineInstants { m with block := some { b with ext := b.ext + by_.val } } = machineInstants m := by
+      unfold machineInstants; rw [hb]
+    rw [he] at hq; exact hq
   case done id est actual went tags ci isPartial =>
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
@@ -1059,7 +1066,10 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
         exact Or.inl (Replay.cut_brk dy m t)
       · simp at hm
     · simp at hm
-  case extend id by_ => simp [Effect.machineOf?] at hm
+  case extend id by_ =>
+    simp only [List.filterMap_cons, Effect.machineOf?] at hm
+    obtain ⟨b, hb, rfl⟩ := Replay.extendFx_machines m id by_.val m' hm
+    exact Or.inl rfl
   case done id est actual went tags ci isPartial =>
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
@@ -1136,10 +1146,10 @@ theorem arm_mi_as_w2_stated_it_is_refuted :
   intro h
   have := h (fun _ => 739865) (fun _ => none)
     ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none, 739865,
-      [], []⟩, none, none, [], none, []⟩
+      [], [], 0⟩, none, none, [], none, []⟩
     (Replay.bE 2 63924370200 (.brk 20 (some 20) none)) (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865
     ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924371400, 0⟩, ⟨false, 0⟩), false, none, 30, none, 739865,
-      [], [⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865⟩]⟩,
+      [], [⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865⟩], 0⟩,
       none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865⟩], none, []⟩ (by decide)
     ⟨63924371400, 0⟩ (by decide)
   revert this
@@ -1153,7 +1163,7 @@ theorem stepWith_mi_as_w2_stated_it_is_refuted :
   have := h Replay.utcZone (fun _ => 739865) (fun _ => none)
     { Replay.State.init 1 with machine :=
       ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none, 739865,
-        [], []⟩, none, none, [], none, []⟩ }
+        [], [], 0⟩, none, none, [], none, []⟩ }
     (Replay.bE 2 63924370200 (.brk 20 (some 20) none)) ⟨63924371400, 0⟩ (by decide)
   revert this
   decide

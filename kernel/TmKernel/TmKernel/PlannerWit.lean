@@ -9496,7 +9496,7 @@ theorem the_open_row_carries_the_logs_worked_minutes_is_refuted :
   intro h
   have hb : theHostWorkedRequest.run.answer.openBlock =
       some ⟨['m','1'], (⟨63924570000, 0⟩, ⟨true, 18000⟩), 0,
-        some (⟨63924570000, 0⟩, ⟨true, 18000⟩), false, 739867⟩ := by decide
+        some (⟨63924570000, 0⟩, ⟨true, 18000⟩), false, 739867, 0⟩ := by decide
   have hrow : { theOpenRow with note := some (.soFar 90) } ∈ openBlockRows theHostWorkedRequest := by
     decide
   exact absurd (h _ _ hrow _ hb) (by decide)

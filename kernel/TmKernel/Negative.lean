@@ -3252,4 +3252,46 @@ theorem aResumedBlockIsPausedAtTheWallsStart :
       = [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨2000, 0⟩, Cal.Offset.utc) : Replay.At)] := by
   decide
 
+/- ===========================================================================
+   APPENDED 2026-10-11: stage 6, run W-48, TRACK A — the owner's D108 (README
+   gaps 4893 and 4876; parity P124: the day's first `plan` carries §7.4's
+   hysteresis input, and the replay holds the open block's own extends).
+   Cheats 320-323 (whoever lands renumbers).
+   =========================================================================== -/
+
+/- CHEAT 320 — the day's hysteresis input claimed to be its LAST `plan`'s: the
+   day keeps its first's (`DayOp.plan` sets it only at `plans = 0`), and
+   `decide` computes `a 6`. -/
+theorem theLastPlanCarriesTheHysteresisInput :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (.plan ['h','1'] 0 0 [(['a'], 6)]),
+      Replay.bE 2 63924370200 (.plan ['h','2'] 1 0 [(['b'], 3)])]).days.get 739865).map (·.yesterday)
+      = some [(['b'], 3)] := by
+  decide
+
+/- CHEAT 321 — an `extend` of the open block claimed to leave the block's own
+   minutes where they were (the replay before D108): `extendFx` grows `ext`,
+   and `decide` computes 15. -/
+theorem anExtendLeavesTheOpenBlockAlone :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (Replay.bStart ['a']),
+      Replay.bE 2 63924369300 (.extend ['a'] 15)]).openBlock.map (·.ext) = some 0 := by
+  decide
+
+/- CHEAT 322 — a `p` past a `u8` claimed read at the hysteresis input: the
+   reader names it `badField yesterday` (serde's `u8`), so `rfl` fails. -/
+theorem aPriorityOf256IsRead :
+    Log.emitEvent Log.Kind.plan.tag [(['h','a','s','h'], .str ['h']),
+        (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1), (['d','r','i','f','t','_','m','i','n'], .num 0),
+        (['y','e','s','t','e','r','d','a','y'], .obj [(['d','1'], .num 256)])]
+      = .ok (.plan ['h'] 1 0 [(['d','1'], 0)]) := by
+  rfl
+
+/- CHEAT 323 — every `plan` claimed to write its (empty) hysteresis input, so
+   every `plan` line but the day's first would differ from fork 4748911's: the
+   empty map is skipped (`renderF`'s `prios` arm), and `rfl` fails. -/
+theorem anEmptyHysteresisInputIsWritten :
+    (Log.Event.plan ['h'] 1 0 []).fields = [(['h','a','s','h'], .str ['h']),
+      (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1), (['d','r','i','f','t','_','m','i','n'], .num 0),
+      (['y','e','s','t','e','r','d','a','y'], .obj [])] := by
+  rfl
+
 end Tm

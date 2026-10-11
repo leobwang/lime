@@ -1090,7 +1090,9 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
       · simp [List.filterMap_append, (Replay.cut_obs dy m t).2.1, Effect.durationOf?]
       · rfl
     · rfl
-  case extend id by_ => rfl
+  case extend id by_ =>
+    simp only [List.filterMap_cons, Effect.durationOf?]
+    exact (Replay.extendFx_obs m id by_.val).2
   case brk planned actual where_ =>
     rw [List.filterMap_append, (Replay.dayArm_obs dy sl e t d).2.1, List.append_nil]
     exact (Replay.brkFx_obs dy m t _ d).2

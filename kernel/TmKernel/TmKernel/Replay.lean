@@ -128,7 +128,7 @@ survivors of the mask on the day index of their wakes, then `finish`es.
 * **Sums are `Nat`** where the fork saturates `u32` (parity P17).  **`extend` writes its item**: under the
   owner's D14 `extended_min` is ported, so §8.2's "an extend changes only the bookkeeping" is refuted
   (`an_extend_changes_more_than_the_bookkeeping`) and restated
-  (`an_extend_changes_only_the_bookkeeping_and_its_extended_minutes`).
+  (`an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks`, since the owner's D108).
 * **Maps.**  Items and item-days, whose ids have no locality in a log, are arrays of association lists
   bucketed by `KeyHash` (`HMap`, `HMap.get_alter` on every map), updated in place when uniquely held; a
   day's ci-unknown minutes are one association list (`KMap`, `KMap.get_alter` on every list).  At C3 the
@@ -2461,12 +2461,17 @@ structure DayAcc where
   from the block (`DayOp.net`), and every reading of the day's duration observations reads them net (`netDur`).  Fork
   `DayReplay` had no such field: a closed block was never read again. -/
   durNet : KMap Nat Nat
+  /-- **D108 (README gap 4893, W-48 track A, parity P124): §7.4's hysteresis input, as the day's FIRST `plan` carries it**
+  — yesterday's `p` per item, the map `.tm/state.json`'s `priorities_yesterday` caches, so D42's rebuild derives it
+  and deleting the cache moves no ranking.  Empty on a day with no `plan`, or whose first `plan` carries none (an older
+  binary's, or a first day with no plan before it).  Fork `DayReplay` had no such field. -/
+  yesterday : List (Id × U8)
 deriving DecidableEq, Repr
 
 /-- `DayReplay::new(date)`. -/
 def DayAcc.empty : DayAcc :=
   ⟨none, [], 0, 0, 0, Ci6.zero, [], [], 0, [], [], none, none, none, none, none, none, none, [], 0, 0, [], [],
-    0, 0, 0, 0, none, []⟩
+    0, 0, 0, 0, none, [], []⟩
 
 /-- **The block family's part of fork `ItemReplay`** (`minutes_by_day` is the map `State.itemDays`). -/
 structure ItemAcc where
@@ -2510,6 +2515,11 @@ structure Block where
   /-- **The pieces of it drawn so far** (D99): every `Block` segment written into a day record for it, each with the day
   it was filed under, so a later mark that moves one un-draws exactly what was written (`redraw`). -/
   drawn : List Piece
+  /-- **The minutes its `extend`s have added since its `start`** (the owner's **D108**, README gaps 4876 and 4893, W-48
+  track A): `tm extend` adds them to the block's planned minutes, so D42's rebuild of `.tm/state.json`'s
+  `active.est_min` reads them here, as the verb computes them, and not off the item's line multiplied.  Fork `Block`
+  had no such field: an `extend` wrote its item's `extended_min` alone. -/
+  ext : Nat
 deriving DecidableEq, Repr
 
 /-- Fork `Cut`, with its day computed when stored (§8.1). -/
@@ -2819,8 +2829,8 @@ inductive DayOp
   | idle (r : IdleRec)
   /-- C5: `routine_min += m` -/
   | routineMin (m : Nat)
-  /-- C5: a `plan` -/
-  | plan (hash : List Char) (replans drift : Nat)
+  /-- C5: a `plan`; D108: the hysteresis input it carries, kept from the day's first -/
+  | plan (hash : List Char) (replans drift : Nat) (yesterday : List (Id × U8))
 deriving DecidableEq, Repr
 
 /-- **D100's credit half** (`DayOp.net`): `k` minutes off the day's block minutes and off the credit's own bucket — the
@@ -2886,9 +2896,9 @@ def DayOp.apply : DayOp → DayAcc → DayAcc
       { a with idle := r :: a.idle, leakMin := a.leakMin + r.min, longestLeak := Nat.max a.longestLeak r.min }
     else { a with idle := r :: a.idle }
   | .routineMin m, a => { a with routineMin := a.routineMin + m }
-  | .plan hash replans drift, a =>
+  | .plan hash replans drift ys, a =>
     { a with plans := a.plans + 1, replansToday := Nat.max a.replansToday replans, driftMin := a.driftMin + drift,
-             lastPlanHash := some hash }
+             lastPlanHash := some hash, yesterday := if a.plans = 0 then ys else a.yesterday }
 
 /-- Fork `day_mut` creates the day; `uncredit_cut`'s `days.get_mut` does not. -/
 def DayOp.alterFn (op : DayOp) : Option DayAcc → Option DayAcc
@@ -3414,7 +3424,7 @@ theorem brkFx_of_stopped_as_d92_stated_it_is_refuted :
       brkFx dy m t e d = [.machine { m with brks := pruneBrks (⟨t, e, d⟩ :: m.brks), brkOpen := none }] := by
   intro h
   let m : Machine := ⟨some ⟨['a'], (⟨63924364800, 0⟩, ⟨false, 0⟩), none, true, some (⟨63924368400, 0⟩, ⟨false, 0⟩),
-    60, none, 739865, [], [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩]⟩,
+    60, none, 739865, [], [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩], 0⟩,
     none, none, [], none, []⟩
   have hl : (brkFx (fun _ => 739865) m (⟨63924366600, 0⟩, ⟨false, 0⟩) (⟨63924367800, 0⟩, ⟨false, 0⟩) 739865).length
       = 4 := by decide
@@ -3457,19 +3467,28 @@ def dayArm (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (e : Entry) (t :
       [.dayAdd (dy (Cal.subMinutes t.1 m.val)) (.segment ⟨(Cal.subMinutes t.1 m.val, t.2), t, .routine item inst⟩),
        .dayAdd d (.routineMin m.val)]
     | _, _ => []
-  | .plan hash replans drift => [.dayAdd d (.plan hash replans.val drift.val)]
+  | .plan hash replans drift ys => [.dayAdd d (.plan hash replans.val drift.val ys)]
   | .demote id from_ to est => [.demote d ⟨e.line, t, id, from_, to, est.val, Log.stampFromKey from_⟩]
   | .drop id => [.drop id]
   | .close period key => [.close d ⟨e.line, t, period, key⟩]
   | .unknown _ _ => [.unknown]
   | _ => []
 
+/-- **What an `extend` writes to the machine** (the owner's **D108**, README gaps 4876 and 4893): when the open block is
+the extended item's, its own `ext` grows by the minutes — the minutes `tm extend` adds to the block's planned minutes,
+which D42's rebuild of `.tm/state.json`'s `active.est_min` reads (`OpenBlock.ext`) — and nothing else of the machine
+moves; an `extend` of any other item writes no machine. -/
+def extendFx (m : Machine) (id : Id) (by_ : Nat) : List Effect :=
+  match m.block with
+  | some b => if b.id = id then [.machine { m with block := some { b with ext := b.ext + by_ } }] else []
+  | none => []
+
 /-- **The machine a `start` opens its block in** (the owner's D99): the block begun at `t` on ledger day `d`, nothing
 drawn and no idle span of its own, the last cut forgotten, and the machine's interruption, breaks and running break —
 which the cut before it keeps (`cut_keeps`). -/
 def startedMachine (m : Machine) (id : Id) (t : At) (d : Nat) (o : Option EnergyObs) : Machine :=
   { block := some { id := id, started := t, since := none, paused := false, pausedAt := none, workedMin := 0, obs := o,
-                    day := d, idle := [], drawn := [] },
+                    day := d, idle := [], drawn := [], ext := 0 },
     lastCut := none, interrupt := m.interrupt, brks := m.brks, brkOpen := m.brkOpen, closed := m.closed }
 
 /-- **The machine an `interrupt` leaves** (the owner's D99): the block's pause closed (`closePauseM`), and the
@@ -3530,7 +3549,7 @@ def arm (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine) (e : 
         r.2 ++ [.itemAdd id .stop, .machine r.1]
       else []
     | none => []
-  | .extend id by_ => [.itemAdd id (.extend by_.val)]
+  | .extend id by_ => .itemAdd id (.extend by_.val) :: extendFx m id by_.val
   | .done id est actual went tags ci isPartial =>
     doneFx dy m e.line t d id est.val actual.val went tags ci isPartial
   | .brk planned actual _ => brkFx dy m t (brkEnd t planned.val (actual.map (·.val))) d ++ dayArm dy sl e t d
@@ -3590,6 +3609,9 @@ structure OpenBlock where
   since : Option At
   paused : Bool
   day : Nat
+  /-- D108: the minutes its `extend`s have added since its `start` (`Block.ext`) — what `tm extend` added to its planned
+  minutes, which D42's rebuild of `active.est_min` reads.  Fork `OpenBlock` had no such field. -/
+  ext : Nat
 deriving DecidableEq, Repr
 
 /-- **The facts**: the state's maps, the observations in file order, the open block and interruption, (C4) the completion family and (C5) the day family's records. -/
@@ -3758,7 +3780,7 @@ D99 the machine settles it at every mark (`settle`), so what it holds is already
 with — its pieces drawn, its minutes theirs, its clock running from where every span it nets ends (README gaps 4520a
 and 4525).  D94 read past a break held ahead of the clock here (lastEndAfter, deleted with it). -/
 def openOf (m : Machine) : Option OpenBlock :=
-  m.block.map (fun b => ⟨b.id, b.started, b.workedMin, b.since, b.paused, b.day⟩)
+  m.block.map (fun b => ⟨b.id, b.started, b.workedMin, b.since, b.paused, b.day, b.ext⟩)
 
 /-- **A duration observation read net** (the owner's D100, README gap 4520b): its `actual_min` less what breaks logged
 after its `done` took from its block (`DayAcc.durNet` on its day). -/
@@ -4625,8 +4647,14 @@ theorem arm_split_of_not_brk (dy : Cal.Instant → Nat) (sl : Nat → Option Nat
     · simp at hx
   case extend =>
     refine Or.inr ⟨fun x hx => ?_, by simp [dayArm, hev]⟩
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    subst hx; rfl
+    rcases List.mem_cons.mp hx with rfl | hx
+    · rfl
+    · unfold extendFx at hx
+      split at hx
+      · split at hx
+        · simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; subst hx; rfl
+        · simp at hx
+      · simp at hx
   case brkStart =>
     refine Or.inr ⟨fun x hx => ?_, by simp [dayArm, hev]⟩
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
@@ -6150,7 +6178,15 @@ theorem conserves_arm (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st :
         exact ⟨hs1.1, fun d' i' => Nat.le_trans (c2 d' i') (hs1.2.1 _ _), cut_headOk dy st.machine t h.2.2⟩
       · exact h
     · exact h
-  case extend => exact conserves_safe st _ (by simp [Effect.safe]) h
+  case extend id by_ =>
+    -- D108: the item's write, then — when the open block is the item's — one machine, its last cut and closed blocks
+    -- untouched.
+    unfold extendFx
+    split
+    · split
+      · exact conserves_safe_then_kept st [.itemAdd id (.extend by_.val)] _ (by simp [Effect.safe]) rfl rfl h
+      · exact conserves_safe st _ (by simp [Effect.safe]) h
+    · exact conserves_safe st _ (by simp [Effect.safe]) h
   case done =>
     unfold doneFx
     simp only [List.cons_append, List.append_assoc]
@@ -6426,7 +6462,7 @@ theorem worked_minutes_floor_each_subsegment_as_c3_stated_it_is_refuted :
       (cut dy m t).1.lastCut.map (·.min) = some ((Cal.secondsBetween b.started.1 t.1).toNat / 60) := by
   intro h
   let b : Block := ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none,
-    739865, [], []⟩
+    739865, [], [], 0⟩
   let m : Machine := ⟨some b, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865⟩], none,
     []⟩
   have := h (fun _ => 739865) m (⟨63924372000, 0⟩, ⟨false, 0⟩) b rfl
@@ -6449,12 +6485,85 @@ theorem worked_minutes_floor_each_subsegment_with_no_break_held (dy : Cal.Instan
     simp [h, h']
   · simp [h, nextStart]
 
-/-- **An `extend` changes only the bookkeeping and its item's extended minutes** (the law under the
-owner's D14).  Its effects are its header (on its day), the bookkeeping, and one write to its item: the
-item's `extended_min` grows by `by_min` (the item created if absent, as fork `item_mut` does), and by the
-frame law nothing at any other key moves. -/
-theorem an_extend_changes_only_the_bookkeeping_and_its_extended_minutes (z : Cal.Tz) (kw : List Cal.Instant)
+/-- **What an `extend` writes to the machine, by key** (D108): nothing, or the machine alone. -/
+theorem extendFx_keys (m : Machine) (id : Id) (by_ : Nat) :
+    (extendFx m id by_).map Effect.key = [] ∨ (extendFx m id by_).map Effect.key = [.machine] := by
+  unfold extendFx
+  split
+  · split
+    · exact Or.inr rfl
+    · exact Or.inl rfl
+  · exact Or.inl rfl
+
+/-- **What an `extend` leaves of the machine** (D108): nothing, when `extendFx` writes none; else the old machine with
+its open block's `ext` grown, that block the extended item's.  Stated over `extendFx`'s own effects, not a second
+definition of that machine: a proof-only `def` of it was emitted and reached by nothing (check 12, W-48 track A). -/
+theorem applyEffects_extendFx (st : State) (id : Id) (by_ : Nat) :
+    (extendFx st.machine id by_ = [] ∧ applyEffects st (extendFx st.machine id by_) = st) ∨
+      ∃ b, st.machine.block = some b ∧ b.id = id ∧ applyEffects st (extendFx st.machine id by_) =
+        { st with machine := { st.machine with block := some { b with ext := b.ext + by_ } } } := by
+  unfold extendFx
+  split
+  · rename_i b hb
+    split
+    · rename_i hid
+      exact Or.inr ⟨b, hb, hid, rfl⟩
+    · exact Or.inl ⟨rfl, rfl⟩
+  · exact Or.inl ⟨rfl, rfl⟩
+
+/-- **An `extend` changes only the bookkeeping, its item's extended minutes and its open block's own** (the law under
+the owner's D14, restated under **D108**, README gaps 4876 and 4893).  Its effects are its header (on its day), the
+bookkeeping, one write to its item — the item's `extended_min` grows by `by_min` (the item created if absent, as fork
+`item_mut` does) — and, when the open block is the item's, one write to the machine: that block's `ext` grows by the same
+minutes (`extendFx_machines`).  By the frame law nothing at any other key moves. -/
+theorem an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks (z : Cal.Tz) (kw : List Cal.Instant)
     (slept : List (Nat × Nat)) (st : State) (e : Entry) (id : Id) (by_ : U32) (h : e.ev = .extend id by_) :
+    (effects z kw slept st e).map Effect.key
+      = [.day (dayOf z kw e.t.val), .global, .day (dayOf z kw e.t.val), .item id] ++
+          (extendFx st.machine id by_.val).map Effect.key ∧
+    (step z kw slept st e).items.get id =
+      some { (st.items.get id).getD ItemAcc.empty with
+             extendedMin := ((st.items.get id).getD ItemAcc.empty).extendedMin + by_.val } ∧
+    ((extendFx st.machine id by_.val = [] ∧ (step z kw slept st e).machine = st.machine) ∨
+      ∃ b, st.machine.block = some b ∧ b.id = id ∧
+        (step z kw slept st e).machine = { st.machine with block := some { b with ext := b.ext + by_.val } }) ∧
+    ∀ k, k ∉ [Key.day (dayOf z kw e.t.val), .global, .item id, .machine] →
+      (step z kw slept st e).valueAt k = st.valueAt k := by
+  have hfx : effects z kw slept st e = [.header (dayOf z kw e.t.val) (HeaderRec.of e false),
+      .global (e.t.val, e.off.val), .seam (dayOf z kw e.t.val) ⟨(e.t.val, e.off.val), .other⟩,
+      .itemAdd id (.extend by_.val)] ++ extendFx st.machine id by_.val := by
+    simp [effects, effectsWith, arm, completionArm, h, seamKindOf]
+  let st1 := applyEffects st [.header (dayOf z kw e.t.val) (HeaderRec.of e false),
+      .global (e.t.val, e.off.val), .seam (dayOf z kw e.t.val) ⟨(e.t.val, e.off.val), .other⟩,
+      .itemAdd id (.extend by_.val)]
+  have hstep : step z kw slept st e = applyEffects st1 (extendFx st1.machine id by_.val) := by
+    unfold step; rw [hfx, applyEffects_append]; rfl
+  have hitem : st1.items.get id = some { (st.items.get id).getD ItemAcc.empty with
+      extendedMin := ((st.items.get id).getD ItemAcc.empty).extendedMin + by_.val } := by
+    simp only [st1, applyEffects, List.foldl, applyEffect, HMap.get_alter, if_true]
+    cases st.items.get id <;> rfl
+  refine ⟨by rw [hfx]; simp [Effect.key], ?_, ?_, fun k hk => ?_⟩
+  · rw [hstep]
+    rcases applyEffects_extendFx st1 id by_.val with ⟨-, h1⟩ | ⟨b, -, -, h1⟩ <;> rw [h1] <;> exact hitem
+  · rw [hstep]
+    rcases applyEffects_extendFx st1 id by_.val with ⟨h0, h1⟩ | ⟨b, hb, hid, h1⟩
+    · exact Or.inl ⟨h0, by rw [h1]; rfl⟩
+    · exact Or.inr ⟨b, hb, hid, by rw [h1]; rfl⟩
+  · unfold step
+    apply applyEffects_touches_only_named_keys
+    rw [hfx]
+    simp only [List.map_append, List.mem_append, not_or] at hk ⊢
+    simp only [List.map, Effect.key, List.mem_cons, List.not_mem_nil, or_false, not_or] at hk ⊢
+    refine ⟨⟨hk.1, hk.2.1, hk.1, hk.2.2.1⟩, fun hm => ?_⟩
+    rcases extendFx_keys st.machine id by_.val with h0 | h0 <;> rw [h0] at hm
+    · cases hm
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hm; exact hk.2.2.2 hm
+
+/-- **The D14 statement, on the logs where it still holds** (D108): with no open block of the extended item, an
+`extend` writes no machine, and the law stands as D14 stated it. -/
+theorem an_extend_changes_only_the_bookkeeping_and_its_extended_minutes_with_no_block_of_it_open (z : Cal.Tz)
+    (kw : List Cal.Instant) (slept : List (Nat × Nat)) (st : State) (e : Entry) (id : Id) (by_ : U32)
+    (h : e.ev = .extend id by_) (hb : ∀ b, st.machine.block = some b → b.id ≠ id) :
     (effects z kw slept st e).map Effect.key
       = [.day (dayOf z kw e.t.val), .global, .day (dayOf z kw e.t.val), .item id] ∧
     (step z kw slept st e).items.get id =
@@ -6462,20 +6571,27 @@ theorem an_extend_changes_only_the_bookkeeping_and_its_extended_minutes (z : Cal
              extendedMin := ((st.items.get id).getD ItemAcc.empty).extendedMin + by_.val } ∧
     ∀ k, k ∉ [Key.day (dayOf z kw e.t.val), .global, .item id] →
       (step z kw slept st e).valueAt k = st.valueAt k := by
-  have hfx : effects z kw slept st e = [.header (dayOf z kw e.t.val) (HeaderRec.of e false),
-      .global (e.t.val, e.off.val), .seam (dayOf z kw e.t.val) ⟨(e.t.val, e.off.val), .other⟩,
-      .itemAdd id (.extend by_.val)] := by
-    simp [effects, effectsWith, arm, completionArm, h, seamKindOf]
-  refine ⟨by rw [hfx]; rfl, ?_, fun k hk => ?_⟩
-  · unfold step
-    rw [hfx]
-    simp only [applyEffects, List.foldl, applyEffect, HMap.get_alter, if_true]
-    cases st.items.get id <;> rfl
-  · unfold step
-    apply applyEffects_touches_only_named_keys
-    rw [hfx]
-    simp only [List.map, Effect.key, List.mem_cons, List.not_mem_nil, or_false, not_or] at hk ⊢
-    exact ⟨hk.1, hk.2.1, hk.1, hk.2.2⟩
+  have h0 : extendFx st.machine id by_.val = [] := by
+    unfold extendFx
+    split
+    · rename_i b hbm
+      rw [if_neg (hb b hbm)]
+    · rfl
+  obtain ⟨k1, k2, k3, k4⟩ := an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks z kw slept st e id
+    by_ h
+  rw [h0] at k1
+  refine ⟨by simpa using k1, k2, fun k hk => ?_⟩
+  by_cases hkm : k = .machine
+  · subst hkm
+    have hme : (step z kw slept st e).machine = st.machine := by
+      rcases k3 with ⟨-, h3⟩ | ⟨b, hbm, hid, -⟩
+      · exact h3
+      · exact absurd hid (hb b hbm)
+    show State.valueAt _ Key.machine = State.valueAt _ Key.machine
+    simp only [State.valueAt, hme]
+  · apply k4
+    simp only [List.mem_cons, List.not_mem_nil, or_false, not_or] at hk ⊢
+    exact ⟨hk.1, hk.2.1, hk.2.2, hkm⟩
 
 end BlockLaws
 
@@ -7323,7 +7439,16 @@ theorem arm_sleptOk (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         simp [Effect.sleptOk, h2]
       · rfl
     · rfl
-  case extend => rfl
+  case extend id by_ =>
+    simp only [List.all_cons, Effect.sleptOk, Bool.true_and]
+    unfold extendFx
+    split
+    · split
+      · rename_i b hb _
+        simp only [List.all_cons, List.all_nil, Bool.and_true]
+        exact machine_sleptOk sl _ m (by simp [hb]) hm
+      · rfl
+    · rfl
   case done => exact doneFx_sleptOk sl dy m _ t d _ _ _ _ _ _ _ hm
   case brk planned actual where_ =>
     rw [List.all_append, Bool.and_eq_true]
@@ -7972,6 +8097,28 @@ def pendLines (m : Machine) : List Nat := ((m.block.bind (·.obs)).map (·.line)
 /-- The lines of a state's energy observations, emitted and pending. -/
 def obsLines (st : State) : List Nat := st.energy.map (·.line) ++ pendLines st.machine
 
+/-- **An `extend` writes no observation** (the owner's D108): at most one machine, its block's own minutes grown. -/
+theorem extendFx_obs (m : Machine) (id : Id) (by_ : Nat) :
+    (extendFx m id by_).filterMap Effect.energyOf? = [] ∧ (extendFx m id by_).filterMap Effect.durationOf? = [] := by
+  unfold extendFx
+  split
+  · split <;> simp [List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.durationOf?]
+  · simp
+
+/-- **The machine an `extend` writes** (the owner's D108): the old machine, its open block's `ext` grown — and only when
+a block is open. -/
+theorem extendFx_machines (m : Machine) (id : Id) (by_ : Nat) (m' : Machine)
+    (h : m' ∈ (extendFx m id by_).filterMap Effect.machineOf?) :
+    ∃ b, m.block = some b ∧ m' = { m with block := some { b with ext := b.ext + by_ } } := by
+  unfold extendFx at h
+  split at h
+  · rename_i b hb
+    split at h
+    · simp only [List.filterMap_cons, List.filterMap_nil, Effect.machineOf?, List.mem_singleton] at h
+      exact ⟨b, hb, h⟩
+    · simp at h
+  · simp at h
+
 theorem redraw_obs (dy : Cal.Instant → Nat) (id : Id) (old : List Piece) (P : List (At × At)) :
     (redraw dy id old P).2.filterMap Effect.energyOf? = [] ∧ (redraw dy id old P).2.filterMap Effect.durationOf? = [] ∧
     (redraw dy id old P).2.filterMap Effect.machineOf? = [] := by
@@ -8278,10 +8425,19 @@ theorem arm_obs (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machin
         · simp
       · simp
   case extend id by_ =>
+    -- D108: at most one machine, its block's pending observation untouched.
     refine ⟨[], List.nil_sublist _, ?_, ?_⟩
-    · show List.Perm ([] ++ pendLines m) (pendLines m ++ [])
-      simp
-    · exact List.nil_sublist _
+    · unfold extendFx
+      split
+      · split
+        · rename_i b hb _
+          simp [List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.machineOf?, pendLines, hb]
+        · simp [List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.machineOf?]
+      · simp [List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.machineOf?]
+    · unfold extendFx
+      split
+      · split <;> simp [Effect.durationOf?]
+      · simp [Effect.durationOf?]
   case brkStart planned where_ =>
     -- D105: one machine, its block (and so its pending observation) untouched.
     refine ⟨[], List.nil_sublist _, ?_, ?_⟩
@@ -8790,12 +8946,59 @@ theorem worked_minutes_is_not_the_floor_of_the_block :
 /-- **Refuted under the owner's D14**: §8.2's `an_extend_changes_only_the_bookkeeping` says an `extend`'s
 arm emits exactly its header and the bookkeeping.  That was design Q7's option (a), which deletes
 `extended_min`; the owner took (b), which ports it, so the arm also writes its item.  The law is
-`an_extend_changes_only_the_bookkeeping_and_its_extended_minutes`. -/
+`an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks` (D14's form, refuted under D108). -/
 theorem an_extend_changes_more_than_the_bookkeeping :
     ∃ (e : Entry) (id : Id) (by_ : U32), e.ev = .extend id by_ ∧
       (effects utcZone [] [] (State.init 1) e).map Effect.key ≠ [.day (dayOf utcZone [] e.t.val), .global] ∧
       (step utcZone [] [] (State.init 1) e).items.get id ≠ (State.init 1).items.get id :=
   ⟨bE 1 63924368400 (.extend ['a'] 15), ['a'], 15, rfl, by decide, by decide⟩
+
+/-- **D14's statement of what an `extend` changes is refuted** (the owner's D108): with `a`'s block open, an `extend`
+of `a` writes the machine too — the block's `ext` — so its effects are not the four D14 named.  The law is
+`an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks`, and D14's statement holds with no block
+of the item open (`…_with_no_block_of_it_open`). -/
+theorem an_extend_changes_only_the_bookkeeping_and_its_extended_minutes_is_refuted :
+    ¬ ∀ (z : Cal.Tz) (kw : List Cal.Instant) (slept : List (Nat × Nat)) (st : State) (e : Entry) (id : Id) (by_ : U32),
+      e.ev = .extend id by_ →
+      (effects z kw slept st e).map Effect.key
+        = [.day (dayOf z kw e.t.val), .global, .day (dayOf z kw e.t.val), .item id] := by
+  intro h
+  let st : State := { State.init 1 with
+    machine := ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none,
+      739865, [], [], 0⟩, none, none, [], none, []⟩ }
+  have := h utcZone [] [] st (bE 2 63924370200 (.extend ['a'] 15)) ['a'] 15 rfl
+  have hl := congrArg List.length this
+  revert hl
+  decide
+
+/-- **D108: an open block's `extend`s are its own** (README gaps 4876 and 4893): `a` started at 09:00, extended 15 and
+then 10 minutes, and `b` — not the open block — extended 5.  The open block's `ext` is 25, the minutes `tm extend` added
+to its planned minutes; the item's all-time `extended_min` is 25 too, and `b`'s 5 reached no block. -/
+theorem an_open_blocks_extends_are_its_own :
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369300 (.extend ['a'] 15),
+      bE 3 63924370200 (.extend ['a'] 10), bE 4 63924371100 (.extend ['b'] 5)]).openBlock.map (·.ext) = some 25 := by
+  decide
+
+/-- **D108: a `start` begins the count again** — `ext` is the extends since the block's OWN `start`: `a` extended 15,
+stopped, started again and extended 10 holds 10. -/
+theorem a_start_begins_the_extends_again :
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369300 (.extend ['a'] 15),
+      bE 3 63924370200 (.stop ['a'] 30), bE 4 63924371100 (bStart ['a']),
+      bE 5 63924372000 (.extend ['a'] 10)]).openBlock.map (·.ext) = some 10 := by
+  decide
+
+/-- **D108: the day keeps its FIRST `plan`'s hysteresis input**: `plan h1` carrying `a 6`, then `plan h2` carrying
+`b 3` — a `plan` after the day's first carries none from this binary, and one that does (a hand edit) is not the day's
+input.  The day's `yesterday` is `a 6`. -/
+theorem a_day_keeps_its_first_plans_hysteresis_input :
+    ((replay utcZone [bE 1 63924368400 (.plan ['h','1'] 0 0 [(['a'], 6)]),
+      bE 2 63924370200 (.plan ['h','2'] 1 0 [(['b'], 3)])]).days.get 739865).map (·.yesterday) = some [(['a'], 6)] := by
+  decide
+
+/-- **D108's step, at every record**: a `plan` sets the day's hysteresis input exactly when it is the day's first. -/
+theorem a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first (h : List Char) (r d : Nat) (ys : List (Id × U8))
+    (a : DayAcc) : ((DayOp.plan h r d ys).apply a).yesterday = if a.plans = 0 then ys else a.yesterday :=
+  rfl
 
 end BlockWitnesses
 
@@ -8944,8 +9147,8 @@ theorem a_gap_is_on_the_day_it_began :
 /-- The log of `a_day_keeps_its_first_arrival_its_highest_replans_and_its_last_plan` (a `def`, so the instance
 search for `decide` sees its name, not six entries three times). -/
 def arrivalsAndPlans : List Entry :=
-  [bE 1 63924364800 (.arrive ['a'] (['8'], ['9']) 6), bE 2 63924365400 (.plan ['h', '1'] 3 5),
-   bE 3 63924366000 (.arrive ['b'] (['7'], ['9']) 4), bE 4 63924366600 (.plan ['h', '2'] 1 2),
+  [bE 1 63924364800 (.arrive ['a'] (['8'], ['9']) 6), bE 2 63924365400 (.plan ['h', '1'] 3 5 []),
+   bE 3 63924366000 (.arrive ['b'] (['7'], ['9']) 4), bE 4 63924366600 (.plan ['h', '2'] 1 2 []),
    bE 5 63924367200 (.loc ['c']), bE 6 63924367800 (.unknown ['m', 'o', 'o', 'd'] [])]
 
 /-- **A day keeps its first arrival, its highest replans and its last plan**: `arrive a` (window 8–9, budget 6),
@@ -9040,7 +9243,7 @@ theorem the_calendar_today_is_not_the_replays_day_after_midnight :
 theorem idle_and_idle_since_read_different_orders :
     ∃ (es : List Entry) (d : Nat) (a b : At), Log.linesIncreasing es = true ∧
       (replay utcZone es).lastEffective = some a ∧ lastTOn utcZone es d = some b ∧ a.1 < b.1 :=
-  ⟨[bE 1 63924368400 (.note ['n']), bE 2 63924364800 (.plan ['h'] 0 0)], 739865,
+  ⟨[bE 1 63924368400 (.note ['n']), bE 2 63924364800 (.plan ['h'] 0 0 [])], 739865,
     (⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), by decide, by decide, by decide, by decide⟩
 
 end DayWitnesses5
@@ -9877,7 +10080,7 @@ theorem arm_split_as_c5_stated_it_is_refuted :
         ((∀ x ∈ arm dy sl m e t d, x.blockOnly = true) ∧ dayArm dy sl e t d = []) := by
   intro h
   let m : Machine := ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none,
-    0, none, 739865, [], []⟩, none, none, [], none, []⟩
+    0, none, 739865, [], [], 0⟩, none, none, [], none, []⟩
   let e := bE 2 63924370200 (.brk 20 (some 20) none)
   rcases h (fun _ => 739865) (fun _ => none) m e (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865 with h1 | ⟨-, h2⟩
   · revert h1; decide

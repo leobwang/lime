@@ -3410,7 +3410,7 @@ open Tm
 #print axioms Tm.Replay.allFifths_foldl
 #print axioms Tm.Replay.load_is_exact_fifths
 #print axioms Tm.Replay.worked_minutes_floor_each_subsegment
-#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes
+#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes_is_refuted
 #print axioms Tm.Replay.a_start_cuts_any_open_block_even_the_same_id
 #print axioms Tm.Replay.a_block_cut_by_start_is_never_replaced_by_done
 #print axioms Tm.Replay.a_stop_then_done_replaces_the_cut_credit
@@ -8660,3 +8660,30 @@ the binary sends back. -/
 #print axioms Tm.EmitWire.dividerPairs_with_the_inputs
 #print axioms Tm.EmitWire.withPlan_of_no_extra
 #print axioms Tm.EmitWire.dividerPairs_on_the_wire
+
+-- ===========================================================================
+-- APPENDED 2026-10-11: stage 6, run W-48, TRACK A — the owner's D108 (README
+-- gaps 4893 and 4876, parity P124): the day's first `plan` carries §7.4's
+-- hysteresis input (`Log`, `Replay.DayAcc.yesterday`) and the replay holds the
+-- open block's own extends (`Replay.Block.ext`).  D14's `extend` law is
+-- refuted as written and restated beside it; its audit line above (line 3413)
+-- names the refutation now, the restatement and its subdomain form are here.
+-- ===========================================================================
+#print axioms Tm.Log.allPrios_map
+#print axioms Tm.Log.allPrios_mem
+#print axioms Tm.Log.a_plan_line_carries_its_hysteresis_input
+#print axioms Tm.Log.a_plan_line_without_it_carries_none
+#print axioms Tm.Log.an_empty_hysteresis_input_is_not_written
+#print axioms Tm.Log.a_malformed_hysteresis_input_is_refused
+#print axioms Tm.Log.every_hysteresis_input_is_read_back
+#print axioms Tm.Replay.extendFx_keys
+#print axioms Tm.Replay.applyEffects_extendFx
+#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_its_extended_minutes_and_its_blocks
+#print axioms Tm.Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes_with_no_block_of_it_open
+#print axioms Tm.Replay.extendFx_obs
+#print axioms Tm.Replay.extendFx_machines
+#print axioms Tm.Replay.an_open_blocks_extends_are_its_own
+#print axioms Tm.Replay.a_start_begins_the_extends_again
+#print axioms Tm.Replay.a_day_keeps_its_first_plans_hysteresis_input
+#print axioms Tm.Replay.a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first
+#print axioms Tm.Log.a_wake_is_a_state_change_and_a_plan_is_not

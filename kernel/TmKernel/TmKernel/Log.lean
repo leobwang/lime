@@ -294,7 +294,7 @@ defaulted.  `place` is an `Option<String>` whose string must be a word of `place
 owner's D111): serde reads any string there and the kernel's grammar names any other word
 `badField`. -/
 inductive FTy
-  | u8 | u32 | u32d | optU8 | optU32 | str | optStr | strs | flag | num | pair | place
+  | u8 | u32 | u32d | optU8 | optU32 | str | optStr | strs | flag | num | pair | place | prios
 deriving DecidableEq, Repr
 
 /-- The kernel's type for each. -/
@@ -311,6 +311,7 @@ deriving DecidableEq, Repr
   | .num => Num
   | .pair => List Char × List Char
   | .place => Option (List Char)
+  | .prios => List (List Char × U8)
 
 /-- A schema's decoded fields, one per key, in order. -/
 @[reducible] def Args : List (List Char × FTy) → Type
@@ -337,7 +338,12 @@ inductive Event
   | idle (attributed : List Char) (min : U32)
   | routine (item : List Char) (inst : List Char) (status : List Char) (actualMin : Option U32)
   | skip (item : List Char) (inst : List Char)
-  | plan (hash : List Char) (replansToday : U32) (driftMin : U32)
+  /-- A plan was computed.  **`yesterday`** (the owner's **D108**, README gap 4893, parity **P124**): the day's FIRST
+  `plan` carries §7.4's hysteresis input — yesterday's `p` per item, the map `.tm/state.json`'s
+  `priorities_yesterday` caches — so the log derives it (`Replay.DayAcc.yesterday`) and deleting the cache moves no
+  ranking.  Every other `plan` line carries none (an empty map is not written).  Fork 4748911 writes no such key and
+  ignores it on read (its `define_events!` denies no unknown field). -/
+  | plan (hash : List Char) (replansToday : U32) (driftMin : U32) (yesterday : List (Id × U8))
   | named (name : List Char) (id : Option Id)
   | demote (id : Id) (from_ : List Char) (to : List Char) (estMin : U32)
   | readopt (id : Id)
@@ -412,7 +418,7 @@ def Kind.schema : Kind → List (List Char × FTy)
   | .idle => [(['a','t','t','r','i','b','u','t','e','d'], .str), (['m','i','n'], .u32)]
   | .routine => [(['i','t','e','m'], .str), (['i','n','s','t'], .str), (['s','t','a','t','u','s'], .str), (['a','c','t','u','a','l','_','m','i','n'], .optU32)]
   | .skip => [(['i','t','e','m'], .str), (['i','n','s','t'], .str)]
-  | .plan => [(['h','a','s','h'], .str), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .u32), (['d','r','i','f','t','_','m','i','n'], .u32)]
+  | .plan => [(['h','a','s','h'], .str), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .u32), (['d','r','i','f','t','_','m','i','n'], .u32), (['y','e','s','t','e','r','d','a','y'], .prios)]
   | .named => [(['n','a','m','e'], .str), (['i','d'], .optStr)]
   | .demote => [(['i','d'], .str), (['f','r','o','m'], .str), (['t','o'], .str), (['e','s','t','_','m','i','n'], .u32)]
   | .readopt => [(['i','d'], .str)]
@@ -442,7 +448,7 @@ def Kind.build : (k : Kind) → Args k.schema → Event
   | .idle, (x0, x1, ()) => .idle x0 x1
   | .routine, (x0, x1, x2, x3, ()) => .routine x0 x1 x2 x3
   | .skip, (x0, x1, ()) => .skip x0 x1
-  | .plan, (x0, x1, x2, ()) => .plan x0 x1 x2
+  | .plan, (x0, x1, x2, x3, ()) => .plan x0 x1 x2 x3
   | .named, (x0, x1, ()) => .named x0 x1
   | .demote, (x0, x1, x2, x3, ()) => .demote x0 x1 x2 x3
   | .readopt, (x0, ()) => .readopt x0
@@ -472,7 +478,7 @@ def Event.split : Event → Option (Σ k : Kind, Args k.schema)
   | .idle x0 x1 => some ⟨.idle, (x0, x1, ())⟩
   | .routine x0 x1 x2 x3 => some ⟨.routine, (x0, x1, x2, x3, ())⟩
   | .skip x0 x1 => some ⟨.skip, (x0, x1, ())⟩
-  | .plan x0 x1 x2 => some ⟨.plan, (x0, x1, x2, ())⟩
+  | .plan x0 x1 x2 x3 => some ⟨.plan, (x0, x1, x2, x3, ())⟩
   | .named x0 x1 => some ⟨.named, (x0, x1, ())⟩
   | .demote x0 x1 x2 x3 => some ⟨.demote, (x0, x1, x2, x3, ())⟩
   | .readopt x0 => some ⟨.readopt, (x0, ())⟩
@@ -503,7 +509,7 @@ def Event.tag : Event → List Char
   | .idle _ _ => Kind.idle.tag
   | .routine _ _ _ _ => Kind.routine.tag
   | .skip _ _ => Kind.skip.tag
-  | .plan _ _ _ => Kind.plan.tag
+  | .plan _ _ _ _ => Kind.plan.tag
   | .named _ _ => Kind.named.tag
   | .demote _ _ _ _ => Kind.demote.tag
   | .readopt _ => Kind.readopt.tag
@@ -535,7 +541,7 @@ def Event.strings : Event → List (List Char)
   | .idle x0 _ => [x0]
   | .routine x0 x1 x2 _ => [x0] ++ [x1] ++ [x2]
   | .skip x0 x1 => [x0] ++ [x1]
-  | .plan x0 _ _ => [x0]
+  | .plan x0 _ _ x3 => [x0] ++ x3.map Prod.fst
   | .named x0 x1 => [x0] ++ x1.toList
   | .demote x0 x1 x2 _ => [x0] ++ [x1] ++ [x2]
   | .readopt x0 => [x0]
@@ -609,6 +615,17 @@ def strStep : Option (List (List Char)) → JVal → Option (List (List Char))
 def allStrs (xs : List JVal) : Option (List (List Char)) :=
   (xs.foldl strStep (some [])).map List.reverse
 
+/-- One pair of a priority map (D108), onto the reversed pairs so far: its value a `u8`. -/
+def prioStep : Option (List (List Char × U8)) → (List Char × JVal) → Option (List (List Char × U8))
+  | some l, (k, .num n) => if h : n < 256 then some ((k, ⟨n, h⟩) :: l) else none
+  | _, _ => none
+
+/-- **A priority map's pairs, in order** (D108): every value a `u8`.  A `foldl` (D9-21): the map can be as long as a
+line.  A repeated key is kept as written; serde's `BTreeMap` keeps the last, and the one reader of the map
+(`Replay.DayAcc.yesterday`'s host decoder) builds its map in order, so the last wins there too. -/
+def allPrios (kvs : List (List Char × JVal)) : Option (List (List Char × U8)) :=
+  (kvs.foldl prioStep (some [])).map List.reverse
+
 /-- **One field, as serde reads it** (design §5.4's table, pinned by the B3 probe): absent is the
 default or `missing`; `null` is `none` for an `Option` and a type error otherwise; a numeral is an
 integer in the field's width or a type error (`-0`, `3.0` and `1e2` are floats to serde, so they
@@ -659,6 +676,13 @@ def readF (k : List Char) : (t : FTy) → Option JVal → FR t.T
   | .place, some .null => .ok none
   | .place, some (.str s) => if isPlace s then .ok (some s) else .bad k
   | .place, some _ => .bad k
+  -- **D108**: a `BTreeMap<String, u8>` with `#[serde(default)]` — absent is empty, an object of `u8`s is read in order.
+  | .prios, none => .ok []
+  | .prios, some (.obj kvs) =>
+    match allPrios kvs with
+    | some ps => .ok ps
+    | none => .bad k
+  | .prios, some _ => .bad k
 
 /-- A schema's fields, each read from the pairs' last value for its key. -/
 def readArgs (kvs : List (List Char × JVal)) : (s : List (List Char × FTy)) → FR (Args s)
@@ -688,6 +712,8 @@ def renderF : (t : FTy) → t.T → Option JVal
   | .pair, (a, b) => some (.arr [.str a, .str b])
   | .place, none => none
   | .place, some s => some (.str s)
+  | .prios, [] => none
+  | .prios, p :: ps => some (.obj ((p :: ps).map (fun q => (q.1, .num q.2.val))))
 
 /-- A schema's fields as pairs, in declaration order, skipped ones left out. -/
 def renderArgs : (s : List (List Char × FTy)) → Args s → List (List Char × JVal)
@@ -704,6 +730,7 @@ def strsOfF : (t : FTy) → t.T → List (List Char)
   | .strs, ss => ss
   | .pair, p => [p.1, p.2]
   | .place, o => o.toList
+  | .prios, ps => ps.map Prod.fst
   | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .flag, _ | .num, _ => []
 
 /-- The strings a schema's fields hold, in order. -/
@@ -715,7 +742,7 @@ def argStrs : (s : List (List Char × FTy)) → Args s → List (List Char)
 def fieldFinite : (t : FTy) → t.T → Bool
   | .num, h => h.finite
   | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .str, _ | .optStr, _ | .strs, _
-  | .flag, _ | .pair, _ | .place, _ => true
+  | .flag, _ | .pair, _ | .place, _ | .prios, _ => true
 
 def argsFinite : (s : List (List Char × FTy)) → Args s → Bool
   | [], () => true
@@ -727,7 +754,7 @@ rule — a numeral serde refuses — checked over the whole line (`allFinite`); 
 def FieldReadable : (t : FTy) → t.T → Prop
   | .place, o => o.all isPlace = true
   | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .str, _ | .optStr, _ | .strs, _
-  | .flag, _ | .num, _ | .pair, _ => True
+  | .flag, _ | .num, _ | .pair, _ | .prios, _ => True
 
 def ArgsReadable : (s : List (List Char × FTy)) → Args s → Prop
   | [], () => True
@@ -755,7 +782,7 @@ def Event.isUndo : Event → Bool
 /-- `Event::is_state_change`: everything but `plan`, `note`, `undo` and unknown events.  Ported for
 the grammar's completeness; the undo mask (C1) does not read it. -/
 def Event.isStateChange : Event → Bool
-  | .plan _ _ _ | .note _ | .undo _ _ | .unknown _ _ => false
+  | .plan _ _ _ _ | .note _ | .undo _ _ | .unknown _ _ => false
   | _ => true
 
 /-- An event's pairs after `t` and `ev`, as serde writes them: a known event's fields in
@@ -1135,6 +1162,20 @@ theorem allStrs_map (ss : List (List Char)) : allStrs (ss.map JVal.str) = some s
   | nil => intro acc; rfl
   | cons s ss ih => intro acc; simp only [List.map_cons, List.foldl_cons, strStep]; rw [ih]; simp
 
+/-- **A priority map the writer writes is read back as written** (D108). -/
+theorem allPrios_map (ps : List (List Char × U8)) :
+    allPrios (ps.map (fun q => (q.1, JVal.num q.2.val))) = some ps := by
+  unfold allPrios
+  suffices h : ∀ acc, (ps.map (fun q => (q.1, JVal.num q.2.val))).foldl prioStep (some acc)
+      = some (ps.reverse ++ acc) by
+    rw [h []]; simp
+  induction ps with
+  | nil => intro acc; rfl
+  | cons q ps ih =>
+    intro acc
+    simp only [List.map_cons, List.foldl_cons, prioStep, q.2.isLt, dite_true]
+    rw [ih]; simp
+
 /-- **The reader reads back what the writer writes, at every field the reader can read**
 (`FieldReadable`; D111).  This was stated at EVERY value of every field type until the owner's
 D111, and that statement is false since: a `place` the writer writes may be a word the table does
@@ -1161,6 +1202,10 @@ theorem readF_renderF (k : List Char) :
   | .place, some s, h => by
     simp only [FieldReadable, Option.all_some] at h
     simp [renderF, readF, h]
+  | .prios, [], _ => rfl
+  | .prios, q :: ps, _ => by
+    simp only [renderF, readF]
+    rw [allPrios_map (q :: ps)]
 
 /-- **`readF_renderF` as stage 5 B3 stated it — at every value — is refuted** (the owner's D111):
 the writer writes a `place` of any word and the reader names a word the table does not hold
@@ -1306,6 +1351,17 @@ theorem allFiniteO_renderArgs : ∀ (s : List (List Char × FTy)) (a : Args s),
     | num => cases x <;> simp_all [renderF, allFiniteO, allFinite, fieldFinite, Num.finite]
     | pair => simp [renderF, allFiniteO, allFinite, allFiniteL]
     | place => cases x <;> simp [renderF, allFiniteO, allFinite]
+    | prios =>
+      cases x with
+      | nil => simp [renderF, allFiniteO]
+      | cons q ps =>
+        simp only [renderF, allFiniteO, allFinite, Bool.and_true]
+        suffices H : ∀ l : List (List Char × U8),
+            allFiniteO (l.map (fun q => (q.1, JVal.num q.2.val))) = true from H (q :: ps)
+        intro l
+        induction l with
+        | nil => rfl
+        | cons r l ih => simp [allFiniteO, allFinite, finiteF64_of_nat _ (u8_le_u64Max r.2), ih]
 
 /-! ## Laws: the written line's shape -/
 
@@ -2206,6 +2262,43 @@ theorem allStrs_mem (xs : List JVal) (ss : List (List Char)) (h : allStrs xs = s
         | cons z zs ihz => simp only [List.foldl_cons, strStep]; exact ihz
       rw [this] at h; cases h
 
+theorem allPrios_mem (kvs : List (List Char × JVal)) (ps : List (List Char × U8)) (h : allPrios kvs = some ps) :
+    ∀ q ∈ ps, ∃ v, (q.1, v) ∈ kvs := by
+  unfold allPrios at h
+  suffices H : ∀ (ys : List (List Char × JVal)) (acc out : List (List Char × U8)),
+      ys.foldl prioStep (some acc) = some out → ∀ q ∈ out, q ∈ acc ∨ ∃ v, (q.1, v) ∈ ys by
+    cases hf : kvs.foldl prioStep (some []) with
+    | none => rw [hf] at h; cases h
+    | some out =>
+      rw [hf] at h; simp only [Option.map_some, Option.some.injEq] at h; subst h
+      intro q hq
+      rcases H kvs [] out hf q (List.mem_reverse.mp hq) with h | h
+      · cases h
+      · exact h
+  have hnone : ∀ zs : List (List Char × JVal), zs.foldl prioStep none = none := by
+    intro zs; induction zs with
+    | nil => rfl
+    | cons z zs ihz => simp only [List.foldl_cons, prioStep]; exact ihz
+  intro ys
+  induction ys with
+  | nil => intro acc out h q hq; simp at h; subst h; exact Or.inl hq
+  | cons y ys ih =>
+    intro acc out h q hq
+    simp only [List.foldl_cons] at h
+    obtain ⟨k, w⟩ := y
+    cases w with
+    | num n =>
+      by_cases hn : n < 256
+      · simp only [prioStep, hn, dite_true] at h
+        rcases ih _ out h q hq with h1 | ⟨v, hv⟩
+        · rcases List.mem_cons.mp h1 with rfl | h1
+          · exact Or.inr ⟨_, List.mem_cons_self⟩
+          · exact Or.inl h1
+        · exact Or.inr ⟨v, List.mem_cons_of_mem _ hv⟩
+      · simp only [prioStep, hn, dite_false] at h
+        rw [hnone] at h; cases h
+    | _ => simp only [prioStep] at h; rw [hnone] at h; cases h
+
 theorem readF_strs (k : List Char) : ∀ (t : FTy) (ov : Option JVal) (x : t.T), readF k t ov = .ok x →
     ∀ s ∈ strsOfF t x, ∃ v, ov = some v ∧ s ∈ jstrs v
   | .str, none, x, h => by simp [readF] at h
@@ -2263,6 +2356,23 @@ theorem readF_strs (k : List Char) : ∀ (t : FTy) (ov : Option JVal) (x : t.T),
       | [.obj _, _], h => simp [readF] at h
       | [.str _, .null], h | [.str _, .bool _], h | [.str _, .num _], h | [.str _, .dec _], h
       | [.str _, .arr _], h | [.str _, .obj _], h => simp [readF] at h
+    | _ => simp [readF] at h
+  | .prios, none, x, h => by simp [readF] at h; subst h; simp [strsOfF]
+  | .prios, some v, x, h => by
+    cases v with
+    | obj kvs =>
+      simp only [readF] at h
+      split at h
+      · next ps hps =>
+        cases h
+        intro s hs
+        refine ⟨_, rfl, ?_⟩
+        show s ∈ jstrsO kvs
+        simp only [strsOfF, List.mem_map] at hs
+        obtain ⟨q, hq, rfl⟩ := hs
+        obtain ⟨v, hv⟩ := allPrios_mem kvs _ hps q hq
+        exact (mem_jstrsO_of_mem kvs (q.1, v) hv).1
+      · cases h
     | _ => simp [readF] at h
   | .u8, ov, x, _ => by simp [strsOfF]
   | .u32, ov, x, _ => by simp [strsOfF]
@@ -2992,6 +3102,7 @@ theorem readF_readable (k : List Char) : ∀ (t : FTy) (ov : Option JVal) (x : t
   | .flag, _, _, _ => trivial
   | .num, _, _, _ => trivial
   | .pair, _, _, _ => trivial
+  | .prios, _, _, _ => trivial
 
 /-- …and so does every schema it reads: `ArgsReadable` of what `readArgs` returns. -/
 theorem readArgs_readable (kvs : List (List Char × JVal)) :
@@ -3041,6 +3152,60 @@ theorem a_break_start_read_off_the_disk_is_at_a_place (n : Nat) (l : List Char) 
           | missing key => simp [hT, hE, hK, hA] at ho
           | bad key => simp [hT, hE, hK, hA] at ho
       | _ => simp [hT, hE] at ho
+
+/-! ## D108: the day's first `plan` carries §7.4's hysteresis input (README gap 4893, W-48 track A, parity P124) -/
+
+/-- **A `plan` line's hysteresis input is read as written** (the owner's D108): `{"d1":1,"m2":3}` at `yesterday` is the
+pairs `d1 1`, `m2 3`, in order — the field the day's first `plan` carries, from which `Replay.DayAcc.yesterday` and D42's
+rebuild of `.tm/state.json`'s `priorities_yesterday` read it. -/
+theorem a_plan_line_carries_its_hysteresis_input :
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h','1']),
+        (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1), (['d','r','i','f','t','_','m','i','n'], .num 0),
+        (['y','e','s','t','e','r','d','a','y'], .obj [(['d','1'], .num 1), (['m','2'], .num 3)])]
+      = .ok (.plan ['h','1'] 1 0 [(['d','1'], 1), (['m','2'], 3)]) :=
+  rfl
+
+/-- **A `plan` line without the key carries no hysteresis input** — every `plan` a binary before D108 wrote, and every
+`plan` after the day's first, which writes none: absent is the empty map, as serde's `#[serde(default)]` reads it. -/
+theorem a_plan_line_without_it_carries_none :
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h','1']),
+        (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 2), (['d','r','i','f','t','_','m','i','n'], .num 5)]
+      = .ok (.plan ['h','1'] 2 5 []) :=
+  rfl
+
+/-- **The empty map is not written** (`skip_serializing_if = "BTreeMap::is_empty"`): a `plan` that carries none renders
+the fork's three keys alone, so every `plan` but the day's first is the line fork 4748911 writes. -/
+theorem an_empty_hysteresis_input_is_not_written (h : List Char) (r d : U32) :
+    (Event.plan h r d []).fields = [(['h','a','s','h'], .str h), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num r.val),
+      (['d','r','i','f','t','_','m','i','n'], .num d.val)] :=
+  rfl
+
+/-- **The check bites, both ways** (AGENTS §5.8): a `p` past a `u8`, a value that is not a numeral, and a map that is
+not an object are each `badField yesterday` — serde's `BTreeMap<String, u8>` refuses all three. -/
+theorem a_malformed_hysteresis_input_is_refused :
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h']), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1),
+        (['d','r','i','f','t','_','m','i','n'], .num 0), (['y','e','s','t','e','r','d','a','y'], .obj [(['d','1'], .num 256)])]
+      = .error (.badField ['y','e','s','t','e','r','d','a','y']) ∧
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h']), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1),
+        (['d','r','i','f','t','_','m','i','n'], .num 0), (['y','e','s','t','e','r','d','a','y'], .obj [(['d','1'], .str ['x'])])]
+      = .error (.badField ['y','e','s','t','e','r','d','a','y']) ∧
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h']), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1),
+        (['d','r','i','f','t','_','m','i','n'], .num 0), (['y','e','s','t','e','r','d','a','y'], .null)]
+      = .error (.badField ['y','e','s','t','e','r','d','a','y']) :=
+  ⟨rfl, rfl, rfl⟩
+
+/-- **Every hysteresis input the writer writes is read back** (D108, over EVERY map, not one witness): the field's own
+round trip, `readF_renderF` at `prios`, which the line's (`the_log_reads_what_it_renders`) composes. -/
+theorem every_hysteresis_input_is_read_back (k : List Char) (ps : List (List Char × U8)) :
+    readF k .prios (renderF .prios ps) = .ok ps :=
+  readF_renderF k .prios ps trivial
+
+/-- **A state change is told from the bookkeeping, both ways** (README gap 4893's step, W-48 track A: `mutate.py`
+found `Event.isStateChange` indistinguishable from `fun _ => false` once the `plan` arm changed shape): a `wake` is a
+state change, a `plan` (whatever hysteresis input it carries) is not. -/
+theorem a_wake_is_a_state_change_and_a_plan_is_not :
+    (Event.wake 480 none).isStateChange = true ∧ (Event.plan [] 0 0 [(['a'], 6)]).isStateChange = false := by
+  decide
 
 end Log
 end Tm

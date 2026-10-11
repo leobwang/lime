@@ -6445,9 +6445,9 @@ theorem openBlockRows_of_an_open_block (r : PlanReq) (b : Replay.OpenBlock) (s :
 resume is ninety; a paused block (no `since`) is its banked minutes alone; and the stretch is
 floored to whole minutes, `num_minutes()` of the span. -/
 theorem openWorkedMin_is_the_banked_minutes_and_the_running_stretch :
-    openWorkedMin 7200 ⟨['m'], (⟨0, 0⟩, ⟨false, 0⟩), 30, some (⟨3600, 0⟩, ⟨false, 0⟩), false, 0⟩ = 90 ∧
-      openWorkedMin 7200 ⟨['m'], (⟨0, 0⟩, ⟨false, 0⟩), 30, none, true, 0⟩ = 30 ∧
-      openWorkedMin 7259 ⟨['m'], (⟨0, 0⟩, ⟨false, 0⟩), 0, some (⟨3600, 0⟩, ⟨false, 0⟩), false, 0⟩ = 60 := by
+    openWorkedMin 7200 ⟨['m'], (⟨0, 0⟩, ⟨false, 0⟩), 30, some (⟨3600, 0⟩, ⟨false, 0⟩), false, 0, 0⟩ = 90 ∧
+      openWorkedMin 7200 ⟨['m'], (⟨0, 0⟩, ⟨false, 0⟩), 30, none, true, 0, 0⟩ = 30 ∧
+      openWorkedMin 7259 ⟨['m'], (⟨0, 0⟩, ⟨false, 0⟩), 0, some (⟨3600, 0⟩, ⟨false, 0⟩), false, 0, 0⟩ = 60 := by
   decide
 
 /-! ### The replayed past, whole -/

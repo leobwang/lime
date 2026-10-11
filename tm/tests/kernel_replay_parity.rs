@@ -374,7 +374,13 @@ fn kernel_view(log: &Value) -> Facts {
             // 29 since the owner's D100 (README gap 4520b, parity P105): the last, `durNet`, is the kernel's own
             // bookkeeping of what a late break took off a `done`'s observation, which the fork has no counterpart of
             // and which the observations compared below are already net of.
-            assert_eq!(a.len(), 29, "a day record has 29 fields: {}", p[1]);
+            //
+            // 30 since the owner's D108 (README gap 4893, parity P124): the last, `yesterday`, is §7.4's hysteresis
+            // input as the day's first `plan` line carries it. No log here was written by a binary that writes the
+            // key — fork 4748911 writes none and reads none — so it is EMPTY on every one, and that is asserted rather
+            // than skipped: a log that carried it would be one the fork's replay reads without it.
+            assert_eq!(a.len(), 30, "a day record has 30 fields: {}", p[1]);
+            assert_eq!(j_arr(&a[29], "yesterday").len(), 0, "a day record carries a hysteresis input the fork's log cannot: {}", p[1]);
             let mut ci_unknown = BTreeMap::new();
             for c in j_arr(&a[6], "ciUnknown") {
                 let c = j_arr(c, "a ciUnknown pair");
@@ -1338,7 +1344,7 @@ fn generate(seed: u64) -> Generated {
             }
             Arm::UndoOfNonStateChange => {
                 w.push(tick(&mut now, &mut rng), Event::Note { text: "n".into() });
-                w.push(tick(&mut now, &mut rng), Event::Plan { hash: "h".into(), replans_today: 1, drift_min: 0 });
+                w.push(tick(&mut now, &mut rng), Event::Plan { hash: "h".into(), replans_today: 1, drift_min: 0, yesterday: Default::default() });
                 w.push(tick(&mut now, &mut rng), ev_undo("note", None));
                 w.push(tick(&mut now, &mut rng), ev_undo("plan", None));
             }
@@ -1383,7 +1389,7 @@ fn generate(seed: u64) -> Generated {
             Arm::Misc => {
                 let t = tick(&mut now, &mut rng);
                 match rng.below(14) {
-                    0 => w.push(t, Event::Plan { hash: "p".into(), replans_today: 2, drift_min: 5 }),
+                    0 => w.push(t, Event::Plan { hash: "p".into(), replans_today: 2, drift_min: 5, yesterday: Default::default() }),
                     1 => w.push(t, Event::Note { text: "note".into() }),
                     2 => w.push(t, Event::Energy { pred: 3, rep: 4, hsw: 3.25, loc: "home".into() }),
                     3 => w.push(t, Event::Named { name: "arrival".into(), id: Some(id.into()) }),
@@ -1444,7 +1450,7 @@ fn day_edge(case: u64, w: &mut Writer, now: &mut DateTime<Utc>, rng: &mut Rng, i
         // Plans: replans that fall and rise, drift, the last hash.
         2 => {
             for (hash, replans, drift) in [("h1", 3, 5), ("h2", 1, 0), ("h3", 4, 2)] {
-                w.push(tick(now, rng), Event::Plan { hash: hash.into(), replans_today: replans, drift_min: drift });
+                w.push(tick(now, rng), Event::Plan { hash: hash.into(), replans_today: replans, drift_min: drift, yesterday: Default::default() });
             }
         }
         // Idle gaps: two equal leaks (the first maximum stays), another attribution, and a leak of 20
@@ -2095,7 +2101,7 @@ fn triple(seed: u64) -> Triple {
             ev_close("day", &key),
             Event::Note { text: "between".into() },
             ev_wake(400),
-            Event::Plan { hash: "m".into(), replans_today: 1, drift_min: 0 },
+            Event::Plan { hash: "m".into(), replans_today: 1, drift_min: 0, yesterday: Default::default() },
             ev_done("m9", 20, false),
             ev_named("lunch", None),
             Event::Energy { pred: 3, rep: 4, hsw: 3.25, loc: "home".into() },

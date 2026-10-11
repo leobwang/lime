@@ -96,7 +96,11 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         · exact Or.inr (Or.inr h)
       · simp at hm
     · simp at hm
-  case extend id by_ => simp [Effect.machineOf?] at hm
+  case extend id by_ =>
+    -- D108: the open block's `ext` grown, nothing else of the machine.
+    simp only [List.filterMap_cons, Effect.machineOf?] at hm
+    obtain ⟨b, -, rfl⟩ := Replay.extendFx_machines m id by_.val m' hm
+    exact Or.inl rfl
   case done id est actual went tags ci isPartial =>
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
@@ -180,7 +184,11 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
         exact Or.inl (cut_keeps dy m t).1
       · simp at hm
     · simp at hm
-  case extend id by_ => simp [Effect.machineOf?] at hm
+  case extend id by_ =>
+    -- D108: the open block's `ext` grown, nothing else of the machine.
+    simp only [List.filterMap_cons, Effect.machineOf?] at hm
+    obtain ⟨b, -, rfl⟩ := Replay.extendFx_machines m id by_.val m' hm
+    exact Or.inl rfl
   case done id est actual went tags ci isPartial =>
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
@@ -261,7 +269,11 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         exact Or.inl (Replay.cut_brkOpen dy m t)
       · simp at hm
     · simp at hm
-  case extend id by_ => simp [Effect.machineOf?] at hm
+  case extend id by_ =>
+    -- D108: the open block's `ext` grown, nothing else of the machine.
+    simp only [List.filterMap_cons, Effect.machineOf?] at hm
+    obtain ⟨b, -, rfl⟩ := Replay.extendFx_machines m id by_.val m' hm
+    exact Or.inl rfl
   case done id est actual went tags ci isPartial =>
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm

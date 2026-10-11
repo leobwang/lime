@@ -1482,7 +1482,9 @@ fn the_log_op_answers_the_completion_facts() {
 /// minutes, the longest 20 and the idle record; the global longest leak is the gap.
 /// C6: in §8.4's view, the day's seam and headers beside its record.  W3: in the codec
 /// shapes (the idle segment's kind is `[5, "leak"]`).  W-47 track K (the owner's D100):
-/// the record's 29th field, the duration nets a late break took, is `[]` here.
+/// the record's 29th field, the duration nets a late break took, is `[]` here; and W-48
+/// track A (the owner's D108, parity P124) its 30th, the hysteresis input the day's first
+/// `plan` carries, is `[]` too (no `plan` line).
 #[test]
 fn the_log_op_answers_the_day_facts() {
     let utc = r#"{"key":"UTC","base":"+00:00:00","then":[]}"#;
@@ -1490,8 +1492,32 @@ fn the_log_op_answers_the_day_facts() {
     let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
     assert_eq!(
         out,
-        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null,[]],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
+        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null,[],[]],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
     );
+}
+
+/// **D108 on the wire** (the owner's D108, parity P124; Replay.lean's
+/// `a_day_keeps_its_first_plans_hysteresis_input` and `an_open_blocks_extends_are_its_own`):
+/// `a` started at 09:00 and extended 15 then 10 minutes, a `plan` at 09:20 carrying
+/// `{"a":6,"b":3}` (the day's first) and one at 09:30 carrying `{"a":1}` (a hand edit: no
+/// binary writes a second).  The open block's seventh element is its extends, 25; the
+/// day record's thirtieth is the FIRST `plan`'s map, `[["a",6],["b",3]]`, in the line's
+/// order; and the `emit` section writes the map last, the empty one not at all.
+#[test]
+fn the_log_op_answers_the_hysteresis_input_and_the_blocks_extends() {
+    let utc = r#"{"key":"UTC","base":"+00:00:00","then":[]}"#;
+    let lines = r#"["{\"t\":\"2026-09-07T09:00:00Z\",\"ev\":\"start\",\"id\":\"a\",\"pred\":3,\"loc\":\"h\"}","{\"t\":\"2026-09-07T09:05:00Z\",\"ev\":\"extend\",\"id\":\"a\",\"by_min\":15}","{\"t\":\"2026-09-07T09:10:00Z\",\"ev\":\"extend\",\"id\":\"a\",\"by_min\":10}","{\"t\":\"2026-09-07T09:20:00Z\",\"ev\":\"plan\",\"hash\":\"h1\",\"replans_today\":0,\"drift_min\":0,\"yesterday\":{\"a\":6,\"b\":3}}","{\"t\":\"2026-09-07T09:30:00Z\",\"ev\":\"plan\",\"hash\":\"h2\",\"replans_today\":1,\"drift_min\":0,\"yesterday\":{\"a\":1}}"]"#;
+    let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
+    assert!(out.contains(r#""open":{"block":["a",[63924368400,0,false,0],"#), "{out}");
+    assert!(out.contains(r#",739865,25],"interrupt":null"#), "the open block's extends: {out}");
+    assert!(out.contains(r#",2,1,0,"h2",[],[["a",6],["b",3]]],"#), "the day's first plan's map: {out}");
+    let emit = |f: &str| {
+        call(&format!(r#"{{"docs":[],"emit":[{{"at":[63924369600,0,false,0],"ev":"plan","f":{f}}}]}}"#)).unwrap()
+    };
+    let with = emit(r#"{"hash":"h","replans_today":0,"drift_min":0,"yesterday":{"a":6}}"#);
+    assert!(with.contains(r#"\"drift_min\":0,\"yesterday\":{\"a\":6}}"#), "{with}");
+    let without = emit(r#"{"hash":"h","replans_today":1,"drift_min":0,"yesterday":{}}"#);
+    assert!(without.contains(r#"\"drift_min\":0}"#) && !without.contains("yesterday"), "{without}");
 }
 
 /// **A running break on the wire** (the owner's D105, parity P100; Replay.lean's
