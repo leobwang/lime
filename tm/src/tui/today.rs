@@ -261,7 +261,12 @@ pub fn now_lines(app: &App, width: usize) -> Vec<Line<'static>> {
                     .unwrap_or_else(|| review::fmt_hm(planned));
                 second.push_str(&format!(" est {est} ×{mult:.1}"));
             }
-            if app.state.active.as_ref().is_some_and(|a| a.paused) {
+            // **The pause is the running block's, so it is said on the running block's row and no
+            // other** (the owner's D109's one reading, reaching the TUI at the W-48 repair, README
+            // gap 5214): with `^t4` paused by a wall and a break begun after it, the head is the
+            // row containing `now` — `Pick up package`, say — and the pane used to hang
+            // ` · paused` on it, while `tm now` says `paused` on `^t4`'s own header line.
+            if app.state.active.as_ref().is_some_and(|a| a.paused && seg.item.as_ref() == Some(&a.id)) {
                 second.push_str(" · paused");
             }
             out.push(Line::from(emit::clip(&second, width)));

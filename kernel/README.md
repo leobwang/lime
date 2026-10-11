@@ -98148,3 +98148,100 @@ None opened (5200-5209 unused); none closed by the land.  **Closed by the landed
   A's `Replay.lean` (the `Block.ext` field, `extendFx`, the `@[csimp]` twins) — and G's reduction may need re-proving
   over the arms it changes.
 * The owner: gaps 5130 and 5131.  Not done here: a TUI drive.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **the repair**
+     — the W-48 auditor's six findings and the W-48 critic's six, reproduced
+     on the landed binary (`4aa44da`) and answered one by one.  Gaps 5210-5249
+     are this step's.  Parity: the held D115/D116/D119 commit's three
+     numbers are taken when it lands (§6); none for the rest.  Written in
+     several commits; this block is kept current with each.
+     ===================================================================== -->
+
+## Stage 6 — W-48 repair
+
+### 1. Every finding, its evidence and its outcome
+
+Each was reproduced first, on a binary built from `4aa44da` (the auditor's, copied into the repair's scratch), before
+anything was changed.  Commands are `tm --dir D --now 2026-09-07T<hh:mm>:00-05:00 …` on a `tm init --example` tree woken
+07:00 and arrived 08:00, unless the row says otherwise.
+
+| # | finding (who) | reproduced | outcome |
+|---|---|---|---|
+| 1 | `{"err":{"plan":"tooManySegments"}}` reached the user as `kernel refusal (unrecognised shape)` (critic) | the critic's 800-pair tree, `tm now` at 22:00: `tm: kernel refusal (unrecognised shape): {"plan":"tooManySegments"}`, exit 1, 0.92 s | **fixed** as a class (gap 5212): every section refusal the kernel answers is read by name — `plan` was the one section the host did not read, and `emit`'s non-walls forms fell through too |
+| 2 | gap 5027 was closed on a timing of that refusal (critic) | the same run: the 0.65 s is the refusal's | **reopened by measurement** (gap 5218, §3); the bound itself is the owner's (gap 5212) |
+| 3 | `tm resume` inside a meeting says `` `tm pause` resumes it `` without naming the meeting (auditor) | `start ^t4` 12:30, `interrupt` 13:10, `resume` 13:30: `resumed · lost 20m · ^t4 still paused — `tm pause` resumes it` | **fixed** (gap 5213): D66's rule, as `tm pause` says it |
+| 4 | the TUI's Now pane hangs ` · paused` on whatever row is current (critic) | (critic, pty) `ci1 p0 Pick up package / elapsed 0m … · paused` while `^t4` is the paused block | **fixed** (gap 5214): D109's one reading |
+| 5 | a re-draw wrote its D64(b) reason over the line's earlier ones (auditor, critic) | `git diff eef6732 4aa44da -- tm/tests/fixtures/fork-4748911-week-grid.jsonl`: 27 reasons replaced by one P119 sentence | **fixed** as a class (gap 5216): 58 dropped reasons in two files restored, every bless appends |
+| 6 | D108 between local midnight and the wake (auditor, critic) | §4 | §4 |
+| 7 | D108 on two machines syncing one plan directory (critic) | §4 | §4 |
+| 8 | D110/D117/D114: no remainder after the wall while a wall holds a block (auditor) | §5 | §5 |
+| 9 | D115, D116 and D119 held, not shipped (auditor, critic) | §6 | §6 |
+| 10 | the last goal's reduction is non-vacuous only for `hrec` (auditor) | §7 | §7 |
+
+### 2. The four host fixes (first commit)
+
+**Every section refusal is named (gap 5212).**  `kernel_bridge::refusal` read `kernel`, `capacity`, the store-key
+collisions, `badLine`, `pastWidth`, `unterminatedComment`, `itemCheck`, `planner` and the `emit` section's `walls` form
+by name, and nothing else: the `plan` row section's refusals (`EmitWire.RowRefusal`) and the `emit` section's array
+forms fell to `unknown`.  A day of more than `Planner.maxCands` segments — a block open across 600 or more logged pause
+pairs, the critic's measurement — is planned by the kernel's first call and refused by its second (the owner's D112
+row section reads its segments under `Planner.maxCands`), so `tm now`, `tm plan`, `tm review day` and `tm check` failed
+with no name (AGENTS §5.7).  Tests: `kernel_bridge::tests::every_section_refusal_the_kernel_answers_is_named` (every
+`jone "err" (jone "<key>"` the kernel writes), `tm/tests/cli_refusal_named.rs` (600 pairs refused by name; 200 pairs
+answered).  **Gap 5212** (four-part, §9.2): 1. *Not done*: the day the planner answers and the day the row section
+reads are bounded apart — `Planner.dayPlan` has no segment bound and `EmitWire.readSegs` refuses past
+`Planner.maxCands`, a candidate count the owner's D48 chose to reuse.  2. *Why*: which way to make them one bound is a
+decision — bound the planner's day (refuse by name at the planner) or widen the row reader to what the planner can
+answer — and no standing decision says which.  3. *Cost*: a block open across 600 or more pause pairs (a day of
+more than 1,024 rows) makes every planning verb refuse, by name since this step; `tm stop` still works.  4. *Clears it*:
+the owner.
+
+**`tm resume` names the meeting (gap 5213).**  When the block a resume leaves paused is held by a calendar wall
+(`WallTimer.pausedFor`, as `tm pause` asks it), the line is `resumed · lost 20m · ^t4 still paused for Meeting w/ host
+12:50–13:50 — it resumes at 13:50; `tm pause` resumes it now`, and `--json` carries `still_paused_for {walls, from,
+to}`; a pause the user typed keeps the old line.  Tests: `tm/tests/cli_resume_names_the_meeting.rs`.
+
+**The TUI says `paused` on the paused block's row only (gap 5214).**  `today::now_lines` appended ` · paused` whenever
+the runtime's block was paused, whichever segment was the head.  Test: `tui_today_render.rs`'s
+`the_now_pane_says_paused_only_on_the_running_blocks_row` (the meeting at 13:00 is not what is paused; `^t3`'s own row
+at 10:42 says it).
+
+**A re-draw keeps every earlier reason (gap 5216).**  Every bless that re-drew a frozen line wrote the new D64(b)
+reason over the committed one.  Measured over the first-parent history since `ratchet.py`'s base: **58** earlier
+reasons no longer on their lines — 49 in `fork-4748911-week-grid.jsonl` (29 lines) and 9 in
+`fork-4748911-planner-classes.jsonl` (8 lines).  Restored, newest first, joined by `— earlier:` (no `world`, `steps`
+or answer byte moved — checked line by line); every re-draw writer now goes through `frozenhist::redraw_why`
+(`fork_week_grid`, `planner_w41_starts`, `tui_kernel_answers`, `planner_p85_days`, both of `planner_classes`'); and
+`fork_rebless_history.rs` gains `every_frozen_line_keeps_every_reason_it_was_redrawn_for` over every frozen file by
+`frozenhist::frozen_files`' property, with its both-ways witness on a repository of its own.
+
+**Each test was seen to fail first**: in a `git clone --shared` of this step's tree with the three source files
+reverted to `4aa44da` (`scratchpad/w48/repair/before`), `a_day_past_the_row_sections_cap_is_refused_by_name`,
+`every_section_refusal_the_kernel_answers_is_named`, both of `cli_resume_names_the_meeting.rs` and
+`the_now_pane_says_paused_only_on_the_running_blocks_row` FAILED, and passed here; the history test's measurement on
+`4aa44da` is the 58 above.
+
+### 3. Gap 5027's measurement, taken again where the day answers (gap 5218)
+
+Track A closed gap 5027 on "`tm now` over 800 pause pairs on one open block falls from 42 s to 0.65 s".  At 800 pairs
+both binaries **refuse** (`{"plan":"tooManySegments"}`, finding 1), so both numbers timed a refusal.  Re-measured where
+the day is answered, cold (the cache and `.tm/state.json` deleted before every run), on the critic's trees
+(`scratchpad/w48/critic/pa200`, `pa500`: wake 06:05, `start ^t3` 07:00, pairs 40 s and 20 s apart, asked at 22:00),
+three runs each, load average 4.3-10:
+
+| pairs | `4aa44da` (A's re-draw) | the critic's pre-A binary (`tm-old`, its scratch) |
+|---:|---:|---:|
+| 200 | 0.21-0.22 s | 0.86-0.87 s |
+| 500 | 0.48-0.51 s | 12.39-12.51 s |
+
+At 500 pairs the two answer the same day — `tm now` byte-identical, `tm --json plan`'s 944 segments equal — and differ
+only in the `divider` key track R added (P118).  So the speedup is real and gap 5027 stays closed; its headline figure
+was a refusal's, and the day stops being answered at about 540 pairs (944 rows at 500), which is gap 5212's bound.
+**Gap 5218** records that correction and nothing is owed on it.
+
+**Acceptance of the first commit** (capped, `scratchpad/w48/repair/acc-p1-*.log`): `check.sh` seventeen lines, every one
+ok — build, totality, axiom audit 6,647 theorems, `Negative.lean` rejected, FFI 97, corpus 29/37 and 4/5, stage goals 1,
+citations, check 9 843 rostered and 0 owed, parity P1-P119, twins, reach, the four field lines, replay; the FFI crate
+105 passed; `cargo test --workspace --no-fail-fast` **2,977 passed / 0 failed / 53 ignored over 164 result lines, three
+runs** (17:56, 18:14, 18:32; load average 4.8-8.8).

@@ -2066,6 +2066,12 @@ pub struct InterruptOut {
     /// interruption (the W-44 repair, README gap 4610, parity P96); absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub still_paused: Option<String>,
+    /// **The meeting that block is paused for**, when its pause is a calendar wall's
+    /// (`WallTimer.pausedFor`: D61's, D110's or D117's) — it lifts by itself at the wall's end,
+    /// and `tm pause` lifts it now (D66, README gap 3048, as `tm pause` names it; the W-48
+    /// repair, README gap 5213). Absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub still_paused_for: Option<MeetingOut>,
 }
 
 /// **A running break, ended FIRST, as `tm break`'s ending arm reports it** — the one body
@@ -2171,6 +2177,7 @@ pub fn interrupt(g: &Globals) -> Result<i32, CliError> {
         dropped: Vec::new(),
         break_ended: ended,
         still_paused: None,
+        still_paused_for: None,
     };
     emit(
         ctx.json,
@@ -2318,6 +2325,16 @@ pub fn resume(g: &Globals) -> Result<i32, CliError> {
         .as_ref()
         .filter(|a| a.paused && still_paused == Some(true))
         .map(|a| a.id.to_string());
+    // **Which pause holds it** (the W-48 repair, README gap 5213): a block a calendar wall holds
+    // paused — D61's at the wall's start, D110's or D117's when it was started or resumed inside
+    // it — lifts by itself at the wall's end, and the line says so and names the meeting, as
+    // `tm pause` names it (D66); only a pause the user typed waits for `tm pause`.
+    let meeting = if held.is_some() {
+        ask_the_walls(&ctx, running_break_at(&ctx), ctx.now_tz)?.paused_for
+    } else {
+        None
+    };
+    let said_meeting = meeting.as_ref().map(|m| (meeting_text(&ctx, &m.walls, m.from, m.to), hhmm(m.to)));
     let out = InterruptOut {
         action: "resume".to_string(),
         id: int.id.map(|i| i.to_string()),
@@ -2325,14 +2342,22 @@ pub fn resume(g: &Globals) -> Result<i32, CliError> {
         dropped,
         break_ended: ended,
         still_paused: held,
+        still_paused_for: meeting.as_ref().map(|m| MeetingOut {
+            walls: m.walls.clone(),
+            from: hhmm(m.from),
+            to: hhmm(m.to),
+        }),
     };
     emit(
         ctx.json,
         || {
             let said = said_after_break(out.break_ended.as_ref(), format!("resumed · lost {lost}m"));
-            match &out.still_paused {
-                Some(id) => format!("{said} · ^{id} still paused — `tm pause` resumes it"),
-                None => said,
+            match (&out.still_paused, &said_meeting) {
+                (Some(id), Some((m, to))) => format!(
+                    "{said} · ^{id} still paused for {m} — it resumes at {to}; `tm pause` resumes it now"
+                ),
+                (Some(id), None) => format!("{said} · ^{id} still paused — `tm pause` resumes it"),
+                (None, _) => said,
             }
         },
         &out,

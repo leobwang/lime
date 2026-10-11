@@ -73,6 +73,22 @@ fn the_now_pane() {
     insta::assert_snapshot!(render_lines(&today::now_lines(&app(), 46), 46));
 }
 
+/// **The pause is said on the running block's row and no other** (the owner's D109, the W-48
+/// repair, README gap 5214): at 13:00 the head is the meeting `g1`, and `^t3`'s pause is not the
+/// meeting's; at 10:42 the head is `^t3` itself, and its pause is said.
+#[test]
+fn the_now_pane_says_paused_only_on_the_running_blocks_row() {
+    let mut meeting = tui_common::app_at(13, 0);
+    meeting.state.active.as_mut().expect("t3 runs").paused = true;
+    let pane = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(pane.contains("Meeting") || pane.contains("g1"), "the head is the wall: {pane}");
+    assert!(!pane.contains("paused"), "the meeting is not what is paused: {pane}");
+    let mut own = app();
+    own.state.active.as_mut().expect("t3 runs").paused = true;
+    let pane = render_lines(&today::now_lines(&own, 90), 90);
+    assert!(pane.contains("· paused"), "the running block's own row says it: {pane}");
+}
+
 #[test]
 fn the_now_pane_with_nothing_running() {
     // 16:30 with no `active` and no segment flagged current: past the last

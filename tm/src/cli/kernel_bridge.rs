@@ -1665,6 +1665,40 @@ fn refusal(err: &Value) -> KernelIssue {
             _ => "see WallTimer.lean's and GridCut.lean's `Refusal`",
         };
         (w.to_string(), format!("kernel refusal: {w} — the day's walls could not be read: {why}"))
+    } else if let Some(text) = err.get("plan").and_then(Value::as_str) {
+        // **The `plan` section's refusal** (`EmitWire.RowRefusal`, `<name> <key…>`), named — the
+        // W-48 repair (README gap 5212). Until then it was the one section refusal the host did
+        // not read, so a day of more than `Planner.maxCands` segments (a block open across
+        // hundreds of logged pauses) reached the user as "unrecognised shape" (AGENTS §5.7).
+        let (name, rest) = match text.split_once(' ') {
+            Some((n, k)) => (n, Some(k)),
+            None => (text, None),
+        };
+        if let Some(k) = rest {
+            put("key", k.to_string());
+        }
+        let why = match name {
+            "tooManySegments" => "the planned day holds more segments than the row section reads \
+                 (`Planner.maxCands`, 1,024) — the kernel planned it, and its own row reader refuses \
+                 it (README gap 5212)",
+            "tooManyPriorities" => "more priorities than the row section reads (`Planner.maxCands`)",
+            _ => "a value of the row section is refused — see EmitWire.lean's `RowRefusal`",
+        };
+        (name.to_string(), format!("kernel refusal: {text} — the day's rows could not be read: {why}"))
+    } else if let Some(e) = err.get("emit") {
+        // The `emit` section's other refusals (`Boundary.lean`'s emit reader: `shape`, `tooMany`, and
+        // `badAt`/`badEv`/`badFields`/`refused` at an item's position), named for the same reason
+        // as the `plan` branch above (README gap 5212): a section the kernel answers is a section
+        // the host reads by name.
+        let name = match e {
+            Value::String(s) => s.clone(),
+            Value::Object(m) => m.keys().next().cloned().unwrap_or_else(|| "emit".into()),
+            _ => "emit".into(),
+        };
+        if let Some(i) = e.get(&name).and_then(|v| v.get("item")).and_then(Value::as_u64) {
+            detail.insert("item".into(), Value::from(i));
+        }
+        (name.clone(), format!("kernel refusal: {name} — the kernel refused an event to append: {e}"))
     } else {
         put("error", err.to_string());
         ("unknown".into(), format!("kernel refusal (unrecognised shape): {err}"))
@@ -1971,6 +2005,35 @@ mod tests {
             let issue = refusal(&resp["err"]);
             assert_eq!(issue.detail["logRefusal"], name, "{raw}");
         }
+    }
+
+    /// **Every section refusal the kernel answers is read by name** (the W-48 repair, README gap
+    /// 5212): `{"err":{"plan":…}}` reached the user as "unrecognised shape" until then, the one
+    /// section key the host did not read — so a day of more than `Planner.maxCands` segments
+    /// failed `tm now`, `tm plan`, `tm review day` and `tm check` with no name (AGENTS §5.7).
+    /// The list is every `jone "err" (jone "<key>"` the kernel writes.
+    #[test]
+    fn every_section_refusal_the_kernel_answers_is_named() {
+        for (err, name) in [
+            (serde_json::json!({"plan": "tooManySegments"}), "tooManySegments"),
+            (serde_json::json!({"plan": "badSegment 3 kind"}), "badSegment"),
+            (serde_json::json!({"plan": "rowsWithCommands"}), "rowsWithCommands"),
+            (serde_json::json!({"planner": "eveningPastTheCalendar"}), "eveningPastTheCalendar"),
+            (serde_json::json!({"capacity": "badWake"}), "badWake"),
+            (serde_json::json!({"emit": {"walls": "badWeek"}}), "badWeek"),
+            (serde_json::json!({"emit": "tooMany"}), "tooMany"),
+            (serde_json::json!({"emit": {"badEv": {"item": 2}}}), "badEv"),
+            (serde_json::json!({"kernel": "occupied"}), "occupied"),
+            (serde_json::json!({"itemCheck": "parentCycle"}), "itemCheck"),
+        ] {
+            let issue = refusal(&err);
+            assert_eq!(issue.name, name, "{err}");
+            assert!(!issue.message.contains("unrecognised shape"), "{}", issue.message);
+        }
+        let seg = refusal(&serde_json::json!({"plan": "badSegment 3 kind"}));
+        assert_eq!(seg.detail["key"], "3 kind");
+        let ev = refusal(&serde_json::json!({"emit": {"badEv": {"item": 2}}}));
+        assert_eq!(ev.detail["item"], 2);
     }
 
     /// Stage 5 D10 L6: a capacity refusal carries the key it names.

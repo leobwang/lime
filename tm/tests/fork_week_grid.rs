@@ -551,7 +551,7 @@ fn the_frozen_week_grids_are_blessed() {
                 Ok(k) => {
                     if k.iter().any(|f| drawn.contains(&f.as_str())) {
                         match redraw.as_deref() {
-                            Some(why) if forkclass::is_d64b_reason(why) => n["d64b"] = json!(why),
+                            Some(why) if forkclass::is_d64b_reason(why) => n["d64b"] = json!(frozenhist::redraw_why(why, o)),
                             _ => refused.push(format!(
                                 "{}: a re-draw records its reason on the line, dated and naming D64(b) (TM_GRID_BLESS_REDRAW)",
                                 n["name"]

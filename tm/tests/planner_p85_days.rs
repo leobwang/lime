@@ -442,7 +442,7 @@ fn the_frozen_p85_days_are_blessed() {
                 match moved_only_by_p100(old, &l) {
                     None => {
                         l["d64b"] = json!({
-                            "why": draw_because.as_deref().unwrap_or_default(),
+                            "why": frozenhist::redraw_why(draw_because.as_deref().unwrap_or_default(), old),
                             "moved": "the `break_start` line `tm break` logs since the owner's D105 (parity P100), and nothing else"
                         });
                         redrawn.push(w.name);

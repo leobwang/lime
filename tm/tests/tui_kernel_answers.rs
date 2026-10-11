@@ -1156,7 +1156,7 @@ fn the_frozen_tui_days_are_blessed() {
             None => added += 1,
             Some(old) if old["world"] != line["world"] => match redraw.as_deref() {
                 Some(why) if forkclass::is_d64b_reason(why) => {
-                    line["d64b"] = json!(why);
+                    line["d64b"] = json!(frozenhist::redraw_why(why, old));
                     changed.push(format!("{} re-drawn", tui_name(w)));
                 }
                 _ => refused.push(format!(

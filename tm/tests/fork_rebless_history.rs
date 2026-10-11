@@ -184,6 +184,42 @@ fn every_frozen_comparand_reads_its_committed_history() {
     }
 }
 
+/// **A re-draw keeps every earlier reason on its line** (the W-48 repair, README gap 5216), both ways on a
+/// repository of its own (AGENTS §5.8): a reason the next version replaced is named, one it kept is not.
+#[test]
+fn a_reason_a_redraw_overwrote_is_named_and_one_it_kept_is_not() {
+    let a = json!({"name": "w", "d64b": "2026-10-05 D64(b): R3"});
+    let b = json!({"name": "w", "d64b": "2026-10-11 D64(b): P119"});
+    let kept = json!({"name": "w", "d64b": frozenhist::redraw_why("2026-10-11 D64(b): P119", &a)});
+    let key = frozenhist::key_of("name");
+    let (dir, path, shas) = repo(&[Some(&[a.clone()][..]), Some(&[b][..])]);
+    let named = frozenhist::dropped_reasons_since(&path, &shas[0], &key).expect("a history");
+    assert_eq!(named.len(), 1, "{named:?}");
+    assert!(named[0].contains("R3"), "{named:?}");
+    drop(dir);
+    let (dir, path, shas) = repo(&[Some(&[a][..]), Some(&[kept][..])]);
+    assert_eq!(frozenhist::dropped_reasons_since(&path, &shas[0], &key).expect("a history"), Vec::<String>::new());
+    drop(dir);
+}
+
+/// **Every frozen line still names every number that re-drew it** (the W-48 repair, README gap 5216): over
+/// every frozen comparand file, by the property `frozenhist::frozen_files` finds them by, the reasons each
+/// line carried at every committed version since the base are on its latest version. W-48's land wrote one
+/// P119 sentence over 27 week-grid lines' reasons (P101, P103, P106-P107, P115-P116, R3) and earlier
+/// re-draws had done the same to 9 class lines; the repair restored them and every bless now appends
+/// (`frozenhist::redraw_why`).
+#[test]
+fn every_frozen_line_keeps_every_reason_it_was_redrawn_for() {
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let mut dropped = Vec::new();
+    for (name, key) in frozenhist::frozen_files().unwrap_or_else(|e| panic!("{e}")) {
+        for d in frozenhist::dropped_reasons(&fixtures.join(&name), &key).unwrap_or_else(|e| panic!("{e}")) {
+            dropped.push(format!("{name}: {d}"));
+        }
+    }
+    assert!(dropped.is_empty(), "{} reason(s) a later re-draw wrote over:\n  {}", dropped.len(), dropped.join("\n  "));
+}
+
 /// **Every committed frozen line kept its world and the shipped fork's answer, in a PLAIN run**
 /// (the W-42 repair, README gap 4341; W-42's reuse critic). Every bless holds its lines against
 /// the committed history (`frozenhist::held`) — but only INSIDE a bless, and R3 deleted eight of

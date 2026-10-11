@@ -2858,7 +2858,7 @@ fn the_frozen_batch_is_blessed() {
                 let why = std::env::var("TM_PLANNER_DRAW_BECAUSE").unwrap_or_default();
                 let was = ClassWorld::of_json(&old["world"], tz()).expect("a committed world");
                 let failed = forkclass::binary_holds(&Built::of(was)).err().unwrap_or_default();
-                line["d64b"] = serde_json::json!({"why": why, "held": failed});
+                line["d64b"] = serde_json::json!({"why": frozenhist::redraw_why(&why, old), "held": failed});
                 match forkclass::redrawn_since(old, &line, tz()) {
                     Err(e) => refused.push(format!("draw {index}: the generator draws another world, and {e}")),
                     Ok(()) => changed.push(format!("draw {index} re-drawn under D64(b)")),
@@ -2965,7 +2965,7 @@ fn the_frozen_model_days_are_blessed() {
                     let why = std::env::var("TM_PLANNER_DRAW_BECAUSE").unwrap_or_default();
                     let was = ClassWorld::of_json(&old["world"], tz()).expect("a committed world");
                     let failed = forkclass::binary_holds(&Built::of(was)).err().unwrap_or_default();
-                    line["d64b"] = serde_json::json!({"why": why, "held": failed});
+                    line["d64b"] = serde_json::json!({"why": frozenhist::redraw_why(&why, old), "held": failed});
                     match forkclass::redrawn_since(old, &line, tz()) {
                         Err(e) => refused.push(format!("{name}: the model draw writes another world now, and {e}")),
                         Ok(()) => changed.push(format!("{name} re-drawn under D64(b)")),

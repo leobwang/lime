@@ -287,6 +287,74 @@ pub fn is_answer(line: &Value, k: &str) -> bool {
         || line[k].as_object().is_some_and(|o| o.iter().any(|(f, v)| numbered(f) && v.is_boolean()))
 }
 
+/// **The D64(b) reason a line carries**: its `d64b` when that is a string, else `d64b.why`; `""` for none.
+pub fn d64b_why(line: &Value) -> &str {
+    line["d64b"]["why"].as_str().or_else(|| line["d64b"].as_str()).unwrap_or_default()
+}
+
+/// **A re-draw's reason KEEPS every earlier one** (the W-48 repair, README gap 5216): the new reason first —
+/// dated and naming D64(b), as [`redrawn`] reads it — then `— earlier:` and the reason the committed line
+/// carried, which carries its own earlier ones. Until then every bless that re-drew a line wrote the new
+/// reason OVER the old, so a line re-drawn twice named only the last number that moved it: W-48's land
+/// replaced 27 week-grid reasons (P101, P103, P106-P107, P115-P116, R3) with one P119 sentence, two of them
+/// on lines whose FORK answers P115/P116 had moved — and the line no longer said which number did.
+pub fn redraw_why(why: &str, old: &Value) -> String {
+    let was = d64b_why(old);
+    if was.is_empty() || why.contains(was) {
+        why.to_string()
+    } else {
+        format!("{why} — earlier: {was}")
+    }
+}
+
+/// **Every reason a line was ever re-drawn for is still on it** (the W-48 repair, README gap 5216): over
+/// every committed version of `path` since the base on HEAD's first-parent line, and then the working copy,
+/// each key's distinct D64(b) reasons in order; a reason an earlier version carried that the line's LATEST
+/// version (the working copy's, else the last committed) does not contain is named, `<key>: <reason>`. A
+/// history git cannot read is UNCHECKED, an `Err`.
+pub fn dropped_reasons(path: &Path, key: &dyn Fn(&Value) -> Option<String>) -> Result<Vec<String>, String> {
+    dropped_reasons_since(path, &base()?, key)
+}
+
+/// [`dropped_reasons`] over an explicit base (a test's own repository).
+pub fn dropped_reasons_since(path: &Path, base: &str, key: &dyn Fn(&Value) -> Option<String>) -> Result<Vec<String>, String> {
+    let dir = path.parent().ok_or_else(|| format!("UNCHECKED: {} has no directory", path.display()))?;
+    let unchecked = |why: &str| format!("UNCHECKED: {}: {why}", path.display());
+    let revs = git(dir, &["rev-list", "--first-parent", "--reverse", &format!("{base}..HEAD")]).ok_or_else(|| unchecked("git rev-list failed"))?;
+    let mut texts = Vec::new();
+    for rev in std::iter::once(base.to_string()).chain(revs.split_whitespace().map(str::to_string)) {
+        texts.push(show(path, &rev).ok_or_else(|| unchecked(&format!("git cannot show it at {rev}")))?);
+    }
+    if let Ok(work) = std::fs::read_to_string(path) {
+        texts.push(work);
+    }
+    let mut seen: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for text in &texts {
+        for raw in text.lines().filter(|l| !l.trim().is_empty()) {
+            let line: Value = serde_json::from_str(raw).map_err(|e| unchecked(&format!("a line is not JSON ({e})")))?;
+            let Some(k) = key(&line) else { continue };
+            let why = d64b_why(&line);
+            if why.is_empty() {
+                continue;
+            }
+            let reasons = seen.entry(k).or_default();
+            if reasons.last().map(String::as_str) != Some(why) {
+                reasons.push(why.to_string());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (k, reasons) in &seen {
+        let last = reasons.last().map(String::as_str).unwrap_or_default();
+        for r in &reasons[..reasons.len().saturating_sub(1)] {
+            if !last.contains(r.as_str()) {
+                out.push(format!("{k}: {r:.120}"));
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// **A D64(b) re-draw between two versions of one line**: the newer carries a `d64b` the older
 /// does not, its reason dated and naming D64(b) (`forkclass::is_d64b_reason`'s rule).
 pub fn redrawn(old: &Value, new: &Value) -> bool {
