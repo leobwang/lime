@@ -96908,3 +96908,19 @@ audit 6,572 theorems, stage goals 1, parity P1-P116, check 9 814 new or changed 
 `mutate.py --verify --write --only WallTimer.lean`: 23 rows whose pin site had drifted rewritten, 0 failed; 7 new rows, 7
 PINNED) — 03:39-03:45, load 8.3; FFI crate ok; `cargo test --workspace --no-fail-fast` **2,959 passed / 0 failed / 53
 ignored over 161 result lines, three runs** (03:45, 04:03, 04:20; load 3.5-8.3).
+
+**Gap 5071 — D115, D116 and D119 are built and accepted but not committed: check 12 needs an exemption-file edit this
+track does not own.**  1. *What.*  The third commit of this track (the owner's D115: a late `start` stamped inside a block
+a later `done` closed cuts it; D119: a late interruption netted from the block it crosses (the
+`resume` arm nets it), and a late mark past D100's 31-day bound named by `tm check`; D116:
+a break read at its `break_start`'s place, another word on its end line named; three parity numbers,
+next free P117 onward) is a patch over this commit, `scratchpad/w48/k/c3-over-69e547c.patch` (19 files, +1,467/−278,
+applies cleanly).  On its tree `check.sh` passes sixteen of seventeen lines, the FFI crate passes, and `cargo test
+--workspace --no-fail-fast` passed 2,964 / 0 failed / 53 ignored over 162 result lines in each of three runs.  2. *Why
+not committed.*  Check 12's census reads two section reasons of `kernel/reach-exempt.txt` against the measurement, and
+both are stale on that tree: `## Replay.lean` (line 619) says 100 of 240 emitted definitions are reached, the measurement
+is **108 of 248**; `## SealResume.lean` (line 866) says 32 of 49, the measurement is **33 of 50**.  Every new definition is
+reached and no exempt entry moves (1,099 before and after), so only the two counts are stale — but W-48's brief gives the
+exemption files to another track ("record it and stop"), and a red tree is never committed.  3. *Cost.*  D115, D116 and
+D119 do not reach the binary yet; gaps 5034, 5035, 4913, 4917 and 5029 stay open.  4. *Clears it.*  The track that holds
+`reach-exempt.txt`: re-derive the two reasons, apply the patch, re-run the acceptance.
