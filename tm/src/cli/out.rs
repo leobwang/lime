@@ -115,6 +115,10 @@ pub enum CliError {
         conflict: StoreError,
         /// What the log records after the command being undone.
         blame: LaterWriter,
+        /// The first line OUTSIDE the generated blocks that differs (the
+        /// owner's D122): a difference inside a block does not refuse an undo,
+        /// so the refusal names the line that did.
+        first: Option<FirstDifference>,
     },
 }
 
@@ -339,7 +343,7 @@ impl CliError {
             CliError::Store(e) => store_kind(e, d),
             // README gap 887: the same `conflict` kind and the same detail as
             // any other write race, plus the one thing only `tm undo` knows.
-            CliError::UndoBlocked { conflict, blame } => {
+            CliError::UndoBlocked { conflict, blame, .. } => {
                 let kind = store_kind(conflict, d);
                 d.insert(
                     "laterWriter".to_string(),
@@ -509,21 +513,20 @@ impl CliError {
                     "  theirs: {} lines — what {file} holds now",
                     theirs.lines().count()
                 );
-                match first_difference(ours, theirs) {
+                // An undo refuses on what lies OUTSIDE tm's generated blocks
+                // (the owner's D122), so it names the first line there; any
+                // other write race names the first line of all.
+                let outside = match self {
+                    CliError::UndoBlocked { first, .. } => first.clone(),
+                    _ => None,
+                };
+                match outside {
                     Some(d) => {
-                        eprintln!("  first difference, line {}:", d.line);
+                        eprintln!("  first difference outside tm's generated blocks, line {}:", d.line);
                         eprintln!("    ours:   {}", d.ours);
                         eprintln!("    theirs: {}", d.theirs);
                     }
-                    // `lines()` drops line endings, so two texts that differ
-                    // only in a trailing newline or in CRLF reach here. Through
-                    // `undo` the strings provably differ, so saying *where* is
-                    // still the whole job — and a silent branch would be this
-                    // gap again.
-                    None => eprintln!(
-                        "  every line agrees — they differ only in a line ending or a trailing \
-                         newline"
-                    ),
+                    None => report_first_difference(ours, theirs),
                 }
                 // **Who wrote it afterwards** (README gap 887). Only the undo
                 // path can say, and only the half the log can answer for: it
@@ -531,11 +534,16 @@ impl CliError {
                 // structurally cannot hold (gap 731).
                 if let CliError::UndoBlocked { blame, .. } = self {
                     blame.report();
+                    eprintln!(
+                        "  undo needs {file} to hold what the undone command wrote, byte for byte \
+                         outside tm's generated blocks"
+                    );
+                } else {
+                    eprintln!(
+                        "  undo needs {file} to hold exactly what the undone command wrote, byte for \
+                         byte"
+                    );
                 }
-                eprintln!(
-                    "  undo needs {file} to hold exactly what the undone command wrote, byte for \
-                     byte"
-                );
                 eprintln!("  `tm --json undo` prints both texts whole, as detail.ours and detail.theirs");
             } else {
                 eprintln!("  ours:   {}", ours.trim_end());
@@ -545,12 +553,33 @@ impl CliError {
     }
 }
 
+/// The whole-text first difference, as every whole-file conflict prints it.
+fn report_first_difference(ours: &str, theirs: &str) {
+    match first_difference(ours, theirs) {
+        Some(d) => {
+            eprintln!("  first difference, line {}:", d.line);
+            eprintln!("    ours:   {}", d.ours);
+            eprintln!("    theirs: {}", d.theirs);
+        }
+        // `lines()` drops line endings, so two texts that differ
+        // only in a trailing newline or in CRLF reach here. Through
+        // `undo` the strings provably differ, so saying *where* is
+        // still the whole job — and a silent branch would be this
+        // gap again.
+        None => eprintln!(
+            "  every line agrees — they differ only in a line ending or a trailing \
+             newline"
+        ),
+    }
+}
+
 /// The first line at which two whole-file texts differ (W-14 repair, gap 395).
 ///
 /// A conflict the user can act on has to name something; a line count does not,
 /// and two equal line counts actively mislead. Lines are compared in order and
 /// the end of the shorter text is reported as `(end of file)`, so a pure
 /// truncation is named as precisely as a rewrite.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FirstDifference {
     /// 1-indexed line number.
     pub line: usize,

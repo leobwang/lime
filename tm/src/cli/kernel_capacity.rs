@@ -650,6 +650,11 @@ pub fn read_day(ctx: &Ctx, ask: PlannerAsk) -> Result<Planned, CliError> {
     day.day.cells = planwire::read_rows(&rows_resp, &day.day.segments).map_err(|e| {
         CliError::Kernel(kernel_bridge::fault_issue(&format!("plan rows: {e}"), ""))
     })?;
+    // **And the `window ends` divider, the kernel's** (W-48 track R, README gaps 5031 and
+    // 1301), from the planner's own budget sent back with the rows.
+    day.day.divider = planwire::read_divider(&rows_resp, &day.day.segments).map_err(|e| {
+        CliError::Kernel(kernel_bridge::fault_issue(&format!("plan rows: {e}"), ""))
+    })?;
     let served = planwire::served_order(&resp["ok"]["plan"]["diagnostics"], &ask.order, &ask.cands).map_err(|e| {
         CliError::Kernel(kernel_bridge::fault_issue(&format!("planner response: {e}"), ""))
     })?;

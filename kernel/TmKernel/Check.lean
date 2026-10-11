@@ -8604,3 +8604,59 @@ mkHash?'s and mkOverrides?'s) left this file with them. -/
 #print axioms Tm.PlanWire.hashHex_digits_read_back
 #print axioms Tm.PlanWire.hashHex_injective
 #print axioms Tm.PlanWire.readPlannerSection_leaves_overrides_unread
+
+/-! APPENDED 2026-10-11 (stage 6, run W-48, TRACK K, second commit): the owner's D114 (a break still running when a
+wall ends holds the block — `WallTimer.breakHolds`; README gap 5014, parity P115) and D117 (a block resumed inside a
+wall is paused from its resume until the wall ends — `WallTimer.pauseSec` over `WallTimer.intSpans`; README gaps 5036
+and 3042, parity P116), each law they break refuted as written and restated beside it. -/
+#print axioms Tm.WallTimer.a_block_resumed_inside_a_wall_is_paused_from_its_resume
+#print axioms Tm.WallTimer.a_block_resumed_inside_a_wall_is_paused_from_its_resume_run
+#print axioms Tm.WallTimer.a_block_started_inside_a_wall_is_paused_from_its_start_as_d110_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_break_running_past_the_walls_end_holds_the_block
+#print axioms Tm.WallTimer.a_running_break_holds_the_walls_unpause_until_it_ends
+#print axioms Tm.WallTimer.a_span_whose_pause_second_has_come_is_paused_as_d110_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_timer_already_stopped_at_the_wall_is_left_alone_as_d110_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_timer_mark_after_the_walls_start_stands_as_d110_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_user_who_resumed_during_the_meeting_keeps_their_timer_as_d110_wrote_it_is_refuted
+#print axioms Tm.WallTimer.a_wall_that_starts_while_a_block_runs_stops_its_timer_as_d61_wrote_it_is_refuted
+#print axioms Tm.WallTimer.ceilSec_le_of_le
+#print axioms Tm.WallTimer.instant_le_ceilSec
+#print axioms Tm.WallTimer.intSpans_append_marksOf
+#print axioms Tm.WallTimer.intSpans_fold
+#print axioms Tm.WallTimer.intSpans_sub
+#print axioms Tm.WallTimer.intStep_markOf
+#print axioms Tm.WallTimer.lt_ceilSec_of_lt
+#print axioms Tm.WallTimer.not_covered_of_not_stopped
+#print axioms Tm.WallTimer.pauseSec_cases
+#print axioms Tm.WallTimer.pauseSec_of_lt_as_d110_wrote_it_is_refuted
+#print axioms Tm.WallTimer.pauseSec_of_uncovered
+#print axioms Tm.WallTimer.startSec_le_pauseSec
+#print axioms Tm.WallTimer.the_walls_end_restarts_the_timer_it_stopped_as_d61_wrote_it_is_refuted
+
+/-! APPENDED 2026-10-11 (stage 6, run W-48, track R): the `window ends` divider is a kernel row (README gaps 5031 and
+1301) — `Emit.divider` over the rows the `plan` section is sent, answered beside them from the budget and window's end
+the binary sends back. -/
+#print axioms Tm.Emit.dividerGlyph_is_three_rules
+#print axioms Tm.Emit.dividerRow_cells
+#print axioms Tm.Emit.budgetStep_of_a_row_that_is_not_work
+#print axioms Tm.Emit.budgetStep_keeps_the_instant
+#print axioms Tm.Emit.dividerAt_where_the_budget_ran_out
+#print axioms Tm.Emit.dividerAt_unspent
+#print axioms Tm.Emit.dividerAt_is_the_window_end_or_the_spent_instant
+#print axioms Tm.Emit.divider_eq
+#print axioms Tm.Emit.dividerBefore_le_length
+#print axioms Tm.Emit.the_budget_runs_out_at_the_second_blocks_end
+#print axioms Tm.Emit.an_unspent_budget_divides_at_the_window_end
+#print axioms Tm.Emit.nothing_past_the_window_and_nothing_spent_is_no_divider
+#print axioms Tm.Emit.a_budget_spent_past_the_window_divides_at_its_end
+#print axioms Tm.Emit.a_zero_budget_runs_out_nowhere
+#print axioms Tm.EmitWire.rowKey_names_the_divider_keys
+#print axioms Tm.EmitWire.readRowSection_reads_the_budget_and_the_window_end
+#print axioms Tm.EmitWire.readRowSection_without_them_reads_no_divider
+#print axioms Tm.EmitWire.readRowSection_refuses_one_without_the_other
+#print axioms Tm.EmitWire.readRowSection_refuses_a_budget_past_the_width_and_an_end_past_the_calendar
+#print axioms Tm.EmitWire.dividerJson_is_its_position_then_the_nine_cells
+#print axioms Tm.EmitWire.dividerPairs_without_the_inputs
+#print axioms Tm.EmitWire.dividerPairs_with_the_inputs
+#print axioms Tm.EmitWire.withPlan_of_no_extra
+#print axioms Tm.EmitWire.dividerPairs_on_the_wire

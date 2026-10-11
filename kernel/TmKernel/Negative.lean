@@ -3226,4 +3226,30 @@ theorem aMoonBreakStartIsCanonical :
 theorem thePlannerReadsTheMoon : (PlanWire.placeOf? ['m','o','o','n']).isSome = true := by
   decide
 
+/- ===========================================================================
+   APPENDED 2026-10-11: stage 6, run W-48, TRACK K — the owner's D114
+   (README gap 5014; parity P115: a break still running when a wall ends
+   holds the block) and D117 (README gaps 5036 and 3042; parity P116: a
+   block resumed inside a wall is paused from its resume until the wall
+   ends).  Cheats 304-305 (whoever lands renumbers).
+   =========================================================================== -/
+
+/- CHEAT 304 — D61's unpause claimed at the wall's end while a break that
+   began inside the meeting still runs: `WallTimer.breakHolds` holds it, and
+   `decide` computes the empty list. -/
+theorem theWallEndUnpausesUnderARunningBreak :
+    WallTimer.writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) (some ⟨1200, 0⟩)
+      [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At)] [(1000, 2000)] = [(false, 1000, 2000)] := by
+  decide
+
+/- CHEAT 305 — a block interrupted across the wall's start and resumed
+   inside it claimed paused at the wall's start (or not at all): its pause is
+   stamped at the resume (`WallTimer.pauseSec`), and `decide` computes it. -/
+theorem aResumedBlockIsPausedAtTheWallsStart :
+    WallTimer.marksOf (⟨500, 0⟩ : Cal.Instant) (WallTimer.intSpans [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)])
+        (WallTimer.writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) none
+          [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)] [(1000, 2000)])
+      = [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨2000, 0⟩, Cal.Offset.utc) : Replay.At)] := by
+  decide
+
 end Tm

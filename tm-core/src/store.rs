@@ -668,6 +668,45 @@ pub mod edit {
         })
     }
 
+    /// **The text of a file that is not generated** (the owner's D122,
+    /// kernel/README.md gaps 4750 and 5110): every line outside a generated
+    /// block, verbatim with its line ending, and each block — its two markers,
+    /// the info on its start marker and its body — as ONE line naming it,
+    /// `<!-- tm:<name> -->`. So two texts agree here exactly when they differ
+    /// only inside generated blocks: the blocks are where they are, with the
+    /// names they have, and what tm wrote into them (a replan's rows, its
+    /// `start HH:MM`) is not compared. The block's span is
+    /// [`generated_span`]'s, the one this module edits by — an unterminated
+    /// block covers its start marker alone, so the lines below it stay the
+    /// user's text.
+    pub fn outside_generated(parsed: &ParsedFile) -> String {
+        outside_generated_lines(parsed)
+            .into_iter()
+            .map(|(_, text, eol)| text + &eol)
+            .collect()
+    }
+
+    /// [`outside_generated`] line by line: `(1-based line of the file, text,
+    /// line ending)`, a block's one line carrying its start marker's number —
+    /// so a difference found here can be named at the line the file holds it.
+    pub fn outside_generated_lines(parsed: &ParsedFile) -> Vec<(usize, String, String)> {
+        let mut out = Vec::new();
+        for (i, l) in parsed.lines.iter().enumerate() {
+            let n = i + 1;
+            match parsed.generated.iter().find(|g| {
+                let (start, end) = generated_span(g);
+                n >= start && n <= end
+            }) {
+                Some(g) if g.start_line == n => {
+                    out.push((n, format!("<!-- tm:{} -->", g.name), l.eol.clone()));
+                }
+                Some(_) => {}
+                None => out.push((n, l.text(), l.eol.clone())),
+            }
+        }
+        out
+    }
+
     /// The headings of a file, in order, skipping the front matter and
     /// generated ranges.
     pub fn headings(parsed: &ParsedFile) -> Vec<Heading> {
@@ -2383,6 +2422,27 @@ mod tests {
         // CRLF files keep CRLF.
         let f = parse_file("inbox.md", "- a\r\n- b\r\n", &cfg());
         assert_eq!(edit::append_to_end(&f, "- c"), "- a\r\n- b\r\n- c\r\n");
+    }
+
+    /// The owner's D122 (README gaps 4750 and 5110): two texts that differ only inside a
+    /// generated block — its rows and its start marker's `HH:MM` — read alike outside it; a
+    /// change outside a block, a block moved or removed, and the lines after an unterminated
+    /// block's start marker (the user's text, as `replace_generated` treats them) do not.
+    #[test]
+    fn outside_generated_reads_past_a_replan_and_nothing_else() {
+        let at = |t: &str| edit::outside_generated(&parse_file("day/2026-09-07.md", t, &cfg()));
+        let a = "---\ndate: 2026-09-07\n---\n<!-- tm:plan start 09:01 -->\nold 1\nold 2\n<!-- tm:plan end -->\n\n# Pinned\n- [ ] 2 y ^p1\n";
+        let b = "---\ndate: 2026-09-07\n---\n<!-- tm:plan start 09:51 -->\nnew 1\n<!-- tm:plan end -->\n\n# Pinned\n- [ ] 2 y ^p1\n";
+        assert_eq!(at(a), at(b));
+        assert_eq!(at(a), "---\ndate: 2026-09-07\n---\n<!-- tm:plan -->\n\n# Pinned\n- [ ] 2 y ^p1\n");
+        assert_ne!(at(a), at(&a.replace("^p1\n", "^p1\nhand\n")), "a line outside a block");
+        assert_ne!(at(a), at(&a.replace("<!-- tm:plan start 09:01 -->\nold 1\nold 2\n<!-- tm:plan end -->\n", "")), "a block removed");
+        assert_ne!(at(a), at(&a.replace("tm:plan start", "tm:review start").replace("tm:plan end", "tm:review end")), "a block renamed");
+        let open = "<!-- tm:plan start 09:01 -->\nrow\n# Pinned\n";
+        assert_eq!(at(open), "<!-- tm:plan -->\nrow\n# Pinned\n", "an unterminated block covers its marker alone");
+        let lines = edit::outside_generated_lines(&parse_file("day/2026-09-07.md", b, &cfg()));
+        assert_eq!(lines[3], (4, "<!-- tm:plan -->".to_string(), "\n".to_string()));
+        assert_eq!(lines[6].0, 9, "a line below a block keeps the file's own number");
     }
 
     #[test]

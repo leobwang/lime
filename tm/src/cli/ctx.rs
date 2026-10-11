@@ -375,92 +375,56 @@ pub(crate) fn open_interruption(replay: &Replay) -> Option<&tm_core::log::Interr
 }
 
 /// **What the verbs left `active.paused` at, read back from the log** — the one
-/// rule the rebuild ([`derived_state`]) reads the open block's pause by (README
-/// gap **3521**, the W-38 repair; D42, and the campaign's D69 call on gap 3283:
-/// the cache follows the log, never the reverse).
+/// rule the rebuild ([`derived_state`]), the cache's reconcile, `tm pause`'s
+/// toggle, `tm resume` and the end of a break read the open block's stops by
+/// (README gap **3521**, the W-38 repair; D42, and the campaign's D69 call on
+/// gap 3283: the cache follows the log, never the reverse).
 ///
-/// The kernel's replay keeps the FORK's pause (`OpenBlock::paused`): `pause`
-/// sets it and `unpause` clears it, and nothing else touches it — so a typed
-/// `tm pause`, then `tm interrupt`, then `tm resume` left the replay paused
-/// while `tm resume` had written the block running. DRIVEN on the W-38 binary:
-/// `tm now` said `35m of 60m` running, and after `rm .tm/state.json` the same
-/// log rebuilt `· paused` and `tm plan` stopped drawing the running block.
-/// That was the third instance of one class (gaps 3283 and 3430 were the
-/// others): a verb that changes `active.paused` in a way the derivation read
-/// differently. So the derivation is now the fold of EVERY writer of that
-/// field, each through the event it logs, over the open block's rows in file
-/// order (undone rows skipped): `tm start` begins it paused exactly when an
-/// interruption is open (P60); `pause` and `unpause` of this block (a typed
-/// `tm pause`, and D61's wall marks) set and clear it; `interrupt` and `resume`
-/// set and clear the interruption, which holds it too, and a `resume` leaves a
-/// pause taken before the interruption standing ([`logged_stops`], the W-44
-/// repair, README gap 4610 — it cleared it until then); and a `break`,
-/// logged when it ends, leaves it as it found it (`end_break`): the break
-/// paused a running block and ending it runs the block again, and a block a
-/// `tm pause` or an interruption held stays held — the kernel's replay reads
-/// a `break` the same way (`Replay.brkFx` moves no clock that is not running).
-/// Until the W-42 repair a logged break CLEARED it unless an interruption was
-/// open, so a typed `tm pause`, then a break, then `tm pause` again logged a
-/// second `pause` the replay read as nothing while the cache read the block
-/// running (the owner's D87, README gaps 4243 and 4332, parity P84). A break
-/// still RUNNING logs nothing and is the caller's `running_break`.
+/// **Since the owner's D118** (README gap 5030, stage 6 W-48 track K, parity
+/// **P114**) it is the KERNEL's open block, read and not re-derived: the
+/// block's own pause is `OpenBlock::paused` (`Replay.Machine`'s, decoded by
+/// `kernel_log::decode_facts`) and the interruption is the one the kernel's
+/// replay holds open ([`open_interruption`]). Until W-48 this function was a
+/// SECOND fold of the log's rows — every `pause` and `unpause` of the block
+/// after its `start` row, in file order — and the kernel's machine reads a
+/// `pause` stamped before the block's own `start` as not the block's (D99,
+/// parity P104), which the fold read as the block's: driven, `start ^t1`
+/// 09:00 then `tm --now 08:50 pause`, and at 09:30 `tm now` headed `30m of
+/// 60m · paused` while `tm plan` drew `09:00 ▶ … 30m so far` and `tm stop` at
+/// 09:40 said `after 40m`; after `rm .tm/state.json` the rebuild restored
+/// `paused`, and the next `tm pause` said `resumed` while idling nothing. Two
+/// readers of one block's state (AGENTS §5.3), and D118 names the kernel's.
 ///
-/// `None` when the scope's rows do not reach the block's `start` — the rebuild
-/// then keeps the replay's own reading.
-pub(crate) fn logged_pause(replay: &Replay, open: &tm_core::log::OpenBlock) -> Option<bool> {
-    logged_stops(replay, open).map(|s| s.paused || s.interrupted)
+/// What the fold read and the machine reads were otherwise the same rule, and
+/// stay so: `pause` and `unpause` of this block (a typed `tm pause`, D61's
+/// wall marks) set and clear the pause; `interrupt` and `resume` set and clear
+/// the interruption, which holds the block too (a block begun inside one starts
+/// held, P60; P103 reads one left open from an earlier ledger day); a `resume`
+/// ends the interruption and not a pause the user took before it (the W-44
+/// repair, README gap 4610, parity P96 — `Replay.resumeBlock`); and a `break`
+/// leaves the timer as it found it (D87, parity P84 — `Replay.brkFx` moves no
+/// clock that is not running). A break still RUNNING is the caller's
+/// (`running_break`, `Replay::open_break`), never this function's.
+pub(crate) fn logged_pause(replay: &Replay, open: &tm_core::log::OpenBlock) -> bool {
+    let s = logged_stops(replay, open);
+    s.paused || s.interrupted
 }
 
-/// **The two stops the log holds on the open block** — the block's own pause
+/// **The two stops the kernel holds on the open block** — the block's own pause
 /// and an open interruption — each with its own end (the W-44 repair, README
-/// gap 4610, parity **P96**): `pause` and `unpause` of this block (a typed `tm
-/// pause`, D61's wall marks) set and clear the pause; `interrupt` and `resume`
-/// set and clear the interruption; a block begun inside an interruption starts
-/// held by it (P60). A `resume` ends the interruption and NOT a pause the user
-/// took before it, as the kernel's replay reads it (`Replay.resumeBlock`), so
-/// `tm resume` leaves such a block paused. Until the repair this fold kept one
-/// flag that a `resume` cleared, and the block ran to `tm now` and `tm stop`
-/// while the replay held it paused. [`logged_pause`] is either stop.
+/// gap 4610, parity **P96**), read off the kernel's replay since the owner's
+/// D118 ([`logged_pause`]). [`logged_pause`] is either stop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LoggedStops {
-    /// The block's own pause (`pause` … `unpause`).
+    /// The block's own pause (`pause` … `unpause`): `OpenBlock::paused`.
     pub paused: bool,
-    /// An open interruption (`interrupt` … `resume`).
+    /// An open interruption (`interrupt` … `resume`): [`open_interruption`].
     pub interrupted: bool,
 }
 
-/// [`LoggedStops`], read back from the log; `None` when the scope's rows do not
-/// reach the block's `start`.
-pub(crate) fn logged_stops(replay: &Replay, open: &tm_core::log::OpenBlock) -> Option<LoggedStops> {
-    // Each tag is asked of `Event` rather than spelled a second time (§5.3).
-    let tag = |e: Event| e.name().to_string();
-    let pause = tag(Event::Pause { id: String::new() });
-    let unpause = tag(Event::Unpause { id: String::new() });
-    let interrupt = tag(Event::Interrupt { id: None });
-    let resume = tag(Event::Resume { lost_min: 0, dropped: Vec::new() });
-    let brk = tag(Event::Break { planned_min: 0, actual_min: None, r#where: None });
-    let rows = replay.view();
-    let mine = |r: &tm_core::log::ViewRow| r.id.as_deref() == Some(open.id.as_str());
-    // The block's own `start` row: the replay's one finder of it (README gap 3950).
-    let at = replay.start_row(Some(open.id.as_str()), open.started)?;
-    // The interruption the log holds open at the `start`: the replay's one reading of it (README gap 4619),
-    // which the host's worked minutes begin their pairing with too.
-    let interrupted = replay.interrupted_before(at).is_some();
-    let mut stops = LoggedStops { paused: false, interrupted };
-    for r in rows[at + 1..].iter().filter(|r| !r.cancelled) {
-        if r.tag == pause && mine(r) {
-            stops.paused = true;
-        } else if r.tag == unpause && mine(r) {
-            stops.paused = false;
-        } else if r.tag == interrupt {
-            stops.interrupted = true;
-        } else if r.tag == resume {
-            stops.interrupted = false;
-        } else if r.tag == brk {
-            // A break leaves the timer as it found it (P84): nothing to fold.
-        }
-    }
-    Some(stops)
+/// [`LoggedStops`], the kernel's reading of the open block `open`.
+pub(crate) fn logged_stops(replay: &Replay, open: &tm_core::log::OpenBlock) -> LoggedStops {
+    LoggedStops { paused: open.paused, interrupted: open_interruption(replay).is_some() }
 }
 
 fn derived_state(replay: &Replay, tz: Tz, today: NaiveDate, running_break: bool) -> RuntimeState {
@@ -529,13 +493,11 @@ fn derived_state(replay: &Replay, tz: Tz, today: NaiveDate, running_break: bool)
             // fills it from `Ctx::planned_block`, the one function
             // `tm start` writes it from.
             est_min: 0,
-            // Every writer of the field, through the event it logs
-            // ([`logged_pause`]); a running break pauses it too — the log's
-            // own (`Replay::open_break`, the owner's D105), or one the cache
-            // still holds that a binary before D105 began (`running_break`).
-            // The replay's own reading stands only where the scope does not
-            // reach the start.
-            paused: logged_pause(replay, b).unwrap_or(b.paused || interrupted.is_some())
+            // The kernel's open block ([`logged_pause`], the owner's D118);
+            // a running break pauses it too — the log's own
+            // (`Replay::open_break`, the owner's D105), or one the cache still
+            // holds that a binary before D105 began (`running_break`).
+            paused: logged_pause(replay, b)
                 || running_break
                 || replay.open_break.is_some(),
         }),
@@ -1139,6 +1101,20 @@ impl Ctx {
             let logged = derived.interrupt.as_ref().map(|i| i.id.clone());
             if here != logged {
                 self.state.interrupt = derived.interrupt.clone();
+            }
+            // **The paused flag is the kernel's** (the owner's D118, README gap
+            // 5030, parity P114): with the cached block the log's own, its
+            // `paused` is what the derivation reads off the kernel's open block
+            // ([`logged_pause`]) — so a `pause` the kernel does not read as the
+            // block's (one stamped before its `start`, a clock behind the log)
+            // no longer leaves the header saying `paused`, and the next `tm
+            // pause` toggles from the kernel's reading. A break the cache alone
+            // holds (begun by a binary before D105) still pauses it: the
+            // derivation was asked with it (`running_break` above).
+            if let (Some(a), Some(f)) = (self.state.active.as_mut(), derived.active.as_ref()) {
+                if a.id == f.id {
+                    a.paused = f.paused;
+                }
             }
             // **The running break, both ways** (the W-46 audit, README gap 4903): the log decides it
             // as it decides the block and the interruption above. Until the audit this read one

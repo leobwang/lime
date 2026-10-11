@@ -292,7 +292,7 @@ fn the_tui_timeline_is_the_day_files_lines() {
     let w = tm_core::emit::DEFAULT_TITLE_W;
     let rows = app.timeline_rows(w);
     let (_, body) =
-        tm_core::emit::render_plan_section_with(&app.plan, &app.cfg, app.now, &tm_core::emit::Layout::new(w));
+        tm_core::emit::render_plan_section_with(&app.plan, app.now, &tm_core::emit::Layout::new(w));
     let file: Vec<&str> = body.lines().collect();
     assert_eq!(rows.len(), file.len(), "the pane and the file differ in length");
     for (i, (row, line)) in rows.iter().zip(&file).enumerate() {
@@ -360,7 +360,7 @@ fn byte_identical_rows_are_constructible_so_position_decides() {
     // for the row it says would land on 0 for both.
     assert_eq!(rows[current.expect("a current row")], rows[next[0]]);
     // And `day_lines` hands each row its own index, equal text or not.
-    let lines = emit::day_lines(&day, &cfg, &emit::Layout::default());
+    let lines = emit::day_lines(&day, &emit::Layout::default());
     let segs: Vec<Option<usize>> = lines.iter().map(|l| l.segment).collect();
     assert!(
         segs.windows(2).all(|w| w[0] != w[1]),
@@ -474,6 +474,50 @@ fn exactly_one_function_composes_a_plan_row() {
         "a `RowCells` is built somewhere the census does not name (or the decoder left): a second \
          builder of a row's cells, D30 Q6 (a)'s one-padder rule broken at the other end (README gap 4897)"
     );
+}
+
+/// **The host does not place or word the `window ends` divider** (W-48 track R, README
+/// gaps 5031 and 1301): the divider's instant, its position among the rows and its cells
+/// are the kernel's (`Emit.divider`, answered beside the rows), and `emit::day_lines`
+/// splices what it is given. divider_instant (the host's walk of the work rows against
+/// the budget) and divider_row (its formatter) are deleted, and the words are written by
+/// no shipped Rust.
+#[test]
+fn the_host_does_not_place_or_word_the_divider() {
+    let mut back = Vec::new();
+    for (name, text) in &sources() {
+        for (n, line) in code_lines(text) {
+            for f in ["divider_instant", "divider_row"] {
+                if line.contains(&format!("fn {f}(")) {
+                    back.push(format!("{name}:{n}: fn {f}"));
+                }
+            }
+            if line.contains("window ends") {
+                back.push(format!("{name}:{n}: the divider's words"));
+            }
+        }
+    }
+    assert!(back.is_empty(), "the host builds the divider again:\n  {}", back.join("\n  "));
+}
+
+/// **The reader that found a row's note cell by VALUE is gone** (W-48 track R, README gap
+/// 4952): emit::note_cell looked the segment up in `plan.segments` by equality and read the
+/// cell at that position, for one harness caller (`support/forkclass.rs`), which now reads
+/// `plan.cells` at the segment's own position (README gap 1197's rule: rows and segments are
+/// matched by index, never by value).
+#[test]
+fn the_note_reader_by_value_is_gone() {
+    let mut back = Vec::new();
+    for (name, text) in &sources() {
+        for (n, line) in code_lines(text) {
+            for f in ["note_cell"] {
+                if line.contains(&format!("fn {f}(")) {
+                    back.push(format!("{name}:{n}: fn {f}"));
+                }
+            }
+        }
+    }
+    assert!(back.is_empty(), "a reader of the note cell by value came back:\n  {}", back.join("\n  "));
 }
 
 /// **The census bites** on the shapes a second builder takes, and not on a

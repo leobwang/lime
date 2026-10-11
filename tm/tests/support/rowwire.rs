@@ -146,6 +146,10 @@ pub fn request_with(docs: Vec<Value>, plan: &DayPlan, cfg: &Config, notes: Notes
             "bed": format!("{:02}:{:02}", cfg.day.bed.hour(), cfg.day.bed.minute()),
             "priorities": prios,
             "segments": plan.segments.iter().map(|s| seg_json(s, notes)).collect::<Vec<_>>(),
+            // The day's budget and window's end, as the binary sends the planner
+            // answer's back (W-48 track R): the kernel answers the divider with them.
+            "budgetBlocks": plan.budget_blocks,
+            "windowEnd": kernel_sec(plan.window.1),
         }
     })
 }
@@ -168,10 +172,24 @@ pub fn kernel_rows(docs: Vec<Value>, plan: &DayPlan, cfg: &Config) -> Result<Vec
 /// [`kernel_rows`], with the notes crossing as `notes` says. The rows are read
 /// by the binary's own decoder (`planwire::read_rows`, the one there is).
 pub fn kernel_rows_with(docs: Vec<Value>, plan: &DayPlan, cfg: &Config, notes: Notes) -> Result<Vec<RowCells>, String> {
+    kernel_day_rows_with(docs, plan, cfg, notes).map(|(cells, _)| cells)
+}
+
+/// The rows AND the `window ends` divider the kernel answers beside them (W-48 track R,
+/// README gaps 5031 and 1301), each read by the binary's own decoder (`planwire::read_rows`,
+/// `planwire::read_divider`).
+pub fn kernel_day_rows_with(
+    docs: Vec<Value>,
+    plan: &DayPlan,
+    cfg: &Config,
+    notes: Notes,
+) -> Result<(Vec<RowCells>, Option<(usize, RowCells)>), String> {
     let req = request_with(docs, plan, cfg, notes);
     let raw = tm_kernel_ffi::call(&req.to_string()).expect("kernel call");
     let resp: Value = serde_json::from_str(&raw).expect("the response is json");
-    tm_core::planwire::read_rows(&resp, &plan.segments).map_err(|e| format!("{e}: {raw}"))
+    let cells = tm_core::planwire::read_rows(&resp, &plan.segments).map_err(|e| format!("{e}: {raw}"))?;
+    let divider = tm_core::planwire::read_divider(&resp, &plan.segments).map_err(|e| format!("{e}: {raw}"))?;
+    Ok((cells, divider))
 }
 
 /// **A day a test built by hand, given the kernel's rows for its segments** —
@@ -181,8 +199,8 @@ pub fn kernel_rows_with(docs: Vec<Value>, plan: &DayPlan, cfg: &Config, notes: N
 /// test that prints a day it laid out itself asks the kernel for its rows, as
 /// the binary does for every day it plans.
 pub fn with_kernel_cells(docs: Vec<Value>, mut plan: DayPlan, cfg: &Config) -> DayPlan {
-    plan.cells = match kernel_rows_with(docs, &plan, cfg, Notes::Written) {
-        Ok(cells) => cells,
+    (plan.cells, plan.divider) = match kernel_day_rows_with(docs, &plan, cfg, Notes::Written) {
+        Ok(rows) => rows,
         Err(raw) => panic!("the kernel refused the rows of a hand-built day:\n{raw}"),
     };
     plan

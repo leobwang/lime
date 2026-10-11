@@ -96754,3 +96754,787 @@ record.
   5027 (the re-draw's cost), 5031 (= 1301, the divider), and track L's, H's and C's still-open gaps the land listed
   (4950, 4951, 4953, 4955, 4957-4960, 4970, 4972-4975, 4977, 4978, 4990, 4993-4995, 4910, 4911, 4914, 5010, 5011, 5016).
   W-48: D108 (`RuntimeIn.yesterday` among it).  Burn-down: **1**.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **track K** —
+     the owner's late-mark decisions D114-D119 (the kernel's replay, the wall
+     rule and the host's readers of them).  Gaps 5070-5109 are this track's;
+     parity `P114`-`P119` are pre-allocated to it (renumbered at the land if fewer
+     are used).  Whoever merges renumbers.
+     ===================================================================== -->
+
+## Stage 6 — W-48 track K: the late-mark decisions — the kernel's paused flag, a break's place, a running break past a wall, a resume inside one, and late interrupts and starts read as the later fact
+
+### 0. The brief, measured before it was acted on
+
+* **The state the brief names is the state found**: worktree `worktree-agent-a67e4570395562f19` at `1a37997`, clean,
+  no earlier W-48 work of this track on it; `check.sh` seventeen lines ok at `1a37997` (axiom audit 6,549, stage goals
+  1, parity P1-P113 next free P114; `scratchpad/w48/k/check-base.log`, 00:21-00:22, load 5.35); highest gap 5041.
+* **Every gap the brief names was reproduced on `1a37997`'s binary before anything was changed**
+  (`scratchpad/w48/k/drive/d114.sh` … `d119.sh`, outputs `*.head.out`); each section below quotes its before and after.
+
+### 1. D118 — the host's paused flag is the kernel's open block (gap 5030)
+
+**Before** (`d118.head.out`, `1a37997`): `start ^t1` 09:00, `tm --now 08:50 pause` says `paused ^t1` and caches
+`paused: true`; at 09:30 `tm now` heads `▶ ^t1 … 30m of 60m · paused` while `tm plan` draws `09:00 ▶ … 30m so far`; after
+`rm .tm/state.json` the rebuild prints `RESTORED from the log: active.paused`; the next `tm pause` (09:35) says `resumed
+^t1` and logs an `unpause` that idles nothing; `tm stop` at 09:40 `after 40m`.
+
+**The two readers.**  The kernel's machine reads a `pause` stamped before its block's own `start` as not the block's
+(`Replay.arm`'s `pause` arm, D99, parity P104), and so do the host's worked minutes (`Replay::idle_min_since`).  The
+host's paused FLAG was a second reading: `ctx::logged_stops` folded every `pause` and `unpause` of the block after its
+`start` ROW, in file order, with no stamp in it.  **Now `ctx::logged_stops` IS the kernel's open block** —
+`OpenBlock::paused` (the machine's `Block.paused`, decoded by `kernel_log::decode_facts`) and the interruption the kernel
+holds open (`ctx::open_interruption`) — and the fold is deleted.  Every reader of the flag goes through it: D42's rebuild
+(`ctx::derived_state`), **the cache's reconcile at every load** (`Ctx::reconcile_state` now makes a cached block's
+`paused` the derivation's whenever the block is the log's, D42's direction), the end of a break (`day::end_break_at`),
+`tm resume`, and `tm pause`'s toggle, which now toggles from the kernel's reading and **after its own line takes the
+kernel's reading of what the line did** — so a `pause` the kernel does not read as the block's says so:
+`logged a pause of ^t1 at 08:50, before the block began at 09:00 — it is not the block's, so ^t1 keeps running`.
+
+**After** (`d118.d118.out`, the same script on this commit's binary): the cache `paused: false`; at 09:30 `tm now`
+`▶ ^t1 … 30m of 60m` with the running row `09:30 … running · 30m left`, `tm plan` `09:00 … 30m so far` then `09:30 ▶ …
+running · 30m left`; the rebuild restores no `paused`; the next `tm pause` says `paused ^t1` and logs a `pause`; `tm
+now` at 09:36 `35m of 60m · paused`; `tm stop` at 09:40 `after 35m`.  `tm/tests/cli_kernel_paused.rs` (3 tests): the
+driven reproduction on every surface, a stale cache that says `paused` over a running block corrected at the next load,
+and the control (a pause inside the block is the block's, through a rebuild).
+
+**Parity P114 taken**: the host's paused flag — `tm now`'s header, `.tm/state.json`'s `active.paused`, D42's rebuild of it and the next `tm pause`'s toggle — is the kernel's open block (`OpenBlock::paused` and the interruption it holds open, `ctx::logged_stops`), so a `pause` stamped before its block's own `start` (a `--now` behind the log) leaves the block running there as it does in the replay and the worked minutes, and `tm pause` says it was not the block's; fork 4748911's `tm pause` toggled the cached flag and its header read `paused` while the minutes ran (the owner's D118, W-48 track K, README gap 5030)
+
+**Behaviour row** (P114): `d118.head.out` against `d118.d118.out`, line for line above; the moved lines are the
+verb's message at 08:50, the cache's `paused`, `tm now`'s header and running row at 09:30, the rebuild's notice, the
+toggle at 09:35 (`pause` where `unpause`), and `tm stop`'s `35m` where `40m`.  No committed expectation moved: the
+workspace's tests that read the flag (`cli_start_paused`, `cli_break_in_block`, `cli_interruption_at_start`,
+`cli_wall_pause`) hold on logs whose every pause lies inside its block, where the two readings were one.
+
+### 2. D114 — a break still running when a wall ends holds the block (gap 5014)
+
+**Before** (`d114.head.out`, `1a37997`; the example tree, Monday): `start ^t4` 12:30, `tm break 30m --where walk` 13:00
+(the housekeeping first logs the meeting's `pause` at 12:50), and at 14:00 — the break overrun, still running — `tm now`
+logs the meeting's `unpause` at 13:50 and heads `▶ ^t4 … 20m of 60m` running, `.tm/state.json` holds `paused: false`
+beside a running break, and the replay reads the block running from 13:50 under the break.
+
+**The rule.**  `WallTimer.unpauseIfDone` gains one conjunct, `!breakHolds brk hi`: a break running since before the
+wall's end (`WallTimer.breakHolds`, the request's running break begun before `hi`) holds the wall's unpause; one begun at
+or after `hi` began once the wall had ended and holds nothing.  The unpause is written when the break ends, by whichever
+verb ends it: `day::end_break_at` — the one writer of the line that ends a break (D97's class: `tm break`, `tm start`,
+`tm stop`, `tm done`, `tm interrupt`, `tm resume`) — runs the wall rule again at the break's end once its line is logged,
+so the unpause follows the break's line in file order and the replay nets the break from the block (D87, D94) and runs it
+from the break's end.  Laws: `a_break_running_past_the_walls_end_holds_the_block` (no unpause while such a break runs,
+whatever the marks) and `a_running_break_holds_the_walls_unpause_until_it_ends` (run: held at 2500 with the break
+running since 1200; written once the break is logged ended; written for a break begun at 2100, after the wall).
+
+**After** (`d114.wt.out`): at 14:00 `tm now` heads `20m of 60m · paused`, the log holds the pause alone, the cache
+`paused: true`; `tm plan` draws no `^t4` piece after 13:50 (until W-48 `20m so far` from 13:50 under the break); `tm start
+^t4` at 14:05 (D107's continue) prints `break ended · 65m of 30m …` and logs `break` then `unpause@13:50`; `tm now` at
+14:06 `21m of 60m` running; `tm stop` at 14:30 `after 45m` (unchanged: the minutes were right before, the reading of the
+state was not).
+
+**Parity P115 taken**: a calendar wall that ends while a break that began before its end is still running does not write its `unpause` — the break holds the block paused, and the unpause at the wall's end is written when the break ends, by the verb that ends it (`WallTimer.breakHolds`, `day::end_break_at`); fork 4748911 logs nothing at a wall (P53), and D61's rule as W-36 to W-47 ran it wrote the unpause at the wall's end under the running break, so `tm now` and the replay read the block working and on break at once (the owner's D114, W-48 track K, README gap 5014)
+
+**Behaviour row** (P115): `d114.head.out` against `d114.wt.out`: at 14:00 the header gains `· paused`, the log loses the
+13:50 `unpause` (it appears after the 14:05 `break` line instead), the cache `paused: true`.  **The one committed
+expectation it moves**: `cli_wall_pause.rs`'s `a_block_unpaused_by_the_meetings_end_is_not_drawn_across_a_running_break`
+read the pause AND the unpause at 14:00; it now reads the pause alone, named there under P115.
+
+### 3. D117 — a block resumed inside a wall is paused until the wall ends (gaps 5036 and 3042)
+
+**Before** (`d117.head.out`, `1a37997`): `start ^t4` 12:00, `interrupt` 12:40, `resume` 13:00 inside the 12:50–13:50
+meeting: `tm now` at 13:30 `70m of 60m` running, nothing logged at the wall; `tm stop` at 14:00 `after 100m`, review
+`block_min 100`.  The interruption across the wall's start stood for the wall's stop (`stoppedAt`), and once it ended
+nothing stopped the timer.  The same block started at 13:00 instead stops at `10m` (D110).
+
+**The rule.**  `WallTimer.pauseSec` — the second a span's pause is stamped at — is D110's (`startSec`, renamed from the
+old `pauseSec`) unless an interruption the log closes (`WallTimer.intSpans`, `spanStep`'s interruption half) covers it
+and its `resume`'s first whole second falls inside the wall: then that second.  So a block resumed inside a wall is
+paused from its resume until the wall ends, with D61's marks, exactly as one begun inside it is.  **And the class:**
+`lastTimerMark` — whether the wall's pause is still the last word — reads the pause stop's own marks, passing over an
+interruption's (`isIntMark`) as it passed over a break's: until W-48 an interruption taken and resumed inside a meeting
+the wall had already paused made its `resume` the last word, the wall's end wrote no unpause, and the block stayed paused
+PAST the meeting (driven `d117c.sh`: `start` 12:00, the wall's pause at 12:50, `interrupt` 13:05, `resume` 13:10, `stop`
+14:20 — `after 50m`; now `after 80m`).  A `resume` ends the interruption, never the pause (`spanStep`,
+`Replay.resumeBlock`).  The rows `answer` renders are given the interruptions taken apart first (`answerRows`): a decided
+witness over a whole replay (`PlannerWit.the_open_wednesdays_wall_is_answered_on_its_index`) otherwise read the log again
+at every comparison the zone table made with a pause's second and ran past its heartbeat budget (measured in a scratch
+copy: 450,000-700,000 heartbeats against 100,000-150,000 at `1a37997`, and under 150,000 with the list taken apart; the
+budget was not raised).
+
+**After** (`d117.wt.out`): `tm now` at 13:30 prints `tm: paused ^t4 for Meeting w/ host 12:50–13:50` and heads `40m of
+60m · paused`; the log gains `pause@13:00` and, at `tm stop` 14:00, `unpause@13:50`; `after 50m`, review `block_min 50`,
+the plan's second piece from 13:50.
+
+**Parity P116 taken**: a block resumed inside a calendar wall — an interruption across the wall's start closed by a `resume` inside it — is paused from its resume until the wall ends (`WallTimer.pauseSec` over `WallTimer.intSpans`), and an interruption taken and resumed inside a meeting the wall already paused leaves the wall's end its `unpause` (`WallTimer.lastTimerMark` passes over an interruption's marks); fork 4748911 logs nothing at a wall (P53), and D61/D110's rule as W-36 to W-47 ran it wrote nothing for the first, so the meeting after the resume counted as work, and no unpause for the second, so the block stayed paused past the meeting (the owner's D117, W-48 track K, README gaps 5036 and 3042)
+
+**Behaviour row** (P116): `d117.head.out` against `d117.wt.out` and `d117c.head.out` against `d117c.wt.out`, line for
+line above.  **The committed expectations it moves, each named (RULE M):** three frozen week-grid lines,
+`tm/tests/fixtures/fork-4748911-week-grid.jsonl`'s `week draw 11`, `week draw 27` and `midnight draw 2`, re-drawn under the
+owner's D64(b) — their steps now build another world, so the frozen world is one the shipped binary can no longer build
+(`every_frozen_week_is_the_world_its_steps_build` named all three) — each line carrying its dated `d64b` reason and the
+fork's own answer on the new world (`TM_GRID_BLESS=1`, `TM_GRID_BLESS_BECAUSE=115,116`, oracle `4748911` built fresh by
+`build-oracle.sh`).  All three are D117's second half: a block begun inside a meeting (D110's pause at its start), an
+`interrupt` taken inside it, and the meeting's end — until W-48 the interruption's mark was the last word on the timer and
+no `unpause` was written (draw 27's `done` logged `actual_min: 0`); now the wall's end writes it (draw 11 `01:19`, draw 27
+`15:24`, midnight draw 2 `13:50`).  In midnight draw 2 the generator's later `tm pause` at 15:28 therefore pauses a running
+block where it had resumed a held one, and its `done` logs 84 minutes where it logged 32; draw 11's interruption stays open,
+so its cache keeps `paused: true` (the wall housekeeping's cache now reads every stop it holds, D118's direction,
+`day::stop_the_timer_at_walls`).  The fork's own grid moved on draws 27 and midnight 2 only because their logs did.
+
+**Laws restated at D114 and D117** (D5: re-proved; each statement it breaks is refuted as written beside the restated
+law): `a_wall_that_starts_while_a_block_runs_stops_its_timer` (the unpause now also needs `breakHolds brk hi = false`;
+`…_as_d61_wrote_it_is_refuted`), `a_span_whose_pause_second_has_come_is_paused` (over D117's pause second, and the
+unpause under `breakHolds`; `…_as_d110_wrote_it_is_refuted`), `a_block_started_inside_a_wall_is_paused_from_its_start`
+(the unpause under `breakHolds`; `…_as_d110_wrote_it_is_refuted`), `the_walls_end_restarts_the_timer_it_stopped` (the
+pause at the pause second, no break holding it; `…_as_d61_wrote_it_is_refuted`), `a_timer_already_stopped_at_the_wall_is_left_alone`,
+`a_timer_mark_after_the_walls_start_stands` and `a_user_who_resumed_during_the_meeting_keeps_their_timer` (each over
+D117's pause second; each `…_as_d110_wrote_it_is_refuted` by an interruption 900–1200 across the wall `[1000, 2000)`),
+`pauseSec_of_lt` (with no interruption the log closes covering the wall's start; `…_as_d110_wrote_it_is_refuted`), and
+`step_of_running`, `step_written`, `mem_writes`, `pauseSec_ge`, `pausedFor_eq_find`,
+`pausedFor_is_a_meeting_the_timer_is_paused_for` and the two-run `after_one_wall_a_second_verb_writes_nothing_more`
+(over the new pause second; `mem_writes` and `step_written` imply their old statements, D117's second never being earlier
+than D110's: `startSec_le_pauseSec`).  New: `a_block_resumed_inside_a_wall_is_paused_from_its_resume` and its run.
+Cheats 304-305.
+
+**Gap 3042's break half, measured and found already closed** (`scratchpad/w48/k/drive/g5070.sh` on this commit's binary):
+`start ^t4` 12:00, `tm break 30m` 12:40, the break ended 13:00 inside the 12:50–13:50 meeting, `stop` 14:00 — the log
+gains the wall's `pause@12:50` and `unpause@13:50` once the break is logged ended (a logged break is not the user's stop,
+`spanStep`, the W-44 repair), and `tm stop` says `after 50m`: the meeting is not counted.  Gap 3042 named it open; it
+closed at W-44 without saying so.
+
+**Gaps closed by this block so far**: 5030 (D118), 5014 (D114), 5036 and 3042 (D117; 3042's break half closed at W-44,
+above).
+
+**Acceptance of the D114/D117 commit** (capped, `scratchpad/w48/k/acc-c2-*.log`): `check.sh` seventeen lines ok — axiom
+audit 6,572 theorems, stage goals 1, parity P1-P116, check 9 814 new or changed and 0 owed (the WallTimer rows re-run by
+`mutate.py --verify --write --only WallTimer.lean`: 23 rows whose pin site had drifted rewritten, 0 failed; 7 new rows, 7
+PINNED) — 03:39-03:45, load 8.3; FFI crate ok; `cargo test --workspace --no-fail-fast` **2,959 passed / 0 failed / 53
+ignored over 161 result lines, three runs** (03:45, 04:03, 04:20; load 3.5-8.3).
+
+**Gap 5071 — D115, D116 and D119 are built and accepted but not committed: check 12 needs an exemption-file edit this
+track does not own.**  1. *What.*  The third commit of this track (the owner's D115: a late `start` stamped inside a block
+a later `done` closed cuts it; D119: a late interruption netted from the block it crosses (the
+`resume` arm nets it), and a late mark past D100's 31-day bound named by `tm check`; D116:
+a break read at its `break_start`'s place, another word on its end line named; three parity numbers,
+next free P117 onward) is a patch over this commit, `scratchpad/w48/k/c3-over-69e547c.patch` (19 files, +1,467/−278,
+applies cleanly).  On its tree `check.sh` passes sixteen of seventeen lines, the FFI crate passes, and `cargo test
+--workspace --no-fail-fast` passed 2,964 / 0 failed / 53 ignored over 162 result lines in each of three runs.  2. *Why
+not committed.*  Check 12's census reads two section reasons of `kernel/reach-exempt.txt` against the measurement, and
+both are stale on that tree: `## Replay.lean` (line 619) says 100 of 240 emitted definitions are reached, the measurement
+is **108 of 248**; `## SealResume.lean` (line 866) says 32 of 49, the measurement is **33 of 50**.  Every new definition is
+reached and no exempt entry moves (1,099 before and after), so only the two counts are stale — but W-48's brief gives the
+exemption files to another track ("record it and stop"), and a red tree is never committed.  3. *Cost.*  D115, D116 and
+D119 do not reach the binary yet; gaps 5034, 5035, 4913, 4917 and 5029 stay open.  4. *Clears it.*  The track that holds
+`reach-exempt.txt`: re-derive the two reasons, apply the patch, re-run the acceptance.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **TRACK H**
+     — the owner's D121 (an exemption file shrinks by SCOPE, never by line
+     count), D122 (`tm undo` compares only the text outside generated
+     blocks), and README gap 4959 (a value the host copies whole from a
+     kernel answer is the kernel serialiser's).  Gaps 5110-5129 are this
+     track's (5110-5113 used).  Parity:
+     **P117** taken (D122; `P120` on the track's branch, renumbered at W-48 Land 1), from the two numbers pre-allocated to this track; the land
+     renumbers it down to the next free number (`parity.py` said P114).
+     ===================================================================== -->
+
+## Stage 6 — W-48 track H: exemption files shrink by scope (D121), a copied kernel answer is written (gap 4959), and `tm undo` reads past a replan (D122)
+
+### 0. The brief, measured before it was acted on
+
+* **Two sessions.**  This step was begun by an earlier session that the owner stopped before it committed; its edits
+  were left uncommitted and unverified in this worktree.  Everything below that says "driven", "measured" or "fails"
+  was re-run by the session that committed it — the gap-4750 drive on a binary built from `1a37997` and on this
+  tree's, the seven D121 plants, the six host mutations, the scope measurement — and the figures are that session's.
+* **The brief said `undo.rs` did not compile** (`CliError::UndoBlocked` has no field `first`).  Measured: it built at
+  once — `out.rs` already carried the field — so the stop came after the fix, not before it.
+
+* **The seven files are the brief's seven, found by the property and not the list.**  A gate holds a file against
+  itself at HEAD when it reads `git show HEAD:` beside `ratchet.py`'s walk: `reach.py` (reach-exempt.txt),
+  `twins.py` (twins-exempt.txt), `fields.py` (fields-, inputs-, sent- and written-exempt.txt) and `totality.py`
+  (kernel-decide-exempt.txt).  `citations-allow.txt` and `mutations.txt` are rosters with their own exact counts and no
+  HEAD comparand; `tm/tests/support/frozenhist.rs` reads the same walk for frozen comparands, not for an exemption file.
+* **"Splitting one line into two narrower ones" already passed where the brief pointed.**  Gap 5037's file,
+  `written-exempt.txt`, is ratcheted by `fields.ratchet_file`, which since W-40's repair lets a new line through
+  exactly when it lies UNDER a key held at HEAD (`fields.under`): a scope rule, and W-47's split of `plan` into
+  `plan.segments` and `plan.priorities` passed it.  No gate failed on gap 5037; W-47's critic counted lines.  The
+  three one-key-per-line files (fields, inputs, kernel-decide) are scope by construction: a line exempts one field or
+  one declaration and cannot be split.  Where the key was NOT the scope — and where this step changed code — is
+  `reach-exempt.txt` (a `CLASS` line answers a measured set of definitions, and an entry for one of them was "new")
+  and `twins-exempt.txt` (a verdict was keyed by its whole group, so a verdict over a narrower group was "new").
+* **Gap 4959 was added to the step** by the orchestrator, beside D121, because closing it is what lets
+  `written-exempt.txt` lose the two lines gap 5037 is about — on the condition that the written half then reads such a
+  value as the kernel serialiser's by a PROPERTY, never by a name list.  §1b is how, and the condition held.
+* **Where this stands.**  The orchestrator's figures at `7d2334f` (seventeen `check.sh` lines ok, parity P1-P113, next
+  free P114) were not re-run on the base; this step's own runs, on its tree, are §4's.
+
+### 1. D121 — "may only shrink" is measured by scope
+
+The rule has one statement, in `ratchet.py`'s header, with a table of what one line of each file exempts.  Two gates
+changed:
+
+* **`reach.py` (check 12).**  What the committed file exempted is its entries AND every definition its `CLASS` lines
+  answer, measured on this tree (`main`'s class scope: a `proof:<Module>` class answers the module's unreached
+  definitions less the witness class, an unsent key what lifting that key's cuts alone reaches).  A new entry inside
+  that scope passes, at the price a rewritten reason already pays — an ISO date in its section's reason (gap 2411);
+  an entry outside it fails, naming the definition, whatever line it replaced.  A NEW `CLASS` line still fails: a
+  class is a rule that answers definitions not yet written, so its scope is not the set it answers today.  The
+  history walk uses the same scope (`ratchet.grown`'s `allowed` hook: an entry a parent's class answered).
+* **`twins.py` (check 11).**  A NOT ONE CONCEPT verdict exempts every PAIR of its members (`twins.not_one_pairs`); a
+  verdict fails when it holds a pair no verdict at HEAD held, naming the pairs.  The ONE CONCEPT -> NOT ONE CONCEPT
+  rewrite is one case of it (groups are disjoint, so a ONE CONCEPT group's pairs are in no held verdict) and keeps its
+  own message.  The history walk keys by pairs too.
+* `fields.py`'s message names D121; its rule is unchanged.  `check.sh`'s comments on checks 11 and 12 say the rule.
+
+**Driven in a clone** (`git clone --no-hardlinks`, the new gates committed there as its tip; HEAD's `reach.py` and
+`twins.py` kept beside them as reach_old.py and twins_old.py; where a plant needs a different HEAD, a commit C1 holds
+it and the clone's `ratchet.BASE` is moved to C1, so the HEAD comparand is what is tested; definitions planted in
+`TodayWhole.lean`, a leaf only the root imports, rebuilt under the 16 GB cap).  Every plant, both directions:
+
+| plant | lines | old gate | new gate |
+|---|---|---|---|
+| W1 written: `plan.segments` + `plan.priorities` replaced by one `plan` line (widen, one line fewer) | 4 -> 3 | (unchanged script) | **rc 1**: `RATCHET: written-exempt.txt:16  `plan` is a NEW exemption, under no key exempt at HEAD -- this file may only SHRINK (D51), …` |
+| W2 written: HEAD holds `plan`, the working copy the two narrow lines (split) | 3 -> 4 | (unchanged script) | **rc 0**, `0 UNANSWERED` |
+| R1 reach: `CLASS proof PlanCheck` replaced by its 67 members under a dated `## PlanCheck.lean` section (split) | 1 -> 67 | **rc 1**, 67 × `… is a NEW exemption, held by no entry at HEAD` | **rc 0**: `1166 exempt in 67 section(s) …, 0 of 0 declared proof-only module(s)` |
+| R1′ the same split, the section's reason undated | 1 -> 67 | rc 1 | **rc 1**, 67 × `… was exempt at HEAD through a `CLASS` line and is named now under the `## PlanCheck.lean` section …, whose reason carries no ISO date` |
+| R2 reach: HEAD exempts planted Tm.Planner.w48hOld; the working copy renames the def and its entry to w48hNew (widen, one line out and one in) | 1100 -> 1100 | rc 1 | **rc 1**: `Tm.Planner.w48hNew (TodayWhole.lean) is a NEW exemption, in the scope of no entry and no `CLASS` line at HEAD -- … measured by the definitions it exempts (D121), whatever section it stands under or line it replaces` (control: at C1 itself, rc 0) |
+| T1 twins: planted Tm.Planner.w48hSurrogate joins the surrogate group; the two-name NOT ONE CONCEPT line deleted and a three-name one added (widen, one out and one in) | 7 -> 7 verdicts | rc 1 | **rc 1**: `a NOT ONE CONCEPT verdict over 2 pair(s) no verdict at HEAD held (Tm.Planner.w48hSurrogate Tm.isHighSurrogate; Tm.Planner.w48hSurrogate Tm.isLowSurrogate)` |
+| T2 twins: HEAD holds the three-name verdict over the planted group; the working copy deletes the def and narrows the verdict to two names | 7 -> 7 | **rc 1**: `is a NEW NOT ONE CONCEPT verdict` | **rc 0** |
+
+So the old gates failed two scope-preserving narrowings (R1, T2) and the new ones pass them, and every widening fails
+on both, by name.  Scripts and logs: `scratchpad/w48/h/plant_{written,reach_split,lean}.sh` and `.log`
+(volatile; the table above is the record).
+
+**Gap 5037 — CLOSED: the file's scope shrank at W-47.**  Every entry at HEAD is at or under an entry before W-47
+(`planner.state.yesterday`, `cmds[].min` held; `plan.segments`, `plan.priorities` under `plan`), which is the gate's
+own relation.  Measured over the 221 key paths the kernel decodes on this tree (`fields.section_paths`, each
+version's entries read as the gate reads them): before W-47 (`047d2b3^1`) 5 lines, 43 paths; at the land (`047d2b3`)
+6 lines, 41 paths — added nothing, removed `plan` and `plan.bed`; at the repair (`7d2334f`) and HEAD 4 lines, 41
+paths — the repair's two deletions (`planner.overrides`, `planner.state.lastHash`) named paths D112 stopped decoding,
+so they cover nothing on this tree.  Lines 5 -> 6 -> 4; scope 43 -> 41 -> 41, never grown.
+
+### 1b. Gap 4959 — a value the host copies whole from a kernel answer is the kernel serialiser's
+
+`planwire::rows_request` sends the planner answer's own `segments` and `priorities` back in the `plan` section
+(`plan["segments"].clone()`), and the written half reads the keys a literal spells, so 35 decoded key paths under the
+two arrays were unwritten and `written-exempt.txt` answered them by two lines.  The half now reads such a value as what
+it is, in two halves, each a property and neither naming a function:
+
+* **The host half** (`sentkeys.Copy`, `sentkeys.RustProgram`).  A request value that is a caller's
+  `&Value` indexed by literal keys and copied whole is a `Copy`.  It is traced to EVERY call of its function in the
+  program (tests are not the program), and each call must hand in, for that parameter, a literal key path under the
+  `ok` object of a binding whose value is the result of a call to a function that returns a `Value` and reaches the
+  FFI door — a function calling a name an `extern "C"` block of the program declares (the shim's dial) — through the
+  program's calls.  On this tree: `read_day`'s `&resp["ok"]["plan"]`, `resp` bound to `kernel_bridge::call_text`,
+  which calls `tm_kernel_ffi::call`, which calls `tm_kernel_call_c`.
+* **The kernel half** (`fields.Serialisers`).  The emitters of the path's last key are every library `def` the export
+  reaches (check 12's call graph) whose body pairs that literal key with a value, found by the KEY; several are
+  intersected, so a key name two objects share can only make a copy less written.  A value's key paths are read off
+  its expression: `.obj [("k".toList, v), ..]`, `.arr e`, and any name that is a library `def` returning `JVal` or
+  `List JVal` (resolved by its qualified name's suffix), through every arm of a `match`.  On this tree the one emitter
+  is `Tm.PlanWire.planJson`, through `segJson`, `flagsJson`, `noteJson`, `minutesJson`, `CapWire.optNatJson` and
+  `priosJson`.
+* `fields.copied_paths` joins them: a decoded path at or under the copy is WRITTEN when every call's response path
+  carries it.  `--audit` prints each copy (`copied plan.segments <- the kernel's answer at ok.plan.segments, emitted by
+  Tm.PlanWire.planJson: 32 of 32 decoded key path(s)`; `plan.priorities` 4 of 4), and check 13's written line counts
+  them.  `written-exempt.txt`'s two lines then failed STALE (`plan.segments` is WRITTEN now) and are deleted: the file
+  is two lines, where W-47 found five and left four.
+
+**Driven in the clone, both directions** (`scratchpad/w48/h/plant_4959.sh`, `.log`):
+
+| plant | `fields.py` |
+|---|---|
+| P0 this tree, the two lines deleted | **rc 0**: `205 written where a request is built (34 of them under 2 value(s) copied whole from the kernel's answer), 5 unwritten (2 shallow, 2 answered by 2 exemption(s)), 0 UNANSWERED` |
+| P1 `segJson` emits its flags under `"flagz"` (source only) | **rc 1**: `copied plan.segments … 24 of 32`, `UNWRITTEN: plan.segments[].flags is decoded by the kernel's reader of plan and written at no place a request is built` |
+| P2 `read_day` hands `rows_request` a host-built `json!({"ok": {"plan": …}})` | **rc 1**: `not traced: read_day hands rows_request a key path into forged, which is not bound to the kernel's parsed answer`; `UNWRITTEN: plan.priorities[]`, `plan.segments[]` |
+| P3 the kernel's answer, read off `["err"]` | **rc 1**: `… the kernel's answer at err.plan, not under its ok object` |
+| P4 `resp` re-bound to a function that returns `(Value, String)` and never reaches the door | **rc 1**: `… a key path into resp, which is not bound to the kernel's parsed answer` |
+| P5 a second call of `rows_request`, handing in another kernel answer | **rc 0**, 32 of 32 and 4 of 4 |
+
+**Gap 4959 — CLOSED** by this section.  **Gap 5037**: closed by §1's measurement, and the file it is about is now two
+lines by this one.
+
+### 2. D122 — `tm undo` compares the text outside generated blocks
+
+**Gap 4750 reproduced first**, on this branch's binary (`1a37997`), `tm init --example`, `--now` on 2026-09-07:
+`wake 06:05 --slept 8h` 09:00, `arrive` 09:01, `start ^t4 --energy 4` 09:02, `done ^t4` 09:50, `plan` 09:51 (the day
+file's diff: the block `<!-- tm:plan start 09:01 -->` and its rows became `<!-- tm:plan start 09:51 -->` and new
+rows, nothing else), then
+
+```
+$ tm --now 2026-09-07T09:55:00-05:00 undo
+tm: conflict in day/2026-09-07.md — the file changed under us
+  ours:   46 lines — what the undone command wrote
+  theirs: 46 lines — what day/2026-09-07.md holds now
+  first difference, line 10:
+    ours:   <!-- tm:plan start 09:01 -->
+    theirs: <!-- tm:plan start 09:51 -->
+  .tm/log.jsonl records 1 entry after the command being undone and no `close` among them; `tm log` shows them
+  undo needs day/2026-09-07.md to hold exactly what the undone command wrote, byte for byte
+[exit 3]
+```
+
+**The change.**  `undo::holds_what_it_left` answers the guard: byte equality first, else both texts read by the one
+parser (`grammar::parse_file`) and compared through `store::edit::outside_generated` — every line outside a
+generated block verbatim with its line ending, and each block (markers, start-marker info, body) as one line
+`<!-- tm:<name> -->`.  The block's span is `generated_span`, the one `replace_generated` edits by (an unterminated
+block covers its start marker alone), and `ParsedFile.generated` is the parser's list — no second recogniser of the
+markers.  So every block tm regenerates (`plan`, `review`, any `tm:<name>`) is read past, and a block's presence,
+place and name are still compared.  The refusal now names the first line OUTSIDE the blocks
+(`undo::first_outside`, carried on `CliError::UndoBlocked.first`; the file's own line number) and says what it
+needs; `--json`'s `detail.ours`/`theirs` stay the two whole texts.  A write race that is not an undo prints what it
+printed.
+
+**After** (same drive, this tree):
+
+```
+$ tm --now 2026-09-07T09:55:00-05:00 undo
+undid done (done ^t4) · 2 file(s) restored · 3 left
+[exit 0]
+--- day file after undo vs before done:  (no difference)
+$ tm --now 2026-09-07T09:56:00-05:00 now
+▶ ^t4 Claude Code drafts tests · started 09:02 · 54m of 60m
+```
+
+and the other direction — `done ^t4` again at 09:57, `plan` at 09:58, a line appended to the day file by hand:
+
+```
+$ tm --now 2026-09-07T09:59:00-05:00 undo
+tm: conflict in day/2026-09-07.md — the file changed under us
+  ours:   46 lines — what the undone command wrote
+  theirs: 47 lines — what day/2026-09-07.md holds now
+  first difference outside tm's generated blocks, line 47:
+    ours:   (end of file)
+    theirs: - [ ] 2 20m Written by hand in the day file
+  …
+  undo needs day/2026-09-07.md to hold what the undone command wrote, byte for byte outside tm's generated blocks
+[exit 3]
+```
+
+the hand line still in the file.
+
+**After an undo the generated block is the one the undone command found — one reading.**  Undo restores each file's
+`before` bytes, generated blocks included, and does not replan (it makes no planner call: `kernel_call_counts.rs`
+pins it at 2 `log` calls and 0 `apply` calls, unchanged).  That is what it always did when no replan came between the
+command and its undo; the block it puts back is the one tm wrote from the state the undo restores, and the next
+replan (`tm plan`, `tm now`, any replanning verb, the TUI's minute tick, D103) redraws it from that state.  Splicing
+the CURRENT block into the restored text was the other candidate and is two readings: its rows were drawn from the
+state the undo just took back (`✓ Claude Code drafts tests` beside a `^t4` running again).  Replanning inside the undo
+was declined as a new kernel call on a verb whose job is to put bytes back.
+
+**Tests** (`tm/tests/cli_undo.rs`): `undo_after_a_replan_undoes_the_last_step_p117` (the behaviour row: the gap's
+sequence, the done undone, the day file byte for byte the one the done found),
+`undo_after_a_replan_still_refuses_a_change_outside_the_generated_blocks` (exit 3, the hand line named at its line,
+the block marker not named, nothing written, `^t4` still `[x]`), `undo_refuses_when_a_generated_block_was_removed`
+(a block's place is compared: `ours:   <!-- tm:plan -->`); `tm-core`'s
+`outside_generated_reads_past_a_replan_and_nothing_else` (rows and `HH:MM` read past; a line outside, a removed
+block, a renamed block not; an unterminated block covers its marker alone; line numbers are the file's).
+
+**Parity P117 taken**: `tm undo` compares the text OUTSIDE generated blocks (the owner's D122): after a replan rewrote a block between a command and its undo — the commonest case `tm plan` after `tm done` — the undo restores the command's files and exits 0, where fork 4748911's `undo` compared every byte (`current != f.after`) and refused with exit 3, `conflict in day/<date>.md — the file changed under us` (this branch's binary before D122 also named the block's `<!-- tm:plan start HH:MM -->` line as the first difference); a change outside a block still refuses, now naming the first line outside the blocks (README gap 4750, W-48 track H)
+
+**RULE M**: no expectation of the binary's own output moved but the one P117 accounts for — no committed test held
+the refusal (the suite had no `tm undo` after a replan; `cli_check_log.rs` gives each verb its own tree for exactly
+that reason, and its `undo` still exits 0 there).
+
+### 3. Mutations (D40, for the new functions; no Lean definition was added)
+
+Each body replaced, one at a time, in the clone; `cargo test -p tm --test cli_undo` and `cargo test -p tm-core --lib
+outside_generated`:
+
+| mutation | fails |
+|---|---|
+| M1 `holds_what_it_left` := byte equality (the pre-D122 guard) | 1 of 26: `undo_after_a_replan_undoes_the_last_step_p117` |
+| M2 `holds_what_it_left` := `true` | 6 of 26: the two new refusals and four standing ones (`undo_refuses_to_discard_another_writers_change`, the three `laterWriter` tests) |
+| M3 `user_text` := `""` | the same 6 of 26 |
+| M4 `first_outside` := `None` | 2 of 26: the two refusals that assert the named line |
+| M5 `edit::outside_generated` := `""` | 6 of 26, and the `tm-core` unit test |
+| M6 `edit::outside_generated_lines` := `vec![]` | 6 of 26, and the `tm-core` unit test |
+
+And gap 4959's gate functions, each mutated in the clone with the §1b plant that pins it run before and after
+(`scratchpad/w48/h/mutate_gate.py`, `.log`); all five KILLED:
+
+| mutation | plant | unmutated -> mutated |
+|---|---|---|
+| G1 `RustProgram`'s answers := every function of the program | P4 (a non-kernel function) | rc 1 -> rc 0 |
+| G2 copy_sources without the `ok` check | P3 (the `err` object) | rc 1 -> rc 0 |
+| G3 `Serialisers`' tree := `None` | P0 (this tree) | rc 0 -> rc 1 (0 of 34 copied paths written) |
+| G4 `copied_paths` writes every decoded path under a copy | P1 (`"flagz"`) | rc 1 -> rc 0 |
+| G5 copy_sources trusts every binding | P4 | rc 1 -> rc 0 |
+
+The D121 gates' changes are pinned by §1's seven plants rather than by constant bodies: each row there that flips
+between the old and the new gate is the mutation of the rule it changed.
+
+### 4. Acceptance
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on this step's tree:
+
+* `check.sh`: seventeen lines, every one ok — build; totality; axiom audit 6,549 theorems; Negative rejected; FFI 96
+  tests; corpus 29/37 files and 4/5 plans; stage goals 1 (`plan_places_no_block_over_a_break`, unchanged); prose
+  citations ok; new definitions mutated ok; parity register ok (`P1-P120`, 6 declared holes, next free `P121`, on the track's branch before W-48 Land 1 renumbered); no two names
+  ok; every emitted definition reached ok (1,099 exempt in 66 sections, 0 UNANSWERED — `reach-exempt.txt` unchanged);
+  the four check-13 lines ok, the written one `205 written where a request is built (34 of them under 2 value(s)
+  copied whole from the kernel's answer), 5 unwritten (2 shallow, 2 answered by 2 exemption(s)), 0 UNANSWERED`; the
+  kernel replays every module ok.  32 s wall (load 4.9).
+* `cargo test --workspace --no-fail-fast`, **three runs**: each 2,957 passed / 0 failed / 53 ignored over 160 result
+  lines (the orchestrator's 2,953 at `7d2334f` plus this step's four tests), 1,126 s, 1,159 s and 1,087 s wall at load
+  6.2-17.5 (the machine shared); no warning; no `.proptest-regressions` file moved.
+* `kernel/tm-kernel-ffi`'s `cargo test`: 104 passed / 0 failed over 5 result lines.
+
+### 5. Gaps
+
+**Gap 4750 — CLOSED** by §2 (the owner's D122; P117).
+
+**Gap 5037 — CLOSED** by §1: measured by scope, `written-exempt.txt` shrank at W-47 (43 -> 41 -> 41 key paths); and
+by §1b the file is two lines (scope 4 key paths: `planner.state.yesterday`, `cmds[].min` and the two under them).
+
+**Gap 4959 — CLOSED** by §1b.
+
+**Gap 5110 — an edit INSIDE a generated block is not a conflict, and an undo discards it.**  1. *What.*  The guard
+reads a block's body and its start marker's info as tm's, so a hand edit there neither refuses the undo nor survives
+it (the undo restores the block the command found).  2. *Why.*  D122: a generated block is derived and tm rewrites it
+on every replan, which discards the same edit; reading it as the user's would bring gap 4750 back.  3. *Cost.*  None
+the next replan would not have; a hand note written inside `<!-- tm:plan … -->` is lost either way.  4. *Clears it.*
+Nothing owed; recorded so the reading is a decision in the ledger.
+
+**Gap 5111 — a `CLASS` line's scope is measured on THIS tree, also for the history walk.**  1. *What.*  `reach.py`
+asks what a parent commit's class answered against the current build, not that commit's.  2. *Why.*  A class's
+answered set at an older commit needs that commit's IR, and the check reads one build.  3. *Cost.*  A commit since
+`ratchet.BASE` that named, as entries, definitions its parent's class answered THEN but not now would be read as
+growth (a false failure, never a false pass for a definition the class answers now); none exists — the branch's
+history passes.  4. *Clears it.*  Per-commit builds in the walk, if the case is ever met.
+
+**Gap 5112 — the `--json` undo refusal does not carry the first line outside the blocks.**  1. *What.*  The human
+line names it; `detail` carries `ours`, `theirs` and `laterWriter`, not `first`.  2. *Why.*  A JSON shape change is
+the `cli_json_matrix` surface's; kept out of a guard change.  3. *Cost.*  A script must re-derive the line from the two
+texts (it has both).  4. *Clears it.*  A step that adds detail.firstOutside with its matrix row.
+
+**Gap 5113 — gap 4959's kernel half finds a copy's emitter by the response path's LAST key.**  1. *What.*
+`fields.Serialisers` takes every reached library `def` that pairs the last key (`segments`) with a
+value and intersects what they emit; it does not follow the response from the export down `ok.plan` to the one
+emitter at that path, and it reads a pair list built by `++`, a key spelled by a variable (`jone k v`) and a value
+built by a definition whose result type is not spelled `JVal`/`List JVal` as emitting nothing.  2. *Why.*  Following
+the response from `PlanWire.callExport` through `CapWire.intoOk` and `intoPlan` is a reader of how the response is
+assembled, past this step; the last-key rule finds the one emitter on this tree (`Tm.PlanWire.planJson`).  3. *Cost.*
+None silent: a second emitter of the same key can only make a copy LESS written (intersection), and every construct
+it cannot read writes nothing, so the keys under it go UNWRITTEN.  What a key one `match` arm writes is emitted for
+every value (a union over arms, the host half's own floor).  4. *Clears it.*  A response-path walk from the export,
+if a second emitter of a copied key ever appears.
+
+### 6. What lands, and what is owed
+
+* **Commits on this track's branch** — one: the gates (D121, gap 4959), the guard and its tests (D122), this block,
+  `parity.txt`'s P117 row (`P120` on the track's branch) and the six pre-allocated holes beside it.
+* **Owed, by name.**  The land: renumber `P120` to the next free number (done at W-48 Land 1: P117) (P114 at this track's start) in this block,
+  `parity.txt` and the `_p120` test name, and delete or fill the `hole P114`-`P119` lines.  Gaps 5111-5113 stay open
+  as recorded; 5110 records a reading, with nothing owed.  Nothing else of D121, D122 or gap 4959.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **track R**
+     — the rows and the divider, owed by W-47.  Gaps 5130-5149 are this
+     track's (5130-5134 used).  Parity: P118 taken (`P122` on the track's branch, renumbered at W-48 Land 1); `P114`-`P121` were declared
+     holes in `parity.txt` (the other W-48 tracks' pre-allocated numbers),
+     which the W-48 Land deletes as their rows land; the track's second
+     pre-allocated number is left free.
+     ===================================================================== -->
+
+## Stage 6 — W-48 track R: the `window ends` divider is a kernel row, the note reader by value is gone, and the one-call rows refused by name
+
+Branch `w48-r`, worktree `.claude/worktrees/w48-r`, from `rebuild-on-lean` at `1a37997`.  Every command capped
+(`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16 GB for measurements and mutations, 8 GB for the
+new `decide` witnesses and the drives).  The machine was shared: load 5-20 throughout, `uptime` beside every figure.
+
+### 0. The brief, measured before it was acted on
+
+* HEAD `1a37997`, clean; `check.sh` all seventeen lines ok on it (axiom audit 6,549, goals 1, parity P1-P113, next
+  free P114), 00:45, load 1.6.  As the brief said.
+* **Step 1's premise was incomplete, and that is the finding of §1**: gap 4954's remedy deletes the binary's only
+  sender of the `plan` section, and the brief did not price what checks 12 and 13 say about a request section nothing
+  sends.  Both say no, and both answer with a file that may only shrink.
+* **Step 3's "if the one-call shape makes it removable"** was a condition that does not bind: `emit::note_cell` was a
+  reader of `plan.cells` whose one caller could read the cells by position on any shape of the call (§3).
+
+### 1. Gap 4954 — ONE CALL: built, driven byte-identical, and REFUSED by checks 12 and 13 (gap 5130)
+
+Built in full (archived at `refs/archive/w48-r/one-call-probe`, `fe40433`, its message says NOT GREEN; the names below
+written without backticks are the probe's and exist on no branch):
+`PlanWire.runPlanner` answered the day's `rows` beside its seven keys (EmitWire.dayRowsJson of the day it planned,
+proved `Emit.rowsOf` zipped with the segments), a planWithPlanner refusal for a request carrying both sections, the
+three success laws re-proved with the key (D5), `planwire::read_plan` reading `plan.rows` with the day, and
+`planwire::rows_request` and `read_day`'s second call deleted, with `kernel_call_counts`' `rows` column pinned to 0
+and T18/T19 restated over one call.
+
+* **Driven** (plan-basic, `--now 2026-09-07T10:42:00-05:00`, the pre-change binary against the probe's, both built
+  from source in this worktree): `tm plan`, `tm now`, `tm --json plan`, `tm --json now`, `tm check` and the day file's
+  `tm:plan` block **byte-identical**, every exit code 0.
+* **Measured** (`cli_latency` T18/T19, `kernel_call_counts`; before at 00:48, load 14.5 → 12.2; the probe at 01:24,
+  load 19.9 → 15.5 — a loaded machine, so these are one run each and not a band): calls per verb fell by exactly the
+  planned days (`tm check` 5 → 4, `tm plan` 5 → 4, `tm now` 3 → 2, `arrive` 11 → 9, `resume` 12 → 11); T11's tree: the
+  planner call 77.6 ms and a rows call 44.2 ms before, the planner call with its rows 99.9 ms after; T19's tick on
+  T11's tree best 129.0 / median 131.9 ms before (build + planner + rows), 97.6 / 110.7 ms after (build + one call);
+  T14 ten years out 241.3 / 249.9 → 210.8 / 214.5 ms.  (The before run's example-tree lines were lost to this step's
+  own filter; W-47 track L measured that rows call at 3.1 ms.)
+* **Refused, on the gates**: with the binary sending no `plan` section, check 12 reports **21 UNANSWERED** — the
+  section's readers, among them `EmitWire.readRowSection`, `readSegs`, `readSeg`, `readKind`, `readFlags`, `readNote`,
+  `readOptNote`, `readPrio`, `readPrios`, `rowsOfReq`, `rowsJson`, `withPlan`, `rowRefusalJson`, `RowRefusal.text`,
+  `RowKey.name`, `segErrName`, `Planner.mkSeg?`, `Planner.mkBatch?` and `Planner.Seg.wf`, are emitted and no request
+  the binary builds reaches them — and check 13's written half reports **`plan.bed` UNWRITTEN**.  Both are
+  right: since W-47 the `plan` section is ALSO the door every hand-built test day gets its kernel rows through
+  (`rowwire::with_kernel_cells`: the `emit_*` snapshots, `kernel_row_cells`, `tui_today_render`, `one_renderer`,
+  `planner_invariants`' claim 2, the FFI crate's tests), so after one call it is a door only the harness enters.  The
+  answers each file offers are growth — a `CLASS unsent plan` line (W-47 track L deleted it when the binary began
+  sending the section) and a `plan.bed` line — and `reach-exempt.txt` is strictly shrink-only (D51, gaps 3953, 4043:
+  "growth is the owner's to grant in the commit that changes reach.py").  A first cut also met check 12's scanner: a
+  `match jget j "plan"` inside `runPlanner` made it the `plan` section's DISPATCHER (`sections.py`), and the cut of an
+  unsent section's dispatcher to its absent arms called the whole planner unreached; the probe reads the collision off
+  the answer `runRowsP` wrote (answersRows) instead.
+
+### 2. Gaps 5031 and 1301 — the `window ends` divider is a kernel row (LANDED)
+
+* **The kernel** (`Emit.lean`, appended): `dividerGlyph`, `budgetStep`/`budgetSpentAt` (fork divider_instant's walk:
+  the work rows' minutes, `Seg.minutes`, against the budget in minutes, to the end of the row that reaches it; a zero
+  budget runs out nowhere), `dividerAt` (spent inside the window, there; else the window's end when a row starts at or
+  after it; else none — or the spent instant), `dividerBefore` (before the first row starting at or after it, else
+  last), `dividerRow` (its clock, `───` in the `ci` cell, an EMPTY mark — which is what puts the title at fork
+  divider_row's column, `ci` being three columns where `CI_W` is two — and `window ends <the window's end>`) and
+  `divider`.  **The budget is the planner's**: the binary sends back the planner answer's own `budgetBlocks` and
+  `window.hi` with the segments (`planwire::rows_request`, two keys), counted in the request's `blockMin`; no budget is
+  recomputed anywhere.  Laws: `dividerRow_cells`, `dividerAt_where_the_budget_ran_out`, `dividerAt_unspent`,
+  `dividerAt_is_the_window_end_or_the_spent_instant`, `dividerBefore_le_length`, `budgetStep_*`, and five decided
+  witnesses on a five-row day (spent at the second block's end, before row 2; unspent, at the window's end before row
+  4; nothing past the window, none; spent past the window, at its end; a zero budget, nowhere).
+* **The wire** (`EmitWire.lean`): `RowReq.div` (both of `budgetBlocks` — `u32Within` — and `windowEnd` — `secWithin`
+  — or neither; one alone refused by the missing key's name), `dividerJson` (its position `before`, the nine cells
+  under `rowKeys`, an empty `batchNames`), `dividerPairs` (the `divider` key — `null` on a day with none — and nothing
+  for a section that sent neither, so a W-24-shaped request is answered as before), and `withPlan` taking the extra
+  pairs.  Laws: `readRowSection_reads_the_budget_and_the_window_end`, `…_without_them_reads_no_divider`,
+  `…_refuses_one_without_the_other`, `…_refuses_a_budget_past_the_width_and_an_end_past_the_calendar`,
+  `dividerJson_is_its_position_then_the_nine_cells`, `dividerPairs_without_the_inputs`, `…_with_the_inputs`,
+  `dividerPairs_on_the_wire`, `withPlan_of_no_extra`.  `withPlan_appends_the_plan_key` holds unchanged.
+* **The host**: divider_instant, divider_row and `emit.rs`' glyph constant are deleted; `DayPlan::divider` holds the
+  kernel's position and cells (`planwire::read_divider`, through the one `RowCells` builder, `cells_of`, which
+  `row_cells_of` now calls); `emit::day_lines` splices it and pads it with `render_row` at a title width its words fit
+  (fork divider_row never cut them; a narrower pane clips the whole line where it clips every row) and no longer takes
+  a `Config`, nor do `render_plan_section(_with)` and `render::timeline`.  **`tm plan --json` gains `divider`**
+  (`{before, time, text}`, `null` on a day with none) — gap 1301's counterpart, read off the day section's own lines.
+* **RULE M.**  No printed divider moved: every snapshot and frozen comparand holding one passes unchanged (the
+  `emit_day_section`, `emit_planner`, `tui_today_render` and `tui_today_prompts` snapshots, `cli_plan`'s §4.3 grid, the
+  `fork-4748911-planner-*` and week-grid fixtures).  ONE expectation of the binary's output moved, the `--json` schema
+  snapshot `cli_plan__plan_schema.snap` (the `divider` key, its three fields), and it is accounted for:
+
+**Parity P118 taken**: `tm plan --json` carries the day section's `window ends` divider — `divider: {before, time, text}`, `null` on a day with none, `text` the day file's own line and `before` its position among `segments` — so a consumer rebuilds the section line for line; fork 4748911's `tm plan --json` had one entry per segment and no divider (README gap 1301, W-48 track R; licensed by the owner's D112 — every surface's bytes the kernel's rows — and D30 Q5's one row renderer whose output every surface, `tm plan --json` named among them, prints)
+
+  The behaviour row is `cli_plan.rs`' `plan_json_carries_the_day_files_divider_p118` (the JSON's rows with the divider
+  spliced at `before` ARE the day file's section).  Nothing else the user sees moves: the divider's instant, position
+  and bytes are fork divider_instant's and divider_row's, now computed once, in the kernel.
+* **Driven** (the pre-change binary against this step's, plan-basic copied per run, four worlds): plan-basic at 10:42
+  (`19:42  ───    window ends 19:42`, before row 11), `budget_ratio = 0.3` at 10:42 (`15:50  ───    window ends 19:42`
+  — the budget spent mid-window, before row 6), `0.75` at 07:00 (`16:00 … window ends 16:00`, before row 14), `0.1` at
+  13:00 (`19:50 … window ends 19:50`, before row 10): `tm plan`, the day file's block, `tm now`, `tm --json now`, `tm
+  check` and every exit code **byte-identical**; `tm --json plan` differs by the `divider` key alone.
+* **Plants** (`plants.py`, in a clone `scratchpad/w48/r/mclone` with its own target directory; `git status
+  --porcelain` 22 lines before and after; each plant alone, its tests run, the file restored), every one caught: P1
+  `fn divider_instant(` restored in `emit.rs` → `one_renderer` `the_host_does_not_place_or_word_the_divider`; P2 the
+  words `window ends` in a shipped Rust string → the same test; P3 `read_day` dropping the kernel's divider →
+  `cli_plan`'s P118 row, the schema snapshot and `the_generated_section_is_the_spec_4_3_grid`; P4 the divider spliced
+  one row late → ten tests in `emit_day_section` and `cli_plan`; P5 the divider fitted at the row's title width → the
+  narrow `emit_day_section` snapshot and three `tui_today_render` snapshots.
+* **D40** (`mutate.py`, run in the clone, never in this tree): 15 definitions audited, 13 pinned (8 by a synthesised
+  constant, 2 by an identity), `readRowSection` unfoldable and pinned by nothing (`Except RowRefusal RowReq` has no
+  `Inhabited`, as before this step); `dividerPairs := []` was first pinned by ONE theorem alone, and
+  `dividerPairs_on_the_wire` was written for it.  The witnesses' rows were first two fixture definitions, which check
+  12 reported emitted and unreached; they are written into each statement now, and their roster rows went with them.
+  Pin sites the edits moved were re-anchored by the declaration that encloses them (`scratchpad/w48/r/shift_sites.py`:
+  43 in `EmitWire.lean`, 5 in `Emit.lean`), and the two rows whose witness theorem was restated were re-run by a
+  build (`mutate.py --verify --write --only Tm.Emit.budgetSpentAt`, `… Tm.Emit.dividerBefore`: verdicts unchanged, the
+  site three lines down); `mutate.py --gate` re-resolves every one.
+* **Exemption files, shrunk** (check 12 failed them STALE): `Tm.Emit.Row.cells` and `Tm.EmitWire.rowKeys` are reached
+  now (through `dividerJson`), so their entries left `reach-exempt.txt`, its `EXEMPT` count 1099 → 1097, and the two
+  sections' censuses were corrected to the measurement (Emit 39 of 40, EmitWire 24 of 39).  These are track H's file
+  this run: **the Land re-checks the two deletions against track H's edits**.
+
+### 3. Gap 4952 — the note reader by value is gone (LANDED)
+
+`emit::note_cell` found a segment in `plan.segments` by equality and read the cell at that position, for one caller,
+`support/forkclass.rs`' under-used-note comparison.  That caller now reads `k.day.cells` at the segment's own index
+(gap 1197's rule) and names a day carrying no cells for the row as a finding rather than skipping it; the function is
+deleted, and `one_renderer.rs`' `the_note_reader_by_value_is_gone` keeps it deleted.  No shape of the call was needed.
+
+### 4. Gap 4976 — the example tree's `^t3`: NOT landed, unlicensed (gap 5131)
+
+Read with gap 4749.  The four-line template change is not licensed by any standing decision for every line it moves:
+D56 and D62 rule what `tm edit`, `tm extend`, `tm stop` and `tm done --partial` WRITE on a line, not what `tm init
+--example` ships; and the eight frozen comparands whose worlds are `plan-basic`'s files by value meet neither D64(a)
+(no registered number changes the fork's day on them — the change is to the WORLD, which the fork would have to be
+asked again, by `tm-oracle`) nor D64(b) (a two-estimate line is a world the binary can still build: a user types it).
+Not re-driven here; gap 4976's measurement (33 failing tests in 19 binaries on W-47 track H's tree) is that step's.
+
+### 5. Gaps
+
+**Gap 5130 — the one-call rows (gap 4954) are refused by checks 12 and 13 (§1).**  1. *What.*  A planned day still
+costs the planner call and a rows call over the same documents.  2. *Why.*  Deleting the binary's rows call leaves
+the `plan` section a door only the test harness enters; check 12 then finds 21 definitions no binary request reaches
+and check 13 finds `plan.bed` written nowhere, and the only answers either file offers are growth, which D51 makes the
+owner's.  3. *Cost.*  The figures in §1: on T11's tree the rows call is ~40 ms of a ~130 ms tick; inside every band.
+4. *Clears it.*  The owner: grant `CLASS unsent plan` and a `plan.bed` written-exempt line (the hand-built-day door
+named as the harness's), or retire the `plan` section and give hand-built days another door (frozen cells, at the cost
+of the kernel's coverage on shapes the planner rarely draws); then the probe at `refs/archive/w48-r/one-call-probe`
+lands as built.
+
+**Gap 5131 — gap 4976 stays unlicensed (§4).**  1. *What.*  `tm init --example`'s `^t3` carries two estimates.
+2. *Why.*  No standing decision covers the template or the eight frozen worlds it moves.  3. *Cost.*  Gap 4749's.
+4. *Clears it.*  An owner ruling that the one-estimate rule reaches the shipped templates, with a D64 clause for
+worlds a user can still type.
+
+**Gap 5132 — the divider's budget crosses the wire twice.**  1. *What.*  The binary sends the planner answer's
+`budgetBlocks` and `window.hi` back in the rows request, as it sends its segments.  2. *Why.*  The rows are a second
+call (gap 5130), and that call's request is the only place the kernel sees the day's rows.  3. *Cost.*  None silent:
+the values are copied verbatim, and `planner_invariants`' claim 2 compares the codec.  4. *Clears it.*  Gap 5130: in
+one call the planner answer computes the divider from its own `DayPlan`.
+
+**Gap 5133 — `[day] bed` crosses the wire twice per planned day.**  It reaches the kernel in the capacity
+section (`day.bed`, the planner's) and again in the rows request (`plan.bed`, the rows'), both from `config.toml`; the
+rows' wind-down title reads the second.  Pre-existing since D112 (W-47); gap 5130 removes it.
+
+**Gap 5134 — `tm now --json` has no divider.**  `tm now` prints a window of the rows (`emit::now_window`) and never
+the divider, so neither surface carries it; gap 1301 named `tm plan --json` alone.  Not a defect; recorded so the
+next reader does not look for one.
+
+**Closed:** 5031 and 1301 (§2), 4952 (§3).  **Open, carried:** 4954 (as 5130), 4976 (as 5131).
+
+### 6. Acceptance, on the tree this commit holds
+
+* **`check.sh`**, capped, all seventeen lines ok: build; totality; axiom audit **6,573** (6,549 at `1a37997`, +24 this
+  step's laws); `Negative.lean` rejected; FFI 96; corpus 29/37 and 4/5; stage goals **1**
+  (`plan_places_no_block_over_a_break`, untouched); prose citations; new definitions mutated (816 rostered, 0 owed);
+  parity (`P1-P122`, 8 declared holes, next free `P123`, on the track's branch before W-48 Land 1 renumbered); no two names; reached (1,097 exempt, 0 unanswered); the four of
+  check 13 (sent 174 key paths over 11 sections — `plan` 5, the two new keys among them; written 212, 173 written, 0
+  unanswered); the kernel replays every module.  The first full run (02:46, load 3.4 → 8.6) failed check 8 on three
+  names of the §1 probe this block had backticked; written without backticks since.
+* **`cargo test --workspace --no-fail-fast`, THREE runs** (D46): run 1 (02:52-03:12, load 8.6 → 13.0, peaking 15.8)
+  2,955 passed / **1 failed** / 53 ignored over 160 result lines — `cli_latency`'s T19 set-up, `tm drop ^a1` on
+  T11's three-year tree, "still running after 5s" (`FIRST_VERB`): the first verb's genesis, which this step does not
+  touch, missed its band under load, gap 4901's class, a measurement and never a band to move; runs 2 (03:12-03:30,
+  load 13.0 → 7.1) and 3 (03:30-03:49, load 7.1 → 8.0) **2,956 passed / 0 failed / 53 ignored** over 160 each (2,953 +
+  3 at `1a37997`: `plan_json_carries_the_day_files_divider_p118`, `the_host_does_not_place_or_word_the_divider`,
+  `the_note_reader_by_value_is_gone`).  `cli_latency` alone again at 03:49 (load 7.9 → 6.5): 7 passed, 0 failed, the
+  three-year first verb 3.36 s.
+* **The FFI crate** (`cd kernel/tm-kernel-ffi && cargo test`): 104 passed, 0 failed.
+* **The rows call this step leaves in place, measured** (that `cli_latency` run, one run, load ~8): T18 the planner
+  call 8.0 ms and the rows call 3.1 ms on the example tree, 75.1 / 49.5 ms on T11's tree, 97.7 / 44.8 and 199.0 / 45.6
+  ms on T14's; T19's tick on T11's tree, build + planner + rows, priced in §1 against the probe's one call.
+
+### 7. What lands, and what is owed
+
+* **ONE commit on `w48-r`** (this block's §2 and §3, and the record of §1 and §4).  The probe of §1 is at
+  `refs/archive/w48-r/one-call-probe` and is not an ancestor of anything.
+* **Owed, by name.**  The owner: gap 5130 (the one-call rows need a `CLASS unsent plan` line and a `plan.bed`
+  written-exempt line, or the hand-built-day door retired) and 5131 (the example tree's `^t3`).  The Land: the two
+  `reach-exempt.txt` deletions of §2 (track H's file this run), the parity holes `P114`-`P121` (`parity.txt`, one per
+  other track's number), and `forkclass.rs`' and `forkday.rs`' edits of §3 (track C's files at W-47).
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **Land 1** —
+     the three phase-1 tracks K, H and R composed onto `rebuild-on-lean` as one
+     measured octopus commit (AGENTS 6.5 item 8).  Gaps 5150-5159 are this
+     step's (5150 used).  No parity number is issued here; two are renumbered.
+     ===================================================================== -->
+
+## Stage 6 — W-48 Land 1: tracks K, H and R composed, parity renumbered down to P118
+
+### 1. What was landed, checked against `git log`, not against the reports
+
+Base `1a37997`.  Each track's report was compared with `git log rebuild-on-lean..<branch>` and with the
+worktree's `git status`; every worktree was clean, so nothing uncommitted was left behind on a branch.
+
+* **Track K** (`worktree-agent-a67e4570395562f19`, tip `b0d1089`): three commits, as reported — `f26c3eb` (D118,
+  the host's paused flag is the kernel's open block), `74dc93b` (D114 and D117 in `WallTimer.lean`), `b0d1089` (the
+  record of the held third commit).  Landed.
+* **Track H** (`worktree-agent-a0d8108ebbcdb6b10`, tip `ef6ea8b`): one commit, as reported (D121, D122, gap 4959).
+  Landed.
+* **Track R** (`w48-r`, tip `2ee9e14`): one commit, as reported (the `window ends` divider a kernel row, gaps 5031,
+  1301, 4952).  Landed.
+* **NOT landed: track K's third commit, D115, D116 and D119.**  It was never committed on K's branch; it exists as
+  the scratchpad patch `c3-over-69e547c.patch` (sha1 67997b00), red by check 12's census alone (K's gap 5071).  So
+  that the volatile scratchpad is not its only copy, this step applied it over `69e547c` (the record commit before
+  its one-line amendment to `b0d1089`) and kept the result at **`refs/archive/w48-k/held-d115-d116-d119`**
+  (`cfef6df`, 19 files, +1,467/−278).  It is an ancestor of nothing.  Gap 5150 says what it now owes.
+
+### 2. The merges, and every conflict
+
+Merged in the order K, H, R into `w48-land1`.  Four files conflicted; each is append-only and both sides were kept:
+
+* `kernel/README.md` — the three track blocks, in that order (each kept whole; the HTML banner opener the two later
+  blocks shared with the first was repeated for each).
+* `kernel/parity.txt` — K's rows P114-P116 kept; H's six and R's eight declared `hole` lines dropped (every number
+  they reserved either landed or was renumbered into); H's and R's rows kept for renumbering (§3).
+* `kernel/TmKernel/Check.lean` — K's and R's appended banners, both kept (24 + 24 audit lines).
+* `kernel/mutations.txt` — K's seven WallTimer rows and R's nine Emit/EmitWire rows, both kept; the rows each side
+  rewrote elsewhere merged without conflict.
+
+No other file conflicted.  Track R's land-owed check — its two `reach-exempt.txt` deletions against track H's edits
+of `reach.py` and `written-exempt.txt` — is answered by check 12 on the composed tree: 1,097 exempt in 66 sections,
+0 unanswered.  R's edits of `forkclass.rs` and `forkday.rs` (track C's files at W-47) are held by no W-48 track and
+merged clean.
+
+### 3. Parity renumbered down to contiguous
+
+Before the land: P1-P116 on K's branch, H's D122 issued as `P120` and R's divider as `P122`, each beside declared
+holes for the other tracks.  `parity.py` requires P1..Pmax with no hole, so:
+
+* **H's D122 (`tm undo` reads past a replan) is P117**: its canonical line, its `parity.txt` row (re-anchored to
+  README.md:97131), its behaviour row's test (renamed to undo_after_a_replan_undoes_the_last_step_p117 in
+  `tm/tests/cli_undo.rs`) and every issuance reference in track H's block;
+* **R's divider in `tm plan --json` is P118**: likewise (re-anchored to README.md:97322; plan_json_carries_the_day_files_divider_p118
+  in `tm/tests/cli_plan.rs`, whose doc comment names the old number in backticks).
+
+The tracks' own measurement sentences (`P1-P120`, `P1-P122`, the holes they declared) are kept as measurements of
+their branches, with the old numbers in backticks — `parity.py` sweeps a bare number above the register's top.
+Result: **118 registered (P1-P118), next free P119.**
+
+### 4. Acceptance, on the tree the land commit holds (capped, D46)
+
+* **`check.sh`**, all seventeen lines ok (06:47-07:02, load 1.1 → 4.5, a cold build, 14 m 55 s wall; and again on the final tree with this block
+  written, 07:56-07:57, load 3.9, 32 s warm): lake build;
+  totality; axiom audit **6,596** (6,549 at `1a37997` + 23 of K + 24 of R); `Negative.lean` rejected; FFI 96; corpus
+  29/37 files and 4/5 whole plans; stage goals **1** (`plan_places_no_block_over_a_break`, gap 4918); prose citations
+  (65,037 on the final tree, 0 unused allow entries); new definitions mutated (823 since `86c4dc6`, 0 owed); parity (P1-P118,
+  next free P119); no two names (0 unanswered); reached (1,618 reachable, 1,097 exempt, 0 unanswered); field writers (17 of 17);
+  decoded fields read (33 read, 3 exempt); sent keys (174, 0 unanswered); decoded keys written (212, 0 unanswered);
+  the kernel replays 96 modules.
+* **`cargo test --workspace --no-fail-fast`, THREE runs**: run 1 (07:02, load 2.1, 18 m 34 s) and run 2 (07:20, load
+  5.4, 17 m 12 s) **2,966 passed / 0 failed / 53 ignored over 161 result lines** each; run 3 (07:38, load 6.4, 17 m 8 s) the same, **2,966 / 0 / 53 over 161**.
+  2,966 = 2,953 at `1a37997` + 6 (K) + 4 (H) + 3 (R).  `cli_latency` passed in each (7 passed, 1 ignored).
+* **The FFI crate** (`cd kernel/tm-kernel-ffi && cargo test`, 07:55, load 6.3): **104 passed, 0 failed** over 5 result lines.
+
+### 5. What was driven (the land's binary, `tm init --example`, 2026-09-07, `-05:00`)
+
+`wake 06:05 --slept 8h` 09:00, `arrive` 09:01, `start ^t4 --energy 4` 09:02, `done ^t4` 09:50, `plan` 09:51, then
+
+```
+$ tm --now 2026-09-07T09:55:00-05:00 undo
+undid done (done ^t4) · 2 file(s) restored · 3 left
+[exit 0]
+```
+
+(D122 composed: on `1a37997` this refused with exit 3, the conflict at the block's start-marker line); then `tm plan
+--json` at 09:56 carries `"divider": {"before": 15, "time": "18:01", "text": "18:01  ───    window ends 18:01"}` and
+`tm plan` prints the same `window ends 18:01` line (R composed with H).  K's D118/D114/D117 were driven on K's branch
+(its block §§1-3) and not re-driven here.  No TUI drive.
+
+### 6. Gaps
+
+**Gap 5150 — track K's held commit (D115, D116, D119) owes more than it did when it was recorded.**  1. *What.*  The
+patch at `refs/archive/w48-k/held-d115-d116-d119` takes three parity numbers it calls "next free P117 onward"; the land
+gave the next two to D122 and the divider, so it must take three numbers from next free P119, renumbering its own
+canonical lines, rows and test names; its reach-exempt census (K's gap 5071: `## Replay.lean` 108 of 248,
+`## SealResume.lean` 33 of 50, "1,099 exempt before and after") was measured over `1a37997`'s file, and the landed file
+is R's (1,097 exempt), so the two reasons are re-derived over the landed tree, not copied from gap 5071.  2. *Why.*  The
+patch was never committed on its branch, and uncommitted work is not landed.  3. *Cost.*  D115, D116 and D119 are not
+in the binary; gaps 5034, 5035, 4913, 4917, 5029 and 5071 stay open.  4. *Clears it.*  A later W-48 step: rebase the
+archived commit onto the land, renumber, re-derive the two census reasons, full acceptance.
+
+**Closed by the landed tracks** (their blocks): 5030, 5014, 5036, 3042 (K); 4750, 5037, 4959 (H); 5031, 1301, 4952
+(R).  **Open, carried by name**: K's 5071; H's 5110-5113; R's 5130-5134 (5130 and 5131 the owner's); 4918.
+
+### 7. Owed, by name
+
+The owner: gaps 5130 and 5131 (track R).  A later step: gap 5150 (with 5071); D108; gap 4918's goal.  Not done here: a
+TUI drive; a per-commit rebuild for reach's history scope (H's gap 5111).

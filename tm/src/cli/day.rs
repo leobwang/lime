@@ -240,7 +240,7 @@ fn end_break_at(ctx: &mut Ctx, end: DateTime<chrono_tz::Tz>) -> Result<Option<u3
             .open_block
             .as_ref()
             .filter(|b| b.id == a.id.as_str())
-            .and_then(|b| super::ctx::logged_pause(&ctx.replay, b))
+            .map(|b| super::ctx::logged_pause(&ctx.replay, b))
     });
     if ctx.state.interrupt.is_none() {
         if let Some(a) = ctx.state.active.as_mut() {
@@ -256,6 +256,18 @@ fn end_break_at(ctx: &mut Ctx, end: DateTime<chrono_tz::Tz>) -> Result<Option<u3
         },
     );
     ctx.append_entry(&entry)?;
+    // **The owner's D114** (README gap 5014, stage 6 W-48 track K, parity
+    // P115): a calendar wall that ended while this break ran had its `unpause`
+    // held — a break running since before a wall's end holds the block
+    // (`WallTimer.breakHolds`), so a block is never working and on break at
+    // once — and the break's end is when it is written, by whichever verb
+    // ends the break, as of the end it ends at. With the break's line logged
+    // and none running, the kernel's wall rule answers that unpause
+    // (`WallTimer.writes`); with no wall ended inside the break it answers
+    // nothing.
+    if ctx.state.active.is_some() && stop_the_timer_at_walls(ctx, end)? {
+        ctx.reload()?;
+    }
     Ok(Some(actual))
 }
 
@@ -547,8 +559,14 @@ pub(crate) fn stop_the_timer_at_walls(ctx: &mut Ctx, at: DateTime<chrono_tz::Tz>
             say_wall_pause(ctx, &active.id, &m.walls, m.from, m.to);
         }
     }
+    // The cache reads the stops the kernel holds, never the last mark alone
+    // (the owner's D118, README gap 5030): a wall's `unpause` ends the wall's
+    // pause and no other stop — an interruption still open, or a break still
+    // running, holds the block (D117, D114) — as `ctx::derived_state` reads it.
+    let interrupted = ctx.state.interrupt.is_some();
+    let on_break = ctx.state.break_.is_some();
     if let Some(a) = ctx.state.active.as_mut() {
-        a.paused = paused;
+        a.paused = paused || interrupted || on_break;
     }
     ctx.save_state()?;
     Ok(true)
@@ -2227,8 +2245,7 @@ pub fn resume(g: &Globals) -> Result<i32, CliError> {
             .open_block
             .as_ref()
             .filter(|b| b.id == a.id.as_str())
-            .and_then(|b| super::ctx::logged_stops(&ctx.replay, b))
-            .map(|s| s.paused)
+            .map(|b| super::ctx::logged_stops(&ctx.replay, b).paused)
     });
     ctx.state.interrupt = None;
     if let Some(a) = ctx.state.active.as_mut() {
@@ -2390,19 +2407,38 @@ pub fn pause(g: &Globals) -> Result<i32, CliError> {
         None
     };
     let rec = Recorder::start(&ctx, "pause")?;
-    active.paused = !active.paused;
-    let paused = active.paused;
+    // The toggle is from the kernel's reading (the cache's `paused` is the
+    // kernel's open block since the owner's D118, the load's reconcile).
+    let pausing = !active.paused;
     let id = active.id.clone();
-    ctx.state.active = Some(active);
-    ctx.save_state()?;
-    ctx.append_event(if paused {
+    ctx.append_event(if pausing {
         Event::Pause { id: id.to_string() }
     } else {
         Event::Unpause { id: id.to_string() }
     })?;
     ctx.reload()?;
-    day_note(&ctx, timer_note(paused, &id))?;
-    rec.finish(&ctx, if paused { "pause" } else { "unpause" })?;
+    // **What the mark did is the kernel's to say** (the owner's D118, README gap
+    // 5030, parity P114): the cache takes the kernel's reading of the open block
+    // after the line it just logged, never the toggle's. They differ on exactly
+    // one log a verb writes — a `pause` stamped before the block's own `start`
+    // (a `--now` behind the log), which the kernel's machine reads as not the
+    // block's (D99, P104) — and then nothing was paused, and the verb says so.
+    let read = ctx
+        .replay
+        .open_block
+        .as_ref()
+        .filter(|b| b.id == id.as_str())
+        .map(|b| super::ctx::logged_pause(&ctx.replay, b))
+        .unwrap_or(pausing);
+    active.paused = read;
+    let paused = read;
+    ctx.state.active = Some(active);
+    ctx.save_state()?;
+    let took = paused == pausing;
+    if took {
+        day_note(&ctx, timer_note(paused, &id))?;
+    }
+    rec.finish(&ctx, if pausing { "pause" } else { "unpause" })?;
 
     let said = meeting.as_ref().map(|m| meeting_text(&ctx, &m.walls, m.from, m.to));
     let out = PauseOut {
@@ -2414,11 +2450,26 @@ pub fn pause(g: &Globals) -> Result<i32, CliError> {
             to: hhmm(m.to),
         }),
     };
+    let started = ctx.replay.open_block.as_ref().filter(|b| b.id == id.as_str()).map(|b| b.started);
     emit(
         ctx.json,
-        || match &said {
-            Some(m) => format!("resumed {} (it was paused for {m})", out.id.token()),
-            None => format!(
+        || match (&said, took) {
+            (_, false) if !pausing => format!(
+                "logged an unpause of {} at {}, and the log still holds it stopped (the log is read as the \
+                 kernel reads it, D118)",
+                out.id.token(),
+                ctx.now_tz.format("%H:%M")
+            ),
+            (_, false) => format!(
+                "logged a pause of {} at {}, before the block began at {} — it is not the block's, so {} keeps \
+                 running (the log is read as the kernel reads it, D118)",
+                out.id.token(),
+                ctx.now_tz.format("%H:%M"),
+                started.map(|t| t.with_timezone(&ctx.cfg.tz).format("%H:%M").to_string()).unwrap_or_default(),
+                out.id.token()
+            ),
+            (Some(m), true) => format!("resumed {} (it was paused for {m})", out.id.token()),
+            (None, true) => format!(
                 "{} {}",
                 if paused { "paused" } else { "resumed" },
                 out.id.token()

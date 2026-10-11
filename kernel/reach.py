@@ -629,6 +629,33 @@ def main(argv):
         spec |= under
     csimp = {k for k, d in dead.items() if d[3] in spec} - witness - proof - unsent
     answered = unsent | witness | proof | csimp
+
+    # THE SCOPE OF ONE `CLASS` LINE, measured on this tree (the owner's D121): the
+    # unreached definitions it would answer if it were the file's only class line
+    # -- `proof:<Module>` the module's, less the witness class, when the module
+    # passes `proof_violations`; an unsent key what lifting that key's cuts alone
+    # reaches.  The ratchet below asks it of the COMMITTED file's class lines, to
+    # know what that file exempted; the history walk asks it of each parent's.
+    # Measured here and not at the commit it is asked of: what a class answered
+    # at an older commit needs that commit's build, and this check reads one.
+    scope_cache = {}
+
+    def class_scope(ck):
+        if ck not in scope_cache:
+            if ck.startswith("proof:"):
+                stem = ck[len("proof:"):]
+                got = set() if proof_violations(stem) else \
+                    {k for k in dead if k[0] == stem + ".lean"} - witness
+            else:
+                lifted = set(keyed.get(ck, ()))
+                got = set()
+                if lifted:
+                    v, _ = callgraph.reachable(
+                        ir, {callgraph.symbol(q): {callgraph.symbol(x) for x in vs}
+                             for q, vs in cuts.items() if q not in lifted})
+                    got = {k for k, d in dead.items() if d[3] in v}
+            scope_cache[ck] = got
+        return scope_cache[ck]
     for stem in sorted(set(library) - compiled):
         bad.append("UNCOMPILED: %s is a library module and `lake` emitted no C "
                    "for it -- nothing imports it (AGENTS 2.3), so this check and "
@@ -718,11 +745,33 @@ def main(argv):
                 bad.append("RATCHET: %s:%d  `CLASS %s`'s reason has been "
                            "REWRITTEN and carries no ISO date (gap 2411's rule)"
                            % (EXEMPT_FILE.name, lineno, spelled))
+        # MEASURED BY SCOPE, NEVER BY LINE (the owner's D121, W-48 track H, README
+        # gap 5037).  What the committed file exempted is its entries AND every
+        # definition its `CLASS` lines answer, measured on this tree
+        # (class_scope), so an entry the committed file held only through a
+        # class -- a class line split into its members, each named -- is not
+        # growth: the file exempts no more than it did.  An entry in the scope of
+        # nothing the committed file held is growth, whatever was deleted beside
+        # it.  A moved entry carries a reason nobody audited, so it costs what a
+        # rewritten reason costs: an ISO date (gap 2411).  A `CLASS` line stays
+        # keyed by its class above: a class is a RULE, which answers definitions
+        # not yet written, so its scope is not the set it answers today.
+        held = set(prev_entries)
+        for k in prev_classes:
+            held |= class_scope(k)
         for key in sorted(set(entries) - set(prev_entries)):
-            module, _, lineno = sections[entries[key][1]]
-            bad.append("RATCHET: %s (%s) is a NEW exemption, held by no entry at HEAD -- "
-                       "this file may only SHRINK (D51), whatever section it stands under "
-                       "(README gaps 3953 and 4043; the section at line %d)"
+            module, reason, lineno = sections[entries[key][1]]
+            if key in held:
+                if not SECTION_DATE.search(reason):
+                    bad.append("RATCHET: %s (%s) was exempt at HEAD through a `CLASS` line and "
+                               "is named now under the `## %s` section at line %d, whose reason "
+                               "carries no ISO date -- a reason nobody audited costs a date "
+                               "(gap 2411)" % (key[1], module, module, lineno))
+                continue
+            bad.append("RATCHET: %s (%s) is a NEW exemption, in the scope of no entry and no "
+                       "`CLASS` line at HEAD -- this file may only SHRINK (D51), measured by "
+                       "the definitions it exempts (D121), whatever section it stands under "
+                       "or line it replaces (README gaps 3953 and 4043; the section at line %d)"
                        % (key[1], module, lineno))
         # AND THE REASON AN ALREADY-GRANDFATHERED ENTRY CARRIES IS PINNED TOO
         # (W-32 repair, gap 2411).  The loop above examines only entries whose
@@ -755,7 +804,16 @@ def main(argv):
     def keys(text):
         ents, _secs, _c, cls = read_exemptions(EXEMPT_FILE, text)
         return {"%s %s" % k for k in ents} | {"CLASS %s" % k for k in cls}
-    hist = ratchet.grown(EXEMPT_FILE, keys)
+
+    # By scope since D121: an entry a commit names is not growth when a `CLASS`
+    # line of its parent answers that definition (measured on this tree, as above).
+    def in_held_class(_sha, key, held):
+        if key.startswith("CLASS "):
+            return False
+        module, _, name = key.partition(" ")
+        return any((module, name) in class_scope(h[len("CLASS "):])
+                   for h in held if h.startswith("CLASS "))
+    hist = ratchet.grown(EXEMPT_FILE, keys, in_held_class)
     if hist is None:
         bad.append("RATCHET UNCHECKED: git cannot read %s's committed history since %s, so "
                    "growth that reached a commit is invisible (README gap 4132)"

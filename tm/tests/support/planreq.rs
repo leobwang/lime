@@ -226,6 +226,7 @@ pub fn kernel_day_of(resp: &Value, w: &World<'_>, order: &[usize]) -> Result<(Ke
     let raw = tm_kernel_ffi::call(&rows).expect("the kernel call returns");
     let rows_resp: Value = serde_json::from_str(&raw).unwrap_or_else(|e| panic!("the response is JSON: {e}\n{raw}"));
     day.day.cells = planwire::read_rows(&rows_resp, &day.day.segments).map_err(|e| format!("plan rows: {e}"))?;
+    day.day.divider = planwire::read_divider(&rows_resp, &day.day.segments).map_err(|e| format!("plan divider: {e}"))?;
     Ok((day, ans))
 }
 

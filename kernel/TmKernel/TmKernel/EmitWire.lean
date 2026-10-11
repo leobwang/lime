@@ -93,12 +93,13 @@ open Emit (Row)
 
 /-- A key of the `plan` section, or of one of its segment records. -/
 inductive RowKey
-  | bed | priorities | segments
+  | bed | priorities | segments | budgetBlocks | windowEnd
   | start | stop | kind | batch | energy | item | planned | mult | flags | note
 deriving DecidableEq, Repr
 
 def RowKey.name : RowKey → String
   | .bed => "bed" | .priorities => "priorities" | .segments => "segments"
+  | .budgetBlocks => "budgetBlocks" | .windowEnd => "windowEnd"
   | .start => "start" | .stop => "stop" | .kind => "kind" | .batch => "batch"
   | .energy => "energy" | .item => "item" | .planned => "planned" | .mult => "mult"
   | .flags => "flags" | .note => "note"
@@ -472,6 +473,11 @@ structure RowReq where
   bed   : Field.Clock
   prios : Capped (Id × Fin 8)
   segs  : Capped WfSeg
+  /-- **The day's budget in blocks and its window's end** (absolute seconds), both or neither (W-48 track R, README
+  gaps 5031 and 1301): with them the section answers the `window ends` divider (`Emit.divider`) beside the rows.  The
+  budget is the planner's — the binary sends back the planner answer's own `budgetBlocks` and `window.hi`, as it sends
+  its `segments` — bounded as the fork's `u32` (`u32Within`) and the calendar (`secWithin`). -/
+  div   : Option (Nat × Nat)
 
 /-- The section: `bed`, the priorities and the segments. -/
 def readRowSection (sec : JVal) : Except RowRefusal RowReq := do
@@ -486,7 +492,17 @@ def readRowSection (sec : JVal) : Except RowRefusal RowReq := do
   let prios ← readPrios ps
   let ss ← arrAtP sec "segments" (.bad .segments)
   let segs ← readSegs ss
-  pure ⟨bed, prios, segs⟩
+  let bb ← optNatAtP sec "budgetBlocks" (.bad .budgetBlocks)
+  let we ← optNatAtP sec "windowEnd" (.bad .windowEnd)
+  let div ← match bb, we with
+    | some b, some e => do
+      let b ← u32Within (.bad .budgetBlocks) b
+      let e ← secWithin (.bad .windowEnd) e
+      pure (some (b, e))
+    | none, none => pure none
+    | none, some _ => throw (.bad .budgetBlocks)
+    | some _, none => throw (.bad .windowEnd)
+  pure ⟨bed, prios, segs, div⟩
 
 /-- **The rows this call answers** — `Emit.rowOf` over the segments the host sent, against the kernel's **own** loaded
 plan, a HOT row told on the request's `now` (the planned day, D112) when it carries one.  The caller `Emit.lean` lacked. -/
@@ -520,10 +536,33 @@ well as the row, which it needs for the batch members only. -/
 def rowsJson (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) (now : Option Nat := none) : JVal :=
   .arr ((q.segs.val.zip (rowsOfReq p z bm q now)).map (fun sr => rowJson p sr.1.val sr.2))
 
-/-- The `plan` key, after `lookahead` (design §10.2's order). -/
-def withPlan (r v : JVal) : JVal :=
+/-- The nine keys, in `Row.cells`' order. -/
+def rowKeys : List (List Char) :=
+  ["time".toList, "ci".toList, "p".toList, "mark".toList, "title".toList,
+   "parent".toList, "est".toList, "actual".toList, "note".toList]
+
+/-- **The divider, as the rows are**: its position among them (`before`, a row index, or the number of rows when it
+comes last), then the nine cells under `rowKeys` and an empty `batchNames`, so the host reads it with the one decoder
+of a row's cells.  `Emit.divider`'s answer (W-48 track R, README gaps 5031 and 1301). -/
+def dividerJson (i : Nat) (r : Row) : JVal :=
+  .obj (("before".toList, .num i) :: (rowKeys.zip (r.cells.map JVal.str) ++ [("batchNames".toList, .arr [])]))
+
+/-- **The `divider` key of a section that sent its budget and window's end** — `null` on a day with no divider — and
+nothing at all on one that did not, whose answer is the rows alone, as before W-48.  The budget is counted in the
+request's own `blockMin`, the length every duration cell of the rows is counted in. -/
+def dividerPairs (z : Cal.Tz) (bm : Nat) (q : RowReq) : List (List Char × JVal) :=
+  match q.div with
+  | none => []
+  | some (b, e) =>
+    [("divider".toList, match Emit.divider z (b * bm) e (q.segs.val.map (·.val)) with
+      | none => .null
+      | some (i, r) => dividerJson i r)]
+
+/-- The `plan` key, after `lookahead` (design §10.2's order), holding the rows and, after them, whatever `extra` pairs
+the section answers (W-48 track R: the divider). -/
+def withPlan (r v : JVal) (extra : List (List Char × JVal) := []) : JVal :=
   match r with
-  | .obj [(k, .obj kvs)] => .obj [(k, .obj (kvs ++ [("plan".toList, jone "rows" v)]))]
+  | .obj [(k, .obj kvs)] => .obj [(k, .obj (kvs ++ [("plan".toList, .obj (("rows".toList, v) :: extra))]))]
   | _ => r
 
 /-! ## The entry -/
@@ -565,7 +604,7 @@ def runRowsP (j : JVal) : Except JVal (JVal × Option CapParts) :=
           | some bm =>
             match readRowSection sec with
             | .error x => .error (rowRefusalJson x)
-            | .ok q => .ok (withPlan r (rowsJson p.val z bm.val q clock.now), parts)
+            | .ok q => .ok (withPlan r (rowsJson p.val z bm.val q clock.now) (dividerPairs z bm.val q), parts)
 
 /-- **The bytes of it** — what every law below this point is about, and byte for byte what
 `runRows` was before W-28 widened the seam (`Boundary.CapParts`).  One match tree, two readers
@@ -632,11 +671,6 @@ theorem runRowsP_bytes (j : JVal) : (runRowsP j).map Prod.fst = runRows j := rfl
 
 /-- **The export is `callRows`.** -/
 theorem callExport_is_callRows (input : String) : callExport input = callRows input := rfl
-
-/-- The nine keys, in `Row.cells`' order. -/
-def rowKeys : List (List Char) :=
-  ["time".toList, "ci".toList, "p".toList, "mark".toList, "title".toList,
-   "parent".toList, "est".toList, "actual".toList, "note".toList]
 
 /-- **The response's cells are `Row.cells`, in `Row.cells`' order.**  A field reordered in
 `Emit.Row` breaks `Emit.cells_are_the_nine_in_order`; a key reordered here breaks this, and the
@@ -1169,6 +1203,79 @@ theorem rowsJson_length_on_a_day (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : Row
     ∃ xs, rowsJson p z bm q now = .arr xs ∧ xs.length = q.segs.val.length := by
   refine ⟨_, rfl, ?_⟩
   cases now <;> simp [rowsOfReq]
+
+/-! ## W-48 track R — the `window ends` divider on the wire (README gaps 5031 and 1301)
+
+APPENDED 2026-10-11.  A `plan` section that carries the day's `budgetBlocks` and its window's end (`windowEnd`, absolute
+seconds) is answered the divider beside the rows — `Emit.divider` over the segments it sent, the budget counted in the
+request's `blockMin` — under `plan.divider`: `null` where the day has none, else its position (`before`) and its nine
+cells.  A section that sends neither is answered exactly as before; one that sends one of the two is refused, by the
+missing key's name. -/
+
+/-- **The two new keys spell themselves.** -/
+theorem rowKey_names_the_divider_keys :
+    (RowKey.budgetBlocks.name, RowKey.windowEnd.name) = ("budgetBlocks", "windowEnd") := rfl
+
+/-- **Both read**, each through its bound. -/
+theorem readRowSection_reads_the_budget_and_the_window_end :
+    (readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr []),
+      ("budgetBlocks".toList, .num 6), ("windowEnd".toList, .num 1000)])).map (fun q => q.div)
+      = .ok (some (6, 1000)) := by
+  rfl
+
+/-- **Neither read is no divider** — the section W-24 shaped, answered as before. -/
+theorem readRowSection_without_them_reads_no_divider :
+    (readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr [])])).map (fun q => q.div)
+      = .ok none := by
+  rfl
+
+/-- **One without the other is refused, by the missing key's name.** -/
+theorem readRowSection_refuses_one_without_the_other :
+    readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr []),
+      ("budgetBlocks".toList, .num 6)]) = .error (.bad .windowEnd) ∧
+    readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr []),
+      ("windowEnd".toList, .num 1000)]) = .error (.bad .budgetBlocks) := by
+  constructor <;> rfl
+
+/-- **R10: a budget past the fork's `u32` and a window's end past the calendar are refused**, each by its key. -/
+theorem readRowSection_refuses_a_budget_past_the_width_and_an_end_past_the_calendar :
+    readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr []),
+      ("budgetBlocks".toList, .num (CapWire.maxRemaining + 1)), ("windowEnd".toList, .num 1000)])
+      = .error (.bad .budgetBlocks) ∧
+    readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr []),
+      ("budgetBlocks".toList, .num 6), ("windowEnd".toList, .num 315537897600)])
+      = .error (.bad .windowEnd) := by
+  constructor <;> rfl
+
+/-- **The divider is its position, then the nine cells under the rows' own keys, and no members.** -/
+theorem dividerJson_is_its_position_then_the_nine_cells (i : Nat) (r : Row) :
+    dividerJson i r = .obj (("before".toList, .num i) ::
+      (rowKeys.zip (r.cells.map JVal.str) ++ [("batchNames".toList, .arr [])])) := rfl
+
+/-- **Without the two inputs the answer gains nothing**, so the plan object is the rows alone, as before W-48. -/
+theorem dividerPairs_without_the_inputs (z : Cal.Tz) (bm : Nat) (q : RowReq) (h : q.div = none) :
+    dividerPairs z bm q = [] := by
+  simp [dividerPairs, h]
+
+/-- **With them, the `divider` key is `Emit.divider` of the segments sent, the budget counted in `bm`.** -/
+theorem dividerPairs_with_the_inputs (z : Cal.Tz) (bm b e : Nat) (q : RowReq) (h : q.div = some (b, e)) :
+    dividerPairs z bm q = [("divider".toList, match Emit.divider z (b * bm) e (q.segs.val.map (·.val)) with
+      | none => .null
+      | some (i, r) => dividerJson i r)] := by
+  simp only [dividerPairs, h]
+
+/-- **Read off the wire, a day with its budget and window's end answers one `divider` key** — `null` here, the day
+holding no row — and a day without them none. -/
+theorem dividerPairs_on_the_wire :
+    (readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr []),
+      ("budgetBlocks".toList, .num 6), ("windowEnd".toList, .num 1000)])).map
+        (fun q => dividerPairs Replay.utcZone 50 q) = .ok [("divider".toList, .null)] ∧
+    (readRowSection (.obj [("bed".toList, .str "22:00".toList), ("segments".toList, .arr [])])).map
+        (fun q => dividerPairs Replay.utcZone 50 q) = .ok [] := by
+  constructor <;> rfl
+
+/-- **And with no extra pairs the `plan` object is the rows alone.** -/
+theorem withPlan_of_no_extra (r v : JVal) : withPlan r v [] = withPlan r v := rfl
 
 end EmitWire
 end Tm

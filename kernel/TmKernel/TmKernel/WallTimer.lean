@@ -98,9 +98,19 @@ theorem touchedAfter_eq_any (marks : List Replay.IdleMark) (t : Cal.Instant) :
   | nil => rfl
   | cons m ms ih => simp [touchedAfter, ih]
 
-/-- **The last mark that set the timer** (the host's last_timer_mark): the last that is not a break. -/
+/-- Whether a mark is an interruption's — an `interrupt` or a `resume` (the owner's **D117**, README gaps 5036 and 3042):
+the other stop's marks (`spanStep`), which say nothing of the block's pause. -/
+def isIntMark : Replay.IdleMark → Bool
+  | .interrupt _ | .resume _ => true
+  | _ => false
+
+/-- **The last mark that set the block's pause** — the host's last_timer_mark: the last that is not a break, and,
+since the owner's **D117**, not an interruption's (`isIntMark`).  Until W-48 an interruption taken and resumed inside a
+meeting the wall had paused made its `resume` the last word, and the wall's end wrote no unpause: the block stayed
+paused past the meeting — resumed inside a wall and paused not "until the wall ends" (README gap 3042).  A `resume`
+ends the interruption, not the pause (`spanStep`, `Replay.resumeBlock`). -/
 def lastTimerMark (marks : List Replay.IdleMark) : Option Replay.IdleMark :=
-  (marks.filter fun m => !isBrk m).getLast?
+  (marks.filter fun m => !isBrk m && !isIntMark m).getLast?
 
 /-- Whether the wall's pause at `lo` is still the last word on the timer. -/
 def lastIsPauseAt (marks : List Replay.IdleMark) (lo : Cal.Instant) : Bool :=
@@ -112,70 +122,223 @@ def lastIsPauseAt (marks : List Replay.IdleMark) (lo : Cal.Instant) : Bool :=
 def markOf (pause : Bool) (t : Cal.Instant) : Replay.IdleMark :=
   if pause then .pause (t, Cal.Offset.utc) else .unpause (t, Cal.Offset.utc)
 
-/-- **The second a span's pause is stamped at, for the block begun at `started`** (the owner's **D110**, README gap
-4748, parity P106): the span's own start `lo` when the wall began while the block ran (D61), and the block's own start —
-its first whole second at or after it — when the block began inside the wall, so the pause holds the block from its
-start until the wall ends.  Fork 4748911 logs nothing at a wall (P53), and D61's rule paused only a wall that began
-while the block ran. -/
-def pauseSec (started : Cal.Instant) (s : Nat × Nat) : Nat :=
-  max s.1 (if started.ns = 0 then started.sec else started.sec + 1)
+/-- **The first whole second at or after an instant** — marks are written in whole seconds. -/
+def ceilSec (t : Cal.Instant) : Nat := if t.ns = 0 then t.sec else t.sec + 1
 
-/-- **A wall that began while the block ran is paused at its own start** — D61's case, unchanged by D110. -/
-theorem pauseSec_of_lt (started : Cal.Instant) (s : Nat × Nat) (h : started < ⟨s.1, 0⟩) :
-    pauseSec started s = s.1 := by
-  rw [Cal.Instant.lt_iff] at h
-  unfold pauseSec
-  simp only at h
-  split <;> (rw [Nat.max_def]; split <;> omega)
+/-- **The second a span's pause would be stamped at, by the owner's D110** (README gap 4748, parity P106): the span's
+own start `lo` when the wall began while the block ran (D61), and the block's own start — its first whole second at or
+after it — when the block began inside the wall.  Until W-48 this was `pauseSec`; since the owner's D117 the pause
+second can be a resume's (`pauseSec`). -/
+def startSec (started : Cal.Instant) (s : Nat × Nat) : Nat :=
+  max s.1 (ceilSec started)
 
-/-- **The pause second is never before the block's start, nor before the wall's** (D110). -/
-theorem pauseSec_ge (started : Cal.Instant) (s : Nat × Nat) :
-    s.1 ≤ pauseSec started s ∧ started ≤ ⟨pauseSec started s, 0⟩ := by
+/-- One mark of the interruptions' pairing (the owner's **D117**): `spanStep`'s interruption half alone — an
+`interrupt` opens one (a second while one is open opens nothing) and only a `resume` closes it, the closed one
+appended as `[from, until)`. -/
+def intStep (st : Option Cal.Instant × List (Cal.Instant × Cal.Instant)) (m : Replay.IdleMark) :
+    Option Cal.Instant × List (Cal.Instant × Cal.Instant) :=
+  match m with
+  | .interrupt t => (st.1.or (some t.1), st.2)
+  | .resume t => (match st.1 with | some a => (none, st.2 ++ [(a, t.1)]) | none => st)
+  | _ => st
+
+/-- **The interruptions the marks close** (D117), in order. -/
+def intSpans (marks : List Replay.IdleMark) : List (Cal.Instant × Cal.Instant) :=
+  (marks.foldl intStep (none, [])).2
+
+/-- **The second a span's pause is stamped at** — D110's (`startSec`), unless an interruption the log closes covers it
+and its `resume` falls inside the wall: then the resume's first whole second (the owner's **D117**, README gaps 5036
+and 3042, parity **P116**), so a block RESUMED inside a calendar wall is paused from its resume until the wall ends, as
+one begun inside it is paused from its start.  Until W-48 the interruption covering the wall's start stood for the
+wall's stop (`stoppedAt`) and nothing was written, so the timer ran from the resume through the rest of the meeting
+(driven: `start` 12:00, `interrupt` 12:40, `resume` 13:00 in a 12:50–13:50 meeting, `stop` 14:00 — `after 100m`). -/
+def pauseSec (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat) : Nat :=
+  match ints.find? (fun i => decide (i.1 ≤ ⟨startSec started s, 0⟩) &&
+      decide ((⟨startSec started s, 0⟩ : Cal.Instant) < i.2) && decide (ceilSec i.2 < s.2)) with
+  | some i => ceilSec i.2
+  | none => startSec started s
+
+theorem instant_le_ceilSec (t : Cal.Instant) : t ≤ ⟨ceilSec t, 0⟩ := by
+  rw [Cal.Instant.le_iff]; unfold ceilSec
+  by_cases h : t.ns = 0 <;> simp [h]
+
+theorem lt_ceilSec_of_lt (p : Nat) (t : Cal.Instant) (h : (⟨p, 0⟩ : Cal.Instant) < t) : p < ceilSec t := by
+  rw [Cal.Instant.lt_iff] at h; simp only at h; unfold ceilSec; split <;> omega
+
+theorem ceilSec_le_of_le (t : Cal.Instant) (p : Nat) (h : t ≤ ⟨p, 0⟩) : ceilSec t ≤ p := by
+  rw [Cal.Instant.le_iff] at h; simp only at h; unfold ceilSec; split <;> omega
+
+/-- **The pause second is never before D110's** (`startSec`): a resume moves it later, never earlier. -/
+theorem startSec_le_pauseSec (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat) :
+    startSec started s ≤ pauseSec started ints s := by
   unfold pauseSec
-  refine ⟨Nat.le_max_left _ _, ?_⟩
-  rw [Cal.Instant.le_iff]
-  simp only
   split
-  · rename_i h; rw [Nat.max_def]; split <;> omega
-  · rename_i h; rw [Nat.max_def]; split <;> omega
+  · rename_i i hf
+    have hp := List.find?_some hf
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+    exact Nat.le_of_lt (lt_ceilSec_of_lt _ _ hp.1.2)
+  · exact Nat.le_refl _
+
+/-- **The pause second is D110's or before the wall's end**: a resume moves it only to a second inside the wall. -/
+theorem pauseSec_cases (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat) :
+    pauseSec started ints s = startSec started s ∨ pauseSec started ints s < s.2 := by
+  unfold pauseSec
+  split
+  · rename_i i hf
+    have hp := List.find?_some hf
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+    exact Or.inr hp.2
+  · exact Or.inl rfl
+
+/-- **With no interruption the log closes covering D110's second, the pause is stamped there.** -/
+theorem pauseSec_of_uncovered (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat)
+    (h : ∀ i ∈ ints, ¬ (i.1 ≤ ⟨startSec started s, 0⟩ ∧ (⟨startSec started s, 0⟩ : Cal.Instant) < i.2)) :
+    pauseSec started ints s = startSec started s := by
+  unfold pauseSec
+  split
+  · rename_i i hf
+    have hm := List.mem_of_find?_eq_some hf
+    have hp := List.find?_some hf
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+    exact absurd ⟨hp.1.1, hp.1.2⟩ (h i hm)
+  · rfl
+
+/-- **A wall that began while the block ran is paused at its own start** — D61's case, unchanged by D110, and by the
+owner's D117 where no interruption the log closes covers the wall's start.  **Restated at D117** (W-48 track K): the
+statement without `hu` is refuted (`pauseSec_of_lt_as_d110_wrote_it_is_refuted`). -/
+theorem pauseSec_of_lt (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat)
+    (h : started < ⟨s.1, 0⟩) (hu : ∀ i ∈ ints, ¬ (i.1 ≤ ⟨s.1, 0⟩ ∧ (⟨s.1, 0⟩ : Cal.Instant) < i.2)) :
+    pauseSec started ints s = s.1 := by
+  have hs : startSec started s = s.1 := by
+    unfold startSec
+    have := ceilSec_le_of_le started s.1 (by
+      rw [Cal.Instant.lt_iff] at h; rw [Cal.Instant.le_iff]; simp only at h ⊢; omega)
+    omega
+  rw [pauseSec_of_uncovered started ints s (by rw [hs]; exact hu), hs]
+
+/-- **"A wall that began while the block ran is paused at its own start", as D110 wrote it, refuted by D117**: the
+block begun at 500 and interrupted 900–1200 across the wall `[1000, 2000)`'s start is paused at its resume, 1200. -/
+theorem pauseSec_of_lt_as_d110_wrote_it_is_refuted :
+    ¬ ∀ (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat), started < ⟨s.1, 0⟩ →
+      pauseSec started ints s = s.1 := by
+  intro h
+  have := h ⟨500, 0⟩ [(⟨900, 0⟩, ⟨1200, 0⟩)] (1000, 2000) (by decide)
+  revert this; decide
+
+/-- **The pause second is never before the block's start, nor before the wall's** (D110, and D117's). -/
+theorem pauseSec_ge (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat) :
+    s.1 ≤ pauseSec started ints s ∧ started ≤ ⟨pauseSec started ints s, 0⟩ := by
+  have h1 := startSec_le_pauseSec started ints s
+  have h2 := instant_le_ceilSec started
+  refine ⟨Nat.le_trans (Nat.le_max_left _ _) h1, ?_⟩
+  have h3 : ceilSec started ≤ pauseSec started ints s := Nat.le_trans (Nat.le_max_right _ _) h1
+  rw [Cal.Instant.le_iff] at h2 ⊢; simp only at h2 ⊢; omega
+
+/-- The two pairings agree on the interruption: `spanStep`'s open interruption is `intStep`'s, and every interruption
+`intStep` closes `spanStep` closes too (D117). -/
+theorem intSpans_fold (started : Cal.Instant) : ∀ (marks : List Replay.IdleMark)
+    (p i : Option Cal.Instant) (l : List (Cal.Instant × Option Cal.Instant)) (k : List (Cal.Instant × Cal.Instant)),
+    (∀ x ∈ k, (x.1, some x.2) ∈ l) →
+    (marks.foldl (spanStep started) ((p, i), l)).1.2 = (marks.foldl intStep (i, k)).1 ∧
+      ∀ x ∈ (marks.foldl intStep (i, k)).2, (x.1, some x.2) ∈ (marks.foldl (spanStep started) ((p, i), l)).2
+  | [], _, _, _, _, h2 => ⟨rfl, h2⟩
+  | m :: ms, p, i, l, k, h2 => by
+    cases m with
+    | pause t =>
+      simp only [List.foldl_cons, spanStep, intStep]
+      split
+      · exact intSpans_fold started ms p i l k h2
+      · exact intSpans_fold started ms _ i l k h2
+    | unpause t =>
+      simp only [List.foldl_cons, spanStep, intStep]
+      split
+      · exact intSpans_fold started ms _ i _ k (fun x hx => List.mem_append_left _ (h2 x hx))
+      · exact intSpans_fold started ms _ i _ k h2
+    | interrupt t =>
+      simp only [List.foldl_cons, spanStep, intStep]
+      exact intSpans_fold started ms p _ l k h2
+    | resume t =>
+      simp only [List.foldl_cons, spanStep, intStep]
+      cases i with
+      | none => exact intSpans_fold started ms p none l k h2
+      | some a =>
+        apply intSpans_fold started ms p none _ _
+        intro x hx
+        rcases List.mem_append.1 hx with hx | hx
+        · exact List.mem_append_left _ (h2 x hx)
+        · simp only [List.mem_singleton] at hx; subst hx; simp
+    | brk t a => exact intSpans_fold started ms p i l k h2
+
+/-- **Every interruption the log closes is one of the user's stops** (`idleSpans`, D117). -/
+theorem intSpans_sub (marks : List Replay.IdleMark) (started : Cal.Instant) (brk : Option Cal.Instant)
+    (i : Cal.Instant × Cal.Instant) (h : i ∈ intSpans marks) : (i.1, some i.2) ∈ idleSpans marks started brk := by
+  have := (intSpans_fold started marks none none [] [] (by simp)).2 i h
+  unfold idleSpans
+  exact List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ this))
+
+/-- **A timer running at `t` has no interruption the log closes covering `t`** (D117). -/
+theorem not_covered_of_not_stopped (marks : List Replay.IdleMark) (started t : Cal.Instant) (brk : Option Cal.Instant)
+    (h : stoppedAt marks started t brk = false) : ∀ i ∈ intSpans marks, ¬ (i.1 ≤ t ∧ t < i.2) := by
+  intro i hi hc
+  unfold stoppedAt at h
+  have := List.any_eq_false.1 h _ (intSpans_sub marks started brk i hi)
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+  exact this ⟨hc.1, hc.2⟩
+
+/-- `intStep` passes over a written mark. -/
+theorem intStep_markOf (st : Option Cal.Instant × List (Cal.Instant × Cal.Instant)) (b : Bool) (t : Cal.Instant) :
+    intStep st (markOf b t) = st := by
+  unfold markOf; split <;> rfl
+
+/-- **A break that has run since before the wall's end holds the block** (the owner's **D114**, README gap 5014,
+parity **P115**): the running break `brk` began before `hi`.  While it runs the wall's `unpause` is not written — it is
+written once the break has ended, by the verb that ends it — so a block is never working and on break at once.  A break
+begun at or after `hi` began once the wall had ended, and holds nothing of it. -/
+def breakHolds (brk : Option Cal.Instant) (hi : Nat) : Bool :=
+  match brk with
+  | some b => decide (b < ⟨hi, 0⟩)
+  | none => false
 
 /-- The pause half of a span: the pause at the span's pause second (`pauseSec`) is written unless one is logged there. -/
-def pauseIfNew (started : Cal.Instant) (s : Nat × Nat) (acc : List Replay.IdleMark × List (Bool × Nat × Nat)) :
-    List Replay.IdleMark × List (Bool × Nat × Nat) :=
-  if acc.1.any (pauseAt ⟨pauseSec started s, 0⟩) then acc
-  else (acc.1 ++ [markOf true ⟨pauseSec started s, 0⟩], acc.2 ++ [(true, s)])
+def pauseIfNew (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (s : Nat × Nat)
+    (acc : List Replay.IdleMark × List (Bool × Nat × Nat)) : List Replay.IdleMark × List (Bool × Nat × Nat) :=
+  if acc.1.any (pauseAt ⟨pauseSec started ints s, 0⟩) then acc
+  else (acc.1 ++ [markOf true ⟨pauseSec started ints s, 0⟩], acc.2 ++ [(true, s)])
 
-/-- The unpause half: once `hi` has passed, an unpause at `hi` is written if none is logged there and
-the span's pause is still the last word on the timer. -/
-def unpauseIfDone (started now : Cal.Instant) (s : Nat × Nat)
-    (a1 : List Replay.IdleMark × List (Bool × Nat × Nat)) :
+/-- The unpause half: once `hi` has passed, an unpause at `hi` is written if none is logged there, the span's pause is
+still the last word on the timer and — since the owner's **D114** — no break running since before `hi` holds the block
+(`breakHolds`). -/
+def unpauseIfDone (started now : Cal.Instant) (brk : Option Cal.Instant) (ints : List (Cal.Instant × Cal.Instant))
+    (s : Nat × Nat) (a1 : List Replay.IdleMark × List (Bool × Nat × Nat)) :
     List Replay.IdleMark × List (Bool × Nat × Nat) :=
   if (decide ((⟨s.2, 0⟩ : Cal.Instant) ≤ now) && !(a1.1.any (unpauseAt ⟨s.2, 0⟩)) &&
-      lastIsPauseAt a1.1 ⟨pauseSec started s, 0⟩) = true
+      lastIsPauseAt a1.1 ⟨pauseSec started ints s, 0⟩ && !breakHolds brk s.2) = true
   then (a1.1 ++ [markOf false ⟨s.2, 0⟩], a1.2 ++ [(false, s)])
   else a1
 
 /-- **One joined wall span `[lo, hi)`, in whole seconds**, against the marks so far: what it writes,
 `(true, span)` for a pause at its pause second (`pauseSec`: `lo`, or the block's start when the block began inside the
-wall — the owner's D110) and `(false, span)` for an unpause at `hi`, and the marks with what it wrote appended (the log
-grows in file order).  A span that ended by the block's start is not the block's, nor one whose pause second is after
-`now`. -/
-def step (started now : Cal.Instant) (brk : Option Cal.Instant)
+wall — the owner's D110 — or the resume of an interruption that covered it — D117) and `(false, span)` for an unpause at
+`hi`, and the marks with what it wrote appended (the log grows in file order).  A span that ended by the block's start
+is not the block's, nor one whose pause second is after `now`.  `ints` is the interruptions the log closes
+(`intSpans`). -/
+def step (started now : Cal.Instant) (brk : Option Cal.Instant) (ints : List (Cal.Instant × Cal.Instant))
     (acc : List Replay.IdleMark × List (Bool × Nat × Nat)) (s : Nat × Nat) :
     List Replay.IdleMark × List (Bool × Nat × Nat) :=
   if ((⟨s.1, 0⟩ : Cal.Instant) ≤ started ∧ (⟨s.2, 0⟩ : Cal.Instant) ≤ started) ∨
-      now < ⟨pauseSec started s, 0⟩ then acc
-  else if (!(acc.1.any (pauseAt ⟨pauseSec started s, 0⟩)) &&
-      (stoppedAt acc.1 started ⟨pauseSec started s, 0⟩ brk || touchedAfter acc.1 ⟨pauseSec started s, 0⟩)) = true
+      now < ⟨pauseSec started ints s, 0⟩ then acc
+  else if (!(acc.1.any (pauseAt ⟨pauseSec started ints s, 0⟩)) &&
+      (stoppedAt acc.1 started ⟨pauseSec started ints s, 0⟩ brk ||
+        touchedAfter acc.1 ⟨pauseSec started ints s, 0⟩)) = true
     then acc
-  else unpauseIfDone started now s (pauseIfNew started s acc)
+  else unpauseIfDone started now brk ints s (pauseIfNew started ints s acc)
 
-/-- **What the day's walls write** (D61, P53), in order: a pause at a span's start, an unpause at
+/-- **What the day's walls write** (D61, P53), in order: a pause at a span's pause second, an unpause at
 its end, over the block begun at `started`, the log's marks of the day, the running break and
 `now`. -/
 def writes (started now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark)
     (spans : List (Nat × Nat)) : List (Bool × Nat × Nat) :=
-  (spans.foldl (step started now brk) (marks, [])).2
+  (spans.foldl (step started now brk (intSpans marks)) (marks, [])).2
 
 /-! ## The laws — one span, the day as a user has it -/
 
@@ -203,47 +366,65 @@ theorem hasUnpause_none_of_untouched (marks : List Replay.IdleMark) (lo hi : Cal
 
 theorem lastIsPauseAt_append (marks : List Replay.IdleMark) (lo : Cal.Instant) :
     lastIsPauseAt (marks ++ [markOf true lo]) lo = true := by
-  simp [lastIsPauseAt, lastTimerMark, markOf, isBrk, pauseAt, List.filter_append]
+  simp [lastIsPauseAt, lastTimerMark, markOf, isBrk, isIntMark, pauseAt, List.filter_append]
 
-/-- The span's two gates, when the block began before the wall and the wall has begun. -/
-theorem step_of_running (started now : Cal.Instant) (brk : Option Cal.Instant)
+/-- The span's two gates, when the block began before the wall, the wall has begun and the span's pause second is its
+start (**restated at the owner's D117**: `hps`, which D61's and D110's rule gave for nothing). -/
+theorem step_of_running (started now : Cal.Instant) (brk : Option Cal.Instant) (ints : List (Cal.Instant × Cal.Instant))
     (acc : List Replay.IdleMark × List (Bool × Nat × Nat)) (s : Nat × Nat)
-    (h1 : started < ⟨s.1, 0⟩) (h2 : (⟨s.1, 0⟩ : Cal.Instant) ≤ now) :
-    step started now brk acc s =
+    (h1 : started < ⟨s.1, 0⟩) (h2 : (⟨s.1, 0⟩ : Cal.Instant) ≤ now) (hps : pauseSec started ints s = s.1) :
+    step started now brk ints acc s =
       if (!(acc.1.any (pauseAt ⟨s.1, 0⟩)) &&
         (stoppedAt acc.1 started ⟨s.1, 0⟩ brk || touchedAfter acc.1 ⟨s.1, 0⟩)) = true then acc
-      else unpauseIfDone started now s (pauseIfNew started s acc) := by
-  have hp := pauseSec_of_lt started s h1
+      else unpauseIfDone started now brk ints s (pauseIfNew started ints s acc) := by
   have hn : ¬ (((⟨s.1, 0⟩ : Cal.Instant) ≤ started ∧ (⟨s.2, 0⟩ : Cal.Instant) ≤ started) ∨
       now < ⟨s.1, 0⟩) := by
     rintro (⟨h, -⟩ | h)
     · exact absurd (Cal.Instant.lt_iff _ _ |>.1 h1) (by rw [Cal.Instant.le_iff] at h; omega)
     · exact absurd h ((Cal.Instant.not_lt _ _).2 h2)
-  simp only [step, hp]
+  simp only [step, hps]
   rw [if_neg hn]
 
-/-- **D61: a wall that starts while a block runs stops its timer at the wall's start** — and, once
-the wall has ended, restarts it at its end.  The block began before the wall (`started < lo`), the
-wall has begun (`lo ≤ now`), nothing is logged at `lo` yet, the log had the timer RUNNING at `lo`
-and nothing has touched it since: the one span writes a pause at `lo`, and an unpause at `hi` when
-`hi` has passed. -/
+/-- **D61: a wall that starts while a block runs stops its timer at the wall's start** — and, once the wall has ended
+and no break running since before its end holds the block (the owner's **D114**, `breakHolds`), restarts it at its
+end.  The block began before the wall (`started < lo`), the wall has begun (`lo ≤ now`), nothing is logged at `lo` yet,
+the log had the timer RUNNING at `lo` and nothing has touched it since: the one span writes a pause at `lo`, and an
+unpause at `hi` when `hi` has passed and no break holds it.  **Restated at D114** (W-48 track K): D61's statement, the
+unpause whenever `hi` has passed, is refuted
+(`a_wall_that_starts_while_a_block_runs_stops_its_timer_as_d61_wrote_it_is_refuted`). -/
 theorem a_wall_that_starts_while_a_block_runs_stops_its_timer (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat)
     (h1 : started < ⟨lo, 0⟩) (h2 : (⟨lo, 0⟩ : Cal.Instant) ≤ now) (hlh : lo < hi)
     (hp : marks.any (pauseAt ⟨lo, 0⟩) = false) (hs : stoppedAt marks started ⟨lo, 0⟩ brk = false)
     (ht : touchedAfter marks ⟨lo, 0⟩ = false) :
     writes started now brk marks [(lo, hi)] =
-      (true, lo, hi) :: (if (⟨hi, 0⟩ : Cal.Instant) ≤ now then [(false, lo, hi)] else []) := by
-  have hps : pauseSec started (lo, hi) = lo := pauseSec_of_lt started (lo, hi) h1
+      (true, lo, hi) :: (if (⟨hi, 0⟩ : Cal.Instant) ≤ now ∧ breakHolds brk hi = false then [(false, lo, hi)]
+        else []) := by
+  have hps : pauseSec started (intSpans marks) (lo, hi) = lo :=
+    pauseSec_of_lt started _ (lo, hi) h1 (not_covered_of_not_stopped marks started ⟨lo, 0⟩ brk hs)
   have hu : (marks ++ [markOf true ⟨lo, 0⟩]).any (unpauseAt ⟨hi, 0⟩) = false := by
     rw [List.any_append, hasUnpause_none_of_untouched marks ⟨lo, 0⟩ ⟨hi, 0⟩ ht ((inst_lt _ _).2 hlh)]
     simp [markOf, unpauseAt]
-  simp only [writes, List.foldl, step_of_running started now brk (marks, []) (lo, hi) h1 h2]
+  simp only [writes, List.foldl, step_of_running started now brk _ (marks, []) (lo, hi) h1 h2 hps]
   simp only [hp, hs, ht, Bool.not_false, Bool.or_false, Bool.and_false, Bool.false_eq_true, if_false,
     pauseIfNew, unpauseIfDone, hps, hu, lastIsPauseAt_append, Bool.not_false, Bool.and_true]
   by_cases hh : (⟨hi, 0⟩ : Cal.Instant) ≤ now
+  · cases breakHolds brk hi <;> simp [hh]
   · simp [hh]
-  · simp [hh]
+
+/-- **D61's law as it stood, refuted by the owner's D114** (README gap 5014, parity P115): a block begun at 500, the
+wall `[1000, 2000)`, a break running since 1200 — asked at 2500 the wall writes its pause and NOT its unpause, which
+waits for the break to end. -/
+theorem a_wall_that_starts_while_a_block_runs_stops_its_timer_as_d61_wrote_it_is_refuted :
+    ¬ ∀ (started now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat),
+      started < ⟨lo, 0⟩ → (⟨lo, 0⟩ : Cal.Instant) ≤ now → lo < hi → marks.any (pauseAt ⟨lo, 0⟩) = false →
+      stoppedAt marks started ⟨lo, 0⟩ brk = false → touchedAfter marks ⟨lo, 0⟩ = false →
+      writes started now brk marks [(lo, hi)] =
+        (true, lo, hi) :: (if (⟨hi, 0⟩ : Cal.Instant) ≤ now then [(false, lo, hi)] else []) := by
+  intro h
+  have := h ⟨500, 0⟩ ⟨2500, 0⟩ (some ⟨1200, 0⟩) [] 1000 2000 (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide)
+  revert this; decide
 
 /-- **D61's "a block started inside a wall is not paused by it", refuted by D110** (README gap 4748, parity P106): a
 block begun at 1500 inside the wall `[1000, 2000)`, asked at 1800 with nothing logged, is paused at its start. -/
@@ -254,33 +435,54 @@ theorem a_block_started_inside_a_wall_is_not_paused_by_it_as_d61_wrote_it_is_ref
   have := h ⟨1500, 0⟩ ⟨1800, 0⟩ none [] 1000 2000 (by decide)
   revert this; decide
 
-/-- **A span whose pause second has come is paused there** — D61's law and D110's at once: the span did not end by
-the block's start, its pause second (`pauseSec`) is before its end and has come (`≤ now`), nothing is logged there, the
-timer was running there and nothing has touched it since: the one span writes the pause, and the unpause at `hi` once
-`hi` has passed. -/
+/-- **A span whose pause second has come is paused there** — D61's law, D110's and D117's at once: the span did not end
+by the block's start, its pause second (`pauseSec`, over the interruptions the log closes) is before its end and has
+come (`≤ now`), nothing is logged there, the timer was running there and nothing has touched it since: the one span
+writes the pause, and the unpause at `hi` once `hi` has passed and no break running since before it holds the block
+(D114).  **Restated at D114 and D117** (W-48 track K); D110's statement is refuted
+(`a_span_whose_pause_second_has_come_is_paused_as_d110_wrote_it_is_refuted`). -/
 theorem a_span_whose_pause_second_has_come_is_paused (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat)
-    (hin : pauseSec started (lo, hi) < hi) (h2 : (⟨pauseSec started (lo, hi), 0⟩ : Cal.Instant) ≤ now)
-    (hp : marks.any (pauseAt ⟨pauseSec started (lo, hi), 0⟩) = false)
-    (hs : stoppedAt marks started ⟨pauseSec started (lo, hi), 0⟩ brk = false)
-    (ht : touchedAfter marks ⟨pauseSec started (lo, hi), 0⟩ = false) :
+    (hin : pauseSec started (intSpans marks) (lo, hi) < hi)
+    (h2 : (⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ : Cal.Instant) ≤ now)
+    (hp : marks.any (pauseAt ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩) = false)
+    (hs : stoppedAt marks started ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ brk = false)
+    (ht : touchedAfter marks ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ = false) :
     writes started now brk marks [(lo, hi)] =
-      (true, lo, hi) :: (if (⟨hi, 0⟩ : Cal.Instant) ≤ now then [(false, lo, hi)] else []) := by
-  have hstart := (pauseSec_ge started (lo, hi)).2
+      (true, lo, hi) :: (if (⟨hi, 0⟩ : Cal.Instant) ≤ now ∧ breakHolds brk hi = false then [(false, lo, hi)]
+        else []) := by
+  have hstart := (pauseSec_ge started (intSpans marks) (lo, hi)).2
   have hn : ¬ (((⟨lo, 0⟩ : Cal.Instant) ≤ started ∧ (⟨hi, 0⟩ : Cal.Instant) ≤ started) ∨
-      now < ⟨pauseSec started (lo, hi), 0⟩) := by
+      now < ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩) := by
     rintro (⟨-, h⟩ | h)
     · rw [Cal.Instant.le_iff] at h hstart; simp only at h hstart; omega
     · exact absurd h ((Cal.Instant.not_lt _ _).2 h2)
-  have hu : (marks ++ [markOf true ⟨pauseSec started (lo, hi), 0⟩]).any (unpauseAt ⟨hi, 0⟩) = false := by
+  have hu : (marks ++ [markOf true ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩]).any (unpauseAt ⟨hi, 0⟩)
+      = false := by
     rw [List.any_append, hasUnpause_none_of_untouched marks _ ⟨hi, 0⟩ ht ((inst_lt _ _).2 hin)]
     simp [markOf, unpauseAt]
   simp only [writes, List.foldl, step, if_neg hn]
   simp only [hp, hs, ht, Bool.not_false, Bool.or_false, Bool.and_false, Bool.false_eq_true, if_false,
     pauseIfNew, unpauseIfDone, hu, lastIsPauseAt_append, Bool.not_false, Bool.and_true]
   by_cases hh : (⟨hi, 0⟩ : Cal.Instant) ≤ now
+  · cases breakHolds brk hi <;> simp [hh]
   · simp [hh]
-  · simp [hh]
+
+/-- **D110's law as it stood, refuted by the owner's D114**: a block begun at 500, the wall `[1000, 2000)`, a break
+running since 1200, asked at 2500 — the span is paused at 1000 (D110's pause second, `startSec`) and its unpause waits
+for the break. -/
+theorem a_span_whose_pause_second_has_come_is_paused_as_d110_wrote_it_is_refuted :
+    ¬ ∀ (started now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat),
+      startSec started (lo, hi) < hi → (⟨startSec started (lo, hi), 0⟩ : Cal.Instant) ≤ now →
+      marks.any (pauseAt ⟨startSec started (lo, hi), 0⟩) = false →
+      stoppedAt marks started ⟨startSec started (lo, hi), 0⟩ brk = false →
+      touchedAfter marks ⟨startSec started (lo, hi), 0⟩ = false →
+      writes started now brk marks [(lo, hi)] =
+        (true, lo, hi) :: (if (⟨hi, 0⟩ : Cal.Instant) ≤ now then [(false, lo, hi)] else []) := by
+  intro h
+  have := h ⟨500, 0⟩ ⟨2500, 0⟩ (some ⟨1200, 0⟩) [] 1000 2000 (by decide) (by decide) (by decide) (by decide)
+    (by decide)
+  revert this; decide
 
 /-- **A wall that ended by the block's start is not the block's** — D61's law of a block started inside a wall, on the
 subdomain D110 leaves it: the wall began and ended at or before the block's start. -/
@@ -294,8 +496,8 @@ theorem a_wall_that_ended_before_the_block_began_writes_nothing (started now : C
 theorem a_wall_that_has_not_begun_writes_nothing (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat)
     (h : now < ⟨lo, 0⟩) : writes started now brk marks [(lo, hi)] = [] := by
-  have hl := (pauseSec_ge started (lo, hi)).1
-  have h' : now < ⟨pauseSec started (lo, hi), 0⟩ := by
+  have hl := (pauseSec_ge started (intSpans marks) (lo, hi)).1
+  have h' : now < ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ := by
     rw [Cal.Instant.lt_iff] at h ⊢; simp only at h ⊢; omega
   simp [writes, step, h']
 
@@ -312,13 +514,28 @@ theorem a_timer_already_stopped_at_the_wall_is_left_alone_as_d61_wrote_it_is_ref
     (by decide) (by decide)
   revert this; decide
 
+/-- **"A timer already stopped at the span's pause second is left alone", read at D110's second, refuted by the
+owner's D117** (README gaps 5036 and 3042, parity P116): a block begun at 500, interrupted 900–1200 across the wall
+`[1000, 2000)`'s start — the timer stopped at 1000 — is paused at its resume, 1200, and unpaused at the wall's end. -/
+theorem a_timer_already_stopped_at_the_wall_is_left_alone_as_d110_wrote_it_is_refuted :
+    ¬ ∀ (started now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat),
+      marks.any (pauseAt ⟨startSec started (lo, hi), 0⟩) = false →
+      stoppedAt marks started ⟨startSec started (lo, hi), 0⟩ brk = true →
+        writes started now brk marks [(lo, hi)] = [] := by
+  intro h
+  have := h ⟨500, 0⟩ ⟨2500, 0⟩ none
+    [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)] 1000 2000
+    (by decide) (by decide)
+  revert this; decide
+
 /-- **A timer already stopped at the span's pause second is not the wall's to stop** — a pause or an interruption
 covered it, or the running break does (the rule waits for it to be logged).  The pause second is the wall's start
-(D61) or the block's when it began inside the wall (D110). -/
+(D61), the block's when it began inside the wall (D110), or the resume of an interruption the log closes across D110's
+second (D117).  **Restated at D117** over that pause second. -/
 theorem a_timer_already_stopped_at_the_wall_is_left_alone (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat)
-    (hp : marks.any (pauseAt ⟨pauseSec started (lo, hi), 0⟩) = false)
-    (hs : stoppedAt marks started ⟨pauseSec started (lo, hi), 0⟩ brk = true) :
+    (hp : marks.any (pauseAt ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩) = false)
+    (hs : stoppedAt marks started ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ brk = true) :
     writes started now brk marks [(lo, hi)] = [] := by
   simp only [writes, List.foldl, step]
   split
@@ -337,29 +554,71 @@ theorem a_timer_mark_after_the_walls_start_stands_as_d61_wrote_it_is_refuted :
     (by decide) (by decide)
   revert this; decide
 
-/-- **A timer mark stamped after the span's pause second stands**: the user has been deciding what the
-timer did since, and the wall writes nothing under it. -/
+/-- **"A timer mark stamped after the span's pause second stands", read at D110's second, refuted by the owner's
+D117**: the `resume` at 1200 of an interruption across the wall `[1000, 2000)`'s start is not a decision the wall
+leaves standing — the block is paused from it. -/
+theorem a_timer_mark_after_the_walls_start_stands_as_d110_wrote_it_is_refuted :
+    ¬ ∀ (started now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat),
+      marks.any (pauseAt ⟨startSec started (lo, hi), 0⟩) = false →
+      touchedAfter marks ⟨startSec started (lo, hi), 0⟩ = true →
+        writes started now brk marks [(lo, hi)] = [] := by
+  intro h
+  have := h ⟨500, 0⟩ ⟨2500, 0⟩ none
+    [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)] 1000 2000
+    (by decide) (by decide)
+  revert this; decide
+
+/-- **A timer mark stamped after the span's pause second stands**: the user has been deciding what the timer did
+since, and the wall writes nothing under it.  **Restated at D117** over the pause second. -/
 theorem a_timer_mark_after_the_walls_start_stands (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat)
-    (hp : marks.any (pauseAt ⟨pauseSec started (lo, hi), 0⟩) = false)
-    (ht : touchedAfter marks ⟨pauseSec started (lo, hi), 0⟩ = true) :
+    (hp : marks.any (pauseAt ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩) = false)
+    (ht : touchedAfter marks ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ = true) :
     writes started now brk marks [(lo, hi)] = [] := by
   simp only [writes, List.foldl, step]
   split
   · rfl
   · simp [hp, ht]
 
-/-- **The wall's end restarts the timer it stopped**: with the wall's pause logged (by an earlier
-verb) and still the last word on the timer, a verb after the wall ended writes the unpause, once. -/
+/-- **The wall's end restarts the timer it stopped**: with the wall's pause logged (by an earlier verb) at the span's
+pause second and still the last word on the timer, a verb after the wall ended writes the unpause, once — when no break
+running since before the wall's end holds the block (the owner's **D114**).  **Restated at D114 and D117** (the pause
+second, `pauseSec`, in place of `lo`); D61's statement is refuted
+(`the_walls_end_restarts_the_timer_it_stopped_as_d61_wrote_it_is_refuted`). -/
 theorem the_walls_end_restarts_the_timer_it_stopped (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat)
     (h1 : started < ⟨lo, 0⟩) (h2 : (⟨lo, 0⟩ : Cal.Instant) ≤ now) (h3 : (⟨hi, 0⟩ : Cal.Instant) ≤ now)
-    (hp : marks.any (pauseAt ⟨lo, 0⟩) = true) (hu : marks.any (unpauseAt ⟨hi, 0⟩) = false)
-    (hl : lastIsPauseAt marks ⟨lo, 0⟩ = true) :
+    (hp : marks.any (pauseAt ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩) = true)
+    (hu : marks.any (unpauseAt ⟨hi, 0⟩) = false)
+    (hl : lastIsPauseAt marks ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ = true)
+    (hb : breakHolds brk hi = false) :
     writes started now brk marks [(lo, hi)] = [(false, lo, hi)] := by
-  have hps : pauseSec started (lo, hi) = lo := pauseSec_of_lt started (lo, hi) h1
-  simp only [writes, List.foldl, step_of_running started now brk (marks, []) (lo, hi) h1 h2]
-  simp [hp, pauseIfNew, unpauseIfDone, hps, h3, hu, hl]
+  have hss : startSec started (lo, hi) = lo := by
+    unfold startSec
+    have := ceilSec_le_of_le started lo (by
+      rw [Cal.Instant.lt_iff] at h1; rw [Cal.Instant.le_iff]; simp only at h1 ⊢; omega)
+    simp only; omega
+  have hn : ¬ (((⟨lo, 0⟩ : Cal.Instant) ≤ started ∧ (⟨hi, 0⟩ : Cal.Instant) ≤ started) ∨
+      now < ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩) := by
+    rintro (⟨h, -⟩ | h)
+    · exact absurd (Cal.Instant.lt_iff _ _ |>.1 h1) (by rw [Cal.Instant.le_iff] at h; omega)
+    · rcases pauseSec_cases started (intSpans marks) (lo, hi) with hc | hc
+      · rw [hc, hss] at h; exact absurd h ((Cal.Instant.not_lt _ _).2 h2)
+      · rw [Cal.Instant.lt_iff, Cal.Instant.le_iff] at *; simp only at *; omega
+  simp only [writes, List.foldl, step, if_neg hn]
+  simp [hp, pauseIfNew, unpauseIfDone, h3, hu, hl, hb]
+
+/-- **D61's law as it stood, refuted by the owner's D114**: the wall's pause logged at 1000 and still the last word, a
+break running since 1200 — asked at 2500 the wall writes nothing; its unpause waits for the break. -/
+theorem the_walls_end_restarts_the_timer_it_stopped_as_d61_wrote_it_is_refuted :
+    ¬ ∀ (started now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat),
+      started < ⟨lo, 0⟩ → (⟨lo, 0⟩ : Cal.Instant) ≤ now → (⟨hi, 0⟩ : Cal.Instant) ≤ now →
+      marks.any (pauseAt ⟨lo, 0⟩) = true → marks.any (unpauseAt ⟨hi, 0⟩) = false →
+      lastIsPauseAt marks ⟨lo, 0⟩ = true → writes started now brk marks [(lo, hi)] = [(false, lo, hi)] := by
+  intro h
+  have := h ⟨500, 0⟩ ⟨2500, 0⟩ (some ⟨1200, 0⟩) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At)] 1000 2000
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+  revert this; decide
 
 /-- **"A user who resumed during the meeting keeps their timer", read at the wall's start, refuted by D110**: a block
 begun at 1500 inside the wall `[1000, 2000)`, with another block's pause at 1000 unpaused at 1100, is paused at its
@@ -374,29 +633,65 @@ theorem a_user_who_resumed_during_the_meeting_keeps_their_timer_as_d61_wrote_it_
     (by decide) (by decide)
   revert this; decide
 
+/-- **"A user who resumed during the meeting keeps their timer", read at D110's second, refuted by the owner's D117**:
+a pause at 1000 and its unpause at 1100, both inside an interruption 900–1200 across the wall `[1000, 2000)`'s start —
+the pause second is the resume's, 1200, where the timer runs, so the wall pauses it there. -/
+theorem a_user_who_resumed_during_the_meeting_keeps_their_timer_as_d110_wrote_it_is_refuted :
+    ¬ ∀ (started now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat),
+      marks.any (pauseAt ⟨startSec started (lo, hi), 0⟩) = true →
+      lastIsPauseAt marks ⟨startSec started (lo, hi), 0⟩ = false →
+        writes started now brk marks [(lo, hi)] = [] := by
+  intro h
+  have := h ⟨500, 0⟩ ⟨2500, 0⟩ none
+    [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At),
+      .unpause ((⟨1100, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)] 1000 2000
+    (by decide) (by decide)
+  revert this; decide
+
 /-- **A user who resumed during the meeting keeps their timer** (D61's correction for a skipped
 meeting): the span's pause is logged but no longer the last word on the timer, so its end writes
-nothing.  Read at the span's pause second (D110). -/
+nothing.  Read at the span's pause second (D110, and D117's since W-48: **restated** over it). -/
 theorem a_user_who_resumed_during_the_meeting_keeps_their_timer (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat)
-    (hp : marks.any (pauseAt ⟨pauseSec started (lo, hi), 0⟩) = true)
-    (hl : lastIsPauseAt marks ⟨pauseSec started (lo, hi), 0⟩ = false) :
+    (hp : marks.any (pauseAt ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩) = true)
+    (hl : lastIsPauseAt marks ⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ = false) :
     writes started now brk marks [(lo, hi)] = [] := by
   simp only [writes, List.foldl, step]
   split
   · rfl
   · simp [hp, pauseIfNew, unpauseIfDone, hl]
 
+/-- **A break running since before the wall's end writes no unpause** — the owner's **D114** (README gap 5014, parity
+P115): whatever the marks, the span's end is not written while such a break runs; the verb that ends the break writes
+it (`tm/src/cli/day.rs`, `end_break_at`). -/
+theorem a_break_running_past_the_walls_end_holds_the_block (started now : Cal.Instant) (brk : Option Cal.Instant)
+    (marks : List Replay.IdleMark) (lo hi : Nat) (hb : breakHolds brk hi = true) :
+    (false, lo, hi) ∉ writes started now brk marks [(lo, hi)] := by
+  simp only [writes, List.foldl, step]
+  intro hx
+  split at hx
+  · simp at hx
+  · split at hx
+    · simp at hx
+    · unfold unpauseIfDone at hx
+      rw [hb] at hx
+      simp only [Bool.not_true, Bool.and_false, Bool.false_eq_true, if_false] at hx
+      unfold pauseIfNew at hx
+      split at hx
+      · simp at hx
+      · simp at hx
+
 /-- What one span's step appends to the written list: the entries before it, then its own, each a start or an end of
 `s` whose pause second is never ahead of `now`, and only for a span that did not end by the block's start (D110: a
-wall the block began inside is the block's too). -/
-theorem step_written (started now : Cal.Instant) (brk : Option Cal.Instant)
+wall the block began inside is the block's too).  **Restated at D117** over the pause second `pauseSec started ints s`
+(it was D110's, `startSec`, which is never later: `startSec_le_pauseSec`). -/
+theorem step_written (started now : Cal.Instant) (brk : Option Cal.Instant) (ints : List (Cal.Instant × Cal.Instant))
     (acc : List Replay.IdleMark × List (Bool × Nat × Nat)) (s : Nat × Nat) (x : Bool × Nat × Nat)
-    (hx : x ∈ (step started now brk acc s).2) :
+    (hx : x ∈ (step started now brk ints acc s).2) :
     x ∈ acc.2 ∨ (x.2 = s ∧ (started < ⟨s.1, 0⟩ ∨ started < ⟨s.2, 0⟩) ∧
-      (⟨pauseSec started s, 0⟩ : Cal.Instant) ≤ now ∧ (x.1 = false → (⟨s.2, 0⟩ : Cal.Instant) ≤ now)) := by
+      (⟨pauseSec started ints s, 0⟩ : Cal.Instant) ≤ now ∧ (x.1 = false → (⟨s.2, 0⟩ : Cal.Instant) ≤ now)) := by
   by_cases hc : ((⟨s.1, 0⟩ : Cal.Instant) ≤ started ∧ (⟨s.2, 0⟩ : Cal.Instant) ≤ started) ∨
-      now < ⟨pauseSec started s, 0⟩
+      now < ⟨pauseSec started ints s, 0⟩
   · simp only [step, if_pos hc] at hx; exact Or.inl hx
   · have h1 : started < ⟨s.1, 0⟩ ∨ started < ⟨s.2, 0⟩ := by
       have := (not_or.1 hc).1
@@ -404,7 +699,7 @@ theorem step_written (started now : Cal.Instant) (brk : Option Cal.Instant)
       rw [Cal.Instant.le_iff, Cal.Instant.le_iff] at this
       simp only at this ⊢
       omega
-    have h2 : (⟨pauseSec started s, 0⟩ : Cal.Instant) ≤ now := (Cal.Instant.not_lt _ _).1 (not_or.1 hc).2
+    have h2 : (⟨pauseSec started ints s, 0⟩ : Cal.Instant) ≤ now := (Cal.Instant.not_lt _ _).1 (not_or.1 hc).2
     simp only [step, if_neg hc] at hx
     split at hx
     · exact Or.inl hx
@@ -422,7 +717,7 @@ theorem step_written (started now : Cal.Instant) (brk : Option Cal.Instant)
         · simp only [List.mem_singleton] at hx; subst hx
           have h3 : (⟨s.2, 0⟩ : Cal.Instant) ≤ now := by
             simp only [Bool.and_eq_true, decide_eq_true_eq] at hq
-            exact hq.1.1
+            exact hq.1.1.1
           exact Or.inr ⟨rfl, h1, h2, fun _ => h3⟩
       · unfold pauseIfNew at hx
         split at hx
@@ -444,19 +739,25 @@ theorem mem_writes_as_d61_wrote_it_is_refuted :
   revert this; decide
 
 /-- **Everything the walls write is a joined span's own start or end, never ahead of `now`, of a wall that did not end
-by the block's start** — over any number of spans (the pause at the span's pause second, `pauseSec`; D110). -/
+by the block's start** — over any number of spans (the pause at the span's pause second, `pauseSec`: D110, D117).
+**Restated at D117** over that pause second, which is never earlier than D110's (`startSec_le_pauseSec`), so the new
+statement implies the old. -/
 theorem mem_writes (started now : Cal.Instant) (brk : Option Cal.Instant)
     (marks : List Replay.IdleMark) (spans : List (Nat × Nat)) (b : Bool) (lo hi : Nat)
     (h : (b, lo, hi) ∈ writes started now brk marks spans) :
     (lo, hi) ∈ spans ∧ (started < ⟨lo, 0⟩ ∨ started < ⟨hi, 0⟩) ∧
-      (⟨pauseSec started (lo, hi), 0⟩ : Cal.Instant) ≤ now ∧ (b = false → (⟨hi, 0⟩ : Cal.Instant) ≤ now) := by
+      (⟨pauseSec started (intSpans marks) (lo, hi), 0⟩ : Cal.Instant) ≤ now ∧
+      (b = false → (⟨hi, 0⟩ : Cal.Instant) ≤ now) := by
   unfold writes at h
   suffices H : ∀ (acc : List Replay.IdleMark × List (Bool × Nat × Nat)) (ss : List (Nat × Nat)),
       (∀ x ∈ acc.2, x.2 ∈ spans ∧ (started < ⟨x.2.1, 0⟩ ∨ started < ⟨x.2.2, 0⟩) ∧
-        (⟨pauseSec started x.2, 0⟩ : Cal.Instant) ≤ now ∧ (x.1 = false → (⟨x.2.2, 0⟩ : Cal.Instant) ≤ now)) →
+        (⟨pauseSec started (intSpans marks) x.2, 0⟩ : Cal.Instant) ≤ now ∧
+        (x.1 = false → (⟨x.2.2, 0⟩ : Cal.Instant) ≤ now)) →
       (∀ s ∈ ss, s ∈ spans) →
-      ∀ x ∈ (ss.foldl (step started now brk) acc).2, x.2 ∈ spans ∧ (started < ⟨x.2.1, 0⟩ ∨ started < ⟨x.2.2, 0⟩) ∧
-        (⟨pauseSec started x.2, 0⟩ : Cal.Instant) ≤ now ∧ (x.1 = false → (⟨x.2.2, 0⟩ : Cal.Instant) ≤ now) by
+      ∀ x ∈ (ss.foldl (step started now brk (intSpans marks)) acc).2, x.2 ∈ spans ∧
+        (started < ⟨x.2.1, 0⟩ ∨ started < ⟨x.2.2, 0⟩) ∧
+        (⟨pauseSec started (intSpans marks) x.2, 0⟩ : Cal.Instant) ≤ now ∧
+        (x.1 = false → (⟨x.2.2, 0⟩ : Cal.Instant) ≤ now) by
     exact H (marks, []) spans (by simp) (fun s hs => hs) (b, lo, hi) h
   intro acc ss hacc hss
   induction ss generalizing acc with
@@ -464,147 +765,231 @@ theorem mem_writes (started now : Cal.Instant) (brk : Option Cal.Instant)
   | cons s ss ih =>
     apply ih _ _ (fun s' hs' => hss s' (List.mem_cons_of_mem _ hs'))
     intro x hx
-    rcases step_written started now brk acc s x hx with hx | ⟨he, h1, h2, h3⟩
+    rcases step_written started now brk _ acc s x hx with hx | ⟨he, h1, h2, h3⟩
     · exact hacc x hx
     · rw [he]; exact ⟨hss s (List.mem_cons_self ..), h1, h2, h3⟩
 
-/-- The marks a written list adds to the log, in order: a pause at its span's pause second (`pauseSec`), an unpause at
-its span's end. -/
-def marksOf (started : Cal.Instant) (w : List (Bool × Nat × Nat)) : List Replay.IdleMark :=
-  w.map fun x => markOf x.1 (if x.1 then ⟨pauseSec started x.2, 0⟩ else ⟨x.2.2, 0⟩)
+/-- The marks a written list adds to the log, in order: a pause at its span's pause second (`pauseSec`, over the
+interruptions the log closes, `ints`), an unpause at its span's end. -/
+def marksOf (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (w : List (Bool × Nat × Nat)) :
+    List Replay.IdleMark :=
+  w.map fun x => markOf x.1 (if x.1 then ⟨pauseSec started ints x.2, 0⟩ else ⟨x.2.2, 0⟩)
+
+/-- **What the rule writes closes no interruption**: the interruptions of the log and the marks it wrote are the log's
+(D117). -/
+theorem intSpans_append_marksOf (marks : List Replay.IdleMark) (started : Cal.Instant)
+    (ints : List (Cal.Instant × Cal.Instant)) (w : List (Bool × Nat × Nat)) :
+    intSpans (marks ++ marksOf started ints w) = intSpans marks := by
+  unfold intSpans marksOf
+  rw [List.foldl_append]
+  congr 1
+  generalize marks.foldl intStep (none, []) = st
+  induction w generalizing st with
+  | nil => rfl
+  | cons x w ih => rw [List.map_cons, List.foldl_cons, intStep_markOf, ih]
 
 /-- **D110: a block started inside a wall is paused from its start until the wall ends** (README gap 4748, parity
 P106) — the marks the rule writes for a block begun at the whole second `st` inside the wall `[lo, hi)`, with nothing
 logged at `st`, its timer running there and untouched since: the `pause` stamped at the block's start (not at the
-wall's), and the `unpause` at the wall's end once it has passed. -/
+wall's), and the `unpause` at the wall's end once it has passed — and, since the owner's **D114**, no break running since
+before it holds the block.  **Restated at D114**: D110's statement is refuted
+(`a_block_started_inside_a_wall_is_paused_from_its_start_as_d110_wrote_it_is_refuted`). -/
 theorem a_block_started_inside_a_wall_is_paused_from_its_start (now : Cal.Instant) (brk : Option Cal.Instant)
     (marks : List Replay.IdleMark) (lo hi st : Nat) (h1 : lo ≤ st) (hin : st < hi)
     (h2 : (⟨st, 0⟩ : Cal.Instant) ≤ now) (hp : marks.any (pauseAt ⟨st, 0⟩) = false)
     (hs : stoppedAt marks ⟨st, 0⟩ ⟨st, 0⟩ brk = false) (ht : touchedAfter marks ⟨st, 0⟩ = false) :
-    marksOf ⟨st, 0⟩ (writes ⟨st, 0⟩ now brk marks [(lo, hi)]) =
+    marksOf ⟨st, 0⟩ (intSpans marks) (writes ⟨st, 0⟩ now brk marks [(lo, hi)]) =
       Replay.IdleMark.pause ((⟨st, 0⟩ : Cal.Instant), Cal.Offset.utc) ::
-        (if (⟨hi, 0⟩ : Cal.Instant) ≤ now then [Replay.IdleMark.unpause ((⟨hi, 0⟩ : Cal.Instant), Cal.Offset.utc)]
-          else []) := by
-  have hps : pauseSec ⟨st, 0⟩ (lo, hi) = st := by
-    unfold pauseSec; simp only [if_true]; exact Nat.max_eq_right h1
+        (if (⟨hi, 0⟩ : Cal.Instant) ≤ now ∧ breakHolds brk hi = false then
+          [Replay.IdleMark.unpause ((⟨hi, 0⟩ : Cal.Instant), Cal.Offset.utc)] else []) := by
+  have hss : startSec ⟨st, 0⟩ (lo, hi) = st := by
+    unfold startSec ceilSec; simp only [if_true]; exact Nat.max_eq_right h1
+  have hps : pauseSec ⟨st, 0⟩ (intSpans marks) (lo, hi) = st := by
+    rw [pauseSec_of_uncovered _ _ _ (by rw [hss]; exact not_covered_of_not_stopped marks _ _ brk hs), hss]
   rw [a_span_whose_pause_second_has_come_is_paused ⟨st, 0⟩ now brk marks lo hi (by rw [hps]; exact hin)
     (by rw [hps]; exact h2) (by rw [hps]; exact hp) (by rw [hps]; exact hs) (by rw [hps]; exact ht)]
   by_cases hh : (⟨hi, 0⟩ : Cal.Instant) ≤ now
+  · cases breakHolds brk hi <;> simp [hh, marksOf, markOf, hps]
   · simp [hh, marksOf, markOf, hps]
+
+/-- **D110's law as it stood, refuted by the owner's D114**: a block begun at 1500 inside the wall `[1000, 2000)`, a
+break running since 1600, asked at 2500 — the block is paused from its start, and the unpause waits for the break. -/
+theorem a_block_started_inside_a_wall_is_paused_from_its_start_as_d110_wrote_it_is_refuted :
+    ¬ ∀ (now : Cal.Instant) (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi st : Nat), lo ≤ st →
+      st < hi → (⟨st, 0⟩ : Cal.Instant) ≤ now → marks.any (pauseAt ⟨st, 0⟩) = false →
+      stoppedAt marks ⟨st, 0⟩ ⟨st, 0⟩ brk = false → touchedAfter marks ⟨st, 0⟩ = false →
+      (writes ⟨st, 0⟩ now brk marks [(lo, hi)]).map
+          (fun x => markOf x.1 (if x.1 then ⟨startSec ⟨st, 0⟩ x.2, 0⟩ else ⟨x.2.2, 0⟩)) =
+        Replay.IdleMark.pause ((⟨st, 0⟩ : Cal.Instant), Cal.Offset.utc) ::
+          (if (⟨hi, 0⟩ : Cal.Instant) ≤ now then
+            [Replay.IdleMark.unpause ((⟨hi, 0⟩ : Cal.Instant), Cal.Offset.utc)] else []) := by
+  intro h
+  have := h ⟨2500, 0⟩ (some ⟨1600, 0⟩) [] 1000 2000 1500 (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide)
+  revert this; decide
+
+/-- **D117: a block resumed inside a wall is paused from its resume until the wall ends** (README gaps 5036 and 3042,
+parity P116) — the marks the rule writes for a block begun before the wall `[lo, hi)` and interrupted across its start,
+the interruption closed by a `resume` whose first whole second `r` falls inside the wall, with nothing logged at `r`, the
+timer running there and untouched since: the `pause` stamped at the resume, and the `unpause` at the wall's end once it
+has passed and no break running since before it holds the block (D114).  Until W-48 the rule read the interruption
+across the wall's start as the wall's stop and wrote nothing, so the meeting after the resume was counted as work. -/
+theorem a_block_resumed_inside_a_wall_is_paused_from_its_resume (started now : Cal.Instant)
+    (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat) (a r : Cal.Instant)
+    (hf : (intSpans marks).find? (fun i => decide (i.1 ≤ ⟨startSec started (lo, hi), 0⟩) &&
+      decide ((⟨startSec started (lo, hi), 0⟩ : Cal.Instant) < i.2) && decide (ceilSec i.2 < hi)) = some (a, r))
+    (h2 : (⟨ceilSec r, 0⟩ : Cal.Instant) ≤ now) (hp : marks.any (pauseAt ⟨ceilSec r, 0⟩) = false)
+    (hs : stoppedAt marks started ⟨ceilSec r, 0⟩ brk = false) (ht : touchedAfter marks ⟨ceilSec r, 0⟩ = false) :
+    marksOf started (intSpans marks) (writes started now brk marks [(lo, hi)]) =
+      Replay.IdleMark.pause ((⟨ceilSec r, 0⟩ : Cal.Instant), Cal.Offset.utc) ::
+        (if (⟨hi, 0⟩ : Cal.Instant) ≤ now ∧ breakHolds brk hi = false then
+          [Replay.IdleMark.unpause ((⟨hi, 0⟩ : Cal.Instant), Cal.Offset.utc)] else []) := by
+  have hps : pauseSec started (intSpans marks) (lo, hi) = ceilSec r := by
+    unfold pauseSec; rw [hf]
+  have hin : ceilSec r < hi := by
+    have hp := List.find?_some hf
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hp
+    exact hp.2
+  rw [a_span_whose_pause_second_has_come_is_paused started now brk marks lo hi (by rw [hps]; exact hin)
+    (by rw [hps]; exact h2) (by rw [hps]; exact hp) (by rw [hps]; exact hs) (by rw [hps]; exact ht)]
+  by_cases hh : (⟨hi, 0⟩ : Cal.Instant) ≤ now
+  · cases breakHolds brk hi <;> simp [hh, marksOf, markOf, hps]
   · simp [hh, marksOf, markOf, hps]
 
 /-- **A second verb writes nothing more** (one wall, the day a user has — AGENTS §3.1 item 4, the
 subdomain in the name): once the marks the rule wrote are in the log, the next verb's run of the
-same rule writes nothing, which is D61's "written once" — and D110's, for a block begun inside the wall.  A two-run
-law (owner D5), re-proved over the pause second. -/
+same rule writes nothing, which is D61's "written once" — and D110's, for a block begun inside the wall, D117's for one
+resumed inside it, and D114's whether or not a break holds the unpause.  A two-run law (owner D5), re-proved over the
+pause second; the marks are rendered over the interruptions the log closes (`marksOf`'s `ints`), which what the rule
+writes leaves as they were (`intSpans_append_marksOf`). -/
 theorem after_one_wall_a_second_verb_writes_nothing_more (started now : Cal.Instant)
     (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (lo hi : Nat) :
-    writes started now brk (marks ++ marksOf started (writes started now brk marks [(lo, hi)])) [(lo, hi)]
-      = [] := by
+    writes started now brk (marks ++ marksOf started (intSpans marks) (writes started now brk marks [(lo, hi)]))
+      [(lo, hi)] = [] := by
+  generalize hWd : writes started now brk marks [(lo, hi)] = Wd
+  have hI : intSpans (marks ++ marksOf started (intSpans marks) Wd) = intSpans marks := intSpans_append_marksOf _ _ _ _
+  unfold writes at hWd ⊢
+  rw [hI]
+  generalize hIg : intSpans marks = I at hWd ⊢
+  subst hWd
   by_cases hc : ((⟨lo, 0⟩ : Cal.Instant) ≤ started ∧ (⟨hi, 0⟩ : Cal.Instant) ≤ started) ∨
-      now < ⟨pauseSec started (lo, hi), 0⟩
-  · simp [writes, step, hc]
+      now < ⟨pauseSec started I (lo, hi), 0⟩
+  · simp [step, hc]
   · -- One run over `ms`, unfolded once at this span.
-    have hw : ∀ ms : List Replay.IdleMark, writes started now brk ms [(lo, hi)] =
-        if (!(ms.any (pauseAt ⟨pauseSec started (lo, hi), 0⟩)) &&
-          (stoppedAt ms started ⟨pauseSec started (lo, hi), 0⟩ brk ||
-            touchedAfter ms ⟨pauseSec started (lo, hi), 0⟩)) = true then []
-        else (unpauseIfDone started now (lo, hi) (pauseIfNew started (lo, hi) (ms, []))).2 := by
+    have hw : ∀ ms : List Replay.IdleMark, ([(lo, hi)].foldl (step started now brk I) (ms, [])).2 =
+        if (!(ms.any (pauseAt ⟨pauseSec started I (lo, hi), 0⟩)) &&
+          (stoppedAt ms started ⟨pauseSec started I (lo, hi), 0⟩ brk ||
+            touchedAfter ms ⟨pauseSec started I (lo, hi), 0⟩)) = true then []
+        else (unpauseIfDone started now brk I (lo, hi) (pauseIfNew started I (lo, hi) (ms, []))).2 := by
       intro ms
-      simp only [writes, List.foldl, step, if_neg hc]
+      simp only [List.foldl, step, if_neg hc]
       split <;> rfl
     -- The marks a pause and an unpause of this span add.
-    have mp : marksOf started [(true, lo, hi)] = [markOf true ⟨pauseSec started (lo, hi), 0⟩] := rfl
-    have mu : marksOf started [(false, lo, hi)] = [markOf false ⟨hi, 0⟩] := rfl
-    have mpu : marksOf started [(true, lo, hi), (false, lo, hi)] =
-        [markOf true ⟨pauseSec started (lo, hi), 0⟩, markOf false ⟨hi, 0⟩] := rfl
-    generalize hP : pauseSec started (lo, hi) = P at hw mp mpu
+    have mp : marksOf started I [(true, lo, hi)] = [markOf true ⟨pauseSec started I (lo, hi), 0⟩] := rfl
+    have mu : marksOf started I [(false, lo, hi)] = [markOf false ⟨hi, 0⟩] := rfl
+    have mpu : marksOf started I [(true, lo, hi), (false, lo, hi)] =
+        [markOf true ⟨pauseSec started I (lo, hi), 0⟩, markOf false ⟨hi, 0⟩] := rfl
+    generalize hP : pauseSec started I (lo, hi) = P at hw mp mpu
     -- A list holding the pause at `P` asks nothing more of the span's pause half, and holds its unpause half's
     -- answer: the second run writes the unpause exactly when the first would have, and then once.
     have second : ∀ ms : List Replay.IdleMark, ms.any (pauseAt ⟨P, 0⟩) = true →
-        (decide ((⟨hi, 0⟩ : Cal.Instant) ≤ now) && !(ms.any (unpauseAt ⟨hi, 0⟩)) && lastIsPauseAt ms ⟨P, 0⟩) = false →
-        writes started now brk ms [(lo, hi)] = [] := by
+        (decide ((⟨hi, 0⟩ : Cal.Instant) ≤ now) && !(ms.any (unpauseAt ⟨hi, 0⟩)) && lastIsPauseAt ms ⟨P, 0⟩ &&
+          !breakHolds brk hi) = false →
+        ([(lo, hi)].foldl (step started now brk I) (ms, [])).2 = [] := by
       intro ms hp hq
       rw [hw ms]
       simp [hp, pauseIfNew, unpauseIfDone, hP, hq]
     cases hp : marks.any (pauseAt ⟨P, 0⟩) with
     | true =>
       cases hq : (decide ((⟨hi, 0⟩ : Cal.Instant) ≤ now) && !(marks.any (unpauseAt ⟨hi, 0⟩)) &&
-          lastIsPauseAt marks ⟨P, 0⟩) with
+          lastIsPauseAt marks ⟨P, 0⟩ && !breakHolds brk hi) with
       | true =>
-        have h1 : writes started now brk marks [(lo, hi)] = [(false, lo, hi)] := by
+        have h1 : ([(lo, hi)].foldl (step started now brk I) (marks, [])).2 = [(false, lo, hi)] := by
           rw [hw marks]; simp [hp, pauseIfNew, unpauseIfDone, hP, hq]
         rw [h1, mu]
         apply second
         · simp [hp]
         · simp [markOf, unpauseAt]
       | false =>
-        have h1 : writes started now brk marks [(lo, hi)] = [] := by
+        have h1 : ([(lo, hi)].foldl (step started now brk I) (marks, [])).2 = [] := by
           rw [hw marks]; simp [hp, pauseIfNew, unpauseIfDone, hP, hq]
         rw [h1]
         simpa [marksOf] using h1
     | false =>
       cases hk : (stoppedAt marks started ⟨P, 0⟩ brk || touchedAfter marks ⟨P, 0⟩) with
       | true =>
-        have h1 : writes started now brk marks [(lo, hi)] = [] := by
+        have h1 : ([(lo, hi)].foldl (step started now brk I) (marks, [])).2 = [] := by
           rw [hw marks]; simp [hp, hk]
         rw [h1]
         simpa [marksOf] using h1
       | false =>
         cases hq : (decide ((⟨hi, 0⟩ : Cal.Instant) ≤ now) &&
-            !((marks ++ [markOf true ⟨P, 0⟩]).any (unpauseAt ⟨hi, 0⟩))) with
+            !((marks ++ [markOf true ⟨P, 0⟩]).any (unpauseAt ⟨hi, 0⟩)) && !breakHolds brk hi) with
         | true =>
-          have h1 : writes started now brk marks [(lo, hi)] = [(true, lo, hi), (false, lo, hi)] := by
+          have h1 : ([(lo, hi)].foldl (step started now brk I) (marks, [])).2 =
+              [(true, lo, hi), (false, lo, hi)] := by
             rw [hw marks]
-            simp only [hp, hk, Bool.not_false, Bool.true_and, Bool.false_eq_true, if_false, pauseIfNew, hP,
-              unpauseIfDone, lastIsPauseAt_append, Bool.and_true, hq, if_true]
-            simp
+            simp only [hp, hk, Bool.not_false, Bool.true_and, Bool.false_eq_true, if_false]
+            unfold pauseIfNew unpauseIfDone
+            rw [hP]
+            dsimp only
+            simp only [hp, Bool.false_eq_true, if_false]
+            rw [if_pos (by rw [lastIsPauseAt_append, Bool.and_true]; exact hq)]
+            rfl
           rw [h1, mpu]
           apply second
           · simp [markOf, pauseAt]
           · simp [markOf, unpauseAt]
         | false =>
-          have h1 : writes started now brk marks [(lo, hi)] = [(true, lo, hi)] := by
+          have h1 : ([(lo, hi)].foldl (step started now brk I) (marks, [])).2 = [(true, lo, hi)] := by
             rw [hw marks]
-            simp only [hp, hk, Bool.not_false, Bool.true_and, Bool.false_eq_true, if_false, pauseIfNew, hP,
-              unpauseIfDone, lastIsPauseAt_append, Bool.and_true, hq]
-            simp
+            simp only [hp, hk, Bool.not_false, Bool.true_and, Bool.false_eq_true, if_false]
+            unfold pauseIfNew unpauseIfDone
+            rw [hP]
+            dsimp only
+            simp only [hp, Bool.false_eq_true, if_false]
+            rw [if_neg (by rw [lastIsPauseAt_append, Bool.and_true, hq]; decide)]
+            rfl
           rw [h1, mp]
           apply second
           · simp [markOf, pauseAt]
-          · rw [lastIsPauseAt_append]; simpa using hq
+          · rw [lastIsPauseAt_append, Bool.and_true]; exact hq
 
 /-- **The meeting the running block is paused for** (the campaign's D66 call on gap 3048): the
 first joined span `now` falls inside whose pause — at its pause second, `pauseSec`: the wall's start, or the block's
-when the block began inside the wall (D110) — is the last word on the timer: what `tm pause` names when it resumes the
-timer inside a meeting (the correction for a skipped one). -/
-def pausedFor (started now : Cal.Instant) (marks : List Replay.IdleMark) :
-    List ((Nat × Nat) × List Id) → Option ((Nat × Nat) × List Id)
+when the block began inside the wall (D110), or the resume of an interruption across D110's second (D117) — is the last
+word on the timer: what `tm pause` names when it resumes the timer inside a meeting (the correction for a skipped
+one). -/
+def pausedFor (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (now : Cal.Instant)
+    (marks : List Replay.IdleMark) : List ((Nat × Nat) × List Id) → Option ((Nat × Nat) × List Id)
   | [] => none
   | x :: xs =>
-    if (lastIsPauseAt marks ⟨pauseSec started x.1, 0⟩ && decide ((⟨pauseSec started x.1, 0⟩ : Cal.Instant) ≤ now) &&
-        decide (now < ⟨x.1.2, 0⟩)) = true then some x else pausedFor started now marks xs
+    if (lastIsPauseAt marks ⟨pauseSec started ints x.1, 0⟩ &&
+        decide ((⟨pauseSec started ints x.1, 0⟩ : Cal.Instant) ≤ now) &&
+        decide (now < ⟨x.1.2, 0⟩)) = true then some x else pausedFor started ints now marks xs
 
 /-- **`pausedFor` is the first span `List.find?` finds** — its definition before the W-37 repair
-wrote it by recursion (README gap 3333, as `touchedAfter_eq_any`). -/
-theorem pausedFor_eq_find (started now : Cal.Instant) (marks : List Replay.IdleMark)
-    (spans : List ((Nat × Nat) × List Id)) :
-    pausedFor started now marks spans = spans.find? fun x => lastIsPauseAt marks ⟨pauseSec started x.1, 0⟩ &&
-      decide ((⟨pauseSec started x.1, 0⟩ : Cal.Instant) ≤ now) && decide (now < ⟨x.1.2, 0⟩) := by
+wrote it by recursion (README gap 3333, as `touchedAfter_eq_any`).  **Restated at D117** over the pause second. -/
+theorem pausedFor_eq_find (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (now : Cal.Instant)
+    (marks : List Replay.IdleMark) (spans : List ((Nat × Nat) × List Id)) :
+    pausedFor started ints now marks spans = spans.find? fun x =>
+      lastIsPauseAt marks ⟨pauseSec started ints x.1, 0⟩ &&
+      decide ((⟨pauseSec started ints x.1, 0⟩ : Cal.Instant) ≤ now) && decide (now < ⟨x.1.2, 0⟩) := by
   induction spans with
   | nil => rfl
   | cons x xs ih =>
     rw [pausedFor, List.find?_cons, ih]
-    cases (lastIsPauseAt marks ⟨pauseSec started x.1, 0⟩ && decide ((⟨pauseSec started x.1, 0⟩ : Cal.Instant) ≤ now)
-      && decide (now < ⟨x.1.2, 0⟩)) <;> rfl
+    cases (lastIsPauseAt marks ⟨pauseSec started ints x.1, 0⟩ &&
+      decide ((⟨pauseSec started ints x.1, 0⟩ : Cal.Instant) ≤ now) && decide (now < ⟨x.1.2, 0⟩)) <;> rfl
 
 /-- **What `pausedFor` names is a meeting the timer is paused for, now**: one of the spans, its
-pause the last timer mark, and `now` inside it from its pause second on. -/
-theorem pausedFor_is_a_meeting_the_timer_is_paused_for (started now : Cal.Instant)
+pause the last timer mark, and `now` inside it from its pause second on.  **Restated at D117** over the pause second. -/
+theorem pausedFor_is_a_meeting_the_timer_is_paused_for (started : Cal.Instant)
+    (ints : List (Cal.Instant × Cal.Instant)) (now : Cal.Instant)
     (marks : List Replay.IdleMark) (spans : List ((Nat × Nat) × List Id)) (x : (Nat × Nat) × List Id)
-    (h : pausedFor started now marks spans = some x) :
-    x ∈ spans ∧ lastIsPauseAt marks ⟨pauseSec started x.1, 0⟩ = true ∧
-      (⟨pauseSec started x.1, 0⟩ : Cal.Instant) ≤ now ∧ now < ⟨x.1.2, 0⟩ := by
+    (h : pausedFor started ints now marks spans = some x) :
+    x ∈ spans ∧ lastIsPauseAt marks ⟨pauseSec started ints x.1, 0⟩ = true ∧
+      (⟨pauseSec started ints x.1, 0⟩ : Cal.Instant) ≤ now ∧ now < ⟨x.1.2, 0⟩ := by
   rw [pausedFor_eq_find] at h
   have hm := List.mem_of_find?_eq_some h
   have hp := List.find?_some h
@@ -713,9 +1098,10 @@ def spanJson (z : Cal.Tz) (x : (Nat × Nat) × List Id) : Except Refusal JVal :=
 
 /-- **One written mark, on the wire**: its line (D16's one writer) and what the host says of it — a pause stamped at its
 span's pause second (`pauseSec`, the block's start for a block begun inside the wall: D110), an unpause at its end. -/
-def entryJson (z : Cal.Tz) (id : Id) (started : Cal.Instant) (spans : List ((Nat × Nat) × List Id))
+def entryJson (z : Cal.Tz) (id : Id) (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant))
+    (spans : List ((Nat × Nat) × List Id))
     (w : Bool × Nat × Nat) : Except Refusal JVal :=
-  match stampAt z (if w.1 then pauseSec started w.2 else w.2.2), stampAt z w.2.1, stampAt z w.2.2 with
+  match stampAt z (if w.1 then pauseSec started ints w.2 else w.2.2), stampAt z w.2.1, stampAt z w.2.2 with
   | some (i, o), some (a, ao), some (b, bo) =>
     match Log.emitLine i o (if w.1 then "pause".toList else "unpause".toList) [("id".toList, .str id)] with
     | .ok line => .ok (.obj [("ev".toList, .str (if w.1 then "pause".toList else "unpause".toList)),
@@ -725,6 +1111,20 @@ def entryJson (z : Cal.Tz) (id : Id) (started : Cal.Instant) (spans : List ((Nat
         ("line".toList, .str line)])
     | .error _ => .error .refused
   | _, _, _ => .error .badInstant
+
+/-- **The marks the walls write and the meeting named, over the interruptions the log closes** (`ints`, the owner's
+D117): `writes` over the open block `ob`, its marks and the request's spans, each mark rendered (`entryJson`), and the
+meeting the block is now paused for (`pausedFor`).  `answer` hands it `intSpans marks` taken apart first — the rows are
+given the list itself, not the reading of the log that gives it — so a decided witness over a whole replay does not read
+the log again at every comparison the zone table makes with a pause's second (README "Stage 6 — W-48 track K"). -/
+def answerRows (z : Cal.Tz) (q : Req) (ob : Replay.OpenBlock) (spans : List ((Nat × Nat) × List Id))
+    (marks : List Replay.IdleMark) (ints : List (Cal.Instant × Cal.Instant)) : Except Refusal JVal := do
+  let ws := writes ob.started.1 q.at_.1.val (q.brk.map (·.1.val)) marks (spans.map (·.1))
+  let es ← ws.mapM (entryJson z ob.id ob.started.1 ints spans)
+  let pf ← match pausedFor ob.started.1 ints q.at_.1.val (marks ++ marksOf ob.started.1 ints ws) spans with
+    | none => pure JVal.null
+    | some x => spanJson z x
+  pure (.obj [("marks".toList, .arr es), ("pausedFor".toList, pf)])
 
 /-- **What the walls write, answered** (gap 3139): nothing while no block is open in the replay;
 otherwise `writes` over the open block, its marks, the walls of the request's day and the day
@@ -754,12 +1154,9 @@ def answer (v : JVal) (zo : Option Cal.Tz) (facts : Option Seal.Answer)
       | some s => if s.1 < ob.started.1 then [Replay.IdleMark.interrupt s] else []
       | none => []
     let marks := held ++ (List.range' ob.day (d + 1 - ob.day)).flatMap dm
-    let ws := writes ob.started.1 q.at_.1.val (q.brk.map (·.1.val)) marks (spans.map (·.1))
-    let es ← ws.mapM (entryJson z ob.id ob.started.1 spans)
-    let pf ← match pausedFor ob.started.1 q.at_.1.val (marks ++ marksOf ob.started.1 ws) spans with
-      | none => pure JVal.null
-      | some x => spanJson z x
-    pure (.obj [("marks".toList, .arr es), ("pausedFor".toList, pf)])
+    match intSpans marks with
+    | [] => answerRows z q ob spans marks []
+    | i :: is => answerRows z q ob spans marks (i :: is)
 
 /-- **No open block, nothing to stop**: the answer is the empty list whatever the walls. -/
 theorem answer_without_an_open_block (v : JVal) (z : Cal.Tz) (f : Seal.Answer)
@@ -842,13 +1239,13 @@ theorem the_rule_is_run :
 the unpause, or once the user resumed inside it, it is not; and (D110) a block begun inside it at 1300, paused at its
 start, is paused for it too. -/
 theorem pausedFor_is_run :
-    pausedFor (⟨500, 0⟩ : Cal.Instant) (⟨1500, 0⟩ : Cal.Instant) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
+    pausedFor (⟨500, 0⟩ : Cal.Instant) (intSpans [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At)]) (⟨1500, 0⟩ : Cal.Instant) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
       = some ((1000, 2000), [['g','1']]) ∧
-    pausedFor (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨2000, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
+    pausedFor (⟨500, 0⟩ : Cal.Instant) (intSpans [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨2000, 0⟩, Cal.Offset.utc) : Replay.At)]) (⟨2500, 0⟩ : Cal.Instant) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨2000, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
       = none ∧
-    pausedFor (⟨500, 0⟩ : Cal.Instant) (⟨1500, 0⟩ : Cal.Instant) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
+    pausedFor (⟨500, 0⟩ : Cal.Instant) (intSpans [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)]) (⟨1500, 0⟩ : Cal.Instant) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
       = none ∧
-    pausedFor (⟨1300, 0⟩ : Cal.Instant) (⟨1500, 0⟩ : Cal.Instant) [.pause ((⟨1300, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
+    pausedFor (⟨1300, 0⟩ : Cal.Instant) (intSpans [.pause ((⟨1300, 0⟩, Cal.Offset.utc) : Replay.At)]) (⟨1500, 0⟩ : Cal.Instant) [.pause ((⟨1300, 0⟩, Cal.Offset.utc) : Replay.At)] [((1000, 2000), [['g','1']])]
       = some ((1000, 2000), [['g','1']]) := by
   decide
 
@@ -978,6 +1375,42 @@ theorem an_interruption_open_since_before_the_block_holds_it_at_a_wall :
         (fun _ _ => [⟨['g','1'], 6, 6, 1000, 1000, 2000⟩]) 0 (some 6) (some 60) with
       | .ok v => v == .obj [("marks".toList, .arr []), ("pausedFor".toList, .null)]
       | .error _ => false) = true := by
+  decide
+
+/-! ## The owner's D114 and D117 on the wall rule (README gaps 5014, 5036 and 3042, W-48 track K) -/
+
+/-- **A break running past the wall's end holds the block, and once it has ended the unpause is written** (the owner's
+D114, README gap 5014, parity P115), run: the wall's pause logged at 1000 and a break running since 1200, asked at
+2500 — nothing; the same break logged as ended (1200, 65 minutes) with none running — the unpause; a break begun at
+2100, once the wall had ended — the unpause too; and with nothing logged, a break running since 1200 lets the pause be
+written and holds the unpause. -/
+theorem a_running_break_holds_the_walls_unpause_until_it_ends :
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) (some ⟨1200, 0⟩) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At)] [(1000, 2000)] = [] ∧
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) none [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .brk ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At) (some 65)]
+      [(1000, 2000)] = [(false, 1000, 2000)] ∧
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) (some ⟨2100, 0⟩) [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At)] [(1000, 2000)]
+      = [(false, 1000, 2000)] ∧
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) (some ⟨1200, 0⟩) [] [(1000, 2000)] = [(true, 1000, 2000)] := by
+  decide
+
+/-- **A block resumed inside a wall is paused from its resume until the wall ends** (the owner's D117, README gaps 5036
+and 3042, parity P116), run: begun at 500 and interrupted 900–1200 across the wall `[1000, 2000)`'s start, asked at 2500
+— the pause at the resume, 1200, and the unpause at the wall's end; asked at 1500 — the pause alone; resumed once the
+wall had ended (2100), or still interrupted — nothing; and an interruption taken and resumed inside a meeting whose
+pause the wall already wrote (1200–1300 under the pause at 1000) leaves that pause the last word, so the wall's end
+writes the unpause (until W-48 the `resume` was the last word and the block stayed paused past the meeting). -/
+theorem a_block_resumed_inside_a_wall_is_paused_from_its_resume_run :
+    marksOf (⟨500, 0⟩ : Cal.Instant) (intSpans [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)])
+        (writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) none [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)]
+          [(1000, 2000)])
+      = [.pause ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨2000, 0⟩, Cal.Offset.utc) : Replay.At)] ∧
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨1500, 0⟩ : Cal.Instant) none [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At)]
+      [(1000, 2000)] = [(true, 1000, 2000)] ∧
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) none [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At), .resume ((⟨2100, 0⟩, Cal.Offset.utc) : Replay.At)]
+      [(1000, 2000)] = [] ∧
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) none [.interrupt ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At)] [(1000, 2000)] = [] ∧
+    writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) none [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .interrupt ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At),
+      .resume ((⟨1300, 0⟩, Cal.Offset.utc) : Replay.At)] [(1000, 2000)] = [(false, 1000, 2000)] := by
   decide
 
 end WallTimer

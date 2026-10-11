@@ -526,6 +526,7 @@ pub fn day_plan(cfg: &Config) -> DayPlan {
             prio("a3", 0, PrioClass::Mandatory),
         ],
         cells: Vec::new(),
+        divider: None,
     };
     // **Its rows are the kernel's** (the owner's D112): the cells the `plan`
     // section answers for these segments over the fixture's own documents.

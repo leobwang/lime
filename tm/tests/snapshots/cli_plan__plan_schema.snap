@@ -29,6 +29,11 @@ expression: schema(&json)
     ]
   },
   "diff": "null",
+  "divider": {
+    "before": "integer",
+    "text": "string",
+    "time": "string"
+  },
   "explain": "null",
   "hash": "string",
   "priorities": [

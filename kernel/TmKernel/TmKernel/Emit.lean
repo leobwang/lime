@@ -680,5 +680,169 @@ theorem rowsOf_tells_the_planned_day (r : PlanReq) :
     rowsOf r = (dayPlan r).segments.map (fun s =>
       rowOf r.plan.val r.tz r.blockMin r.look.day.bed (dayPlan r).priorities.val s.val (dayPlan r).day) := rfl
 
+/-! ## W-48 track R — the `window ends` divider is a kernel row (README gaps 5031 and 1301)
+
+APPENDED 2026-10-11, at the end of the module so that no line above moves.  Until W-48 the divider was the one line of
+§4.3's day section that was not the kernel's: `tm-core/src/emit.rs`'s divider_instant re-summed the work rows' minutes
+against `budget_blocks × block_min`, and its divider_row formatted the line — a second reader of where the day's budget
+ends, beside the planner that spent it.  Both are deleted; the instant, its position among the rows and its cells are
+these definitions, and the one Rust padder (`emit::render_row`, D30 Q6) lays the cells out.
+
+**The budget is the planner's, never recomputed.**  The budget in minutes is a day's `DayPlan.budgetBlocks` (which is
+`Planner.PlanReq.budgetBlocks`, the stored budget or `Look.budgetOf`) times its block length; this module only walks
+the rows against it.  The walk is fork divider_instant's, rule for rule: the minutes the work rows (`SegKind.isWork`:
+Block and Batch) actually span, in row order, `Planner.Seg.minutes` — an overrunning block eats the budget it overran
+into — until the running total reaches the budget, at that row's end; the window's end instead when that comes first,
+or when nothing is spent and some row starts at or after the window's end; and no divider otherwise.
+
+**The row**: the instant's `HH:MM` (`timeCell`), the glyph `───` in the `ci` cell, an EMPTY mark, and `window ends
+HH:MM` (the window's end) as the title.  The empty mark is what puts the title at fork divider_row's column: `ci` is
+three columns where `CI_W` is two, and the mark's one column is the one the glyph took. -/
+
+/-- §4.3's divider glyph, `───` (fork emit::DIVIDER, deleted from this repository at W-48). -/
+def dividerGlyph : List Char := ['─', '─', '─']
+
+/-- One row of the budget walk: `(minutes the work rows spent, the instant the budget ran out)`.  Once the instant is
+found the walk carries it unchanged; a row that is not work spends nothing. -/
+def budgetStep (budgetMin : Nat) (acc : Nat × Option Nat) (s : Seg) : Nat × Option Nat :=
+  match acc.2 with
+  | some _ => acc
+  | none =>
+    if s.kind.isWork then
+      if 0 < budgetMin ∧ budgetMin ≤ acc.1 + s.minutes then (acc.1 + s.minutes, some s.stop)
+      else (acc.1 + s.minutes, none)
+    else acc
+
+/-- **Where the budget runs out**: the end of the work row whose minutes take the running total to the budget, or
+none (a budget of zero runs out nowhere, as the fork's `budget_min > 0` says). -/
+def budgetSpentAt (budgetMin : Nat) (segs : List Seg) : Option Nat :=
+  (segs.foldl (budgetStep budgetMin) (0, none)).2
+
+/-- **The divider's instant** — where the budget runs out, or the window ends, whichever is earlier; the window's end
+only when some row starts at or after it, unless the budget ran out past it. -/
+def dividerAt (budgetMin windowEnd : Nat) (segs : List Seg) : Option Nat :=
+  let past := segs.any (fun s => decide (windowEnd ≤ s.start))
+  match budgetSpentAt budgetMin segs with
+  | some t => if t < windowEnd then some t else if past then some windowEnd else some t
+  | none => if past then some windowEnd else none
+
+/-- **Its position**: before the first row that starts at or after the instant, else after the last. -/
+def dividerBefore (t : Nat) (segs : List Seg) : Nat :=
+  (segs.findIdx? (fun s => decide (t ≤ s.start))).getD segs.length
+
+/-- **Its cells** — `t`'s clock, the glyph, an empty mark and `window ends` the window's end's clock. -/
+def dividerRow (z : Cal.Tz) (t windowEnd : Nat) : Row :=
+  { time := timeCell z t, ci := dividerGlyph, p := [], mark := [],
+    title := "window ends ".toList ++ timeCell z windowEnd,
+    parent := [], est := [], actual := [], note := [] }
+
+/-- **The divider of a day's rows**, its position among them and its cells; none where the day has none. -/
+def divider (z : Cal.Tz) (budgetMin windowEnd : Nat) (segs : List Seg) : Option (Nat × Row) :=
+  (dividerAt budgetMin windowEnd segs).map (fun t => (dividerBefore t segs, dividerRow z t windowEnd))
+
+/-! ### Its laws -/
+
+/-- **The glyph is three box-drawing characters.** -/
+theorem dividerGlyph_is_three_rules : dividerGlyph = ['─', '─', '─'] := rfl
+
+/-- **The divider's nine cells**: its clock, the glyph, nothing, NO mark, `window ends <clock>`, nothing. -/
+theorem dividerRow_cells (z : Cal.Tz) (t e : Nat) :
+    (dividerRow z t e).cells
+      = [timeCell z t, dividerGlyph, [], [], "window ends ".toList ++ timeCell z e, [], [], [], []] := rfl
+
+/-- **A row that is not work spends nothing.** -/
+theorem budgetStep_of_a_row_that_is_not_work (b : Nat) (acc : Nat × Option Nat) (s : Seg)
+    (h : s.kind.isWork = false) : budgetStep b acc s = acc := by
+  unfold budgetStep; split <;> simp [h]
+
+/-- **Once the budget has run out the walk keeps the instant.** -/
+theorem budgetStep_keeps_the_instant (b u t : Nat) (s : Seg) : budgetStep b (u, some t) s = (u, some t) := rfl
+
+/-- **Spent inside the window, the divider is where it was spent.** -/
+theorem dividerAt_where_the_budget_ran_out (b e t : Nat) (segs : List Seg)
+    (h : budgetSpentAt b segs = some t) (ht : t < e) : dividerAt b e segs = some t := by
+  simp [dividerAt, h, ht]
+
+/-- **Unspent, the divider is the window's end exactly when a row starts at or after it**, and there is none
+otherwise. -/
+theorem dividerAt_unspent (b e : Nat) (segs : List Seg) (h : budgetSpentAt b segs = none) :
+    dividerAt b e segs = if segs.any (fun s => decide (e ≤ s.start)) then some e else none := by
+  simp [dividerAt, h]
+
+/-- **A divider is the window's end or where the budget ran out** — no third instant. -/
+theorem dividerAt_is_the_window_end_or_the_spent_instant (b e t : Nat) (segs : List Seg)
+    (h : dividerAt b e segs = some t) : t = e ∨ budgetSpentAt b segs = some t := by
+  cases hs : budgetSpentAt b segs with
+  | none =>
+    rw [dividerAt_unspent b e segs hs] at h
+    by_cases hp : segs.any (fun s => decide (e ≤ s.start)) = true
+    · rw [if_pos hp] at h; cases h; exact Or.inl rfl
+    · rw [if_neg hp] at h; cases h
+  | some t' =>
+    simp only [dividerAt, hs] at h
+    by_cases h1 : t' < e
+    · rw [if_pos h1] at h; cases h; exact Or.inr rfl
+    · rw [if_neg h1] at h
+      by_cases hp : segs.any (fun s => decide (e ≤ s.start)) = true
+      · rw [if_pos hp] at h; cases h; exact Or.inl rfl
+      · rw [if_neg hp] at h; cases h; exact Or.inr rfl
+
+/-- **The divider is `dividerAt`'s instant, at `dividerBefore`'s position, with `dividerRow`'s cells.** -/
+theorem divider_eq (z : Cal.Tz) (b e : Nat) (segs : List Seg) :
+    divider z b e segs = (dividerAt b e segs).map (fun t => (dividerBefore t segs, dividerRow z t e)) := rfl
+
+/-- **Its position is at most the number of rows**, so it is a place in the day's list and never past it. -/
+theorem dividerBefore_le_length (t : Nat) (segs : List Seg) : dividerBefore t segs ≤ segs.length := by
+  unfold dividerBefore
+  cases h : segs.findIdx? (fun s => decide (t ≤ s.start)) with
+  | none => simp
+  | some i =>
+    have := List.findIdx?_eq_some_iff_findIdx_eq.mp h
+    simp only [Option.getD_some]
+    omega
+
+/-! ### Witnessed on three small days
+
+Three blocks of an hour from 09:00 (absolute seconds 32 400, 36 000, 39 600 on day 0), a wall from 13:00, with a window
+ending at 14:00: a two-hour budget runs out at the end of the second block; a five-hour one never does and the divider
+is the window's end, before the first row starting at or after it; with no row past the window and nothing spent there
+is none.  The rows are written into each statement rather than named by a definition: a fixture `def` in a library
+module is emitted code nothing reaches (check 12). -/
+
+theorem the_budget_runs_out_at_the_second_blocks_end :
+    let segs : List Seg := [⟨32400, 36000, .block, none, none, none, {}, none, none, none⟩, ⟨36000, 39600, .block, none, none, none, {}, none, none, none⟩,
+      ⟨39600, 46800, .wall, none, none, none, {}, none, none, none⟩, ⟨46800, 50400, .block, none, none, none, {}, none, none, none⟩,
+      ⟨50400, 54000, .rest, none, none, none, {}, none, none, none⟩]
+    budgetSpentAt 120 segs = some 39600 ∧ dividerAt 120 50400 segs = some 39600 ∧
+      dividerBefore 39600 segs = 2 := by decide
+
+theorem an_unspent_budget_divides_at_the_window_end :
+    let segs : List Seg := [⟨32400, 36000, .block, none, none, none, {}, none, none, none⟩, ⟨36000, 39600, .block, none, none, none, {}, none, none, none⟩,
+      ⟨39600, 46800, .wall, none, none, none, {}, none, none, none⟩, ⟨46800, 50400, .block, none, none, none, {}, none, none, none⟩,
+      ⟨50400, 54000, .rest, none, none, none, {}, none, none, none⟩]
+    budgetSpentAt 300 segs = none ∧ dividerAt 300 50400 segs = some 50400 ∧
+      dividerBefore 50400 segs = 4 := by decide
+
+theorem nothing_past_the_window_and_nothing_spent_is_no_divider :
+    let segs : List Seg := [⟨32400, 36000, .block, none, none, none, {}, none, none, none⟩, ⟨36000, 39600, .block, none, none, none, {}, none, none, none⟩,
+      ⟨39600, 46800, .wall, none, none, none, {}, none, none, none⟩, ⟨46800, 50400, .block, none, none, none, {}, none, none, none⟩,
+      ⟨50400, 54000, .rest, none, none, none, {}, none, none, none⟩]
+    dividerAt 300 60000 segs = none := by decide
+
+/-- **A budget spent past the window's end divides at the window's end when a row starts there** — the fork's
+`Some(t) if t < end` is not taken, and `any(start ≥ end)` is. -/
+theorem a_budget_spent_past_the_window_divides_at_its_end :
+    let segs : List Seg := [⟨32400, 36000, .block, none, none, none, {}, none, none, none⟩, ⟨36000, 39600, .block, none, none, none, {}, none, none, none⟩,
+      ⟨39600, 46800, .wall, none, none, none, {}, none, none, none⟩, ⟨46800, 50400, .block, none, none, none, {}, none, none, none⟩,
+      ⟨50400, 54000, .rest, none, none, none, {}, none, none, none⟩]
+    budgetSpentAt 180 segs = some 50400 ∧ dividerAt 180 46800 segs = some 46800 := by decide
+
+/-- **And a zero budget runs out nowhere.** -/
+theorem a_zero_budget_runs_out_nowhere :
+    let segs : List Seg := [⟨32400, 36000, .block, none, none, none, {}, none, none, none⟩, ⟨36000, 39600, .block, none, none, none, {}, none, none, none⟩,
+      ⟨39600, 46800, .wall, none, none, none, {}, none, none, none⟩, ⟨46800, 50400, .block, none, none, none, {}, none, none, none⟩,
+      ⟨50400, 54000, .rest, none, none, none, {}, none, none, none⟩]
+    budgetSpentAt 0 segs = none := by decide
+
 end Emit
 end Tm

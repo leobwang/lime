@@ -79,7 +79,7 @@ use tm_core::tree::Tree;
 fn rendered(plan: &DayPlan, tree: &Tree, cfg: &Config, h: u32, m: u32) -> String {
     let now = at("2026-09-07", h, m);
     let wake = at("2026-09-07", 6, 5);
-    let (info, body) = emit::render_plan_section(plan, cfg, now);
+    let (info, body) = emit::render_plan_section(plan, now);
     let bar = emit::daybar_cells(plan, None, tree, cfg, 96, wake, now);
     let svg = emit::render_svg(&bar, plan, cfg, 960, 64);
     let mut out = format!("<!-- tm:plan start {info} -->\n{body}<!-- tm:plan end -->\n\nsvg\n");
@@ -264,11 +264,11 @@ fn no_row_repeats_its_own_title_or_actual_on(p: &dyn DayPlanner) {
         let fx = load_with_log(name, log);
         let state = basic_state();
         let day = p.day(&fx, &state, at("2026-09-07", 7, 0));
-        let (_, body) = emit::render_plan_section(&day, &fx.cfg, at("2026-09-07", 7, 0));
+        let (_, body) = emit::render_plan_section(&day, at("2026-09-07", 7, 0));
         // The `───  window ends` divider is a row without a segment (§4.3).
         let rows: Vec<&str> = body
             .lines()
-            .filter(|l| !l.contains(emit::DIVIDER))
+            .filter(|l| !l.contains("window ends"))
             .collect();
         assert_eq!(rows.len(), day.segments.len(), "{name}: row/segment drift");
         for (seg, row) in day.segments.iter().zip(rows) {
