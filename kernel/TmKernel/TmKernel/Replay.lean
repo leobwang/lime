@@ -2651,6 +2651,433 @@ to the earliest span start after it (or to `t`), then on from that start — so 
 is a sub-segment of its own: its minutes are its own seconds over 60 (site R8). -/
 def pieces (H : List (At × At)) (x t : At) : List (At × At) := piecesGo H (H.length + 1) x t
 
+/-! ### `pieces`, compiled (README gap 5027, W-48 track A)
+
+`pieces` walks every span for every piece it draws (`lift`'s `find?`, `nextStart`'s fold), and `settle` asks it at
+every mark of an open block, over the block's own idle spans — so `tm now` over a block with `k` pauses cost `k³`
+(gap 5027: 1 s at 200 pause pairs, 5 s at 400).  `piecesFast` takes the nonempty spans as given, or sorted by start,
+and when they are apart (each ending at or before the next one starts — what a block's own pauses always are) draws
+the pieces in one pass (`sweep`); otherwise it is `pieces` itself.  `pieces_eq_piecesFast` proves the two equal on
+every input, so every theorem keeps reading `pieces` and the compiled code runs the pass. -/
+
+/-- A count under a stronger predicate is smaller when one element meets the weaker alone. -/
+theorem countP_lt_of_witness {α : Type} (P Q : α → Bool) (hPQ : ∀ x, P x = true → Q x = true) :
+    ∀ (l : List α) (w : α), w ∈ l → Q w = true → P w = false → l.countP P < l.countP Q
+  | [], _, h, _, _ => by cases h
+  | x :: l, w, hw, hq, hp => by
+    rw [List.countP_cons, List.countP_cons]
+    rcases List.mem_cons.1 hw with rfl | hw
+    · have := List.countP_mono_left (l := l) (p := P) (q := Q) (fun a _ h => hPQ a h)
+      simp only [hp, hq, Bool.false_eq_true, ↓reduceIte]; omega
+    · have ih := countP_lt_of_witness P Q hPQ l w hw hq hp
+      by_cases hx : P x = true
+      · rw [if_pos hx, if_pos (hPQ x hx)]; omega
+      · rw [if_neg hx]
+        split <;> omega
+
+/-- A span is nonempty: its start before its end. -/
+def spanOk (p : At × At) : Bool := decide (p.1.1 < p.2.1)
+
+/-- **Spans APART** (README gap 5027): each nonempty, each ending at or before the next one starts — so they are
+sorted by start, pairwise disjoint, and no instant is covered twice. -/
+def apart : List (At × At) → Bool
+  | [] => true
+  | [p] => spanOk p
+  | p :: q :: l => spanOk p && decide (p.2.1 ≤ q.1.1) && apart (q :: l)
+
+/-- **The pieces of `[x, t)` outside spans that are apart, in one pass** (README gap 5027): a span ending at or
+before `x` is behind it; one covering `x` moves `x` to its end; one starting after `x` closes a piece at its start
+(or `t`), and the pass goes on from its end. -/
+def sweep : List (At × At) → At → At → List (At × At)
+  | [], x, t => if x.1 < t.1 then [(x, t)] else []
+  | p :: ps, x, t =>
+    if p.2.1 ≤ x.1 then sweep ps x t
+    else if p.1.1 ≤ x.1 then sweep ps p.2 t
+    else if t.1 ≤ x.1 then []
+    else if t.1 ≤ p.1.1 then [(x, t)]
+    else (x, p.1) :: sweep ps p.2 t
+
+/-! The sort is by start (`fun p q => decide (p.1.1 ≤ q.1.1)`), written in `piecesFast` itself: a named comparator
+handed to `mergeSort` is reached through a static closure check 12 does not follow (gap 5165). -/
+
+/-- **`pieces`, compiled** (README gap 5027): the nonempty spans as given, when they are apart — a block's own pauses
+are, in the order the replay holds them — and else sorted by start; when either is apart, one pass (`sweep`);
+otherwise `pieces` itself. -/
+def piecesFast (H : List (At × At)) (x t : At) : List (At × At) :=
+  if apart (H.filter spanOk) then sweep (H.filter spanOk) x t
+  else if apart ((H.filter spanOk).mergeSort (fun p q => decide (p.1.1 ≤ q.1.1))) then sweep ((H.filter spanOk).mergeSort (fun p q => decide (p.1.1 ≤ q.1.1))) x t
+  else pieces H x t
+
+theorem apart_spec : ∀ (S : List (At × At)), apart S = true →
+    (∀ p ∈ S, p.1.1 < p.2.1) ∧ S.Pairwise (fun p q => p.2.1 ≤ q.1.1)
+  | [], _ => ⟨(fun _ h => absurd h List.not_mem_nil), List.Pairwise.nil⟩
+  | [p], h => by
+    simp only [apart, spanOk, decide_eq_true_eq] at h
+    refine ⟨fun q hq => ?_, List.pairwise_singleton _ _⟩
+    simp only [List.mem_singleton] at hq; subst hq; exact h
+  | p :: q :: l, h => by
+    simp only [apart, spanOk, Bool.and_eq_true, decide_eq_true_eq] at h
+    obtain ⟨⟨hp, hpq⟩, hrest⟩ := h
+    obtain ⟨h1, h2⟩ := apart_spec (q :: l) hrest
+    refine ⟨fun r hr => ?_, List.Pairwise.cons (fun r hr => ?_) h2⟩
+    · rcases List.mem_cons.1 hr with rfl | hr
+      · exact hp
+      · exact h1 r hr
+    · rcases List.mem_cons.1 hr with rfl | hr
+      · exact hpq
+      · have hq := h1 q List.mem_cons_self
+        have hqr := List.rel_of_pairwise_cons h2 hr
+        simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hpq hqr hq ⊢; omega
+
+/-- `liftGo` at an instant no span covers stays there. -/
+theorem liftGo_of_uncovered (H : List (At × At)) (y : At) (h : ∀ q ∈ H, covers q y = false) :
+    ∀ n, liftGo H n y = y
+  | 0 => rfl
+  | n + 1 => by
+    unfold liftGo
+    rw [List.find?_eq_none.2 (fun q hq => by simp [h q hq])]
+
+/-- **One more jump than spans still ending after the instant changes nothing.** -/
+theorem liftGo_succ (H : List (At × At)) : ∀ (n : Nat) (y : At),
+    H.countP (fun q => decide (y.1 < q.2.1)) ≤ n → liftGo H (n + 1) y = liftGo H n y
+  | 0, y, hn => by
+    have h0 : H.countP (fun q => decide (y.1 < q.2.1)) = 0 := by omega
+    rw [List.countP_eq_zero] at h0
+    have hu : ∀ q ∈ H, covers q y = false := by
+      intro q hq
+      have := h0 q hq
+      unfold covers; simp only [decide_eq_true_eq] at this; simp [this]
+    rw [liftGo_of_uncovered H y hu]; rfl
+  | n + 1, y, hn => by
+    show liftGo H (n + 2) y = liftGo H (n + 1) y
+    unfold liftGo
+    split
+    · rename_i q hq
+      have hqH : q ∈ H := List.mem_of_find?_eq_some hq
+      have hqc : covers q y = true := List.find?_some (p := fun p => covers p y) hq
+      unfold covers at hqc
+      simp only [decide_eq_true_eq] at hqc
+      apply liftGo_succ H n q.2
+      have hlt := countP_lt_of_witness (fun p => decide (q.2.1 < p.2.1)) (fun p => decide (y.1 < p.2.1))
+        (fun x hx => by
+          simp only [decide_eq_true_eq] at hx ⊢
+          exact Cal.Instant.lt_trans hqc.2 hx)
+        H q hqH (by simpa using hqc.2) (by simp [Cal.Instant.lt_irrefl])
+      omega
+    · rfl
+
+/-- `lift` from an instant one span covers, and no other, is `lift` from that span's end. -/
+theorem lift_of_cover (H : List (At × At)) (p : At × At) (y : At) (hp : p ∈ H) (hc : covers p y = true)
+    (hu : ∀ q ∈ H, covers q y = true → q = p) : lift H y = lift H p.2 := by
+  unfold lift
+  obtain ⟨L, hL⟩ : ∃ L, H.length = L + 1 := ⟨H.length - 1, by
+    have := List.length_pos_of_mem hp; omega⟩
+  rw [hL]
+  have hf : H.find? (fun q => covers q y) = some p := by
+    cases h : H.find? (fun q => covers q y) with
+    | none => rw [List.find?_eq_none] at h; exact absurd hc (by simpa using h p hp)
+    | some q => rw [hu q (List.mem_of_find?_eq_some h) (List.find?_some (p := fun q => covers q y) h)]
+  have hstep : liftGo H (L + 1) y = liftGo H L p.2 := by
+    simp only [liftGo, hf]
+  rw [hstep, liftGo_succ H L p.2]
+  unfold covers at hc
+  simp only [decide_eq_true_eq] at hc
+  have hlt := countP_lt_of_witness (fun q => decide (p.2.1 < q.2.1)) (fun q => decide (y.1 < q.2.1))
+    (fun x hx => by
+      simp only [decide_eq_true_eq] at hx ⊢
+      exact Cal.Instant.lt_trans hc.2 hx)
+    H p hp (by simpa using hc.2) (by simp [Cal.Instant.lt_irrefl])
+  have := List.countP_le_length (p := fun q => decide (y.1 < q.2.1)) (l := H)
+  omega
+
+/-- A candidate of `nextStart`. -/
+def cand (x t : At) (p : At × At) : Prop := x.1 < p.1.1 ∧ p.1.1 < t.1 ∧ p.1.1 < p.2.1
+
+/-- **`nextStart` with no candidate is `none`.** -/
+theorem nextStart_none_of (H : List (At × At)) (x t : At) (h : ∀ q ∈ H, ¬ cand x t q) :
+    nextStart H x t = none := by
+  let f := fun (acc : Option At) (p : At × At) =>
+    if x.1 < p.1.1 ∧ p.1.1 < t.1 ∧ p.1.1 < p.2.1 then
+      match acc with
+      | some a => if p.1.1 < a.1 then some p.1 else acc
+      | none => some p.1
+    else acc
+  have key : ∀ (l : List (At × At)), (∀ q ∈ l, ¬ cand x t q) → l.foldl f none = none := by
+    intro l
+    induction l with
+    | nil => intro _; rfl
+    | cons q l ih =>
+      intro hl
+      rw [List.foldl_cons]
+      have : f none q = none := if_neg (hl q List.mem_cons_self)
+      rw [this]
+      exact ih (fun r hr => hl r (List.mem_cons_of_mem _ hr))
+  exact key H h
+
+/-- **`nextStart` is the start of a candidate every other candidate starts after.** -/
+theorem nextStart_of_least (H : List (At × At)) (x t : At) (p : At × At) (hp : p ∈ H) (hc : cand x t p)
+    (hlt : ∀ q ∈ H, cand x t q → q = p ∨ p.1.1 < q.1.1) : nextStart H x t = some p.1 := by
+  let f := fun (acc : Option At) (p : At × At) =>
+    if x.1 < p.1.1 ∧ p.1.1 < t.1 ∧ p.1.1 < p.2.1 then
+      match acc with
+      | some a => if p.1.1 < a.1 then some p.1 else acc
+      | none => some p.1
+    else acc
+  have key : ∀ (l : List (At × At)) (acc : Option At), (∀ q ∈ l, cand x t q → q = p ∨ p.1.1 < q.1.1) →
+      (acc = some p.1 ∨ (p ∈ l ∧ (acc = none ∨ ∃ a, acc = some a ∧ p.1.1 < a.1))) → l.foldl f acc = some p.1 := by
+    intro l
+    induction l with
+    | nil =>
+      intro acc _ hacc
+      rcases hacc with h | ⟨h, -⟩
+      · exact h
+      · exact absurd h List.not_mem_nil
+    | cons q l ih =>
+      intro acc hl hacc
+      rw [List.foldl_cons]
+      have hl' : ∀ r ∈ l, cand x t r → r = p ∨ p.1.1 < r.1.1 := fun r hr => hl r (List.mem_cons_of_mem _ hr)
+      have step_none : cand x t q → f none q = some q.1 := fun hq => if_pos hq
+      have step_some : ∀ a, cand x t q → f (some a) q = if q.1.1 < a.1 then some q.1 else some a :=
+        fun a hq => if_pos hq
+      by_cases hq : cand x t q
+      · rcases hl q List.mem_cons_self hq with hqp | hpq
+        · -- `q` is `p`: whatever came before, `p`'s start is now held
+          subst hqp
+          apply ih _ hl' (Or.inl ?_)
+          rcases hacc with h | ⟨-, h | ⟨a, h, ha⟩⟩
+          · subst h; rw [step_some _ hq, if_neg (Cal.Instant.lt_irrefl _)]
+          · subst h; exact step_none hq
+          · subst h; rw [step_some _ hq, if_pos ha]
+        · -- `q` starts after `p`
+          have hnot : ¬ q.1.1 < p.1.1 := by
+            intro h; simp only [Cal.Instant.lt_iff] at h hpq; omega
+          have hpl : p ∈ q :: l → p ∈ l := by
+            intro hpm
+            rcases List.mem_cons.1 hpm with h | h
+            · subst h; exact absurd hpq (Cal.Instant.lt_irrefl _)
+            · exact h
+          apply ih _ hl'
+          rcases hacc with h | ⟨hpm, h | ⟨a, h, ha⟩⟩
+          · subst h; left; rw [step_some _ hq, if_neg hnot]
+          · subst h
+            exact Or.inr ⟨hpl hpm, Or.inr ⟨q.1, step_none hq, hpq⟩⟩
+          · subst h
+            refine Or.inr ⟨hpl hpm, Or.inr ?_⟩
+            rw [step_some _ hq]
+            split
+            · exact ⟨q.1, rfl, hpq⟩
+            · exact ⟨a, rfl, ha⟩
+      · have hf : f acc q = acc := if_neg hq
+        rw [hf]
+        apply ih _ hl'
+        rcases hacc with h | ⟨hpm, h⟩
+        · exact Or.inl h
+        · right
+          refine ⟨?_, h⟩
+          rcases List.mem_cons.1 hpm with h' | h'
+          · subst h'; exact absurd hc hq
+          · exact h'
+  exact key H none hlt (Or.inr ⟨hp, Or.inl rfl⟩)
+
+/-- `piecesGo` reads its start only through `lift`. -/
+theorem piecesGo_congr (H : List (At × At)) (a b t : At) (h : lift H a = lift H b) :
+    ∀ n, piecesGo H n a t = piecesGo H n b t
+  | 0 => rfl
+  | n + 1 => by simp only [piecesGo, h]
+
+/-- **`piecesGo` from an instant no span covers.** -/
+theorem piecesGo_of_uncovered (H : List (At × At)) (x t : At) (h : ∀ q ∈ H, covers q x = false) (n : Nat) :
+    piecesGo H (n + 1) x t =
+      if t.1 ≤ x.1 then [] else
+        match nextStart H x t with
+        | none => [(x, t)]
+        | some s => (x, s) :: piecesGo H n s t := by
+  have hl : lift H x = x := liftGo_of_uncovered H x h _
+  have ha : H.any (fun p => covers p x) = false := by
+    rw [List.any_eq_false]; intro q hq; simp [h q hq]
+  simp only [piecesGo, hl, ha, Bool.false_or, decide_eq_true_eq]
+
+/-- **`pieces` over spans that are apart is one pass** (README gap 5027): for `H` whose nonempty spans are, in some
+order, the apart list `S`, `piecesGo` from any instant past every span of a prefix of `S`, with fuel for every
+candidate start after it, is `sweep` over the rest. -/
+theorem piecesGo_eq_sweep (H S : List (At × At)) (hmem : ∀ q, q ∈ S ↔ (q ∈ H ∧ q.1.1 < q.2.1))
+    (hS : apart S = true) (t : At) :
+    ∀ (S' pre : List (At × At)) (x : At) (n : Nat), S = pre ++ S' → (∀ q ∈ pre, q.2.1 ≤ x.1) →
+      H.countP (fun q => decide (x.1 < q.1.1 ∧ q.1.1 < q.2.1)) + 1 ≤ n →
+      piecesGo H n x t = sweep S' x t := by
+  obtain ⟨hok, hpw⟩ := apart_spec S hS
+  -- a span of `H` that covers an instant, or is a candidate, is one of `S`
+  have inS_cov : ∀ q ∈ H, ∀ y, covers q y = true → q ∈ S := by
+    intro q hq y hc
+    unfold covers at hc; simp only [decide_eq_true_eq] at hc
+    exact (hmem q).2 ⟨hq, by simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hc ⊢; omega⟩
+  have inS_cand : ∀ q ∈ H, ∀ y u, cand y u q → q ∈ S := fun q hq y u hc => (hmem q).2 ⟨hq, hc.2.2⟩
+  have anti : ∀ a b : At, a.1 ≤ b.1 →
+      H.countP (fun q => decide (b.1 < q.1.1 ∧ q.1.1 < q.2.1)) ≤
+        H.countP (fun q => decide (a.1 < q.1.1 ∧ q.1.1 < q.2.1)) := by
+    intro a b hab
+    apply List.countP_mono_left
+    intro q _ hq
+    simp only [decide_eq_true_eq] at hq ⊢
+    simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hab hq ⊢; omega
+  intro S'
+  induction S' with
+  | nil =>
+    intro pre x n hpre hbehind hn
+    rw [List.append_nil] at hpre
+    subst hpre
+    have hu : ∀ q ∈ H, covers q x = false := by
+      intro q hq
+      cases hc : covers q x with
+      | false => rfl
+      | true =>
+        have hb := hbehind q (inS_cov q hq x hc)
+        unfold covers at hc; simp only [decide_eq_true_eq] at hc
+        simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hb hc; omega
+    have hns : nextStart H x t = none := nextStart_none_of H x t (fun q hq hc => by
+      have hb := hbehind q (inS_cand q hq x t hc)
+      obtain ⟨h1, -, h3⟩ := hc
+      simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hb h1 h3; omega)
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [piecesGo_of_uncovered H x t hu m, hns]
+    simp only [sweep]
+    by_cases h : t.1 ≤ x.1
+    · rw [if_pos h, if_neg (by rw [Cal.Instant.not_lt]; exact h)]
+    · rw [if_neg h, if_pos (by rw [← Cal.Instant.not_lt] at h; simpa using h)]
+  | cons p ps ih =>
+    intro pre x n hpre hbehind hn
+    subst hpre
+    have hp : p ∈ pre ++ p :: ps := List.mem_append_right _ List.mem_cons_self
+    have hpok := hok p hp
+    have hpw' := List.pairwise_append.1 hpw
+    have hbefore : ∀ a ∈ pre, a.2.1 ≤ p.1.1 := fun a ha => hpw'.2.2 a ha p List.mem_cons_self
+    have hafter : ∀ b ∈ ps, p.2.1 ≤ b.1.1 := fun b hb => List.rel_of_pairwise_cons hpw'.2.1 hb
+    have hpH : p ∈ H := ((hmem p).1 hp).1
+    have hpre' : pre ++ p :: ps = (pre ++ [p]) ++ ps := by simp
+    -- every span of `pre ++ [p]` ends at or before `p`'s end
+    have hbehind_p : ∀ y : At, x.1 ≤ y.1 → p.2.1 ≤ y.1 → ∀ q ∈ pre ++ [p], q.2.1 ≤ y.1 := by
+      intro y hxy hpy q hq
+      rcases List.mem_append.1 hq with hq | hq
+      · have := hbehind q hq; simp only [Cal.Instant.le_iff] at this hxy ⊢; omega
+      · simp only [List.mem_singleton] at hq; subst hq; exact hpy
+    -- the one span that covers an instant in `p`
+    have only_p : ∀ y : At, p.1.1 ≤ y.1 → y.1 < p.2.1 → ∀ q ∈ H, covers q y = true → q = p := by
+      intro y h1 h2 q hq hc
+      have hqS := inS_cov q hq y hc
+      unfold covers at hc; simp only [decide_eq_true_eq] at hc
+      rcases List.mem_append.1 hqS with hq' | hq'
+      · have := hbefore q hq'
+        simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this hc h1; omega
+      · rcases List.mem_cons.1 hq' with rfl | hq'
+        · rfl
+        · have := hafter q hq'
+          simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this hc h2; omega
+    have lift_p : ∀ y : At, p.1.1 ≤ y.1 → y.1 < p.2.1 → lift H y = lift H p.2 := by
+      intro y h1 h2
+      apply lift_of_cover H p y hpH _ (only_p y h1 h2)
+      unfold covers; simp only [decide_eq_true_eq]; exact ⟨h1, h2⟩
+    simp only [sweep]
+    by_cases h1 : p.2.1 ≤ x.1
+    · rw [if_pos h1]
+      exact ih (pre ++ [p]) x n hpre' (hbehind_p x (instant_le_refl _) h1) hn
+    · rw [if_neg h1]
+      have hxp2 : x.1 < p.2.1 := by rw [← Cal.Instant.not_lt] at h1; simpa using h1
+      by_cases h2 : p.1.1 ≤ x.1
+      · -- `p` covers `x`
+        rw [if_pos h2, piecesGo_congr H x p.2 t (lift_p x h2 hxp2) n]
+        apply ih (pre ++ [p]) p.2 n hpre'
+          (hbehind_p p.2 (by simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hxp2 ⊢; omega)
+            (instant_le_refl _))
+        have := anti x p.2 (by simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hxp2 ⊢; omega)
+        omega
+      · rw [if_neg h2]
+        have hxp1 : x.1 < p.1.1 := by rw [← Cal.Instant.not_lt] at h2; simpa using h2
+        -- nothing covers `x`
+        have hu : ∀ q ∈ H, covers q x = false := by
+          intro q hq
+          cases hc : covers q x with
+          | false => rfl
+          | true =>
+            exfalso
+            have hqS := inS_cov q hq x hc
+            unfold covers at hc; simp only [decide_eq_true_eq] at hc
+            rcases List.mem_append.1 hqS with hq' | hq'
+            · have := hbehind q hq'
+              simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this hc; omega
+            · rcases List.mem_cons.1 hq' with rfl | hq'
+              · simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hc hxp1; omega
+              · have := hafter q hq'
+                simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this hc hxp1 hpok; omega
+        obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+        rw [piecesGo_of_uncovered H x t hu m]
+        by_cases h3 : t.1 ≤ x.1
+        · rw [if_pos h3, if_pos h3]
+        · rw [if_neg h3, if_neg h3]
+          by_cases h4 : t.1 ≤ p.1.1
+          · rw [if_pos h4]
+            have hns : nextStart H x t = none := nextStart_none_of H x t (fun q hq hc => by
+              obtain ⟨c1, c2, c3⟩ := hc
+              have hqS := inS_cand q hq x t ⟨c1, c2, c3⟩
+              rcases List.mem_append.1 hqS with hq' | hq'
+              · have := hbehind q hq'
+                simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this c1 c3; omega
+              · rcases List.mem_cons.1 hq' with rfl | hq'
+                · simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at h4 c2; omega
+                · have := hafter q hq'
+                  simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this h4 c2 hpok; omega)
+            rw [hns]
+          · rw [if_neg h4]
+            have hpt : p.1.1 < t.1 := by rw [← Cal.Instant.not_lt] at h4; simpa using h4
+            have hns : nextStart H x t = some p.1 := by
+              apply nextStart_of_least H x t p hpH ⟨hxp1, hpt, hpok⟩
+              intro q hq hc
+              obtain ⟨c1, c2, c3⟩ := hc
+              have hqS := inS_cand q hq x t ⟨c1, c2, c3⟩
+              rcases List.mem_append.1 hqS with hq' | hq'
+              · have := hbehind q hq'
+                simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this c1 c3; omega
+              · rcases List.mem_cons.1 hq' with rfl | hq'
+                · exact Or.inl rfl
+                · have := hafter q hq'
+                  right
+                  simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at this hpok ⊢; omega
+            simp only [hns]
+            congr 1
+            rw [piecesGo_congr H p.1 p.2 t (lift_p p.1 (instant_le_refl _) hpok) m]
+            apply ih (pre ++ [p]) p.2 m hpre'
+              (hbehind_p p.2 (by simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hxp2 ⊢; omega)
+                (instant_le_refl _))
+            have h5 := anti p.1 p.2 (by simp only [Cal.Instant.le_iff, Cal.Instant.lt_iff] at hpok ⊢; omega)
+            have h6 := countP_lt_of_witness (fun q => decide (p.1.1 < q.1.1 ∧ q.1.1 < q.2.1))
+              (fun q => decide (x.1 < q.1.1 ∧ q.1.1 < q.2.1))
+              (fun q hq => by
+                simp only [decide_eq_true_eq] at hq ⊢
+                simp only [Cal.Instant.lt_iff] at hq hxp1 ⊢; omega)
+              H p hpH (by simp only [decide_eq_true_eq]; exact ⟨hxp1, hpok⟩)
+              (by simp [Cal.Instant.lt_irrefl])
+            omega
+
+/-- **`pieces` is `piecesFast`** (README gap 5027): `@[csimp]` — the compiled code runs the one pass whenever the
+spans, sorted, are apart. -/
+@[csimp] theorem pieces_eq_piecesFast : @pieces = @piecesFast := by
+  funext H x t
+  have hfuel := List.countP_le_length (p := fun q => decide (x.1 < q.1.1 ∧ q.1.1 < q.2.1)) (l := H)
+  unfold piecesFast
+  split
+  · rename_i h
+    refine (piecesGo_eq_sweep H _ (fun q => ?_) h t _ [] x (H.length + 1) rfl (fun _ hq => absurd hq List.not_mem_nil)
+      (by omega))
+    rw [List.mem_filter]
+    simp [spanOk]
+  · split
+    · rename_i h
+      refine (piecesGo_eq_sweep H _ (fun q => ?_) h t _ [] x (H.length + 1) rfl (fun _ hq => absurd hq List.not_mem_nil)
+        (by omega))
+      rw [List.mem_mergeSort, List.mem_filter]
+      simp [spanOk]
+    · rfl
+
+
 /-- **C5: `t + Duration::minutes(m)`** (a break's end): chrono's `NaiveTime::overflowing_add_signed`
 with a positive whole-minute delta.  A leap second is left as its own second before adding
 (`frac -= 1_000_000_000`); a zero delta leaves the instant, leap second and all.  No overflow: a stamp's
@@ -3174,6 +3601,247 @@ def redraw (dy : Cal.Instant → Nat) (id : Id) (old : List Piece) (P : List (At
         (fun p => Effect.dayAdd p.day (.unsegment ⟨p.s, p.e, .block id⟩)) ++
       (P.filter (fun q => !old.any (fun p => samePiece p q))).map
         (fun q => Effect.dayAdd (dy q.1.1) (.segment ⟨q.1, q.2, .block id⟩)))
+
+/-! ### `redraw`, compiled (README gap 5027) -/
+
+/-- Start instants strictly increasing: the shape `pieces` draws (`sweep`) and a block's drawn pieces keep. -/
+def startsUp : List (At × At) → Bool
+  | [] => true
+  | [_] => true
+  | p :: q :: l => decide (p.1.1 < q.1.1) && startsUp (q :: l)
+
+/-- **`redraw`'s pieces, in one merge** (README gap 5027): over old pieces and new spans each with start instants
+strictly increasing, the pieces drawn (in the new spans' order), the old pieces no new span is (in their order), and the
+new spans no old piece is (in theirs).  `redrawWalkGo`'s fuel is one step per element, so it reduces (a `decide` reads
+it) and is always enough (`redrawWalkGo_spec`). -/
+def redrawWalkGo (dy : Cal.Instant → Nat) : Nat → List Piece → List (At × At) → List Piece × List Piece × List (At × At)
+  | _, [], P => (P.map (fun q => ⟨q.1, q.2, dy q.1.1⟩), [], P)
+  | _, old, [] => ([], old, [])
+  | 0, old, P => ([], old, P)
+  | n + 1, p :: os, q :: qs =>
+    if p.s.1 < q.1.1 then
+      let r := redrawWalkGo dy n os (q :: qs)
+      (r.1, p :: r.2.1, r.2.2)
+    else if q.1.1 < p.s.1 then
+      let r := redrawWalkGo dy n (p :: os) qs
+      (⟨q.1, q.2, dy q.1.1⟩ :: r.1, r.2.1, q :: r.2.2)
+    else if samePiece p q then let r := redrawWalkGo dy n os qs; (p :: r.1, r.2.1, r.2.2)
+    else let r := redrawWalkGo dy n os qs; (⟨q.1, q.2, dy q.1.1⟩ :: r.1, p :: r.2.1, q :: r.2.2)
+def redrawWalk (dy : Cal.Instant → Nat) (old : List Piece) (P : List (At × At)) :
+    List Piece × List Piece × List (At × At) := redrawWalkGo dy (old.length + P.length) old P
+
+/-- **`redraw`, compiled** (README gap 5027): the one merge when both lists' starts strictly increase, `redraw`
+itself otherwise. -/
+def redrawFast (dy : Cal.Instant → Nat) (id : Id) (old : List Piece) (P : List (At × At)) :
+    List Piece × List Effect :=
+  if startsUp (old.map (fun p => (p.s, p.e))) && startsUp P then
+    let r := redrawWalk dy old P
+    (r.1, r.2.1.map (fun p => Effect.dayAdd p.day (.unsegment ⟨p.s, p.e, .block id⟩)) ++
+      r.2.2.map (fun q => Effect.dayAdd (dy q.1.1) (.segment ⟨q.1, q.2, .block id⟩)))
+  else redraw dy id old P
+
+theorem samePiece_start (p : Piece) (q : At × At) (h : samePiece p q = true) : p.s.1 = q.1.1 := by
+  unfold samePiece at h
+  simp only [Bool.and_eq_true] at h
+  have := (atEq_iff _ _).1 h.1
+  rw [this]
+
+theorem startsUp_cons {p : At × At} {l : List (At × At)} (h : startsUp (p :: l) = true) :
+    startsUp l = true ∧ ∀ q ∈ l, p.1.1 < q.1.1 := by
+  induction l generalizing p with
+  | nil => exact ⟨rfl, fun _ h => absurd h List.not_mem_nil⟩
+  | cons q l ih =>
+    simp only [startsUp, Bool.and_eq_true, decide_eq_true_eq] at h
+    obtain ⟨h1, h2⟩ := h
+    obtain ⟨-, h3⟩ := ih h2
+    refine ⟨h2, fun r hr => ?_⟩
+    rcases List.mem_cons.1 hr with rfl | hr
+    · exact h1
+    · exact Cal.Instant.lt_trans h1 (h3 r hr)
+
+/-- **The merge is `redraw`'s three lists** over starts strictly increasing, with fuel for every element. -/
+theorem redrawWalkGo_spec (dy : Cal.Instant → Nat) : ∀ (n : Nat) (old : List Piece) (P : List (At × At)),
+    old.length + P.length ≤ n → startsUp (old.map (fun p => (p.s, p.e))) = true → startsUp P = true →
+    redrawWalkGo dy n old P =
+      (P.map (fun q => match old.find? (fun p => samePiece p q) with
+          | some p => p
+          | none => ⟨q.1, q.2, dy q.1.1⟩),
+       old.filter (fun p => !P.any (samePiece p)),
+       P.filter (fun q => !old.any (fun p => samePiece p q)))
+  | _, [], P, _, _, _ => by
+    simp only [redrawWalkGo, List.find?_nil, List.filter_nil, List.any_nil, Bool.not_false, Prod.mk.injEq, true_and]
+    exact (List.filter_eq_self.2 (fun _ _ => rfl)).symm
+  | _, p :: os, [], _, _, _ => by
+    simp only [redrawWalkGo, List.map_nil, List.filter_nil, List.any_nil, Bool.not_false, Prod.mk.injEq, true_and,
+      and_true]
+    exact (List.filter_eq_self.2 (fun _ _ => rfl)).symm
+  | 0, p :: os, q :: qs, hlen, _, _ => by simp at hlen
+  | n + 1, p :: os, q :: qs, hlen, ho, hP => by
+    simp only [List.length_cons] at hlen
+    rw [List.map_cons] at ho
+    have ho' := startsUp_cons ho
+    have hP' := startsUp_cons hP
+    have hos : ∀ o ∈ os, p.s.1 < o.s.1 := fun o ho => ho'.2 (o.s, o.e) (List.mem_map.2 ⟨o, ho, rfl⟩)
+    have hqs : ∀ r ∈ qs, q.1.1 < r.1.1 := hP'.2
+    have hnm : ∀ (a : Piece) (b : At × At), a.s.1 ≠ b.1.1 → samePiece a b = false := by
+      intro a b hne
+      cases h : samePiece a b with
+      | false => rfl
+      | true => exact absurd (samePiece_start a b h) hne
+    have neLt : ∀ a b : Cal.Instant, a < b → a ≠ b := fun a b h he => by
+      subst he; exact Cal.Instant.lt_irrefl _ h
+    have mapC : ∀ (A B : List Piece) (R : List (At × At)),
+        (∀ r ∈ R, A.find? (fun a => samePiece a r) = B.find? (fun a => samePiece a r)) →
+        R.map (fun r => match A.find? (fun a => samePiece a r) with
+          | some a => a
+          | none => ⟨r.1, r.2, dy r.1.1⟩) =
+        R.map (fun r => match B.find? (fun a => samePiece a r) with
+          | some a => a
+          | none => ⟨r.1, r.2, dy r.1.1⟩) := by
+      intro A B R h; apply List.map_congr_left; intro r hr; rw [h r hr]
+    rw [redrawWalkGo]
+    by_cases h1 : p.s.1 < q.1.1
+    · rw [if_pos h1, redrawWalkGo_spec dy n os (q :: qs) (by simp; omega) ho'.1 hP]
+      have hpq : ∀ r ∈ q :: qs, samePiece p r = false := by
+        intro r hr
+        apply hnm
+        rcases List.mem_cons.1 hr with rfl | hr
+        · exact neLt _ _ h1
+        · exact neLt _ _ (Cal.Instant.lt_trans h1 (hqs r hr))
+      have hany : (q :: qs).any (samePiece p) = false := by
+        rw [List.any_eq_false]; intro r hr; simp [hpq r hr]
+      have e1 := mapC (p :: os) os (q :: qs) (fun r hr => by rw [List.find?_cons, hpq r hr])
+      have e2 : (p :: os).filter (fun a => !(q :: qs).any (samePiece a)) =
+          p :: os.filter (fun a => !(q :: qs).any (samePiece a)) :=
+        List.filter_cons_of_pos (by simp [hany])
+      have e3 : (q :: qs).filter (fun r => !(p :: os).any (fun a => samePiece a r)) =
+          (q :: qs).filter (fun r => !os.any (fun a => samePiece a r)) := by
+        apply List.filter_congr; intro r hr; rw [List.any_cons, hpq r hr, Bool.false_or]
+      rw [e1, e2, e3]
+    · rw [if_neg h1]
+      by_cases h2 : q.1.1 < p.s.1
+      · rw [if_pos h2, redrawWalkGo_spec dy n (p :: os) qs (by simp; omega) (by rw [List.map_cons]; exact ho) hP'.1]
+        have hqo : ∀ a ∈ p :: os, samePiece a q = false := by
+          intro a ha
+          apply hnm
+          rcases List.mem_cons.1 ha with rfl | ha
+          · exact (neLt _ _ h2).symm
+          · exact (neLt _ _ (Cal.Instant.lt_trans h2 (hos a ha))).symm
+        have hfind : (p :: os).find? (fun a => samePiece a q) = none := by
+          rw [List.find?_eq_none]; intro a ha; simp [hqo a ha]
+        have hany : (p :: os).any (fun a => samePiece a q) = false := by
+          rw [List.any_eq_false]; intro a ha; simp [hqo a ha]
+        have e1 : (q :: qs).map (fun r => match (p :: os).find? (fun a => samePiece a r) with
+            | some a => a
+            | none => ⟨r.1, r.2, dy r.1.1⟩) =
+            ⟨q.1, q.2, dy q.1.1⟩ :: qs.map (fun r => match (p :: os).find? (fun a => samePiece a r) with
+              | some a => a
+              | none => ⟨r.1, r.2, dy r.1.1⟩) := by
+          rw [List.map_cons, hfind]
+        have e2 : (p :: os).filter (fun a => !(q :: qs).any (samePiece a)) =
+            (p :: os).filter (fun a => !qs.any (samePiece a)) := by
+          apply List.filter_congr; intro a ha; rw [List.any_cons, hqo a ha, Bool.false_or]
+        have e3 : (q :: qs).filter (fun r => !(p :: os).any (fun a => samePiece a r)) =
+            q :: qs.filter (fun r => !(p :: os).any (fun a => samePiece a r)) :=
+          List.filter_cons_of_pos (by simp [hany])
+        rw [e1, e2, e3]
+      · rw [if_neg h2]
+        have heq : p.s.1 = q.1.1 :=
+          Cal.Instant.le_antisymm ((Cal.Instant.not_lt _ _).1 h2) ((Cal.Instant.not_lt _ _).1 h1)
+        have hpr : ∀ r ∈ qs, samePiece p r = false := fun r hr => hnm p r (by rw [heq]; exact neLt _ _ (hqs r hr))
+        have hoq : ∀ o ∈ os, samePiece o q = false := fun o ho => hnm o q (by
+          rw [← heq]; exact (neLt _ _ (hos o ho)).symm)
+        have em : qs.map (fun r => match (p :: os).find? (fun a => samePiece a r) with
+              | some a => a
+              | none => ⟨r.1, r.2, dy r.1.1⟩) =
+            qs.map (fun r => match os.find? (fun a => samePiece a r) with
+              | some a => a
+              | none => ⟨r.1, r.2, dy r.1.1⟩) :=
+          mapC (p :: os) os qs (fun r hr => by rw [List.find?_cons, hpr r hr])
+        have ef1 : os.filter (fun a => !(q :: qs).any (samePiece a)) = os.filter (fun a => !qs.any (samePiece a)) := by
+          apply List.filter_congr; intro o ho; rw [List.any_cons, hoq o ho, Bool.false_or]
+        have ef2 : qs.filter (fun r => !(p :: os).any (fun a => samePiece a r)) =
+            qs.filter (fun r => !os.any (fun a => samePiece a r)) := by
+          apply List.filter_congr; intro r hr; rw [List.any_cons, hpr r hr, Bool.false_or]
+        have hfind_q : os.find? (fun a => samePiece a q) = none := by
+          rw [List.find?_eq_none]; intro a ha; simp [hoq a ha]
+        have hany_q : os.any (fun a => samePiece a q) = false := by
+          rw [List.any_eq_false]; intro a ha; simp [hoq a ha]
+        have hany_p : qs.any (samePiece p) = false := by
+          rw [List.any_eq_false]; intro r hr; simp [hpr r hr]
+        by_cases hsp : samePiece p q = true
+        · rw [if_pos hsp, redrawWalkGo_spec dy n os qs (by omega) ho'.1 hP'.1]
+          have e1 : (q :: qs).map (fun r => match (p :: os).find? (fun a => samePiece a r) with
+              | some a => a
+              | none => ⟨r.1, r.2, dy r.1.1⟩) =
+              p :: qs.map (fun r => match (p :: os).find? (fun a => samePiece a r) with
+                | some a => a
+                | none => ⟨r.1, r.2, dy r.1.1⟩) := by
+            rw [List.map_cons, List.find?_cons_of_pos (p := fun a => samePiece a q) (l := os) hsp]
+          have e2 : (p :: os).filter (fun a => !(q :: qs).any (samePiece a)) =
+              os.filter (fun a => !(q :: qs).any (samePiece a)) :=
+            List.filter_cons_of_neg (by simp [hsp])
+          have e3 : (q :: qs).filter (fun r => !(p :: os).any (fun a => samePiece a r)) =
+              qs.filter (fun r => !(p :: os).any (fun a => samePiece a r)) :=
+            List.filter_cons_of_neg (by simp [hsp])
+          rw [e1, e2, e3, em, ef1, ef2]
+        · have hsp' : samePiece p q = false := by simpa using hsp
+          rw [if_neg hsp, redrawWalkGo_spec dy n os qs (by omega) ho'.1 hP'.1]
+          have e1 : (q :: qs).map (fun r => match (p :: os).find? (fun a => samePiece a r) with
+              | some a => a
+              | none => ⟨r.1, r.2, dy r.1.1⟩) =
+              ⟨q.1, q.2, dy q.1.1⟩ :: qs.map (fun r => match (p :: os).find? (fun a => samePiece a r) with
+                | some a => a
+                | none => ⟨r.1, r.2, dy r.1.1⟩) := by
+            rw [List.map_cons, List.find?_cons_of_neg (p := fun a => samePiece a q) (l := os) (by simp [hsp']), hfind_q]
+          have e2 : (p :: os).filter (fun a => !(q :: qs).any (samePiece a)) =
+              p :: os.filter (fun a => !(q :: qs).any (samePiece a)) :=
+            List.filter_cons_of_pos (by simp [hsp', hany_p])
+          have e3 : (q :: qs).filter (fun r => !(p :: os).any (fun a => samePiece a r)) =
+              q :: qs.filter (fun r => !(p :: os).any (fun a => samePiece a r)) :=
+            List.filter_cons_of_pos (by simp [hsp', hany_q])
+          rw [e1, e2, e3, em, ef1, ef2]
+
+/-- **`redraw` is `redrawFast`** (README gap 5027): `@[csimp]` — the compiled code runs the one merge whenever the old
+pieces' and the new spans' starts strictly increase. -/
+@[csimp] theorem redraw_eq_redrawFast : @redraw = @redrawFast := by
+  funext dy id old P
+  unfold redrawFast
+  split
+  · rename_i h
+    simp only [Bool.and_eq_true] at h
+    rw [redrawWalk, redrawWalkGo_spec dy _ old P (Nat.le_refl _) h.1 h.2]
+    rfl
+  · rfl
+
+/-! The witnesses' spans are `[a, b)` in whole seconds of 2026-09-07, UTC, written out: a fixture `def` would be
+emitted and reached by nothing (check 12). -/
+
+/-- **The one pass answers as `pieces` does** (README gap 5027): three spans apart — `[0, 300)`, `[600, 900)`,
+`[1200, 1500)` — and `[x, t)` = `[100, 1800)` split into `[300, 600)`, `[900, 1200)` and `[1500, 1800)`, which `pieces`
+answers too over the same spans given out of order with an empty one among them (what `piecesFast` sorts and
+filters). -/
+theorem the_one_pass_answers_as_pieces :
+    apart [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩)) : At × At)] = true ∧
+    sweep [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩)) : At × At)] ((((⟨63924364800 + 100, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 100, 0⟩, ⟨false, 0⟩)) : At × At)).1 ((((⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩)) : At × At)).1 =
+      [(((((⟨63924364800 + 300, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 600, 0⟩, ⟨false, 0⟩)) : At × At)).1), (((((⟨63924364800 + 900, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩)) : At × At)).1), (((((⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩)) : At × At)).1)] ∧
+    pieces [(((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 50, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 50, 0⟩, ⟨false, 0⟩)) : At × At)] ((((⟨63924364800 + 100, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 100, 0⟩, ⟨false, 0⟩)) : At × At)).1 ((((⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩)) : At × At)).1 =
+      [(((((⟨63924364800 + 300, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 600, 0⟩, ⟨false, 0⟩)) : At × At)).1), (((((⟨63924364800 + 900, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1200, 0⟩, ⟨false, 0⟩)) : At × At)).1), (((((⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1500, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1800, 0⟩, ⟨false, 0⟩)) : At × At)).1)] := by
+  decide
+
+/-- **The pass's guard bites**: spans that overlap are not apart, nor is an empty one, and spans out of order are
+not; `spanOk` drops an empty span and keeps a nonempty one. -/
+
+theorem the_pass_is_guarded :
+    apart [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 600, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 300, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)] = false ∧ apart [(((⟨63924364800 + 50, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 50, 0⟩, ⟨false, 0⟩)) : At × At)] = false ∧ apart [(((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)] = false ∧
+    spanOk ((((⟨63924364800 + 50, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 50, 0⟩, ⟨false, 0⟩)) : At × At)) = false ∧ spanOk ((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1, 0⟩, ⟨false, 0⟩)) : At × At)) = true := by
+  decide
+
+/-- **The merge's guard bites**: starts strictly increasing are up, starts out of order or equal are not. -/
+theorem the_merge_is_guarded :
+    startsUp [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)] = true ∧ startsUp [(((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)] = false ∧
+    startsUp [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 600, 0⟩, ⟨false, 0⟩)) : At × At)] = false := by
+  decide
 
 /-- **Settle the open block** (the owner's **D99**, README gap 4520a, W-47 track K, parity P104) — fork `close_sub`'s
 successor, run after every mark that moves what the block's clock nets: its pieces drawn so far are re-drawn as
@@ -5427,21 +6095,6 @@ theorem cutOut_starts (s e : At) (P : List (At × At)) (q : At × At) (hq : q �
   · exact Or.inl ⟨r, hr, h1⟩
   · simp only [List.map_cons, List.map_nil, List.mem_singleton] at h1
     exact Or.inr h1
-
-/-- A count under a stronger predicate is smaller when one element meets the weaker alone. -/
-theorem countP_lt_of_witness {α : Type} (P Q : α → Bool) (hPQ : ∀ x, P x = true → Q x = true) :
-    ∀ (l : List α) (w : α), w ∈ l → Q w = true → P w = false → l.countP P < l.countP Q
-  | [], _, h, _, _ => by cases h
-  | x :: l, w, hw, hq, hp => by
-    rw [List.countP_cons, List.countP_cons]
-    rcases List.mem_cons.1 hw with rfl | hw
-    · have := List.countP_mono_left (l := l) (p := P) (q := Q) (fun a _ h => hPQ a h)
-      simp only [hp, hq, Bool.false_eq_true, ↓reduceIte]; omega
-    · have ih := countP_lt_of_witness P Q hPQ l w hw hq hp
-      by_cases hx : P x = true
-      · rw [if_pos hx, if_pos (hPQ x hx)]; omega
-      · rw [if_neg hx]
-        split <;> omega
 
 /-- **`lift` lands where no span covers** (the owner's D94), given a jump for every span still ending after its
 instant: each jump lands on a covering span's end, later than the instant, and leaves that span behind. -/
@@ -10823,6 +11476,39 @@ theorem the_held_credit_counts_a_cut_and_not_a_done :
   decide
 
 end D40Witnesses100
+
+section D40WitnessesGap5027
+
+/-! The compiled twins' own witnesses (README gap 5027, W-48 track A): `mutate.py` found each of `piecesFast`,
+`redrawWalk`, `redrawFast` told from a constant by its `@[csimp]` proof ALONE, so each is run here, on a branch a
+`decide` can read. -/
+
+/-- **`piecesFast` answers through the pass** on spans already apart. -/
+theorem piecesFast_answers_through_the_pass :
+    piecesFast [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)] ((((⟨63924364800 + 100, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 100, 0⟩, ⟨false, 0⟩)) : At × At)).1 ((((⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : At × At)).1 =
+      [(((((⟨63924364800 + 300, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 600, 0⟩, ⟨false, 0⟩)) : At × At)).1), (((((⟨63924364800 + 900, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : At × At)).1)] := by
+  decide
+
+/-- **The merge keeps an unmoved piece, un-draws a moved one and draws the new one**: old `[0, 300)` (day 7) and
+`[600, 900)` (day 7), new `[0, 300)` and `[600, 1000)` — the first kept with its day, the second's old piece left over,
+the new span drawn on day 8. -/
+theorem the_merge_keeps_unmoved_pieces_and_redraws_moved_ones :
+    (redrawWalk (fun _ => 8) [⟨((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩, ⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩]
+        [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : At × At)]) =
+      ([⟨((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩, ⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : At × At)).2, 8⟩],
+       [⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩], [(((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : At × At)]) := by
+  decide
+
+/-- **`redrawFast` answers through the merge, and else through `redraw`**: the merge's case above writes one
+un-draw and one draw; old pieces out of order fall back, and draw every new span. -/
+theorem redrawFast_answers_through_the_merge_and_else_through_redraw :
+    ((redrawFast (fun _ => 8) ['a'] [⟨((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩, ⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩]
+        [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At), (((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : At × At)]).2.length = 2) ∧
+    ((redrawFast (fun _ => 8) ['a'] [⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩, ⟨((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).1, ((((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)).2, 7⟩]
+        [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 300, 0⟩, ⟨false, 0⟩)) : At × At)]).1.map (·.day) = [7]) := by
+  decide
+
+end D40WitnessesGap5027
 
 end Replay
 end Tm

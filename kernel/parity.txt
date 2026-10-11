@@ -88,7 +88,7 @@ P32  row    README.md:13905                                the candidate section
 P33  row    README.md:15697                                a routine `done` whose `inst` names a date before 0001-01-01 is not a date here; chrono parses it
 P34  row    README.md:16001                                an `idle` gap or a routine `done`'s minutes reaching before the origin saturate at it
 P35  row    README.md:19158                                the `of` a silent verb's compensating undo writes is `verb:<name>`, which matches no event tag
-P36  cite   TmKernel/TmKernel/Replay.lean:9214             a close's primary id: the fork writes `null`, the kernel writes the id (renumbered from P32 at stage 5's close)
+P36  cite   TmKernel/TmKernel/Replay.lean:9867             a close's primary id: the fork writes `null`, the kernel writes the id (renumbered from P32 at stage 5's close)
 P37  row    README.md:50415                                an emoji ZWJ sequence or modifier is one cluster's base width here; the fork sums code points
 P38  taken  README.md:29742                                the kernel reads a store key where the fork's `ItemLine::id()` reads none -- the title key
 P39  row    README.md:52676                                a column-zero item line inside an HTML comment is prose here and an item in the fork (owner D47)

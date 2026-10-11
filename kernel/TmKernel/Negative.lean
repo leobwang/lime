@@ -3294,4 +3294,23 @@ theorem anEmptyHysteresisInputIsWritten :
       (['y','e','s','t','e','r','d','a','y'], .obj [])] := by
   rfl
 
+/- ===========================================================================
+   APPENDED 2026-10-11: stage 6, run W-48, TRACK A, second commit — README gap
+   5027 (the re-draw's compiled twins).  Cheats 324-325 (whoever lands
+   renumbers).
+   =========================================================================== -/
+
+/- CHEAT 324 — spans that overlap claimed apart, so the one pass would draw
+   pieces `pieces` itself does not: `apart` reads each end against the next
+   start, and `decide` computes `false`. -/
+theorem overlappingSpansAreApart : Replay.apart [(((⟨63924364800 + 0, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 600, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At), (((⟨63924364800 + 300, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)] = true := by
+  decide
+
+/- CHEAT 325 — the merge claimed to keep a piece a new span moved: the old
+   `[600, 900)` is no new span, and `decide` computes it un-drawn. -/
+theorem theMergeKeepsAMovedPiece :
+    (Replay.redrawWalk (fun _ => 8) [⟨((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).1, ((((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 900, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)).2, 7⟩]
+        [(((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)]).2.1 = [] := by
+  decide
+
 end Tm

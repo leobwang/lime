@@ -8687,3 +8687,32 @@ the binary sends back. -/
 #print axioms Tm.Replay.a_day_keeps_its_first_plans_hysteresis_input
 #print axioms Tm.Replay.a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first
 #print axioms Tm.Log.a_wake_is_a_state_change_and_a_plan_is_not
+
+-- ===========================================================================
+-- APPENDED 2026-10-11: stage 6, run W-48, TRACK A, second commit — README gap
+-- 5027: D99's re-draw made linear per mark by `@[csimp]` twins proved equal to
+-- the definitions every theorem reads (`pieces`, `redraw`, `Seal.redrawReads`).
+-- `countP_lt_of_witness` moved up the file (its audit line stands above).
+-- ===========================================================================
+#print axioms Tm.Replay.apart_spec
+#print axioms Tm.Replay.liftGo_of_uncovered
+#print axioms Tm.Replay.liftGo_succ
+#print axioms Tm.Replay.lift_of_cover
+#print axioms Tm.Replay.nextStart_none_of
+#print axioms Tm.Replay.nextStart_of_least
+#print axioms Tm.Replay.piecesGo_congr
+#print axioms Tm.Replay.piecesGo_of_uncovered
+#print axioms Tm.Replay.piecesGo_eq_sweep
+#print axioms Tm.Replay.pieces_eq_piecesFast
+#print axioms Tm.Replay.samePiece_start
+#print axioms Tm.Replay.startsUp_cons
+#print axioms Tm.Replay.redrawWalkGo_spec
+#print axioms Tm.Replay.redraw_eq_redrawFast
+#print axioms Tm.Replay.the_one_pass_answers_as_pieces
+#print axioms Tm.Replay.the_pass_is_guarded
+#print axioms Tm.Replay.the_merge_is_guarded
+#print axioms Tm.Replay.piecesFast_answers_through_the_pass
+#print axioms Tm.Replay.the_merge_keeps_unmoved_pieces_and_redraws_moved_ones
+#print axioms Tm.Replay.redrawFast_answers_through_the_merge_and_else_through_redraw
+#print axioms Tm.Seal.redrawReads_eq_redrawReadsFast
+#print axioms Tm.Seal.redrawReadsFast_reads_through_the_merge_and_else_through_redrawReads

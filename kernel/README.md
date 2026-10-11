@@ -97737,3 +97737,99 @@ Every expectation of the binary's own output that moved is P124's, each named:
   from the constant once its `plan` arm changed shape) and then ALONE behind an `rfl` witness;
   `Log.a_wake_is_a_state_change_and_a_plan_is_not`, decided, pins it.
 
+### 9. Gap 5027 — D99's re-draw, compiled linear per mark (the second commit)
+
+**What was slow, measured before touching it** (callgrind over `tm now` at 150 and 400 pause/unpause pairs on one open
+block): `pieces` was ~70% of the instructions — the instant order's two decisions under `lift`'s `find?` and
+`nextStart`'s fold, once per piece over every span, so `k²` per settle and `k³` over a day of `k` marks — and `redraw`'s
+`find?`/`filter` another ~10%, also `k²`.  With `pieces` compiled, the next 28% was `Seal.settleReads`' `redrawReads`
+(the same `filter` the seal's cut rule asks at every mark), and after that `mergeSort` (51% inclusive: the spans sorted
+at every settle though a block's own pauses are already in order).
+
+**Three `@[csimp]` twins, each proved equal to the definition every theorem reads** (so no law moved, and D99's laws
+are untouched):
+* `Replay.pieces_eq_piecesFast`: `piecesFast` takes the nonempty spans as given (`spanOk`), or sorted by start
+  (core's merge sort, the comparison written in place: gap 5165), and when they are `apart` — each ending at or before the next one starts — draws the
+  pieces in one pass (`sweep`); otherwise it is `pieces`.  The proof (`piecesGo_eq_sweep`) is an induction over the
+  sorted spans with the slow fold's fuel as the invariant's bound, through `lift_of_cover` (the one span covering an
+  instant decides `lift`), `liftGo_succ` (one more jump changes nothing once fuel suffices), `nextStart_of_least` and
+  `nextStart_none_of` (the earliest candidate is the next span's start, or there is none).
+* `Replay.redraw_eq_redrawFast`: when the old pieces' and the new spans' starts strictly increase (`startsUp`),
+  `redrawWalk` merges them once — kept, un-drawn and drawn in their orders — `redrawWalkGo_spec` proving the merge is
+  `redraw`'s three lists; fuelled one step per element, so a `decide` reads it.
+* `Seal.redrawReads_eq_redrawReadsFast`: the merge's third list, for the seal's cut rule.
+
+**Witnessed** (D40: `mutate.py` found `piecesFast`, `redrawWalk` and `redrawFast` told from a constant by their csimp
+proofs ALONE until each was run): `piecesFast_answers_through_the_pass`,
+`the_merge_keeps_unmoved_pieces_and_redraws_moved_ones`, `redrawFast_answers_through_the_merge_and_else_through_redraw`,
+`Seal.redrawReadsFast_reads_through_the_merge_and_else_through_redrawReads`; the guards both ways
+(`the_pass_is_guarded`, `the_merge_is_guarded`); cheats 324-325.
+
+**Measured — `tm now` over N pause/unpause pairs on one open block, one day** (`drive/perf.sh`, the gap's shape: a
+`tm init --example` tree, `wake` 06:05, `start ^t3` 07:00, the pairs 40 s and 20 s apart, the cache deleted, one cold
+call, then three timed calls at 22:00; debug-profile binaries; `uptime` load 5.2-7.1 throughout, 2026-10-11 13:00-13:05):
+
+| N pairs | before (D108's binary, no twins), ms | after, ms |
+|---:|---|---|
+| 50 | 48, 49, 49 | 42, 41, 39 |
+| 100 | 121, 122, 122 | 58, 58, 57 |
+| 200 | 617, 619, 613 | 113, 108, 106 |
+| 400 | 5,017, 5,130, 5,017 | 258, 267, 248 |
+| 800 | 42,496, 42,621, 46,429 | 691, 681, 695 |
+| 1,600 | not run (cubic: ~6 min by the trend) | 2,393, 2,439, 2,353 |
+
+Doubling N multiplied the time by ~2.5, 5, 8 and 8.5 before (cubic in the marks) and by ~1.4, 1.9, 2.4, 2.7 and 3.5
+after: **each mark's settle is now linear in the block's pieces** (one pass, one merge, one ordered check; a sort only
+when the spans arrive out of order), so a day of `k` marks is quadratic in `k`, not cubic.  It is not linear over the
+whole day: every mark still re-draws the whole open block (gap 5164).
+
+*The world, so it can be rebuilt* (the script stays in scratch): `tm --dir T --now 2026-09-07T06:00:00-05:00 init
+--example`; `.tm/log.jsonl` replaced by a `wake` at 06:05 (`slept_min` 480), a `start` of `t3` at 07:00, then N pairs
+`pause`/`unpause` of `t3` 40 s and 20 s apart (one pair a minute); `.tm/cache` and `.tm/state.json` deleted; one
+`tm --dir T --now 2026-09-07T22:00:00-05:00 now` (genesis), then three timed.  At one pair a minute only 900 pairs
+fall before 22:00, so the 1,600 row also holds 700 pairs stamped after `now` (the log's own marks, read as written).
+
+*Re-measured on the committed binary* (after the comparator was written in place, gap 5165; 14:44, load 4.6-4.9):
+N = 50: 44, 40, 39 ms; 100: 57, 55, 56; 200: 105, 98, 99; 400: 229, 226, 227; 800: 644, 648, 646.
+
+*The answers did not move* (a twin is proved equal; this drives it): on the world above at N = 30 and N = 200, `tm now`,
+`tm --json plan` and `tm review day` at 22:00 through the pre-twin binary and the committed one are byte-identical —
+28,635 and 106,326 bytes (`cmp` silent).
+
+*Acceptance of the second commit* (capped): `check.sh` seventeen lines ok — axiom audit 6,636; FFI 97; corpus 29/37 and
+4/5; goals 1; citations ok; mutated 838 rostered, 0 owed; parity P1-P124, 5 holes; reach 1,630 reachable, 1,097
+exempt; fields 17/17; inputs 33 read, 3 exempt; sent 174/173; written 212/207; replay 96.  `cargo test --workspace
+--no-fail-fast` **three runs**, each 2,969 passed / 0 failed / 53 ignored over 162 result lines (17m43s, 17m7s, 17m5s;
+load 3.1-6.4).  `kernel/tm-kernel-ffi` `cargo test` 105 passed.  Mutations (D40, in a clone): the twelve new
+definitions all PINNED once the witnesses ran them (`piecesFast`, `redrawWalk` and `redrawFast` were ALONE before);
+the fixture spanAt and the comparator spanLe were removed rather than exempted (gap 5165).
+
+### 10. Gaps closed and opened by the two commits
+
+* **Closed**: **4893** (D108: `priorities_yesterday` derived from the day's first `plan` line); **4876** (D108:
+  `active.est_min` rebuilt as `tm start` and `tm extend` computed it); **5027** (each mark's re-draw linear in the
+  block's pieces, §9 — its whole-day half is 5164).
+* **Open**: 5160, 5161, 5162, 5163 (§5) and:
+
+**Gap 5164 — a day of `k` marks on one open block still costs `k²` (A).**  1. *What.*  `Replay.settle` re-draws the
+whole open block at every mark (`openPieces`, `redraw`, and the seal's `settleReads` beside them), so a mark costs the
+block's pieces, now linearly (§9), and `k` marks cost `k²`: 2.4 s at 1,600 pause pairs on one day.  2. *Why not
+taken.*  A linear day needs a settle that re-draws only the pieces a mark meets — the gap's other suggestion — which is
+a change to `settle`'s definition and so to every D99 law that reads it (D5 re-proves them), not a twin; the twins were
+the step that leaves every law untouched.  3. *Cost.*  A block kept open for days with hundreds of pauses costs every
+verb the quadratic term (0.7 s at 800 pairs, 2.4 s at 1,600); an ordinary day (a handful of pauses) is ~40 ms.  4.
+*Clears it.*  An incremental settle, its laws re-proved.
+
+**Gap 5165 — check 12 does not follow a named comparator handed to `mergeSort` (A).**  1. *What.*  The compiler
+passes a named comparison to core's merge sort as a static closure object (`…___closed__0_value = {.m_fun =
+(void*)…___boxed}`), and `callgraph.py`'s walk does not read those initialisers, so the comparison is emitted and
+reached by nothing to check 12 — which is why `Replay.obsLe`, `Replay.segLe` and `Planner.rowLe` are grandfathered entries of
+`reach-exempt.txt`.  This step's spanLe met it, and since the file is shrink-only the comparison is written in place
+in `piecesFast` instead (a lifted lambda is no source definition).  Likewise a witness fixture `def` (the step's
+spanAt) is emitted and unreached; its spans are written out.  2. *Why not fixed.*  `callgraph.py` is check 12's,
+not this track's, and a walk that follows static closures would move the census of every section.  3. *Cost.*  A
+comparator cannot be named, witnessed or mutated as its own definition (the merge sort's order only chooses between
+the one pass and `pieces`, both proved equal, so no answer depends on it).  4. *Clears it.*  A step that teaches
+`callgraph.py` the static closure initialisers and re-derives the census; the three grandfathered comparators then
+leave the file.
+
