@@ -96754,3 +96754,55 @@ record.
   5027 (the re-draw's cost), 5031 (= 1301, the divider), and track L's, H's and C's still-open gaps the land listed
   (4950, 4951, 4953, 4955, 4957-4960, 4970, 4972-4975, 4977, 4978, 4990, 4993-4995, 4910, 4911, 4914, 5010, 5011, 5016).
   W-48: D108 (`RuntimeIn.yesterday` among it).  Burn-down: **1**.
+
+<!-- =====================================================================
+     APPENDED 2026-10-11: stage 6 (the planner), run **W-48**, **track K** —
+     the owner's late-mark decisions D114-D119 (the kernel's replay, the wall
+     rule and the host's readers of them).  Gaps 5070-5109 are this track's;
+     parity `P114`-`P119` are pre-allocated to it (renumbered at the land if fewer
+     are used).  Whoever merges renumbers.
+     ===================================================================== -->
+
+## Stage 6 — W-48 track K: the late-mark decisions — the kernel's paused flag, a break's place, a running break past a wall, a resume inside one, and late interrupts and starts read as the later fact
+
+### 0. The brief, measured before it was acted on
+
+* **The state the brief names is the state found**: worktree `worktree-agent-a67e4570395562f19` at `1a37997`, clean,
+  no earlier W-48 work of this track on it; `check.sh` seventeen lines ok at `1a37997` (axiom audit 6,549, stage goals
+  1, parity P1-P113 next free P114; `scratchpad/w48/k/check-base.log`, 00:21-00:22, load 5.35); highest gap 5041.
+* **Every gap the brief names was reproduced on `1a37997`'s binary before anything was changed**
+  (`scratchpad/w48/k/drive/d114.sh` … `d119.sh`, outputs `*.head.out`); each section below quotes its before and after.
+
+### 1. D118 — the host's paused flag is the kernel's open block (gap 5030)
+
+**Before** (`d118.head.out`, `1a37997`): `start ^t1` 09:00, `tm --now 08:50 pause` says `paused ^t1` and caches
+`paused: true`; at 09:30 `tm now` heads `▶ ^t1 … 30m of 60m · paused` while `tm plan` draws `09:00 ▶ … 30m so far`; after
+`rm .tm/state.json` the rebuild prints `RESTORED from the log: active.paused`; the next `tm pause` (09:35) says `resumed
+^t1` and logs an `unpause` that idles nothing; `tm stop` at 09:40 `after 40m`.
+
+**The two readers.**  The kernel's machine reads a `pause` stamped before its block's own `start` as not the block's
+(`Replay.arm`'s `pause` arm, D99, parity P104), and so do the host's worked minutes (`Replay::idle_min_since`).  The
+host's paused FLAG was a second reading: `ctx::logged_stops` folded every `pause` and `unpause` of the block after its
+`start` ROW, in file order, with no stamp in it.  **Now `ctx::logged_stops` IS the kernel's open block** —
+`OpenBlock::paused` (the machine's `Block.paused`, decoded by `kernel_log::decode_facts`) and the interruption the kernel
+holds open (`ctx::open_interruption`) — and the fold is deleted.  Every reader of the flag goes through it: D42's rebuild
+(`ctx::derived_state`), **the cache's reconcile at every load** (`Ctx::reconcile_state` now makes a cached block's
+`paused` the derivation's whenever the block is the log's, D42's direction), the end of a break (`day::end_break_at`),
+`tm resume`, and `tm pause`'s toggle, which now toggles from the kernel's reading and **after its own line takes the
+kernel's reading of what the line did** — so a `pause` the kernel does not read as the block's says so:
+`logged a pause of ^t1 at 08:50, before the block began at 09:00 — it is not the block's, so ^t1 keeps running`.
+
+**After** (`d118.d118.out`, the same script on this commit's binary): the cache `paused: false`; at 09:30 `tm now`
+`▶ ^t1 … 30m of 60m` with the running row `09:30 … running · 30m left`, `tm plan` `09:00 … 30m so far` then `09:30 ▶ …
+running · 30m left`; the rebuild restores no `paused`; the next `tm pause` says `paused ^t1` and logs a `pause`; `tm
+now` at 09:36 `35m of 60m · paused`; `tm stop` at 09:40 `after 35m`.  `tm/tests/cli_kernel_paused.rs` (3 tests): the
+driven reproduction on every surface, a stale cache that says `paused` over a running block corrected at the next load,
+and the control (a pause inside the block is the block's, through a rebuild).
+
+**Parity P114 taken**: the host's paused flag — `tm now`'s header, `.tm/state.json`'s `active.paused`, D42's rebuild of it and the next `tm pause`'s toggle — is the kernel's open block (`OpenBlock::paused` and the interruption it holds open, `ctx::logged_stops`), so a `pause` stamped before its block's own `start` (a `--now` behind the log) leaves the block running there as it does in the replay and the worked minutes, and `tm pause` says it was not the block's; fork 4748911's `tm pause` toggled the cached flag and its header read `paused` while the minutes ran (the owner's D118, W-48 track K, README gap 5030)
+
+**Behaviour row** (P114): `d118.head.out` against `d118.d118.out`, line for line above; the moved lines are the
+verb's message at 08:50, the cache's `paused`, `tm now`'s header and running row at 09:30, the rebuild's notice, the
+toggle at 09:35 (`pause` where `unpause`), and `tm stop`'s `35m` where `40m`.  No committed expectation moved: the
+workspace's tests that read the flag (`cli_start_paused`, `cli_break_in_block`, `cli_interruption_at_start`,
+`cli_wall_pause`) hold on logs whose every pause lies inside its block, where the two readings were one.

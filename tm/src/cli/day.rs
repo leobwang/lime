@@ -240,7 +240,7 @@ fn end_break_at(ctx: &mut Ctx, end: DateTime<chrono_tz::Tz>) -> Result<Option<u3
             .open_block
             .as_ref()
             .filter(|b| b.id == a.id.as_str())
-            .and_then(|b| super::ctx::logged_pause(&ctx.replay, b))
+            .map(|b| super::ctx::logged_pause(&ctx.replay, b))
     });
     if ctx.state.interrupt.is_none() {
         if let Some(a) = ctx.state.active.as_mut() {
@@ -2227,8 +2227,7 @@ pub fn resume(g: &Globals) -> Result<i32, CliError> {
             .open_block
             .as_ref()
             .filter(|b| b.id == a.id.as_str())
-            .and_then(|b| super::ctx::logged_stops(&ctx.replay, b))
-            .map(|s| s.paused)
+            .map(|b| super::ctx::logged_stops(&ctx.replay, b).paused)
     });
     ctx.state.interrupt = None;
     if let Some(a) = ctx.state.active.as_mut() {
@@ -2390,19 +2389,38 @@ pub fn pause(g: &Globals) -> Result<i32, CliError> {
         None
     };
     let rec = Recorder::start(&ctx, "pause")?;
-    active.paused = !active.paused;
-    let paused = active.paused;
+    // The toggle is from the kernel's reading (the cache's `paused` is the
+    // kernel's open block since the owner's D118, the load's reconcile).
+    let pausing = !active.paused;
     let id = active.id.clone();
-    ctx.state.active = Some(active);
-    ctx.save_state()?;
-    ctx.append_event(if paused {
+    ctx.append_event(if pausing {
         Event::Pause { id: id.to_string() }
     } else {
         Event::Unpause { id: id.to_string() }
     })?;
     ctx.reload()?;
-    day_note(&ctx, timer_note(paused, &id))?;
-    rec.finish(&ctx, if paused { "pause" } else { "unpause" })?;
+    // **What the mark did is the kernel's to say** (the owner's D118, README gap
+    // 5030, parity P114): the cache takes the kernel's reading of the open block
+    // after the line it just logged, never the toggle's. They differ on exactly
+    // one log a verb writes — a `pause` stamped before the block's own `start`
+    // (a `--now` behind the log), which the kernel's machine reads as not the
+    // block's (D99, P104) — and then nothing was paused, and the verb says so.
+    let read = ctx
+        .replay
+        .open_block
+        .as_ref()
+        .filter(|b| b.id == id.as_str())
+        .map(|b| super::ctx::logged_pause(&ctx.replay, b))
+        .unwrap_or(pausing);
+    active.paused = read;
+    let paused = read;
+    ctx.state.active = Some(active);
+    ctx.save_state()?;
+    let took = paused == pausing;
+    if took {
+        day_note(&ctx, timer_note(paused, &id))?;
+    }
+    rec.finish(&ctx, if pausing { "pause" } else { "unpause" })?;
 
     let said = meeting.as_ref().map(|m| meeting_text(&ctx, &m.walls, m.from, m.to));
     let out = PauseOut {
@@ -2414,11 +2432,26 @@ pub fn pause(g: &Globals) -> Result<i32, CliError> {
             to: hhmm(m.to),
         }),
     };
+    let started = ctx.replay.open_block.as_ref().filter(|b| b.id == id.as_str()).map(|b| b.started);
     emit(
         ctx.json,
-        || match &said {
-            Some(m) => format!("resumed {} (it was paused for {m})", out.id.token()),
-            None => format!(
+        || match (&said, took) {
+            (_, false) if !pausing => format!(
+                "logged an unpause of {} at {}, and the log still holds it stopped (the log is read as the \
+                 kernel reads it, D118)",
+                out.id.token(),
+                ctx.now_tz.format("%H:%M")
+            ),
+            (_, false) => format!(
+                "logged a pause of {} at {}, before the block began at {} — it is not the block's, so {} keeps \
+                 running (the log is read as the kernel reads it, D118)",
+                out.id.token(),
+                ctx.now_tz.format("%H:%M"),
+                started.map(|t| t.with_timezone(&ctx.cfg.tz).format("%H:%M").to_string()).unwrap_or_default(),
+                out.id.token()
+            ),
+            (Some(m), true) => format!("resumed {} (it was paused for {m})", out.id.token()),
+            (None, true) => format!(
                 "{} {}",
                 if paused { "paused" } else { "resumed" },
                 out.id.token()
