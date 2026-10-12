@@ -1484,7 +1484,8 @@ fn the_log_op_answers_the_completion_facts() {
 /// shapes (the idle segment's kind is `[5, "leak"]`).  W-47 track K (the owner's D100):
 /// the record's 29th field, the duration nets a late break took, is `[]` here; and W-48
 /// track A (the owner's D108, parity P119) its 30th, the hysteresis input the day's first
-/// `plan` carries, is `[]` too (no `plan` line).
+/// `plan` carries, is `[]` too (no `plan` line), as are the W-48 repair's 31st-33rd (README
+/// gap 5210: the last `plan`'s stamp, the last input-carrying `plan`'s stamp and its map).
 #[test]
 fn the_log_op_answers_the_day_facts() {
     let utc = r#"{"key":"UTC","base":"+00:00:00","then":[]}"#;
@@ -1492,7 +1493,7 @@ fn the_log_op_answers_the_day_facts() {
     let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
     assert_eq!(
         out,
-        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null,[],[]],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
+        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null,[],[],null,null,[]],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
     );
 }
 
@@ -1502,7 +1503,9 @@ fn the_log_op_answers_the_day_facts() {
 /// `{"a":6,"b":3}` (the day's first) and one at 09:30 carrying `{"a":1}` (a hand edit: no
 /// binary writes a second).  The open block's seventh element is its extends, 25; the
 /// day record's thirtieth is the FIRST `plan`'s map, `[["a",6],["b",3]]`, in the line's
-/// order; and the `emit` section writes the map last, the empty one not at all.
+/// order — and since the W-48 repair (README gap 5210) its 31st is the last `plan`'s stamp
+/// and its 32nd and 33rd the last input-carrying `plan`'s stamp and map, both 09:30's; and
+/// the `emit` section writes the map last, the empty one not at all.
 #[test]
 fn the_log_op_answers_the_hysteresis_input_and_the_blocks_extends() {
     let utc = r#"{"key":"UTC","base":"+00:00:00","then":[]}"#;
@@ -1510,7 +1513,10 @@ fn the_log_op_answers_the_hysteresis_input_and_the_blocks_extends() {
     let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
     assert!(out.contains(r#""open":{"block":["a",[63924368400,0,false,0],"#), "{out}");
     assert!(out.contains(r#",739865,25],"interrupt":null"#), "the open block's extends: {out}");
-    assert!(out.contains(r#",2,1,0,"h2",[],[["a",6],["b",3]]],"#), "the day's first plan's map: {out}");
+    assert!(
+        out.contains(r#",2,1,0,"h2",[],[["a",6],["b",3]],[63924370200,0,false,0],[63924370200,0,false,0],[["a",1]]],"#),
+        "the day's first plan's map, then the last plan's stamp and the last input-carrying plan's (README gap 5210): {out}"
+    );
     let emit = |f: &str| {
         call(&format!(r#"{{"docs":[],"emit":[{{"at":[63924369600,0,false,0],"ev":"plan","f":{f}}}]}}"#)).unwrap()
     };

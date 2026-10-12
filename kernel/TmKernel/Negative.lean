@@ -3313,4 +3313,63 @@ theorem theMergeKeepsAMovedPiece :
         [(((⟨63924364800 + 600, 0⟩, ⟨false, 0⟩), (⟨63924364800 + 1000, 0⟩, ⟨false, 0⟩)) : Replay.At × Replay.At)]).2.1 = [] := by
   decide
 
+/- ===========================================================================
+   APPENDED 2026-10-11: stage 6, run W-48, TRACK K (third commit) — the
+   owner's D115 (README gap 5034; parity P120: a late `start` stamped inside
+   a block a later `done` closed cuts it), D119 (README gaps 4913, 4917 and
+   5029; parity P121: a late interruption is netted from the block it
+   crosses) and D116 (README gap 5035; parity P122: a break is read at its
+   `break_start`'s place).  Cheats 306-308 as the track wrote them, 326-328 since the W-48 repair landed them.
+   =========================================================================== -/
+
+/- CHEAT 326 — the block a late `start` is stamped inside claimed to keep its
+   whole credit, as fork 4748911 read it: `Replay.netStart` cuts it at the
+   start, and `decide` computes thirty. -/
+theorem aLateStartLeavesTheClosedBlockWhole :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924366600 (Replay.bStart ['b']),
+        Replay.bE 4 63924370200 (.stop ['b'] 0)]).items.get ['a']).map (·.minutes) = some 60 := by
+  decide
+
+/- CHEAT 327 — a late interruption claimed to leave the block it crosses
+   whole: the `resume` nets it (`Replay.netClosed`), and `decide` computes
+   fifty. -/
+theorem aLateInterruptionLeavesTheBlockWhole :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924366600 (.interrupt none),
+        Replay.bE 4 63924367200 (.resume 10 [])]).items.get ['a']).map (·.minutes) = some 60 := by
+  decide
+
+/- CHEAT 328 — a break claimed to be read at the word its END line writes,
+   a second reading of its place: `Replay.placed` reads the `break_start`'s,
+   and `decide` computes `walk`. -/
+theorem aBreakIsReadAtItsEndLinesWord :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (.brkStart 10 (some ['w','a','l','k'])),
+        Replay.bE 2 63924364800 (.brk 10 (some 10) (some ['m','o','o','n']))]).days.get 739865).map
+      (fun a => a.breaks.map (·.where_)) = some [some ['m','o','o','n']] := by
+  decide
+
+/- ===========================================================================
+   APPENDED 2026-10-11: stage 6, run W-48, THE REPAIR — D108 read by the plan
+   lines' own stamps (README gaps 5210 and 5211): the day record keeps the
+   last `plan` that carried a hysteresis input, beside the first.  Cheats
+   329-330.
+   =========================================================================== -/
+
+/- CHEAT 329 — the latest input claimed to be the day's first, so a calendar
+   day's first `plan` written before the wake (filed under the previous ledger
+   day) would be read as nothing: `late` is the last `plan` that carried one,
+   and `decide` computes `b 3`. -/
+theorem theLatestInputIsTheDaysFirst :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (.plan ['h','1'] 0 0 [(['a'], 6)]),
+      Replay.bE 2 63924370200 (.plan ['h','2'] 1 0 [(['b'], 3)])]).days.get 739865).map (·.late) = some [(['a'], 6)] := by
+  decide
+
+/- CHEAT 330 — a `plan` that carries no input claimed to clear the latest:
+   it leaves it, and `decide` computes `b 3`. -/
+theorem aPlanWithoutAnInputClearsTheLatest :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924370200 (.plan ['h','2'] 0 0 [(['b'], 3)]),
+      Replay.bE 2 63924372000 (.plan ['h','3'] 1 0 [])]).days.get 739865).map (·.late) = some [] := by
+  decide
+
 end Tm

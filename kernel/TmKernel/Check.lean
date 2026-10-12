@@ -8732,3 +8732,75 @@ The goal stays in `Goals.lean`. -/
 #print axioms Tm.PlannerWit.closeUnderBreakRun_resumes_ok
 #print axioms Tm.PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break
 #print axioms Tm.PlanCheck.netOne_draws_beside_the_break
+
+/-! APPENDED 2026-10-11 (stage 6, run W-48, TRACK K, third commit): the owner's D115 (a late `start` stamped inside a
+block a later `done` closed cuts it — `Replay.netStart`; README gap 5034, parity P120), D119 (a late interruption is
+netted from the block it crosses — `Replay.netClosed` in the `resume` arm — and a late mark past the 31-day bound is
+named, `RWarn.pastBound`; README gaps 4913, 4917 and 5029, parity P121) and D116 (a break is read at its `break_start`'s
+place, another word on its end line named, `Replay.placed`, `RWarn.breakPlace`; README gap 5035, parity P122), with the
+seal laws re-proved over the instants they read. -/
+#print axioms Tm.Replay.a_break_is_read_at_its_starts_place
+#print axioms Tm.Replay.a_late_interruption_nets_the_block_it_crosses
+#print axioms Tm.Replay.a_late_mark_past_the_bound_is_named
+#print axioms Tm.Replay.a_late_start_cuts_the_block_it_is_stamped_inside
+#print axioms Tm.Replay.applyEffects_lateWarns_rwarns
+#print axioms Tm.Replay.a_start_cuts_no_block_it_is_not_stamped_inside
+#print axioms Tm.Replay.completionArm_instOf
+#print axioms Tm.Replay.completionCore_doneDates
+#print axioms Tm.Replay.completionCore_markOf
+#print axioms Tm.Replay.completionCore_namedOf
+#print axioms Tm.Replay.completionCore_no_header
+#print axioms Tm.Replay.completionCore_noRec
+#print axioms Tm.Replay.completionCore_noSeam
+#print axioms Tm.Replay.completionCore_obs
+#print axioms Tm.Replay.completionCore_rwarns
+#print axioms Tm.Replay.completionCore_safe
+#print axioms Tm.Replay.completionCore_sleptOk
+#print axioms Tm.Replay.conserves_cut_of
+#print axioms Tm.Replay.cutOut_lt
+#print axioms Tm.Replay.cutOut_startEnd_starts
+#print axioms Tm.Replay.dayArm_placed_rec
+#print axioms Tm.Replay.foldl_end_ge
+#print axioms Tm.Replay.lateWarnList_not_status
+#print axioms Tm.Replay.lateWarns_all
+#print axioms Tm.Replay.lateWarns_any
+#print axioms Tm.Replay.lateWarns_filterMap
+#print axioms Tm.Replay.lateWarns_rwarn
+#print axioms Tm.Replay.netClosed_conserves
+#print axioms Tm.Replay.netEachAll_conserves
+#print axioms Tm.Replay.netStart_blockOnly
+#print axioms Tm.Replay.netStart_conserves
+#print axioms Tm.Replay.netStart_keeps
+#print axioms Tm.Replay.netStart_mem
+#print axioms Tm.Replay.netStart_obs
+#print axioms Tm.Replay.netStart_pendLines
+#print axioms Tm.Replay.netStart_sleptOk
+#print axioms Tm.Replay.piecesGo_lt
+#print axioms Tm.Replay.placed_ev_of_brk
+#print axioms Tm.Replay.placed_line
+#print axioms Tm.Replay.placed_of_not_brk
+#print axioms Tm.Replay.startEnd_ge
+#print axioms Tm.Replay.startEnd_guard
+#print axioms Tm.Replay.the_replay_warnings_are_the_unknown_statuses_in_file_order_as_c4_stated_it_is_refuted
+#print axioms Tm.Seal.cutReads_netStart
+#print axioms Tm.Seal.netClosed_lastCut_day
+#print axioms Tm.Seal.netStart_congr
+#print axioms Tm.Seal.netStart_mi
+#print axioms Tm.Seal.startReads_mi
+#print axioms Tm.Replay.arm_split_as_d87_stated_it_is_refuted
+
+-- ===========================================================================
+-- APPENDED 2026-10-11: stage 6, run W-48, THE REPAIR — D108 read by the plan lines' own stamps (README gaps 5210 and
+-- 5211: `Replay.DayAcc.planAt`, `lateAt`, `late`; `a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first` is
+-- restated with the stamp's binder and keeps its audit line above), and the last goal's reduction given a subject for
+-- each of its replay hypotheses (README gap 5219).
+-- ===========================================================================
+#print axioms Tm.Replay.a_plan_records_its_stamp
+#print axioms Tm.Replay.a_plan_with_an_input_is_the_latest_and_one_without_keeps_it
+#print axioms Tm.Replay.the_latest_input_and_the_last_plan_are_read_at_their_stamps
+#print axioms Tm.PlannerWit.openAfterBreakRun_resumes_ok
+#print axioms Tm.PlannerWit.breakAfterDoneRun_resumes_ok
+#print axioms Tm.PlannerWit.the_apart_replay_holds_with_a_block_open_after_a_break
+#print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_block_open_after_a_break
+#print axioms Tm.PlannerWit.the_apart_replay_holds_with_a_break_running_after_a_done
+#print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_break_running_after_a_done

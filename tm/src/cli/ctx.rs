@@ -430,9 +430,43 @@ pub(crate) fn logged_stops(replay: &Replay, open: &tm_core::log::OpenBlock) -> L
     LoggedStops { paused: open.paused, interrupted: open_interruption(replay).is_some() }
 }
 
+/// **What the log says about a CALENDAR day's plans** (the W-48 repair, README gaps 5210 and 5211): the hash of
+/// its last `plan` line and the hysteresis input its first `plan` carried, each read by its line's stamp in the
+/// tree's zone.
+///
+/// `.tm/state.json` keeps `last_plan_hash` and `priorities_yesterday` by calendar day (`roll_day`), and the replay
+/// keeps its days by LEDGER day — a line written after local midnight and before the next wake is filed under the
+/// previous ledger day (`Replay.dayOf`), so `replay.day(today)` held none of them and D42's rebuild, reading it,
+/// dropped both: driven by the W-48 auditor and critic, deleting the cache at 00:35 re-ranked the next day, moved
+/// the plan's hash and logged a `plan` line with no notice. A calendar day's lines are filed under its own ledger
+/// day or the one before (a ledger day is at most a day from its wake), so the two are read, the later winning.
+#[derive(Debug, Default)]
+pub(crate) struct LoggedPlans {
+    /// The hash of the calendar day's last `plan` line (`DayReplay::plan_at`).
+    pub last_hash: Option<String>,
+    /// The hysteresis input the calendar day's `plan` lines carried (`DayReplay::late_at`), `None` when none did.
+    pub input: Option<BTreeMap<Id, u8>>,
+}
+
+pub(crate) fn logged_plans(replay: &Replay, tz: Tz, today: NaiveDate) -> LoggedPlans {
+    let local = |t: &DateTime<FixedOffset>| t.with_timezone(&tz).date_naive();
+    let mut out = LoggedPlans::default();
+    for d in [today.pred_opt(), Some(today)].into_iter().flatten() {
+        let Some(day) = replay.day(d) else { continue };
+        if day.plan_at.as_ref().is_some_and(|t| local(t) == today) {
+            out.last_hash = day.last_plan_hash.clone();
+        }
+        if day.late_at.as_ref().is_some_and(|t| local(t) == today) {
+            out.input = Some(day.late.iter().map(|(k, v)| (Id::new(k), *v)).collect());
+        }
+    }
+    out
+}
+
 fn derived_state(replay: &Replay, tz: Tz, today: NaiveDate, running_break: bool) -> RuntimeState {
     let hhmm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).time();
     let day = replay.day(today);
+    let plans = logged_plans(replay, tz, today);
     // A wake after the day's last arrival cleared all three (gap 3710): the
     // derivation reads what the wake wrote, as the cache holds it.
     let woken = woken_since_arrival(replay, today);
@@ -515,11 +549,10 @@ fn derived_state(replay: &Replay, tz: Tz, today: NaiveDate, running_break: bool)
             started: i.start.map(hhmm),
             id: i.id.as_deref().map(Id::new),
         }),
-        last_plan_hash: day.and_then(|d| d.last_plan_hash.clone()),
-        // **The day's first `plan` line carries it** (the owner's D108, parity P119).
-        priorities_yesterday: day
-            .map(|d| d.priorities_yesterday.iter().map(|(k, v)| (Id::new(k), *v)).collect())
-            .unwrap_or_default(),
+        // **By the plan lines' own stamps** (the W-48 repair, README gap 5210): the calendar day's last `plan`,
+        // and the input its first `plan` carried (the owner's D108, parity P119), wherever the replay filed them.
+        last_plan_hash: plans.last_hash,
+        priorities_yesterday: plans.input.unwrap_or_default(),
         closed: Closed::default(),
     }
 }
@@ -1247,7 +1280,10 @@ impl Ctx {
         // break the rebuild RESTORED, named like a running block; the third
         // stays, because a break a binary before D105 began logged no
         // `break_start` and is still lost with the file.
-        let used_today = self.replay.day(self.today).is_some();
+        // A calendar day's lines before the wake are filed under the previous ledger day (README gap 5210), so a
+        // `plan` the log holds for today is the log having something to say about today too.
+        let used_today = self.replay.day(self.today).is_some()
+            || logged_plans(&self.replay, self.cfg.tz, self.today).last_hash.is_some();
         if loud
             && (self.state.active.is_some()
                 || self.state.interrupt.is_some()
@@ -2140,7 +2176,16 @@ impl Ctx {
     /// once the day has rolled; before the first plan of a new day the last
     /// stored plan is the previous day's, so its priorities are the ones to
     /// compare against.
+    ///
+    /// **The log's input first** (the W-48 repair, README gap 5211; the owner's D108 and D42): once today's first
+    /// `plan` line carries the input, every machine reading that log ranks against it — the critic drove two
+    /// machines syncing one plan directory (the template's own sync model: `log.jsonl` synced, `.tm/state.json`
+    /// and `.tm/last_plan.json` per machine) ranking one log `p5` and `p3`. Before today's first `plan` the input
+    /// is still this machine's last stored plan's (README gap 5221).
     pub fn hysteresis_input(&self) -> BTreeMap<Id, u8> {
+        if let Some(logged) = logged_plans(&self.replay, self.cfg.tz, self.today).input {
+            return logged;
+        }
         let stored = self.last_plan().unwrap_or_default();
         match stored.date {
             Some(d) if d == self.today => self.state.priorities_yesterday.clone(),

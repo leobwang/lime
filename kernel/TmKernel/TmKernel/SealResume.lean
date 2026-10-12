@@ -72,6 +72,13 @@ block a break of ledger day `d` nets, the starts of the pieces it draws anew for
 def closedReads (s e : Replay.At) (d : Nat) (l : List Replay.Closed) : List Cal.Instant :=
   l.flatMap (fun C => if d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) then [] else redrawReads C.drawn (Replay.cutOut s e C.spans))
 
+/-- **The instants a late `start` at `t` reads the index at** (the owner's D115): each held closed block it cuts
+(`Replay.netStart`, over the block's own span `[t, Replay.startEnd t C)`), the starts of the pieces it draws anew — which
+are where the block's own pieces began (`Replay.cutOut_startEnd_starts`). -/
+def startReads (t : Replay.At) (d : Nat) (l : List Replay.Closed) : List Cal.Instant :=
+  l.flatMap (fun C => if d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ t.1 ∨ (Replay.startEnd t C).1 ≤ p.s.1))
+    then [] else redrawReads C.drawn (Replay.cutOut t (Replay.startEnd t C) C.spans))
+
 /-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), the open block's pause start
 when the step closes it (`closePause`), and — since the owner's D99 (README gap 4520a) — the start of every piece the
 step draws for the open block that was not drawn before (`settleReads`, `cutReads`): a piece drawn before is moved by
@@ -81,7 +88,7 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
   entryInstants e ++
     match e.ev with
     | .start id pred rep hsw sleptMin loc _ _ =>
-      cutReads m (e.t.val, e.off.val) ++ blockPaused m ++
+      startReads (e.t.val, e.off.val) (dy e.t.val) m.closed ++ cutReads m (e.t.val, e.off.val) ++ blockPaused m ++
         settleReads (Replay.startedMachine m id (e.t.val, e.off.val) (dy e.t.val)
           (rep.map (fun rp => ⟨e.line, (e.t.val, e.off.val), dy e.t.val, pred, rp, hsw, loc, some sleptMin.val, none,
             some id, true⟩)))
@@ -104,9 +111,9 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       blockPaused m ++ settleReads (Replay.interruptMachine m (e.t.val, e.off.val) (dy e.t.val) id)
     | .resume _ _ =>
       match m.interrupt with
-      | some (s, _, _) =>
+      | some (s, sd, _) =>
         settleReads { m with block := m.block.map (fun b => Replay.resumeBlock b (some (s, (e.t.val, e.off.val)))
-          (e.t.val, e.off.val)), interrupt := none }
+          (e.t.val, e.off.val)), interrupt := none } ++ closedReads s (e.t.val, e.off.val) sd m.closed
       | none => settleReads { m with block := m.block.map (fun b => Replay.resumeBlock b none (e.t.val, e.off.val)) }
     | .stop id _ =>
       match m.block with

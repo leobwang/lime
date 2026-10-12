@@ -63,6 +63,7 @@ theorem arm_sl (dy : Cal.Instant → Nat) (sl sl' : Nat → Option Nat) (m : Mac
   unfold Replay.arm Replay.dayArm
   cases hev : e.ev <;> simp only
   case energy pred rep hsw loc => exact absurd hev (h _ _ _ _)
+  case brk p a w => simp only [Replay.placed_ev_of_brk m e hev]
 
 /-- A state whose open block's pending observation is a start's (C5's `SleptInv`, its second half). -/
 def PendingStart (st : State) : Prop := ∀ o, st.machine.block.bind (·.obs) = some o → o.fromStart = true
@@ -86,7 +87,7 @@ theorem effectsWith_rebind (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl sl' : Nat
       exact map_rebind_of_all sl _ (Replay.arm_sleptOk dy sl st.machine e _ _ hp)
   unfold Replay.effectsWith
   simp only [List.map_cons, List.map_append, Effect.rebind]
-  rw [map_rebind_of_all sl _ (Replay.completionArm_sleptOk sl z e _ _), harm]
+  rw [map_rebind_of_all sl _ (Replay.completionArm_sleptOk sl z _ e _ _), harm]
 
 theorem pendingStart_step (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry)
     (hp : PendingStart st) : PendingStart (Replay.stepWith z dy sl st e) := by

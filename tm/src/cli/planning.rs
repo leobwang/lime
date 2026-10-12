@@ -316,7 +316,10 @@ pub fn write_plan(ctx: &mut Ctx, plan: &DayPlan, prios: &[Prio]) -> Result<Vec<S
         // `.tm/state.json` below, so D42's rebuild reads it back out of the log
         // (`DayReplay::priorities_yesterday`) and deleting the cache re-ranks nothing. Every
         // later `plan` of the day carries none — the map is the day's, read from its first.
-        let yesterday = if ctx.plans_today() == 0 {
+        // **The calendar day's first, by the plan lines' own stamps** (the W-48 repair, README gap 5210): a `plan`
+        // before the wake is filed under the previous ledger day, so `plans_today` — the ledger day's count — said
+        // "first" on every one of them, and the rebuild read none.
+        let yesterday = if super::ctx::logged_plans(&ctx.replay, ctx.cfg.tz, ctx.today).input.is_none() {
             ctx.hysteresis_input().into_iter().map(|(id, p)| (id.to_string(), p)).collect()
         } else {
             BTreeMap::new()

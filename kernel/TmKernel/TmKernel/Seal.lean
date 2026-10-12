@@ -439,10 +439,26 @@ def cInstRec : Codec InstRec :=
   cIso (cTuple <| tCons cAt <| tCons cStatus <| tCons cStr <| tCons cOptNat <| tNil)
     (fun r => (r.t, r.status, r.raw, r.actualMin, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1⟩) (fun _ => rfl)
 
-def cRWarn : Codec RWarn :=
-  cIso (cTuple <| tCons cNat <| tCons cStr <| tNil)
-    (fun w => match w with | .unknownInstanceStatus l r => (l, r, ()))
-    (fun p => .unknownInstanceStatus p.1 p.2.1) (fun w => by cases w; rfl)
+/-- **A replay warning**: an unknown routine status as `[line, status]`, as it was written before W-48 — and, since stage 6
+W-48 track K, a `break` line whose word is not its `break_start`'s as `[line, 1, start, end]` (the owner's D116) and a late
+mark past D100's bound as `[line, 2, day, newest]` (D119), each told apart by its length and its tag. -/
+def cRWarn : Codec RWarn := {
+  enc := fun w => match w with
+    | .unknownInstanceStatus l r => .arr [.num l, cStr.enc r]
+    | .breakPlace l a b => .arr [.num l, .num 1, cOptStr.enc a, cOptStr.enc b]
+    | .pastBound l d h => .arr [.num l, .num 2, .num d, .num h]
+  dec := fun j => match j with
+    | .arr [.num l, x] => (cStr.dec x).map (.unknownInstanceStatus l)
+    | .arr [.num l, .num 1, x, y] => match cOptStr.dec x, cOptStr.dec y with
+      | some a, some b => some (.breakPlace l a b)
+      | _, _ => none
+    | .arr [.num l, .num 2, .num d, .num h] => some (.pastBound l d h)
+    | _ => none
+  ok := fun w => match w with
+    | .unknownInstanceStatus _ r => cStr.ok r
+    | .breakPlace _ a b => cOptStr.ok a && cOptStr.ok b
+    | .pastBound .. => true
+  rt := fun w => by cases w <;> simp only [Codec.rt] <;> rfl }
 
 def cNamedRec : Codec NamedRec :=
   cIso (cTuple <| tCons (cPair cNat cAt) <| tCons (cPair cNat (cPair cNat cAt)) <| tNil)
@@ -462,11 +478,12 @@ def cDayAcc : Codec DayAcc :=
       <| tCons (cList maxList (cPair cAt cStr)) <| tCons cNat <| tCons cNat <| tCons (cList maxList cIdleRec)
       <| tCons (cList maxList cBreakRec) <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr
       <| tCons (cList maxList (cPair cNat cNat)) <| tCons (cList maxList (cPair cStr cU8))
+      <| tCons cOptAt <| tCons cOptAt <| tCons (cList maxList (cPair cStr cU8))
       <| tNil)
     (fun a => (a.firstStart, a.starts, a.blockMin, a.blocksDone, a.loadFifths, a.byCi, a.ciUnknown, a.done, a.lostMin,
       a.dropped, a.segments, a.wake, a.sleptMin, a.onsetMin, a.arrival, a.loc, a.window, a.budget, a.locChanges,
       a.leakMin, a.longestLeak, a.idle, a.breaks, a.routineMin, a.plans, a.replansToday, a.driftMin, a.lastPlanHash,
-      a.durNet, a.yesterday, ()))
+      a.durNet, a.yesterday, a.planAt, a.lateAt, a.late, ()))
     (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
@@ -477,7 +494,10 @@ def cDayAcc : Codec DayAcc :=
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
       p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
-      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩)
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1,
+      p.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩)
     (fun _ => rfl)
 theorem cDayAcc_nonnull : cDayAcc.NonNull := fun _ => nofun
 

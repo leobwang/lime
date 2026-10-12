@@ -379,8 +379,15 @@ fn kernel_view(log: &Value) -> Facts {
             // input as the day's first `plan` line carries it. No log here was written by a binary that writes the
             // key — fork 4748911 writes none and reads none — so it is EMPTY on every one, and that is asserted rather
             // than skipped: a log that carried it would be one the fork's replay reads without it.
-            assert_eq!(a.len(), 30, "a day record has 30 fields: {}", p[1]);
+            //
+            // 33 since the W-48 repair (README gaps 5210 and 5211): the last `plan` line's stamp, and the last `plan`
+            // line that carried a hysteresis input — its stamp and its map — which the host reads by the stamps'
+            // local date. The first is the kernel's bookkeeping beside `lastPlanHash` (compared below as the fork's
+            // `last_plan_hash`); the other two are null and empty on every fork log, as `yesterday` is, and asserted so.
+            assert_eq!(a.len(), 33, "a day record has 33 fields: {}", p[1]);
             assert_eq!(j_arr(&a[29], "yesterday").len(), 0, "a day record carries a hysteresis input the fork's log cannot: {}", p[1]);
+            assert!(a[31].is_null(), "a day record carries an input-carrying plan the fork's log cannot: {}", p[1]);
+            assert_eq!(j_arr(&a[32], "late").len(), 0, "a day record carries a hysteresis input the fork's log cannot: {}", p[1]);
             let mut ci_unknown = BTreeMap::new();
             for c in j_arr(&a[6], "ciUnknown") {
                 let c = j_arr(c, "a ciUnknown pair");

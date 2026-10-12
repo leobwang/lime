@@ -1998,7 +1998,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         let date = d_date(dn, "a day's number")?;
         let rec = d_at(p, 1, "a day record")?;
         if !rec.is_null() {
-            let a = d_tuple(rec, 30, "a day record")?;
+            let a = d_tuple(rec, 33, "a day record")?;
             let g = |i: usize, what: &'static str| -> D<&Value> { d_at(a, i, what) };
             // Field 28, `durNet` (the owner's D100, README gap 4520b, parity P105): the minutes a break logged after a
             // `done` took off that `done`'s duration observation, by the observation's line.  The kernel nets the
@@ -2017,6 +2017,18 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 priorities_yesterday.insert(
                     d_str(d_at(c, 0, "a yesterday id")?, "a yesterday id")?,
                     d_u8(d_at(c, 1, "a yesterday priority")?, "a yesterday priority")?,
+                );
+            }
+            // Fields 30-32 (the W-48 repair, README gaps 5210 and 5211): the last `plan`'s stamp, and the last `plan`
+            // that carried a hysteresis input — its stamp and its map — read by the stamps' local date
+            // (`ctx::logged_plans`), because a calendar day's lines before the wake are filed under the previous
+            // ledger day.
+            let mut late = BTreeMap::new();
+            for c in d_arr(g(32, "late")?, "late")? {
+                let c = d_tuple(c, 2, "a late pair")?;
+                late.insert(
+                    d_str(d_at(c, 0, "a late id")?, "a late id")?,
+                    d_u8(d_at(c, 1, "a late priority")?, "a late priority")?,
                 );
             }
             let mut ci_unknown = BTreeMap::new();
@@ -2104,6 +2116,9 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 replans_today: d_u32(g(25, "replansToday")?, "replansToday")?,
                 drift_min: d_u32(g(26, "driftMin")?, "driftMin")?,
                 last_plan_hash: d_opt(g(27, "lastPlanHash")?, |x| d_str(x, "lastPlanHash"))?,
+                plan_at: d_opt(g(30, "planAt")?, |x| d_when(x, "planAt"))?,
+                late_at: d_opt(g(31, "lateAt")?, |x| d_when(x, "lateAt"))?,
+                late,
                 priorities_yesterday,
                 segments: d_arr(g(10, "segments")?, "segments")?
                     .iter()
@@ -2325,13 +2340,33 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
     // The replay warnings, in the fork's words: one a surviving routine whose
     // status the fork does not read, stamped with the warned line's own `t`.
     let mut warnings: Vec<String> = Vec::new();
+    // **The late marks** (stage 6 W-48 track K: the owner's D116 and D119), `Seal.cRWarn`'s two
+    // kinds beside the routine status: `[line, 1, start, end]` and `[line, 2, day, newest]`.
+    let mut late_marks: Vec<tm_core::log::LateMark> = Vec::new();
     for x in d_arr(v.get("replayWarnings").unwrap_or(&Value::Null), "facts.replayWarnings")? {
-        let x = d_tuple(x, 2, "a replay warning")?;
-        let line = d_u64(d_at(x, 0, "a replay warning's line")?, "a replay warning's line")?;
-        let raw = d_str(d_at(x, 1, "a replay warning's status")?, "a replay warning's status")?;
-        // Gap 133: no header for the line, no timestamp to print with it.
-        if let Ok(i) = rows.binary_search_by_key(&line, |r| r.line) {
-            warnings.push(format!("{}: unknown routine status {raw:?}", fmt_timestamp(&rows[i].t)));
+        let a = x.as_array().ok_or("a replay warning is not an array")?;
+        let line = d_u64(d_at(a, 0, "a replay warning's line")?, "a replay warning's line")?;
+        if a.len() == 2 {
+            let raw = d_str(d_at(a, 1, "a replay warning's status")?, "a replay warning's status")?;
+            // Gap 133: no header for the line, no timestamp to print with it.
+            if let Ok(i) = rows.binary_search_by_key(&line, |r| r.line) {
+                warnings.push(format!("{}: unknown routine status {raw:?}", fmt_timestamp(&rows[i].t)));
+            }
+            continue;
+        }
+        let a = d_tuple(x, 4, "a replay warning")?;
+        match d_u64(d_at(a, 1, "a replay warning's kind")?, "a replay warning's kind")? {
+            1 => late_marks.push(tm_core::log::LateMark::BreakPlace {
+                line,
+                start: d_opt(d_at(a, 2, "a break's start place")?, |p| d_str(p, "a break's start place"))?,
+                end: d_opt(d_at(a, 3, "a break line's place")?, |p| d_str(p, "a break line's place"))?,
+            }),
+            2 => late_marks.push(tm_core::log::LateMark::PastBound {
+                line,
+                day: d_date(d_at(a, 2, "a late mark's day")?, "a late mark's day")?,
+                newest: d_date(d_at(a, 3, "the newest held day")?, "the newest held day")?,
+            }),
+            k => return Err(format!("a replay warning of unknown kind {k}")),
         }
     }
 
@@ -2402,6 +2437,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         open_break,
         unknown: d_u32(v.get("unknown").unwrap_or(&Value::Null), "facts.unknown")?,
         warnings,
+        late_marks,
         seams,
         last_effective_t: d_opt(v.get("lastEffective").unwrap_or(&Value::Null), |x| d_when(x, "lastEffective"))?,
         rows,

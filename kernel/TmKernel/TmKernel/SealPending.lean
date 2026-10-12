@@ -27,8 +27,9 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   unfold Replay.arm at hm
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
-    simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-      Effect.machineOf?, List.filterMap_nil, Replay.settle_machines, List.mem_singleton] at hm
+    simp only [List.filterMap_append, (Replay.cut_obs dy _ t).2.2.1, (Replay.netStart_obs dy _ _ _).2.2,
+      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, Replay.settle_machines,
+      List.mem_singleton] at hm
     subst hm
     right
     rw [Replay.settle_obs]
@@ -70,7 +71,16 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     · exact h1
     · exact h1
   case resume lost dropped =>
-    split at hm <;>
+    split at hm
+    · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+        Replay.settle_machines, List.nil_append, List.mem_singleton, (Replay.netClosed_obs dy _ _ _ _).2.2] at hm
+      subst hm
+      left
+      rw [(Replay.netClosed_keeps dy _ _ _ _).1, Replay.settle_obs]
+      show (m.block.map (fun b => Replay.resumeBlock b _ t)).bind (·.obs) = m.block.bind (·.obs)
+      cases m.block with
+      | none => rfl
+      | some b => exact Replay.resumeBlock_obs b _ t
     · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
         Replay.settle_machines, List.nil_append, List.mem_singleton] at hm
       subst hm
@@ -110,7 +120,7 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         · exact Or.inl rfl
       · exact Or.inl rfl
   case brk p a w =>
-    rw [List.filterMap_append, (Replay.dayArm_obs dy sl e t d).1, List.append_nil] at hm
+    rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
     exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).2.2
   case brkStart pl w =>
     -- D105: the running break is set and the block, with its pending observation, untouched.
@@ -129,7 +139,7 @@ theorem stepWith_pending (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → O
       = (Replay.arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val)).filterMap Effect.machineOf? := by
     unfold Replay.effectsWith
     simp [List.filterMap_cons, List.filterMap_append, Effect.machineOf?,
-      (Replay.completionArm_obs z e (e.t.val, e.off.val) (dy e.t.val)).2.2]
+      (Replay.completionArm_obs z st.machine e (e.t.val, e.off.val) (dy e.t.val)).2.2]
   unfold Replay.stepWith
   rw [h3, hfx]
   cases hl : ((Replay.arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val)).filterMap Effect.machineOf?).getLast? with

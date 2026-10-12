@@ -2222,6 +2222,7 @@ mod tests {
             open_break: None,
             unknown: 0,
             warnings: Vec::new(),
+            late_marks: Vec::new(),
             seams: Default::default(),
             last_effective_t: None,
             rows: Vec::new(),

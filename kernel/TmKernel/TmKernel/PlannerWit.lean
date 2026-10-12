@@ -13189,5 +13189,114 @@ theorem the_close_under_a_running_break_lays_its_block_across_the_break :
         (pastKind g.kind).1 = SegKind.block → g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec) :=
   ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
 
+
+/-! ### The reduction's other two hypotheses, each with a subject (the W-48 repair, README gap 5219)
+
+`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay` was applied at one request, the mid-break day, whose
+replay holds no open block and no running break — so its open-block and running-break hypotheses held there of
+nothing.  Two days give each a subject, both runs the decoder builds (`runOk`): a block left OPEN across a break the
+log holds (the break nets its clock, so the block runs again from the break's end), and a break RUNNING after a block
+the log closed.  On each the hypothesis holds of a real subject, the reduction applies, and the goal's statement
+follows on the whole day. -/
+
+/-- `witLines`' wake, arrival and `m1`'s 07:05 `start`, then the break of 07:10-07:25 (`midBreakLine`) — `m1` still open. -/
+def openAfterBreakLines : List Log.Line :=
+  witLines.take 3 ++ [⟨4, midBreakLine.text⟩]
+
+set_option maxRecDepth 400000 in
+theorem openAfterBreakRun_resumes_ok : runOk Cal.chicago 739867 openAfterBreakLines = true := by decide
+
+def openAfterBreakRun : Seal.Run :=
+  match h : Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) openAfterBreakLines with
+  | .ok run => run
+  | .error _ => absurd openAfterBreakRun_resumes_ok (by simp [runOk, h])
+
+/-- The census request (with `m1` running) with that log behind it. -/
+def theOpenAfterBreakRequest : PlanReq := { theCensusRequest with run := openAfterBreakRun }
+
+/-- **A `break_start` at 08:30**, fifteen minutes planned (D105). -/
+def breakAfterDoneStartLine : Log.Line := ⟨5, some ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','9','T','0','8',':','3','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','b','r','e','a','k','_','s','t','a','r','t','"',',','"','p','l','a','n','n','e','d','_','m','i','n','"',':','1','5','}']⟩
+
+/-- `witLines`' wake, arrival, `m1`'s 07:05 `start` and 08:05 `done`, then a break begun at 08:30 and still running. -/
+def breakAfterDoneLines : List Log.Line := witLines.take 4 ++ [breakAfterDoneStartLine]
+
+set_option maxRecDepth 400000 in
+theorem breakAfterDoneRun_resumes_ok : runOk Cal.chicago 739867 breakAfterDoneLines = true := by decide
+
+def breakAfterDoneRun : Seal.Run :=
+  match h : Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) breakAfterDoneLines with
+  | .ok run => run
+  | .error _ => absurd breakAfterDoneRun_resumes_ok (by simp [runOk, h])
+
+/-- **The runtime the binary rebuilds from that log** (D42, D105): the break begun at 08:30 is still running. -/
+def breakAfterDoneState : RuntimeIn :=
+  { RuntimeIn.empty with brk := some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 510).sec, 0⟩, 15, none⟩ }
+
+/-- The census request with that log and that runtime behind it. -/
+def theBreakAfterDoneRequest : PlanReq :=
+  { theCensusRequest with run := breakAfterDoneRun, state := breakAfterDoneState }
+
+set_option maxRecDepth 400000 in
+/-- **The open-block hypothesis, with a subject** (README gap 5219): the replay holds `m1` open from 07:25 — the break's
+end, D87's netting — and today's record a Break of positive length; the three hypotheses hold. -/
+theorem the_apart_replay_holds_with_a_block_open_after_a_break :
+    (theOpenAfterBreakRequest.run.answer.openBlock.bind (·.since)).map (·.1.sec)
+        = some (Cal.instantOf Cal.chicago 739867 445).sec ∧
+    ((theOpenAfterBreakRequest.todayRecord.map (·.segments)).getD []).any
+        (fun k => decide ((pastKind k.kind).1 = SegKind.brk ∧ k.start.1.sec < k.stop.1.sec)) = true ∧
+    (∀ g ∈ (theOpenAfterBreakRequest.todayRecord.map (·.segments)).getD [],
+      ∀ k ∈ (theOpenAfterBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → (pastKind k.kind).1 = SegKind.brk → g.start.1.sec < g.stop.1.sec →
+          k.start.1.sec < k.stop.1.sec → g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec) ∧
+    (∀ b ∈ theOpenAfterBreakRequest.run.answer.openBlock.toList, ∀ s ∈ b.since.toList,
+      ∀ k ∈ (theOpenAfterBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind k.kind).1 = SegKind.brk → k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec) ∧
+    (∀ bs ∈ theOpenAfterBreakRequest.state.brk.toList, ∀ t ∈ bs.started.toList,
+      ∀ g ∈ (theOpenAfterBreakRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec) :=
+  ⟨by decide, by decide, by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **The goal's statement on that day, whole, through the reduction.** -/
+theorem the_break_law_holds_whole_with_a_block_open_after_a_break (b k : WfSeg)
+    (hb : b ∈ (dayPlan theOpenAfterBreakRequest).segments) (hk : k ∈ (dayPlan theOpenAfterBreakRequest).segments)
+    (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :
+    b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start :=
+  PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay theOpenAfterBreakRequest (by decide)
+    the_apart_replay_holds_with_a_block_open_after_a_break.2.2.1
+    the_apart_replay_holds_with_a_block_open_after_a_break.2.2.2.1
+    the_apart_replay_holds_with_a_block_open_after_a_break.2.2.2.2 b k hb hk hbk hkk
+
+set_option maxRecDepth 400000 in
+/-- **The running-break hypothesis, with a subject** (README gap 5219): the runtime's break began at 08:30, after the
+Block of `m1` today's record holds (07:05-08:05); the three hypotheses hold. -/
+theorem the_apart_replay_holds_with_a_break_running_after_a_done :
+    theBreakAfterDoneRequest.run.answer.openBreak.map (fun o => o.s.1.sec)
+        = some (Cal.instantOf Cal.chicago 739867 510).sec ∧
+    ((theBreakAfterDoneRequest.todayRecord.map (·.segments)).getD []).any
+        (fun g => decide ((pastKind g.kind).1 = SegKind.block ∧ g.start.1.sec < g.stop.1.sec)) = true ∧
+    (∀ g ∈ (theBreakAfterDoneRequest.todayRecord.map (·.segments)).getD [],
+      ∀ k ∈ (theBreakAfterDoneRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → (pastKind k.kind).1 = SegKind.brk → g.start.1.sec < g.stop.1.sec →
+          k.start.1.sec < k.stop.1.sec → g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec) ∧
+    (∀ b ∈ theBreakAfterDoneRequest.run.answer.openBlock.toList, ∀ s ∈ b.since.toList,
+      ∀ k ∈ (theBreakAfterDoneRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind k.kind).1 = SegKind.brk → k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec) ∧
+    (∀ bs ∈ theBreakAfterDoneRequest.state.brk.toList, ∀ t ∈ bs.started.toList,
+      ∀ g ∈ (theBreakAfterDoneRequest.todayRecord.map (·.segments)).getD [],
+        (pastKind g.kind).1 = SegKind.block → g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec) :=
+  ⟨by decide, by decide, by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **The goal's statement on that day, whole, through the reduction.** -/
+theorem the_break_law_holds_whole_with_a_break_running_after_a_done (b k : WfSeg)
+    (hb : b ∈ (dayPlan theBreakAfterDoneRequest).segments) (hk : k ∈ (dayPlan theBreakAfterDoneRequest).segments)
+    (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :
+    b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start :=
+  PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay theBreakAfterDoneRequest (by decide)
+    the_apart_replay_holds_with_a_break_running_after_a_done.2.2.1
+    the_apart_replay_holds_with_a_break_running_after_a_done.2.2.2.1
+    the_apart_replay_holds_with_a_break_running_after_a_done.2.2.2.2 b k hb hk hbk hkk
+
 end PlannerWit
 end Tm

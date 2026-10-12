@@ -198,7 +198,20 @@ pub const LOG_STALL_DAYS: i64 = 7;
 /// produce them, and `CODES` is the list `check` itself can emit. Both are
 /// warnings, so neither moves [`exit_code`] — which is D18's own requirement:
 /// `tm check` must keep working, and keep its exit code, on a damaged log.
-pub const LOG_CODES: &[&str] = &[LOG_LINE, LOG_FUTURE, LOG_STALL];
+pub const LOG_CODES: &[&str] = &[LOG_LINE, LOG_FUTURE, LOG_STALL, LOG_BREAK_PLACE, LOG_LATE_MARK];
+
+/// **A `break` line whose place is not its `break_start`'s** — the owner's
+/// D116 (README gap 5035): the break is read at the place its `break_start`
+/// gave, and the end line's other word is named, never a second reading. A
+/// warning (D18's family): every line is well formed.
+pub const LOG_BREAK_PLACE: &str = "log-break-place";
+
+/// **A late mark past the replay's bound** — the owner's D119 (README gaps
+/// 4913, 4917 and 5029): a `break`, `start` or interruption's `resume` logged
+/// out of time order more than 31 ledger days behind the newest block the
+/// replay holds closed, so a block closed then that it lies across is not
+/// netted. The bound stays; the mark is named. A warning (D18's family).
+pub const LOG_LATE_MARK: &str = "log-late-mark";
 
 /// **The kernel refused to load the tree** (the owner's D32, README gap 476).
 ///

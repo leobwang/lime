@@ -1065,6 +1065,39 @@ fn log_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
             ));
         }
     }
+    // **The late marks the kernel's replay names** (stage 6 W-48 track K): a
+    // `break` line whose word is not its `break_start`'s (the owner's D116) and
+    // a late mark past the replay's 31-day bound (D119), each at its own line.
+    // The kernel decides both (`Replay.lateWarnList`); this only words them.
+    let quote = |p: &Option<String>| p.as_deref().map_or_else(|| "no place".to_string(), |w| format!("{w:?}"));
+    for mark in &ctx.replay.late_marks {
+        out.push(match mark {
+            tm_core::log::LateMark::BreakPlace { line, start, end } => validate::CheckProblem::warning(
+                validate::LOG_BREAK_PLACE,
+                LOG_PATH,
+                *line as usize,
+                None,
+                format!(
+                    "this `break` line writes {} where the `break_start` that began the break wrote {}; the \
+                     break is read at {} (the start's place, D116) and this line's word is not read",
+                    quote(end),
+                    quote(start),
+                    quote(start),
+                ),
+            ),
+            tm_core::log::LateMark::PastBound { line, day, newest } => validate::CheckProblem::warning(
+                validate::LOG_LATE_MARK,
+                LOG_PATH,
+                *line as usize,
+                None,
+                format!(
+                    "this line is logged out of time order on {day}, more than 31 days behind {newest}, \
+                     the newest block the replay holds closed; a block closed on or before {day} that it \
+                     lies across is not taken down by it (the replay's bound, D119)"
+                ),
+            ),
+        });
+    }
     out.extend(stall_problems(ctx));
     out
 }

@@ -1082,7 +1082,7 @@ pub struct StartRecord {
 }
 
 /// Per-day derived state.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DayReplay {
     /// The day.
     pub date: NaiveDate,
@@ -1155,9 +1155,69 @@ pub struct DayReplay {
     /// with the fork, read none.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub priorities_yesterday: BTreeMap<String, u8>,
+    /// **The last `plan` line's stamp** (the W-48 repair, README gap 5210; the kernel's `Replay.DayAcc.planAt`),
+    /// beside [`DayReplay::last_plan_hash`]. `.tm/state.json` keeps its `last_plan_hash` by CALENDAR day, and a
+    /// `plan` written after local midnight and before the wake is filed under the previous ledger day, so D42's
+    /// rebuild finds a calendar day's last plan by this stamp's local date. Not serialised: fork `DayReplay`
+    /// has no such field, and T5 compares the fork's keys.
+    #[serde(skip)]
+    pub plan_at: Option<DateTime<FixedOffset>>,
+    /// **The last `plan` line that carried a hysteresis input, its stamp** (README gaps 5210 and 5211; the
+    /// kernel's `Replay.DayAcc.lateAt`) — the host writes the input on a calendar day's first `plan` and reads
+    /// it back by this stamp's local date. Not serialised, as [`DayReplay::plan_at`].
+    #[serde(skip)]
+    pub late_at: Option<DateTime<FixedOffset>>,
+    /// That line's map (the kernel's `Replay.DayAcc.late`). Not serialised, as [`DayReplay::plan_at`].
+    #[serde(skip)]
+    pub late: BTreeMap<String, u8>,
     /// Actual segments (blocks, pauses, interruptions, breaks, routines,
     /// idle gaps), by start time.
     pub segments: Vec<LogSegment>,
+}
+
+/// **Equal as days, the plan stamps aside** (the W-48 repair, README gap 5210): `plan_at`, `late_at` and `late` are
+/// the host's bookkeeping for reading a calendar day's plans by their stamps — not serialised, so a JSON round trip
+/// (`log_replay.rs`) cannot carry them — and are left out of a day's equality as the observations' `line` is.
+impl PartialEq for DayReplay {
+    fn eq(&self, other: &DayReplay) -> bool {
+        // Destructured so a new field is a compile error here.
+        let DayReplay {
+            date,
+            wake,
+            slept_min,
+            onset_min,
+            arrival,
+            loc,
+            window,
+            budget,
+            loc_changes,
+            first_start,
+            starts,
+            block_min,
+            blocks_done,
+            load_fifths,
+            minutes_by_ci,
+            ci_unknown,
+            done,
+            lost_min,
+            dropped,
+            leak_min,
+            longest_leak,
+            idle,
+            breaks,
+            routine_min,
+            plans,
+            replans_today,
+            drift_min,
+            last_plan_hash,
+            priorities_yesterday,
+            segments,
+            plan_at: _,
+            late_at: _,
+            late: _,
+        } = self;
+        *date == other.date && *wake == other.wake && *slept_min == other.slept_min && *onset_min == other.onset_min && *arrival == other.arrival && *loc == other.loc && *window == other.window && *budget == other.budget && *loc_changes == other.loc_changes && *first_start == other.first_start && *starts == other.starts && *block_min == other.block_min && *blocks_done == other.blocks_done && *load_fifths == other.load_fifths && *minutes_by_ci == other.minutes_by_ci && *ci_unknown == other.ci_unknown && *done == other.done && *lost_min == other.lost_min && *dropped == other.dropped && *leak_min == other.leak_min && *longest_leak == other.longest_leak && *idle == other.idle && *breaks == other.breaks && *routine_min == other.routine_min && *plans == other.plans && *replans_today == other.replans_today && *drift_min == other.drift_min && *last_plan_hash == other.last_plan_hash && *priorities_yesterday == other.priorities_yesterday && *segments == other.segments
+    }
 }
 
 impl DayReplay {
@@ -1533,6 +1593,13 @@ pub struct Replay {
     /// Inconsistencies noticed while replaying (a `done` for an item that was
     /// not started is fine; an unknown routine status is not).
     pub warnings: Vec<String>,
+    /// **The late marks the kernel's replay names** (stage 6 W-48 track K: the
+    /// owner's D116 and D119), each at its own physical line, whatever the
+    /// scope read — `tm check` names them as warnings (D18's family). Fork
+    /// 4748911's `Replay` has no such key, and an empty list is not written,
+    /// so a replay naming none serialises exactly as it did before W-48.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub late_marks: Vec<LateMark>,
     /// Per wake-attributed day inside the range: the seam facts of every
     /// surviving entry of that day ([`DaySeam`]).
     pub seams: BTreeMap<NaiveDate, DaySeam>,
@@ -1609,6 +1676,7 @@ impl PartialEq for Replay {
             open_break,
             unknown,
             warnings,
+            late_marks,
             seams,
             last_effective_t,
             entry_count: _,
@@ -1637,9 +1705,40 @@ impl PartialEq for Replay {
             && *open_break == other.open_break
             && *unknown == other.unknown
             && *warnings == other.warnings
+            && *late_marks == other.late_marks
             && *seams == other.seams
             && *last_effective_t == other.last_effective_t
     }
+}
+
+/// **A late mark the kernel's replay names** (stage 6 W-48 track K), read off
+/// the kernel's `replayWarnings` (`Replay.RWarn`): never derived here.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LateMark {
+    /// The owner's **D116** (README gap 5035): the `break` line on `line`
+    /// ends a break whose `break_start` gave the place `start`, and writes
+    /// `end`, another word. The break is read at `start`; `end` is named.
+    BreakPlace {
+        /// The `break` line's physical line.
+        line: u64,
+        /// The place its `break_start` gave.
+        start: Option<String>,
+        /// The word the `break` line writes.
+        end: Option<String>,
+    },
+    /// The owner's **D119** (README gaps 4913, 4917 and 5029): the late mark
+    /// on `line` (a `break`, a `start` or an interruption's `resume`) is
+    /// stepped on ledger day `day`, more than 31 ledger days behind `newest`,
+    /// the newest day of a block the replay holds closed — D100's bound, which
+    /// stays — so a block closed then that it lies across is not netted.
+    PastBound {
+        /// The mark's physical line.
+        line: u64,
+        /// The ledger day it is netted on.
+        day: NaiveDate,
+        /// The newest ledger day of a block the replay holds closed.
+        newest: NaiveDate,
+    },
 }
 
 /// What [`Replay::latest_named`] keeps of the `tm event <name>` occurrences

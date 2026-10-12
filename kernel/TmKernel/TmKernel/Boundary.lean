@@ -13036,13 +13036,16 @@ wall in the plan the kernel answers no mark and no meeting, in build order; with
 refuses `logAbsent` by name.  The request — no documents (so no walls), a one-line log from
 genesis (a `start a1` at 09:00 UTC) asking for facts, the day, the block length, and `emit` in
 its walls form at `at` — is a local `let`, not a definition the export cannot reach (README gap
-3333, W-37 repair; D51). -/
+3333, W-37 repair; D51).  The `start` line carries its four required fields and none of the
+defaulted ones since the W-48 repair (README gap 5215): landing D115, D116 and D119 beside D108
+took the decided replay of the full line past the elaborator's budget, and §5.10a's remedy is the
+smaller input — the replay still holds `a1` open. -/
 theorem the_walls_form_is_answered_through_the_emit_section :
     let wallsWitnessRequest : Bool → JVal := fun withLog =>
       .obj ([("docs".toList, .arr []), ("now".toList, .str ['2','0','2','6','-','0','9','-','0','7']), ("blockMin".toList, .num 60),
         ("tz".toList, utcTzJson)] ++
         (if withLog then [("log".toList, CapWire.logFromGenesisJ [.str
-          ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','9',':','0','0',':','0','0','Z','"',',','"','e','v','"',':','"','s','t','a','r','t','"',',','"','i','d','"',':','"','a','1','"',',','"','p','r','e','d','"',':','5',',','"','r','e','p','"',':','4',',','"','h','s','w','"',':','3','.','0',',','"','s','l','e','p','t','_','m','i','n','"',':','4','9','0',',','"','l','o','c','"',':','"','l','o','u','n','g','e','"',',','"','b','l','o','c','k','s','_','d','o','n','e','"',':','0',',','"','s','i','n','c','e','_','b','r','e','a','k','_','m','i','n','"',':','0','}']])] else []) ++
+          ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','9',':','0','0',':','0','0','Z','"',',','"','e','v','"',':','"','s','t','a','r','t','"',',','"','i','d','"',':','"','a','1','"',',','"','p','r','e','d','"',':','5',',','"','h','s','w','"',':','3','.','0',',','"','l','o','c','"',':','"','l','o','u','n','g','e','"','}']])] else []) ++
         [("emit".toList, .obj [("walls".toList, .obj [("at".toList, .str ['2','0','2','6','-','0','9','-','0','7','T','1','0',':','0','0',':','0','0','Z']), ("break".toList, .null)])])])
     (match readEmitSection (wallsWitnessRequest true) with
       | .ok (some v) => v == .obj [("marks".toList, .arr []), ("pausedFor".toList, .null)]
