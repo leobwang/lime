@@ -451,13 +451,20 @@ pub(crate) struct LoggedPlans {
 pub(crate) fn logged_plans(replay: &Replay, tz: Tz, today: NaiveDate) -> LoggedPlans {
     let local = |t: &DateTime<FixedOffset>| t.with_timezone(&tz).date_naive();
     let mut out = LoggedPlans::default();
+    // **The later LINE wins, not the later ledger day** (W-49 track L, README gap 5300; the owner's D125): each
+    // ledger day's slot is the latest calendar date's last `plan` and last input it holds, with the line that wrote
+    // it, and of the two ledger days a calendar day's lines can be filed under, the line later in the log wins —
+    // a line a clock behind the log stamped before the wake can be appended after the wake's lines.
+    let (mut plan_line, mut input_line) = (None, None);
     for d in [today.pred_opt(), Some(today)].into_iter().flatten() {
         let Some(day) = replay.day(d) else { continue };
-        if day.plan_at.as_ref().is_some_and(|t| local(t) == today) {
-            out.last_hash = day.last_plan_hash.clone();
+        if day.plan_at.as_ref().is_some_and(|t| local(t) == today) && day.plan_line >= plan_line {
+            out.last_hash = day.plan_hash.clone();
+            plan_line = day.plan_line;
         }
-        if day.late_at.as_ref().is_some_and(|t| local(t) == today) {
+        if day.late_at.as_ref().is_some_and(|t| local(t) == today) && day.late_line >= input_line {
             out.input = Some(day.late.iter().map(|(k, v)| (Id::new(k), *v)).collect());
+            input_line = day.late_line;
         }
     }
     out
@@ -1407,9 +1414,14 @@ impl Ctx {
         // **`priorities_yesterday` is RESTORED since D108**: the day's first
         // `plan` line carries it. On a day with no `plan` yet the map is empty,
         // and §7.4 reads `.tm/last_plan.json`'s anyway (`Ctx::hysteresis_input`).
-        if self.plans_today() > 0 {
+        // **Asked of the CALENDAR day, by the plan lines' own stamps** (W-49 track L, the W-48 recheck's finding;
+        // README gap 5301): this said RESTORED whenever the LEDGER day held a `plan` (`plans_today`), so before the
+        // wake — the calendar day's lines filed under the previous ledger day — it said nothing of an input the
+        // rebuild had restored, and after the wake on a day whose lines carried none it said RESTORED of nothing.
+        if logged_plans(&self.replay, self.cfg.tz, self.today).input.is_some() {
             out.push(format!(
-                "RESTORED from the log: `priorities_yesterday` — {} item(s), from the day's first `plan` line (D108).",
+                "RESTORED from the log: `priorities_yesterday` — {} item(s), from the calendar day's `plan` line that \
+                 carried it (D108).",
                 self.state.priorities_yesterday.len()
             ));
         }
@@ -1729,7 +1741,7 @@ impl Ctx {
 
     /// The zone table the kernel attributes days with (§6.1), from the cache
     /// under the plan root when its key still matches, else probed (D13).
-    fn tz_wire(store: &FsStore, cfg: &Config) -> Value {
+    pub(crate) fn tz_wire(store: &FsStore, cfg: &Config) -> Value {
         super::tz_table::wire_for(Some(&store.root().join(kernel_log::CACHE_DIR)), cfg.tz)
     }
 

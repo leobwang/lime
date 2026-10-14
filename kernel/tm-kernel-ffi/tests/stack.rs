@@ -218,10 +218,11 @@ fn the_log_op_reads_and_renders_at_the_line_bound_on_a_2mib_thread() {
             8_192,
             "one day record a wake, its block fields empty"
         );
-        // The record's 30th field, the hysteresis input the day's first `plan` carries (the owner's
-        // D108, parity P119), is `[]`: no `plan` line; and so are the W-48 repair's three after it
-        // (README gap 5210: the last `plan`'s stamp, the last input-carrying `plan`'s stamp and map).
-        assert_eq!(out.matches(r#",0,false,0],420,null,null,null,null,null,[],0,0,[],[],0,0,0,0,null,[],[],null,null,[]],[null,[],["#).count(), 8_192, "its wake, its sleep and its seam");
+        // The record's 30th-35th fields (README gaps 5210 and 5300, the W-48 repair and W-49 track L:
+        // the latest calendar date's last `plan` — stamp, hash, line — and its last input-carrying
+        // `plan` — stamp, line, map) are empty: no `plan` line.  W-48 track A's 30th, the ledger day's
+        // FIRST input, is gone since W-49 track L.
+        assert_eq!(out.matches(r#",0,false,0],420,null,null,null,null,null,[],0,0,[],[],0,0,0,0,null,[],null,null,null,null,null,[]],[null,[],["#).count(), 8_192, "its wake, its sleep and its seam");
         assert_eq!(out.matches(r#",0,false,0]],[],[],[],[],[],[["#).count(), 8_192, "no observation, interruption, demotion or close; its header");
         for i in [0i64, 1, 4_095, 8_191] {
             let d = 739_865 - i;
@@ -281,7 +282,7 @@ fn the_log_op_reads_and_renders_at_the_line_bound_on_a_2mib_thread() {
         }
         // C5: the 6 days' records hold nothing of the day family (no wake, arrival, gap or plan) —
         // nor, since the W-48 repair (README gap 5210), a plan's stamp or an input-carrying plan.
-        assert_eq!(out.matches(r#",null,null,null,null,null,null,null,[],0,0,[],[],0,0,0,0,null,[],[],null,null,[]],["#).count(), 6, "6 day records empty of the day family");
+        assert_eq!(out.matches(r#",null,null,null,null,null,null,null,[],0,0,[],[],0,0,0,0,null,[],null,null,null,null,null,[]],["#).count(), 6, "6 day records empty of the day family");
         assert!(out.ends_with(r#""unknown":0,"longestLeak":null,"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#), "{}", &out[out.len().saturating_sub(300)..]);
         eprintln!("the block machine at the line bound: {:.0} ms, {} bytes", start.elapsed().as_secs_f64() * 1000.0, out.len());
     });

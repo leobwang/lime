@@ -198,7 +198,7 @@ pub const LOG_STALL_DAYS: i64 = 7;
 /// produce them, and `CODES` is the list `check` itself can emit. Both are
 /// warnings, so neither moves [`exit_code`] — which is D18's own requirement:
 /// `tm check` must keep working, and keep its exit code, on a damaged log.
-pub const LOG_CODES: &[&str] = &[LOG_LINE, LOG_FUTURE, LOG_STALL, LOG_BREAK_PLACE, LOG_LATE_MARK];
+pub const LOG_CODES: &[&str] = &[LOG_LINE, LOG_FUTURE, LOG_STALL, LOG_BREAK_PLACE, LOG_LATE_MARK, LOG_STALE_EST];
 
 /// **A `break` line whose place is not its `break_start`'s** — the owner's
 /// D116 (README gap 5035): the break is read at the place its `break_start`
@@ -212,6 +212,15 @@ pub const LOG_BREAK_PLACE: &str = "log-break-place";
 /// replay holds closed, so a block closed then that it lies across is not
 /// netted. The bound stays; the mark is named. A warning (D18's family).
 pub const LOG_LATE_MARK: &str = "log-late-mark";
+
+/// **A stale estimate** — the owner's D126 (W-49 track L): a `stop` (or a partial
+/// `done`) wrote an item's remainder, and a line logged after it and stamped
+/// inside its block — a late `start`, `break`, `break_start`, `interrupt` or
+/// `resume` that no verb of this tree wrote (a sync, a hand edit) — netted the
+/// block, so the line's estimate reads minutes the replay no longer counts. The
+/// verb that logs such a line corrects the estimate itself; this names the line
+/// when none did. A warning (D18's family).
+pub const LOG_STALE_EST: &str = "log-stale-est";
 
 /// **The kernel refused to load the tree** (the owner's D32, README gap 476).
 ///

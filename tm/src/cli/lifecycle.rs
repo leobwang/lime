@@ -1099,6 +1099,84 @@ fn log_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
         });
     }
     out.extend(stall_problems(ctx));
+    out.extend(stale_estimates(ctx));
+    out
+}
+
+/// **The owner's D126, the half no verb writes** (W-49 track L, parity P130): an open item whose last logged line is
+/// the `stop` (or the partial `done`) that wrote its remainder — no `edit`, `extend` or later block of it since — and
+/// after which a line stamped BEFORE it was logged (a late `start`, `break`, `break_start`, `interrupt` or `resume`:
+/// a sync appended another machine's line, or a hand edit) is named when that line netted the block: the replay of
+/// the log up to the `stop` counts more of the item's minutes than the replay of the whole log, so the line's estimate
+/// reads minutes the replay no longer counts. The verb that logs such a line corrects the estimate itself and logs
+/// the correction as an `edit` ([`super::day`]'s `correct_netted_estimates`), which is what takes an item off this
+/// list. The replay of the prefix is asked only for such a candidate, through the replay that writes nothing
+/// (`kernel_log::replay_unsealed`).
+fn stale_estimates(ctx: &Ctx) -> Vec<validate::CheckProblem> {
+    const LATE: &[&str] = &["start", "break", "break_start", "interrupt", "resume"];
+    let view = ctx.replay.view();
+    let mut last: BTreeMap<&str, usize> = BTreeMap::new();
+    for (i, r) in view.iter().enumerate() {
+        if let (false, Some(id)) = (r.cancelled, r.id.as_deref()) {
+            last.insert(id, i);
+        }
+    }
+    let mut out = Vec::new();
+    for (key, i) in last {
+        let row = &view[i];
+        if row.tag != "stop" && row.tag != "done" {
+            continue;
+        }
+        let id = tm_core::model::Id::new(key);
+        let Some(item) = ctx.tree.get(&id) else { continue };
+        if super::day::is_stateless(item) || item.state.is_closed() {
+            continue;
+        }
+        let Some(late) = view[i + 1..].iter().find(|r| !r.cancelled && LATE.contains(&r.tag.as_str()) && r.t < row.t)
+        else {
+            continue;
+        };
+        let Ok(bytes) = ctx.log_now() else { continue };
+        let mut prefix: Vec<u8> = Vec::new();
+        for (n, l) in bytes.split(|b| *b == b'\n').enumerate() {
+            if n as u64 >= row.line {
+                break;
+            }
+            prefix.extend_from_slice(l);
+            prefix.push(b'\n');
+        }
+        let tz = Ctx::tz_wire(&ctx.store, &ctx.cfg);
+        let Ok(Some(read)) =
+            super::kernel_log::replay_unsealed(ctx.store.root(), &prefix, ctx.cfg.tz, &tz, ctx.today, super::kernel_log::Scope::Hot)
+        else {
+            continue;
+        };
+        let (was, now) = (read.replay.block_minutes(key), ctx.replay.block_minutes(key));
+        if now >= was {
+            continue;
+        }
+        let netted = was - now;
+        let Some(est) = ctx.tree.remaining(&id) else { continue };
+        out.push(validate::CheckProblem::warning(
+            validate::LOG_STALE_EST,
+            LOG_PATH,
+            late.line as usize,
+            None,
+            format!(
+                "this `{}` is logged after line {}'s `{}` of {} and stamped inside its block, and it netted {netted}m \
+                 from it; the estimate that `{}` wrote ({est}m) reads the minutes the replay no longer counts, and \
+                 reads {}m as the log now does — `tm edit {} est={}m` (D126)",
+                late.tag,
+                row.line,
+                row.tag,
+                id.token(),
+                row.tag,
+                est + netted,
+                id.token(),
+                est + netted
+            ),
+        ));
+    }
     out
 }
 

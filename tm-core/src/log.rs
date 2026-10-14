@@ -1148,26 +1148,33 @@ pub struct DayReplay {
     pub drift_min: u32,
     /// Hash of the last plan.
     pub last_plan_hash: Option<String>,
-    /// **§7.4's hysteresis input as the day's first `plan` carries it** (the owner's **D108**,
-    /// the kernel's `Replay.DayAcc.yesterday`): what D42's rebuild puts back into
-    /// `.tm/state.json`'s `priorities_yesterday`. Fork `DayReplay` has no such field, so it is
-    /// not serialised when empty — every log a binary before D108 wrote, and T5's comparison
-    /// with the fork, read none.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub priorities_yesterday: BTreeMap<String, u8>,
-    /// **The last `plan` line's stamp** (the W-48 repair, README gap 5210; the kernel's `Replay.DayAcc.planAt`),
-    /// beside [`DayReplay::last_plan_hash`]. `.tm/state.json` keeps its `last_plan_hash` by CALENDAR day, and a
-    /// `plan` written after local midnight and before the wake is filed under the previous ledger day, so D42's
-    /// rebuild finds a calendar day's last plan by this stamp's local date. Not serialised: fork `DayReplay`
-    /// has no such field, and T5 compares the fork's keys.
+    /// **The latest calendar date's last `plan` line's stamp** (the W-48 repair, README gap 5210; W-49 track L,
+    /// gap 5300; the kernel's `Replay.DayAcc.planAt`), beside [`DayReplay::last_plan_hash`]. `.tm/state.json` keeps
+    /// its `last_plan_hash` by CALENDAR day, and a `plan` written after local midnight and before the wake is filed
+    /// under the previous ledger day, so D42's rebuild finds a calendar day's last plan by this stamp's local date,
+    /// and a line a clock behind the log stamped on an earlier date does not move it. Not serialised: fork
+    /// `DayReplay` has no such field, and T5 compares the fork's keys.
     #[serde(skip)]
     pub plan_at: Option<DateTime<FixedOffset>>,
-    /// **The last `plan` line that carried a hysteresis input, its stamp** (README gaps 5210 and 5211; the
-    /// kernel's `Replay.DayAcc.lateAt`) — the host writes the input on a calendar day's first `plan` and reads
-    /// it back by this stamp's local date. Not serialised, as [`DayReplay::plan_at`].
+    /// That line's hash (W-49 track L; the kernel's `Replay.DayAcc.planHash`) — the calendar day's last plan's, where
+    /// [`DayReplay::last_plan_hash`] is the ledger day's last line's (the fork's). Not serialised, as `plan_at`.
+    #[serde(skip)]
+    pub plan_hash: Option<String>,
+    /// That line's line number (W-49 track L): two ledger days can hold one calendar day's lines, and the later line
+    /// wins (the owner's D125). Not serialised, as `plan_at`.
+    #[serde(skip)]
+    pub plan_line: Option<u64>,
+    /// **§7.4's hysteresis input: the last `plan` line that carried one, its stamp** (the owner's D108, parity P119;
+    /// README gaps 5210, 5211 and 5300; the kernel's `Replay.DayAcc.lateAt`) — the host writes the input on a
+    /// calendar day's first `plan` and reads it back by this stamp's local date. The day's ONE answer since W-49:
+    /// the ledger day's first input (`priorities_yesterday` here until W-49) was a second answer to one question,
+    /// and nothing read it. Not serialised, as `plan_at`.
     #[serde(skip)]
     pub late_at: Option<DateTime<FixedOffset>>,
-    /// That line's map (the kernel's `Replay.DayAcc.late`). Not serialised, as [`DayReplay::plan_at`].
+    /// That line's line number (W-49 track L, D125). Not serialised, as `plan_at`.
+    #[serde(skip)]
+    pub late_line: Option<u64>,
+    /// That line's map (the kernel's `Replay.DayAcc.late`). Not serialised, as `plan_at`.
     #[serde(skip)]
     pub late: BTreeMap<String, u8>,
     /// Actual segments (blocks, pauses, interruptions, breaks, routines,
@@ -1175,9 +1182,11 @@ pub struct DayReplay {
     pub segments: Vec<LogSegment>,
 }
 
-/// **Equal as days, the plan stamps aside** (the W-48 repair, README gap 5210): `plan_at`, `late_at` and `late` are
-/// the host's bookkeeping for reading a calendar day's plans by their stamps — not serialised, so a JSON round trip
-/// (`log_replay.rs`) cannot carry them — and are left out of a day's equality as the observations' `line` is.
+/// **Equal as days, every field compared** (W-49 track L; the W-48 recheck's finding). Until W-49 this skipped
+/// `plan_at`, `late_at` and `late` — the host's bookkeeping for reading a calendar day's plans by their stamps — so two
+/// days that disagreed about the calendar day's last plan or its hysteresis input compared EQUAL, and the JSON round
+/// trip (`log_replay.rs`), which cannot carry them, passed because equality could not see what it lost. Every field
+/// is destructured, so a new one is a compile error here, and every one is compared.
 impl PartialEq for DayReplay {
     fn eq(&self, other: &DayReplay) -> bool {
         // Destructured so a new field is a compile error here.
@@ -1210,13 +1219,15 @@ impl PartialEq for DayReplay {
             replans_today,
             drift_min,
             last_plan_hash,
-            priorities_yesterday,
             segments,
-            plan_at: _,
-            late_at: _,
-            late: _,
+            plan_at,
+            plan_hash,
+            plan_line,
+            late_at,
+            late_line,
+            late,
         } = self;
-        *date == other.date && *wake == other.wake && *slept_min == other.slept_min && *onset_min == other.onset_min && *arrival == other.arrival && *loc == other.loc && *window == other.window && *budget == other.budget && *loc_changes == other.loc_changes && *first_start == other.first_start && *starts == other.starts && *block_min == other.block_min && *blocks_done == other.blocks_done && *load_fifths == other.load_fifths && *minutes_by_ci == other.minutes_by_ci && *ci_unknown == other.ci_unknown && *done == other.done && *lost_min == other.lost_min && *dropped == other.dropped && *leak_min == other.leak_min && *longest_leak == other.longest_leak && *idle == other.idle && *breaks == other.breaks && *routine_min == other.routine_min && *plans == other.plans && *replans_today == other.replans_today && *drift_min == other.drift_min && *last_plan_hash == other.last_plan_hash && *priorities_yesterday == other.priorities_yesterday && *segments == other.segments
+        *date == other.date && *wake == other.wake && *slept_min == other.slept_min && *onset_min == other.onset_min && *arrival == other.arrival && *loc == other.loc && *window == other.window && *budget == other.budget && *loc_changes == other.loc_changes && *first_start == other.first_start && *starts == other.starts && *block_min == other.block_min && *blocks_done == other.blocks_done && *load_fifths == other.load_fifths && *minutes_by_ci == other.minutes_by_ci && *ci_unknown == other.ci_unknown && *done == other.done && *lost_min == other.lost_min && *dropped == other.dropped && *leak_min == other.leak_min && *longest_leak == other.longest_leak && *idle == other.idle && *breaks == other.breaks && *routine_min == other.routine_min && *plans == other.plans && *replans_today == other.replans_today && *drift_min == other.drift_min && *last_plan_hash == other.last_plan_hash && *segments == other.segments && *plan_at == other.plan_at && *plan_hash == other.plan_hash && *plan_line == other.plan_line && *late_at == other.late_at && *late_line == other.late_line && *late == other.late
     }
 }
 

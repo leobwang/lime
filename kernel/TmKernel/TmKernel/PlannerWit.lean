@@ -13157,22 +13157,22 @@ def theCloseUnderBreakRequest : PlanReq :=
   { theCensusRequest with run := closeUnderBreakRun, state := closeUnderBreakState }
 
 set_option maxRecDepth 400000 in
-/-- **A block closed while a logged break runs is drawn across the break** (W-48 track G, README gap 5180), computed: the
-replay's running break is the 07:30 `break_start`, the runtime's break passes the decoder's check (`BreakState.wf`), and
-the day's rows before `now` are `m1`'s replayed Block 07:05-08:05 across the running Break 07:30-14:00 (and the
-meeting, which the running break's row also covers).  The record is apart and there is no open block; the running-break
-clause fails.  So `Goals.plan_places_no_block_over_a_break` is false on this request — and it is NOT refuted here: the
-replay's `cut` and `doneClose` draw a block's pieces over the spans it nets (`Replay.blockSpans`), which do not hold the
-running break (`Replay.Machine.brkOpen`), so the block's 07:30-08:05 is read as block AND as break until the break's own
-line arrives, when the owner's D100 nets it from the closed block and the same block reads twenty-five minutes (driven,
-README block §2).  A refutation standing on that reading is not a discharge (the campaign's lesson 4). -/
-theorem the_close_under_a_running_break_lays_its_block_across_the_break :
+/-- **A block closed while a logged break runs is netted by the break** (README gap 5180 closed, W-49 track L; the owner's
+D94 and D100), computed: the replay's running break is the 07:30 `break_start`, the runtime's break passes the decoder's
+check (`BreakState.wf`), and the day's rows before `now` are `m1`'s replayed Block 07:05-07:30 — the `done` at 08:05
+closed it, and the running break nets everything from its start (`Replay.runNet`) — beside the running Break 07:30-14:00
+(and the meeting, which the running break's row also covers).  All three of the reduction's facts hold, the running
+break's with a subject.  Until W-49 the block was drawn 07:05-08:05 across the break, and this theorem, then
+the_close_under_a_running_break_lays_its_block_across_the_break, decided the running-break clause FALSE on this request
+(W-48 track G): the falsifying world the goal stood on is gone, and the block reads now what it read once the break's
+line arrived (twenty-five minutes, driven at W-48 track G §2). -/
+theorem the_close_under_a_running_break_is_netted_from_its_block :
     closeUnderBreakRun.answer.openBreak.map (fun o => o.s.1.sec)
       = some (Cal.instantOf Cal.chicago 739867 450).sec ∧
     (closeUnderBreakState.brk.map (BreakState.wf theCloseUnderBreakRequest.now)) = some true ∧
     ((dayPlan theCloseUnderBreakRequest).segments.filter (fun s => decide (s.val.start < theCloseUnderBreakRequest.now.sec))).map
         (fun s => (s.val.start, s.val.stop, s.val.kind, s.val.item))
-      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 485).sec, SegKind.block,
+      = [((Cal.instantOf Cal.chicago 739867 425).sec, (Cal.instantOf Cal.chicago 739867 450).sec, SegKind.block,
           some (['m','1'] : Id)),
          ((Cal.instantOf Cal.chicago 739867 450).sec, (Cal.instantOf Cal.chicago 739867 840).sec, SegKind.brk, none),
          ((Cal.instantOf Cal.chicago 739867 770).sec, (Cal.instantOf Cal.chicago 739867 830).sec, SegKind.wall,
@@ -13184,10 +13184,22 @@ theorem the_close_under_a_running_break_lays_its_block_across_the_break :
     (∀ b ∈ theCloseUnderBreakRequest.run.answer.openBlock.toList, ∀ s ∈ b.since.toList,
       ∀ k ∈ (theCloseUnderBreakRequest.todayRecord.map (·.segments)).getD [],
         (pastKind k.kind).1 = SegKind.brk → k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec) ∧
-    ¬ (∀ bs ∈ theCloseUnderBreakRequest.state.brk.toList, ∀ t ∈ bs.started.toList,
+    (∀ bs ∈ theCloseUnderBreakRequest.state.brk.toList, ∀ t ∈ bs.started.toList,
       ∀ g ∈ (theCloseUnderBreakRequest.todayRecord.map (·.segments)).getD [],
         (pastKind g.kind).1 = SegKind.block → g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec) :=
   ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **The goal's statement on that day, whole, through the reduction** (README gap 5180): the request the goal was false
+on until W-49 track L. -/
+theorem the_break_law_holds_whole_at_the_close_under_a_running_break (b k : WfSeg)
+    (hb : b ∈ (dayPlan theCloseUnderBreakRequest).segments) (hk : k ∈ (dayPlan theCloseUnderBreakRequest).segments)
+    (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :
+    b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start :=
+  PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay theCloseUnderBreakRequest (by decide)
+    the_close_under_a_running_break_is_netted_from_its_block.2.2.2.1
+    the_close_under_a_running_break_is_netted_from_its_block.2.2.2.2.1
+    the_close_under_a_running_break_is_netted_from_its_block.2.2.2.2.2 b k hb hk hbk hkk
 
 
 /-! ### The reduction's other two hypotheses, each with a subject (the W-48 repair, README gap 5219)

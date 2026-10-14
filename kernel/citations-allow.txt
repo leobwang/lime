@@ -403,6 +403,16 @@ can_fail
 # Check 8 cannot read "refuted"; a human did, once, and this roster is that reading.  The
 # count is what stops a later sentence quietly re-citing one as though it were alive.
 #
+# W-49 track L (README gap 5180): the witness that decided gap 5180's defect is DELETED with its audit line, its
+# successor `PlannerWit.the_close_under_a_running_break_is_netted_from_its_block`; its three backticked citations are in
+# W-48 track G's append-only block, which named it while it stood, and W-49 track L's block says it is gone.
+3 PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break
+# W-49 track L (README gap 5300): D108's first-of-the-ledger-day law is DELETED with its audit line — the day keeps one
+# answer, the latest input (the owner's D125) — and its citations are W-48's append-only README blocks and W-48
+# repair's Check.lean banner, which named it while it stood.
+2 Replay.a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first
+1 a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first
+1 the_close_under_a_running_break_lays_its_block_across_the_break
 3 Instant.lt_iff_nanos
 3 LogReq.wf_facts_from_line_one
 3 LogReq.wf_headers_from_line_one

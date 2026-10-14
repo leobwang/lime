@@ -44,6 +44,28 @@ theorem netClosed_lastCut_day (dy : Cal.Instant → Nat) (s e : Replay.At) (dd :
   simp only [Option.map_map, Function.comp_def] at h
   exact h
 
+/-- **The running break's netting keeps the last cut's day** (README gap 5180): `Replay.runNet_keeps`, read on the day. -/
+theorem runNet_lastCut_day (dy : Cal.Instant → Nat) (M : Machine) :
+    (Replay.runNet dy M).1.lastCut.map (·.day) = M.lastCut.map (·.day) := by
+  have h := congrArg (Option.map (fun x => x.2.2)) (Replay.runNet_keeps dy M).2.2.2.2
+  simp only [Option.map_map, Function.comp_def] at h
+  exact h
+
+/-- **What `arm_lastCut` concludes of a machine, it concludes of the running break's netting of it** (README gap
+5180): the netting keeps whether a cut stands and its day. -/
+theorem runNet_lastCut_cases (dy : Cal.Instant → Nat) (M m : Machine) (D : Nat)
+    (h : M.lastCut.map (·.day) = m.lastCut.map (·.day) ∨ M.lastCut = none ∨ ∃ c, M.lastCut = some c ∧ c.day = D) :
+    (Replay.runNet dy M).1.lastCut.map (·.day) = m.lastCut.map (·.day) ∨ (Replay.runNet dy M).1.lastCut = none ∨
+      ∃ c, (Replay.runNet dy M).1.lastCut = some c ∧ c.day = D := by
+  have hd := runNet_lastCut_day dy M
+  rcases h with h | h | ⟨c, hc, hcd⟩
+  · exact Or.inl (hd.trans h)
+  · rw [h] at hd
+    exact Or.inr (Or.inl (Option.map_eq_none_iff.1 hd))
+  · rw [hc] at hd
+    obtain ⟨c', hc', hcd'⟩ := Option.map_eq_some_iff.1 hd
+    exact Or.inr (Or.inr ⟨c', hc', hcd'.trans hcd⟩)
+
 /-- **An arm's machine keeps the last cut's day, drops the cut, or cuts on the arm's stamp's day** — restated at the owner's
 D100 (README gap 4520b) from "keeps the last cut": a break logged after a cut and stamped inside its block takes its
 minutes down (`Replay.netClosed`), and keeps its block, its stamp and its day (`Replay.brkFx_machine`); the day is what
@@ -55,8 +77,8 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
     simp only [List.filterMap_append, (Replay.cut_obs dy _ t).2.2.1, (Replay.netStart_obs dy _ _ _).2.2,
-      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, Replay.settle_machines,
-      List.mem_singleton] at hm
+      Replay.runNet_machines, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+      Replay.settle_machines, List.mem_singleton] at hm
     subst hm
     exact Or.inr (Or.inl (arm_settled_lastCut dy _))
   case pause id =>
@@ -103,12 +125,13 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   case stop id rem =>
     split at hm
     · split at hm
-      · simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      · simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, Replay.runNet_machines, List.nil_append,
+          List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm
-        rcases (cut_keeps dy m t).2 with h | h
-        · exact Or.inl (congrArg (Option.map (·.day)) h)
-        · exact Or.inr (Or.inr h)
+        exact runNet_lastCut_cases dy _ m (dy t.1) (by
+          rcases (cut_keeps dy m t).2 with h | h
+          · exact Or.inl (congrArg (Option.map (·.day)) h)
+          · exact Or.inr (Or.inr h))
       · simp at hm
     · simp at hm
   case extend id by_ =>
@@ -120,6 +143,9 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
     subst hm
+    refine runNet_lastCut_cases dy _ m (dy t.1) ?_
+    show (Replay.doneClose dy m t id actual.val went).1.lastCut.map (·.day) = _ ∨
+      (Replay.doneClose dy m t id actual.val went).1.lastCut = none ∨ _
     unfold Replay.doneClose
     split
     · split
@@ -136,9 +162,10 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     simp only [Option.map_map, Function.comp_def] at h
     exact Or.inl h
   case brkStart pl w =>
-    simp only [Effect.machineOf?, List.filterMap_cons, List.filterMap_nil, List.mem_singleton] at hm
+    simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
+      List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
     subst hm
-    exact Or.inl rfl
+    exact Or.inl ((runNet_lastCut_day dy _).trans (congrArg (Option.map (·.day)) (arm_settled_lastCut dy _)))
   all_goals rw [(Replay.dayArm_obs dy sl e t d).1] at hm; simp at hm
 
 /-- **An arm's machine keeps the open interruption, closes it, or opens one on the arm's day.** -/
@@ -149,12 +176,12 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
     simp only [List.filterMap_append, (Replay.cut_obs dy _ t).2.2.1, (Replay.netStart_obs dy _ _ _).2.2,
-      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, Replay.settle_machines,
-      List.mem_singleton] at hm
+      Replay.runNet_machines, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+      Replay.settle_machines, List.mem_singleton] at hm
     subst hm
     left
     rw [arm_settled_interrupt]
-    exact (cut_interrupt dy _ t).trans (Replay.netStart_keeps dy _ _ m).2.1
+    exact (Replay.runNet_keeps dy _).2.1.trans ((cut_interrupt dy _ t).trans (Replay.netStart_keeps dy _ _ m).2.1)
   case pause id =>
     split at hm
     · split at hm
@@ -198,10 +225,10 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
   case stop id rem =>
     split at hm
     · split at hm
-      · simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      · simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, Replay.runNet_machines, List.nil_append,
+          List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (cut_keeps dy m t).1
+        exact Or.inl ((Replay.runNet_keeps dy _).2.1.trans (cut_keeps dy m t).1)
       · simp at hm
     · simp at hm
   case extend id by_ =>
@@ -213,6 +240,8 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
     subst hm
+    rw [(Replay.runNet_keeps dy _).2.1]
+    show (Replay.doneClose dy m t id actual.val went).1.interrupt = _ ∨ _
     unfold Replay.doneClose
     split
     · split
@@ -227,9 +256,10 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
     rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
     exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).2.1
   case brkStart pl w =>
-    simp only [Effect.machineOf?, List.filterMap_cons, List.filterMap_nil, List.mem_singleton] at hm
+    simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
+      List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
     subst hm
-    exact Or.inl rfl
+    exact Or.inl ((Replay.runNet_keeps dy _).2.1.trans (arm_settled_interrupt dy _))
   all_goals rw [(Replay.dayArm_obs dy sl e t d).1] at hm; simp at hm
 
 /-- **An arm's machine keeps the running break, ends it, or opens one on the arm's day** (the owner's D105, parity
@@ -242,12 +272,13 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
     simp only [List.filterMap_append, (Replay.cut_obs dy _ t).2.2.1, (Replay.netStart_obs dy _ _ _).2.2,
-      List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, Replay.settle_machines,
-      List.mem_singleton] at hm
+      Replay.runNet_machines, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+      Replay.settle_machines, List.mem_singleton] at hm
     subst hm
     left
     rw [arm_settled_brkOpen]
-    exact (Replay.cut_brkOpen dy _ t).trans (Replay.netStart_keeps dy _ _ m).2.2.2.1
+    exact (Replay.runNet_keeps dy _).2.2.2.1.trans ((Replay.cut_brkOpen dy _ t).trans
+      (Replay.netStart_keeps dy _ _ m).2.2.2.1)
   case pause id =>
     split at hm
     · split at hm
@@ -292,10 +323,10 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   case stop id rem =>
     split at hm
     · split at hm
-      · simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, List.nil_append, List.filterMap_cons,
-          Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+      · simp only [List.filterMap_append, (Replay.cut_obs dy m t).2.2.1, Replay.runNet_machines, List.nil_append,
+          List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm
-        exact Or.inl (Replay.cut_brkOpen dy m t)
+        exact Or.inl ((Replay.runNet_keeps dy _).2.2.2.1.trans (Replay.cut_brkOpen dy m t))
       · simp at hm
     · simp at hm
   case extend id by_ =>
@@ -307,14 +338,15 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     rw [doneFx_machines] at hm
     simp only [List.mem_singleton] at hm
     subst hm
-    exact Or.inl (Replay.doneClose_brkOpen dy m t id actual.val went)
+    exact Or.inl ((Replay.runNet_keeps dy _).2.2.2.1.trans (Replay.doneClose_brkOpen dy m t id actual.val went))
   case brk p a w =>
     rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
     exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy m t _ d m' hm))
   case brkStart pl w =>
-    simp only [Effect.machineOf?, List.filterMap_cons, List.filterMap_nil, List.mem_singleton] at hm
+    simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
+      List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
     subst hm
-    exact Or.inr (Or.inr ⟨_, rfl, rfl⟩)
+    exact Or.inr (Or.inr ⟨_, (Replay.runNet_keeps dy _).2.2.2.1.trans (arm_settled_brkOpen dy _), rfl⟩)
   all_goals rw [(Replay.dayArm_obs dy sl e t d).1] at hm; simp at hm
 
 theorem stepWith_machine_eq (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry) :
