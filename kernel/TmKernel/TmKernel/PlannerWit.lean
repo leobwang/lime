@@ -5660,7 +5660,7 @@ it says the opposite: `Planner.PlanReq.activeRow` sets `current` and leaves `isO
 default.  The pair is what makes design §6.3 row 3's restatement unusable in this tree
 (README gap 1500) — it would exclude the interruption and keep the row that grows. -/
 theorem the_reservation_row_is_not_marked_open (r : PlanReq) (t : Seg)
-    (h : t ∈ r.activeRow) : t.flags.current = true ∧ t.flags.isOpen = false := by
+    (h : t ∈ r.activeRow) : t.flags.current = !r.held ∧ t.flags.isOpen = false := by
   unfold PlanReq.activeRow at h
   split at h
   · exact absurd h (by simp)
@@ -12045,7 +12045,8 @@ theorem the_cut_law_fires_at_the_short_break :
   ⟨rfl, PlanStable.the_cut_does_not_change_when_an_overrun_break_is_logged theShortBreakRequest shortBreakRun
     ⟨some ⟨(Cal.instantOf Cal.chicago 739867 825).sec, 0⟩, 10, some .seat⟩
     ⟨(Cal.instantOf Cal.chicago 739867 825).sec, 0⟩ rfl rfl (by decide)
-    (fun a ha => by have h : (none : Option ActiveBlock) = some a := ha; cases h) (by decide) (by decide) (by decide)⟩
+    (fun a ha => by have h : (none : Option ActiveBlock) = some a := ha; cases h) (by decide) (by decide) (by decide)
+    (by decide) (by decide)⟩
 
 /-! ### (2) The night -/
 
@@ -12462,7 +12463,7 @@ theorem the_day_law_fires_at_the_short_break :
     ⟨some ⟨(Cal.instantOf Cal.chicago 739867 825).sec, 0⟩, 10, some .seat⟩
     ⟨(Cal.instantOf Cal.chicago 739867 825).sec, 0⟩ rfl rfl (by decide)
     (fun a ha => by have h : (none : Option ActiveBlock) = some a := ha; cases h) (by decide) (by decide) (by decide)
-    (by decide)⟩
+    (by decide) (by decide) (by decide)⟩
 
 /-! ############################################################################
 ## W-41 (track K): a start after `now` planned from `now` (D78), the request's two refusals (D80),
@@ -13297,6 +13298,282 @@ theorem the_break_law_holds_whole_with_a_break_running_after_a_done (b k : WfSeg
     the_apart_replay_holds_with_a_break_running_after_a_done.2.2.1
     the_apart_replay_holds_with_a_break_running_after_a_done.2.2.2.1
     the_apart_replay_holds_with_a_break_running_after_a_done.2.2.2.2 b k hb hk hbk hkk
+
+/-! ############################################################################
+## W-49 track W — the remainder after a wall that holds the running block (README gap 5217, parity P126)
+
+The owner's D110 ("the plan draws the remainder after the wall"), D117 and D114, with D77's rule that the day does not
+change at an instant it can foresee.  While a calendar wall holds the running block paused — D61's pause at the wall's
+start, D110's at a start inside it, D117's at a resume inside it — or a break running since before the wall's end holds
+it past the end (D114), §8.2 choice 5b reserves the block's remainder from the release, the instant the blocked list
+lets it go (`Planner.PlanReq.wallHold`, `Planner.PlanReq.activeRun`).  Fork 4748911 refuses a paused timer outright,
+so it reserved nothing until the wall's `unpause` was logged and the day moved then.
+
+`theHeldRequest` is the open Wednesday at 13:30 inside `^g1`'s 12:50–13:50 meeting with D61's pause logged at 12:50
+(`openWallLines`' first four lines) — the binary's own log at that instant, `m1` paused.  `theReleasedRequest` is the
+same day at 13:50 with the meeting's `unpause` logged: what the planner sees once the wall has let go.
+`theBreakHeldRequest` is the day at 13:55 with a sit running since 13:40, planned for thirty minutes — D114's case.
+############################################################################ -/
+
+/-- `m1`, started at 12:00, three hours estimated — **paused**, as the host reads a block the meeting holds. -/
+def heldBlock : ActiveBlock :=
+  ⟨['m','1'], ⟨(Cal.instantOf Cal.chicago 739867 720).sec, 0⟩, 180, true⟩
+
+/-- The open Wednesday's three lines and D61's `pause m1` at 12:50 — no `unpause` yet. -/
+def heldLines : List Log.Line := openWallLines.take 4
+
+set_option maxRecDepth 400000 in
+theorem heldRun_resumes_ok : runOk Cal.chicago 739867 heldLines = true := by decide
+
+def heldRun : Seal.Run :=
+  match h : Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) heldLines with
+  | .ok run => run
+  | .error _ => absurd heldRun_resumes_ok (by simp [runOk, h])
+
+/-- **The open Wednesday at 13:30, the meeting holding `m1`** (gap 5217). -/
+def theHeldRequest : PlanReq :=
+  { ({ theWallOnNowRequest with run := heldRun } : PlanReq) with state := ⟨some heldBlock, none, none, Capped.nil, none⟩ }
+
+/-- **The same day at 13:50, the meeting's `unpause` logged** — `m1` running again. -/
+def theReleasedRequest : PlanReq :=
+  { ({ theOpenRequest with run := openWallRun } : PlanReq) with look := { theOpenRequest.look with today0 :=
+      { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 830).sec, 0⟩ } } }
+
+/-- **The same day at 13:55, a sit running since 13:40 for thirty minutes** (D114: it began before the meeting's end,
+so it holds `m1` past it). -/
+def theBreakHeldRequest : PlanReq :=
+  { ({ theHeldRequest with state := ⟨some heldBlock, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 820).sec, 0⟩, 30,
+      some .seat⟩, none, Capped.nil, none⟩ } : PlanReq) with look := { theOpenRequest.look with today0 :=
+      { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 835).sec, 0⟩ } } }
+
+set_option maxRecDepth 400000 in
+/-- **P126, computed: the meeting holds `m1`, and its remainder is reserved from the meeting's end.**  At 13:30 the
+wall holds the block (`held`), the reservation runs 13:50–14:00 — the meeting's end to the block's boundary, the
+hundred and thirty minutes still owed carried on it — and its row is no `▶` and says nothing: the block is not running.
+The fork's active_run refuses the paused timer and reserved nothing here. -/
+theorem the_held_block_is_reserved_from_the_walls_end :
+    theHeldRequest.held = true ∧
+    theHeldRequest.activeRun.map (fun q => (q.start, q.stop, q.leftMin))
+      = some ((Cal.instantOf Cal.chicago 739867 830).sec, (Cal.instantOf Cal.chicago 739867 840).sec, 130) ∧
+    ((dayPlan theHeldRequest).segments.filter (fun s => s.val.kind == SegKind.block &&
+        decide (theHeldRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.start, s.val.stop))
+      = [((Cal.instantOf Cal.chicago 739867 830).sec, (Cal.instantOf Cal.chicago 739867 840).sec)] ∧
+    ((dayPlan theHeldRequest).segments.filter (fun s => s.val.kind == SegKind.block &&
+        decide (theHeldRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.item, s.val.energy))
+      = [(some ['m','1'], none)] ∧
+    ((dayPlan theHeldRequest).segments.filter (fun s => s.val.kind == SegKind.block &&
+        decide (theHeldRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.flags.current, s.val.note))
+      = [(false, none)] := by
+  refine ⟨by decide, by decide, by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **Nothing drifts when the meeting lets the block go** (D77; gap 5217): every row of the held day from 13:50 on is
+the released day's, start, stop, kind, item and slot energy — the reservation included, now `▶` with "running · 130m
+left".  Until W-49 the held day drew nothing of `m1` after the meeting and the day moved at 13:50. -/
+theorem nothing_drifts_when_the_wall_lets_the_block_go :
+    ((dayPlan theHeldRequest).segments.filter (fun s =>
+        decide (theReleasedRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.start, s.val.stop, s.val.item))
+      = ((dayPlan theReleasedRequest).segments.filter (fun s =>
+        decide (theReleasedRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.start, s.val.stop, s.val.item)) ∧
+    ((dayPlan theHeldRequest).segments.filter (fun s =>
+        decide (theReleasedRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.kind, s.val.energy))
+      = ((dayPlan theReleasedRequest).segments.filter (fun s =>
+        decide (theReleasedRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.kind, s.val.energy)) ∧
+    theReleasedRequest.held = false ∧
+    ((dayPlan theReleasedRequest).segments.filter (fun s => s.val.flags.current)).map
+        (fun s => (s.val.start, s.val.stop, s.val.note))
+      = [((Cal.instantOf Cal.chicago 739867 830).sec, (Cal.instantOf Cal.chicago 739867 840).sec,
+          some (Note.runningLeft 130))] := by
+  refine ⟨by decide, by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **D114, computed: a break that holds the block past the meeting releases it at its own end.**  At 13:55 the sit
+(13:40–14:10) holds `m1`; the reservation runs from 14:10, where the blocked list lets go, to 15:00, the boundary. -/
+theorem the_break_that_holds_the_block_releases_it_at_its_end :
+    theBreakHeldRequest.held = true ∧ (breakRows theBreakHeldRequest).length = 1 ∧
+    theBreakHeldRequest.activeRun.map (fun q => (q.start, q.stop, q.leftMin))
+      = some ((Cal.instantOf Cal.chicago 739867 850).sec, (Cal.instantOf Cal.chicago 739867 900).sec, 130) := by
+  refine ⟨by decide, by decide, by decide⟩
+
+/-- **The same day at 14:15, the sit overrun since 14:10** — still running, still holding `m1`. -/
+def theOverrunHeldRequest : PlanReq :=
+  { theBreakHeldRequest with look := { theOpenRequest.look with today0 :=
+      { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 855).sec, 0⟩ } } }
+
+set_option maxRecDepth 400000 in
+/-- **An overrun break that holds the block reserves nothing** (`Planner.PlanReq.wallHold`): the meeting has ended and
+the sit has run past its planned length, so it ends when the user says, as P45 reads a running break — the wall's hold is
+not read past the wall, and the day does not draw a resume nobody can foresee. -/
+theorem an_overrun_break_that_holds_the_block_reserves_nothing :
+    theOverrunHeldRequest.held = false ∧ theOverrunHeldRequest.activeRun = none := by
+  refine ⟨by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **`Planner.PlanReq.activeRun_spec` as it stood until W-49 — the reservation starts at `now` — is refuted**: the
+held day's starts at 13:50, twenty minutes after. -/
+theorem the_reservation_starts_at_now_is_refuted :
+    ¬ ∀ (r : PlanReq) (q : ActiveRes), r.activeRun = some q → q.start = r.now.sec := by
+  intro h
+  obtain ⟨q, hq, hs⟩ : ∃ q, theHeldRequest.activeRun = some q ∧ q.start ≠ theHeldRequest.now.sec := by
+    cases hq : theHeldRequest.activeRun with
+    | none => exact absurd hq (by decide)
+    | some q =>
+      refine ⟨q, rfl, ?_⟩
+      have h1 : theHeldRequest.activeRun.map (·.start) = some (Cal.instantOf Cal.chicago 739867 830).sec := by decide
+      rw [hq] at h1
+      have h2 : q.start = (Cal.instantOf Cal.chicago 739867 830).sec := Option.some.inj h1
+      rw [h2]; decide
+  exact hs (h theHeldRequest q hq)
+
+set_option maxRecDepth 400000 in
+/-- **`Planner.the_reservation_row_is_exact` as it stood until W-49 — the row starts at `now` — is refuted** there. -/
+theorem the_reservation_row_starts_at_now_is_refuted :
+    ¬ ∀ (r : PlanReq) (q : ActiveRes), r.activeRun = some q → r.now.sec + 1 < LogStamp.yearEnd →
+      ∀ t ∈ reservationSegs r, (Planner.segOf t).val.start = r.now.sec := by
+  intro h
+  cases hq : theHeldRequest.activeRun with
+  | none => exact absurd hq (by decide)
+  | some q =>
+    have hrow : (reservationSegs theHeldRequest).map (fun t => (Planner.segOf t).val.start)
+        = [(Cal.instantOf Cal.chicago 739867 830).sec] := by decide
+    cases ht : reservationSegs theHeldRequest with
+    | nil => rw [ht] at hrow; exact absurd hrow (by simp)
+    | cons t ts =>
+      rw [ht] at hrow
+      have e := h theHeldRequest q hq (by decide) t (by rw [ht]; exact List.mem_cons_self ..)
+      have e2 : (Planner.segOf t).val.start = (Cal.instantOf Cal.chicago 739867 830).sec := by
+        simp only [List.map_cons, List.cons.injEq] at hrow; exact hrow.1
+      rw [e2] at e
+      exact absurd e (by decide)
+
+set_option maxRecDepth 400000 in
+/-- **`Planner.a_running_break_pauses_the_block` as W-35 wrote it — a running break reserves nothing — is refuted** by
+D114's break: it is a Break row of the day and the block it holds is reserved from its end. -/
+theorem a_running_break_pauses_the_block_as_w35_wrote_it_is_refuted :
+    ¬ ∀ (r : PlanReq) (s : Seg), s ∈ breakRows r → r.interrupted = true ∧ r.activeRun = none := by
+  intro h
+  cases hb : breakRows theBreakHeldRequest with
+  | nil => exact absurd (congrArg List.length hb) (by decide)
+  | cons s ss =>
+    have := (h theBreakHeldRequest s (by rw [hb]; exact List.mem_cons_self ..)).2
+    exact absurd this (by decide)
+
+set_option maxRecDepth 400000 in
+/-- **A held block's reservation is at most one block — fired** (AGENTS §7.4 item 2): the held day's 13:50–14:00. -/
+theorem the_held_reservation_bound_fires :
+    ∀ q, theHeldRequest.activeRun = some q → q.stop - q.start ≤ theHeldRequest.blockMin * 60 :=
+  fun q hq => theHeldRequest.a_held_reservation_reaches_at_most_one_block q (by decide) (by decide) hq
+
+/-! ### D77's overrun-break laws, and a twin whose log does not hold the meeting's pause
+
+`PlanStable.the_cut_does_not_change_when_an_overrun_break_is_logged` and the whole-day form were stated for every
+request whose block the break paused, and every twin replay `run'` whose record keeps the starts and the arrival and adds
+the break; since W-49 they carry `held = false` on both sides, and here is why.  Nothing in the law ties the twin's pause
+marks to the running day's, and since W-49 a meeting's pause in the log is a HOLD: `m1` paused by the meeting at 12:50,
+a five-minute sit begun inside it at 13:00 and still running at 13:20 — the meeting holds the block, whose remainder is
+reserved from 13:50 — and a twin whose log adds the sit's `break` line and holds no pause has nothing holding the block,
+so it reserves nothing, and the two cuts differ. -/
+
+/-- The sit at 13:00, as `tm break` logs it ending at 13:20. -/
+def acrossBreakLine : Log.Line := ⟨4, some ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','9','T','1','3',':','0','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','b','r','e','a','k','"',',','"','p','l','a','n','n','e','d','_','m','i','n','"',':','5',',','"','a','c','t','u','a','l','_','m','i','n','"',':','2','0',',','"','w','h','e','r','e','"',':','"','s','e','a','t','"','}']⟩
+
+set_option maxRecDepth 400000 in
+theorem loggedAcrossRun_resumes_ok : runOk Cal.chicago 739867 (openLines ++ [acrossBreakLine]) = true := by decide
+
+def loggedAcrossRun : Seal.Run :=
+  match h : Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) (openLines ++ [acrossBreakLine]) with
+  | .ok run => run
+  | .error _ => absurd loggedAcrossRun_resumes_ok (by simp [runOk, h])
+
+/-- **The held Wednesday at 13:20, a five-minute sit running since 13:00** inside the meeting that holds `m1`. -/
+def theBreakAcrossRequest : PlanReq :=
+  { ({ theHeldRequest with state := ⟨some heldBlock, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 780).sec, 0⟩, 5,
+      some .seat⟩, none, Capped.nil, none⟩ } : PlanReq) with look := { theOpenRequest.look with today0 :=
+      { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 800).sec, 0⟩ } } }
+
+/-- **A twin with the sit logged and no pause of the meeting's in its log.** -/
+def theBreakAcrossTwin : PlanReq :=
+  { theBreakAcrossRequest with
+      state := { theBreakAcrossRequest.state with brk := none },
+      run := loggedAcrossRun }
+
+set_option maxRecDepth 400000 in
+/-- **The sit, running and in that twin**: running, the meeting holds `m1` and its remainder is reserved 13:50–14:00;
+in the twin nothing holds it and nothing is reserved — and the two cuts differ. -/
+theorem a_twin_without_the_meetings_pause_loses_the_hold :
+    theBreakAcrossRequest.held = true ∧
+    theBreakAcrossRequest.activeRun.map (fun q => (q.start, q.stop))
+      = some ((Cal.instantOf Cal.chicago 739867 830).sec, (Cal.instantOf Cal.chicago 739867 840).sec) ∧
+    theBreakAcrossTwin.held = false ∧ theBreakAcrossTwin.activeRun = none ∧
+    theBreakAcrossTwin.todayCut ≠ theBreakAcrossRequest.todayCut := by
+  refine ⟨by decide, by decide, by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **`PlanStable.the_cut_does_not_change_when_an_overrun_break_is_logged` as D77 stated it — without `held = false`
+— is refuted** by the sit across the meeting's start: every other hypothesis holds of it. -/
+theorem the_cut_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted :
+    ¬ ∀ (r : PlanReq) (run' : Seal.Run) (b : BreakState) (t : Cal.Instant),
+      r.state.brk = some b → b.started = some t → t.sec + 60 * b.plannedMin ≤ r.now.sec →
+      (∀ a, r.state.active = some a → a.paused = true) →
+      (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
+        (r.todayRecord.map (·.starts)).getD [] →
+      ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
+        ((r.todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) ++ [t.sec] →
+      ({ r with run := run' } : PlanReq).todayRecord.bind (·.arrival) = r.todayRecord.bind (·.arrival) →
+      ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).todayCut = r.todayCut := by
+  intro h
+  exact a_twin_without_the_meetings_pause_loses_the_hold.2.2.2.2
+    (h theBreakAcrossRequest loggedAcrossRun ⟨some ⟨(Cal.instantOf Cal.chicago 739867 780).sec, 0⟩, 5, some .seat⟩
+      ⟨(Cal.instantOf Cal.chicago 739867 780).sec, 0⟩ rfl rfl (by decide)
+      (fun a ha => by
+        have : (some heldBlock : Option ActiveBlock) = some a := ha
+        cases this; rfl)
+      (by decide) (by decide) (by decide))
+
+set_option maxRecDepth 400000 in
+/-- **`PlanStable.the_day_from_now_does_not_change_when_an_overrun_break_is_logged` as D77 stated it is refuted** there
+too: the running day draws `m1`'s reservation at 13:50, which the twin does not. -/
+theorem the_day_from_now_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted :
+    ¬ ∀ (r : PlanReq) (run' : Seal.Run) (b : BreakState) (t : Cal.Instant),
+      r.state.brk = some b → b.started = some t → t.sec + 60 * b.plannedMin ≤ r.now.sec →
+      (∀ a, r.state.active = some a → a.paused = true) →
+      (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
+        (r.todayRecord.map (·.starts)).getD [] →
+      ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
+        ((r.todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) ++ [t.sec] →
+      ({ r with run := run' } : PlanReq).todayRecord.bind (·.arrival) = r.todayRecord.bind (·.arrival) →
+      ({ r with run := run' } : PlanReq).blocksDone = r.blocksDone →
+      ((dayPlan ({ r with state := { r.state with brk := none }, run := run' } : PlanReq)).segments.filter
+          (fun s => decide (r.now.sec ≤ s.val.start))) =
+        ((dayPlan r).segments.filter (fun s => decide (r.now.sec ≤ s.val.start))) := by
+  intro h
+  have he := h theBreakAcrossRequest loggedAcrossRun ⟨some ⟨(Cal.instantOf Cal.chicago 739867 780).sec, 0⟩, 5, some .seat⟩
+      ⟨(Cal.instantOf Cal.chicago 739867 780).sec, 0⟩ rfl rfl (by decide)
+      (fun a ha => by
+        have : (some heldBlock : Option ActiveBlock) = some a := ha
+        cases this; rfl)
+      (by decide) (by decide) (by decide) (by decide)
+  have hne : ((dayPlan theBreakAcrossTwin).segments.filter
+        (fun s => decide (theBreakAcrossRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.start, s.val.item)) ≠
+      ((dayPlan theBreakAcrossRequest).segments.filter
+        (fun s => decide (theBreakAcrossRequest.now.sec ≤ s.val.start))).map (fun s => (s.val.start, s.val.item)) := by
+    decide
+  exact hne (congrArg (List.map (fun s => (s.val.start, s.val.item))) he)
+
+
+set_option maxRecDepth 400000 in
+/-- **`Planner.PlanReq.notTheStart`, each clause fired, both directions** (D40; AGENTS §5.8): a held block is refused a
+start at `now` — an overrun break's release, whose end the user says (P45) — and at the calendar's last second, and is
+given its release, 13:50; a block no wall holds is refused any start after `now` (fork active_run's `free_from > now`)
+and given `now` itself.  On the requests the decoder builds the earlier refusals of `activeRun` (`interrupted`, the
+pause) answer the first and last clauses before this one is asked; these are the clauses read alone. -/
+theorem the_reservation_start_guard_fires :
+    theHeldRequest.notTheStart theHeldRequest.now.sec = true ∧
+    theHeldRequest.notTheStart (Cal.instantOf Cal.chicago 739867 830).sec = false ∧
+    theHeldRequest.notTheStart (LogStamp.yearEnd - 1) = true ∧
+    theReleasedRequest.notTheStart (theReleasedRequest.now.sec + 60) = true ∧
+    theReleasedRequest.notTheStart theReleasedRequest.now.sec = false := by
+  refine ⟨by decide, by decide, by decide, by decide, by decide⟩
 
 end PlannerWit
 end Tm

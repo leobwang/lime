@@ -1552,6 +1552,26 @@ pub fn now_annotation(seg: &Segment, now: DateTime<Tz>, running: Option<&Running
     )
 }
 
+/// **When a block a wall holds resumes** (README gap 5217, stage 6 W-49 track W,
+/// parity **P126**; the owner's D110, D117 and D114): the start of the row the
+/// kernel reserves for the running item `id` from the release of the wall (or
+/// the running break) that holds it paused — `Planner.PlanReq.activeRow` for a
+/// held block: a Block of the item with **no slot energy** (§8.2 choice 5b's
+/// reservation is not a slot; every row step 5 assigns carries its slot's
+/// energy, `Planner.assignedSeg`) that starts after `now` (the running block's
+/// reservation starts AT `now`; replayed rows end by it). `None` when no such
+/// row is planned — a block the user paused, an interruption, or a release past
+/// the day's limit. Asked by `tm now`'s header and the TUI's Now pane alike, one
+/// reading of the resume.
+pub fn resumes_at(plan: &DayPlan, now: DateTime<Tz>, id: &Id) -> Option<DateTime<Tz>> {
+    plan.segments
+        .iter()
+        .find(|s| {
+            s.kind == SegKind::Block && s.item.as_ref() == Some(id) && s.energy.is_none() && s.start > now
+        })
+        .map(|s| s.start)
+}
+
 /// **The positions `tm now` shows** (§13): the segment `now` is inside — the
 /// one the planner marked current, else the first unfinished one containing
 /// `now` — and the next three that have not started.

@@ -186,6 +186,9 @@ fn the_kernel_plans_every_generated_class_the_fork_planned() {
         t.day.underused_notes > 0 && t.notes_rendered == t.day.underused_notes,
         "every under-used note left to the renderer is rendered as the fork wrote it: {t:?}"
     );
+    // README gap 5217 (P126): a held day was compared by value, before the release and from it, and
+    // a break day's rows from the release too.
+    assert!(t.p126 > 0 && t.p126_before > 0 && t.p126_after > 0 && t.p126_breaks > 0, "no held day (P126) was compared: {t:?}");
 }
 
 /// **P81's frozen answer, and its rule, on one line** (W-43 track C, README gap 4248). A line
@@ -300,7 +303,7 @@ fn the_kernel_plans_every_frozen_batch_day_the_fork_planned() {
     );
     // The floors (AGENTS §9.2): the batch compares every departure the comparand carries on
     // at least one day, so none is asserted on nothing, and the comparison ran on every line.
-    assert_eq!(t.day.days + t.p45, lines.len(), "every batch line was compared: {t:?}");
+    assert_eq!(t.day.days + t.p45 + t.p126, lines.len(), "every batch line was compared: {t:?}");
     assert!(lines.len() >= forkclass::BATCH_DRAWS / 2, "the batch holds {} of {} draws", lines.len(), forkclass::BATCH_DRAWS);
     assert!(t.p45 > 0 && t.p45_after > 0, "no running break was compared in the batch: {t:?}");
     let p67_lines = lines.iter().filter(|l| !l["p67"].is_null()).count();
@@ -567,7 +570,7 @@ fn the_kernel_plans_every_frozen_model_day_the_fork_planned() {
     // The floors (AGENTS §9.2): every line was compared, every line carries a model file, and
     // the draws reached the days that read a model differently — a short night, a running break,
     // a day with no wake logged (README gap 4991), which is a primary line's world, unwoken.
-    assert_eq!(t.day.days + t.p45, lines.len(), "every learned-model line was compared: {t:?}");
+    assert_eq!(t.day.days + t.p45 + t.p126, lines.len(), "every learned-model line was compared: {t:?}");
     let primary: Vec<&Value> = lines.iter().filter(|l| l["secondary"].is_null()).collect();
     assert!(primary.len() >= forkclass::MODEL_DRAWS / 2, "the file holds {} of {} draws", primary.len(), forkclass::MODEL_DRAWS);
     let files = lines.iter().filter(|l| l["world"]["model"].is_string() && l["world"]["mult"].is_null()).count();

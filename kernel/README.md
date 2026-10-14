@@ -98516,3 +98516,178 @@ Capped (`scratchpad/w48/repair/acc-p2b-*.log`): `check.sh` seventeen lines, ever
 A first acceptance of this tree failed and was stopped (`acc-p2-*.log`): `log_replay.rs`'s round trip met the three new
 `DayReplay` fields and the week grid met `week draw 11`'s moved world — both answered above, in §4 — and `stack.rs`'s two
 day-record pins, moved with the FFI pins.
+
+<!-- =====================================================================
+     APPENDED 2026-10-13: stage 6 (the planner), run **W-49**, **track W** —
+     the remainder after a wall that holds the running block (README gap
+     5217; the owner's D110, D117 and D114).  Gaps 5280-5299 are this
+     track's; parity P126 (P123-P125 declared holes until the Land
+     renumbers); cheats 361-365.  Kept current with each commit.
+     ===================================================================== -->
+
+## Stage 6 — W-49 track W
+
+### 1. What changed, and why
+
+While a calendar wall held the running block paused — D61's pause at the wall's start, D110's at a block's start inside
+it, D117's at a resume inside it — or a break begun before the wall's end held it past the end (D114), §8.2 choice 5b
+reserved nothing: fork 4748911's active_run refuses a paused timer and a wall on `now`, so the block's remainder was
+drawn only where step 5 put it at its rank, or nowhere, and the day moved when the wall's `unpause` was logged (the
+W-48 recheck's `w1`: `start ^m2` 11:00, `tm --json plan` at 13:20 inside the 12:50–13:50 meeting showed no `^m2` after
+13:50; at 13:51 the log's `plan` line said `drift_min 110`).  D110's row says "the plan draws the remainder after the
+wall", and D77 says the day does not change at an instant it can foresee.  So:
+
+* `Planner.PlanReq.wallHold` reads the hold — `WallTimer.holdOf`, the walls form's own reading (`WallTimer.heldFor` is
+  `WallTimer.pausedFor` widened by D114's `breakHolds`; `WallTimer.blockMarks` is now the one reading of the open
+  block's marks that `WallTimer.answer` and the planner share) — asked only of the replay's open block, begun by `now`,
+  with no interruption running, and past the wall only while D114's break is within its planned length.
+* `Planner.PlanReq.activeRun` reserves a held block from the release — the start of the first free stretch after `now`,
+  which `WallTimer.before_the_first_free_stretch_is_blocked` shows is the end of what holds it — with its estimate and
+  block boundary read there (`PlanReq.activeStop`, `PlanReq.currentBlockEnd` now take the instant).  A release at or
+  before `now` (an overrun break) or past the calendar reserves nothing (`PlanReq.notTheStart`).
+* The held block's row carries no `▶` and no note (`PlanReq.activeRow`): it is not running at `now`.  `tm now` says
+  `· paused · resumes 13:50` and `--json` carries `active.resumes`; the TUI's Now pane names the block and the resume
+  (`tm_core::emit::resumes_at`, one reading of it).
+
+**Parity P126 taken**: a running block a calendar wall holds paused — D61's pause at the wall's start, D110's at a start inside it, D117's at a resume inside it — or that a break begun before the wall's end holds past it while the break is within its planned length (D114) is reserved from the release, the first free instant after `now`, its remaining minutes and its block boundary read there, and drawn there with no `▶` (`Planner.PlanReq.wallHold`, `Planner.PlanReq.activeRun`); `tm now` says when it resumes; fork 4748911's active_run refused a paused timer and a wall on `now`, so the remainder was drawn at its rank or not at all, and the day moved when the wall's `unpause` was logged (README gap 5217, W-49 track W)
+
+**Behaviour row** (P126), driven on this step's binary (`target/debug/tm`, `plan-basic` via `tm init --example`, woken
+07:00, arrived 08:00; `scratchpad/w49/w2/{d1,a2,b2}`), against the W-48 repair's record of `4aa44da` (§5 of that block):
+
+* *The recheck's `w1`* — `start ^m2` 11:00; at 13:20, inside the 12:50–13:50 meeting, `tm now` heads `▶ ^m2 Rollback
+  path passes tests · started 11:00 · 110m of 360m · paused · resumes 13:50` and `tm --json plan` draws `^m2` 11:00–12:50,
+  the wall 12:50–13:50 and `^m2` **13:50–14:00** (no mark); at 13:51 the log's `plan` line says `drift_min 0`.  Before:
+  no `^m2` after 13:50, and `drift_min 110` at 13:51.
+* *`a2`, started inside the wall* — `start ^t4` 13:00; at 13:49 `13:50 3 p3 Claude Code drafts tests @m2 1b` is the
+  reservation (it was 14:40, at its rank), `tm now` says `paused · resumes 13:50`; at 13:51 `13:50 … 1m so far`,
+  `13:51 ▶ … running · 59m left` and `drift_min 0` (was 70).
+* *`b2`, resumed inside the wall* — `start ^m2` 11:00, `interrupt` 12:00, `resume` 13:00; at 13:20 `13:50 4 p3 Rollback
+  path passes tests @O2 6b` (it was drawn nowhere and named nowhere), `resumes 13:50`; at 13:51 `drift_min 0`.
+
+Tests: `tm/tests/cli_wall_hold.rs` (five: D61's, D110's, D117's and D114's cases, and a typed pause that is NOT held),
+`tm/tests/tui_today_render.rs`' `the_now_pane_names_the_held_blocks_resume` (the TUI's Now pane, from a hand-built day),
+and the kernel's own witnesses in `PlannerWit.lean`'s W-49 block (`the_held_block_is_reserved_from_the_walls_end`,
+`nothing_drifts_when_the_wall_lets_the_block_go`, `the_break_that_holds_the_block_releases_it_at_its_end`,
+`an_overrun_break_that_holds_the_block_reserves_nothing`).
+
+### 2. Laws restated (D5: re-proved, each statement it breaks refuted as written beside it)
+
+| law | was | is | new ⇒ old? |
+|---|---|---|---|
+| `Planner.PlanReq.activeRun_spec` | `q.start = now`, `iv.1 ≤ now` | `q.start = iv.1`, `now ≤ q.start`, `held = false → q.start = now`, every second in `[now, q.start)` blocked, `held → now < q.start` | yes where `held = false`; refuted as written by `PlannerWit.the_reservation_starts_at_now_is_refuted` |
+| `Planner.the_reservation_row_is_exact` | row starts at `now` | row starts at `q.start`, at `now` where `held = false` | yes where `held = false`; refuted by `PlannerWit.the_reservation_row_starts_at_now_is_refuted` |
+| `Planner.PlanReq.mem_activeRow` | `current = true` | `current = !held` | yes where `held = false`; the held row's `current = false` is computed in `the_held_block_is_reserved_from_the_walls_end` |
+| `Planner.a_running_break_pauses_the_block` | a running break reserves nothing | `held = false → activeRun = none` | yes where `held = false`; refuted by `PlannerWit.a_running_break_pauses_the_block_as_w35_wrote_it_is_refuted` (D114's break) |
+| `PlanStable.nothing_is_reserved_while_the_block_is_paused`, `PlanStable.the_cut_does_not_change_when_an_overrun_break_is_logged`, `PlanStable.the_logged_twins_inputs`, `PlanStable.the_day_from_now_does_not_change_when_an_overrun_break_is_logged` | D77's overrun-break laws over every paused block | the same with `held = false` on both sides (`hheld`, `hheld'`) | yes on the class; the two D77 laws refuted as D77 wrote them by `PlannerWit.…_as_d77_wrote_it_is_refuted` over `a_twin_without_the_meetings_pause_loses_the_hold` (a twin whose log drops the meeting's pause loses the hold) — gap 5282 |
+| `PlanReq.activeStop_*`, `PlanReq.currentBlockEnd_within_a_block` | read at `now` | read at the reservation's start `t` | the old is the instance `t = now` |
+
+`Planner.PlanReq.activeRow_is_an_energyless_block` and every PlanCheck/PlanFold/PlanStable proof that read the old
+`activeRun_spec` are re-proved with their statements unchanged; `dayPlan` stays total (D28); D80's wind-down goal
+(`PlannerWit.plan_places_no_demanding_block_after_wind_down_on_every_request_the_decoder_accepts`) and the PlanCheck
+battery hold (`PlanStable.no_block_row_starts_at_or_after_a_wind_down_row_when_the_window_ends_by_the_night` reads the
+reservation's start through `the_reservation_starts_before_the_wind_down`).  Cheats 361–365 hold P126's clauses.
+
+### 3. The committed expectations it moves, each named (RULE M; D64(a) with D70's introduction, and D64(b))
+
+* `tm/tests/fixtures/fork-4748911-planner-classes.jsonl` — 16 lines gain `p126` (D70: adds only): `wall-on-now/{lounge,
+  home,late,travel,spent}` ×3 (the primary, `(window)` and `(d61)` worlds; travel and spent twice) and `break-block/late`
+  ×3 (primary, `(window)`, `(overrun)`).  `fork-4748911-planner-batch.jsonl` — 10 draws gain `p126` (7, 9, 19, 56, 60, 65,
+  79, 82, 91, 104).  `fork-4748911-planner-models.jsonl` — 10 lines (model draws 0, 15, 17, 32, 33, each with its
+  no-wake twin).  `fork-4748911-planner-p56.jsonl` — 9 draws (2, 14, 20, 24, 28, 67, 80, 118, 124;
+  `TM_P56_BLESS=1 TM_P56_BLESS_BECAUSE=126`).  `fork-4748911-planner-tui.jsonl` — `tui MeetingNow`
+  (`TM_TUI_BLESS=1 TM_TUI_BLESS_BECAUSE=P126`), and `tui_kernel_answers.rs`' bite on that line bends its `p126` rows with
+  its day (the lounge day stands in for both halves).  Every one by `TM_PLANNER_BLESS{,_BATCH,_MODELS}=1 TM_PLANNER_BLESS_BECAUSE=P126` (and the two above) over the oracle
+  built for this run (`scratchpad/w49/w/oracle`, fork 4748911); nothing else on any line moved (each diffed by key).
+  `p126` is fork 4748911's day asked AT the release with the block running again — its `unpause` logged there, a running
+  break ended and logged where the kernel's blocked list ends it, P46 re-read at the release — its rows from the release
+  and its what-ifs (`forkplan::after_hold`, `forkplan::held_release`, read off the world and the comparand's day, never
+  the kernel's).  `forkclass::compare_line` holds a held day to the comparand before the release and to `p126` from it
+  (`compare_held_day`, `p126_want`: the reservation row drawn with no `▶` and no note — P126's own clause), on a break day
+  splits the P45/P67 rows at the release, and holds the kernel's what-if to `p126.whatif`.
+* `tm/tests/fixtures/fork-4748911-week-grid.jsonl` — `midnight draw 7`, re-drawn under D64(b)
+  (`TM_GRID_BLESS=1 TM_GRID_BLESS_BECAUSE=126`, its dated `d64b` reason prepended): its steps' `tm plan` at 14:34 on
+  2026-09-07 runs inside a wall that holds `^m2`, so the `plan` line's hash moved (`e85ceca17e68e633` → `a68aaad30dfb744a`)
+  and `day/2026-09-07.md` (and its `.svg`) draws `15:15 3 p3 Claude Code drafts tests @m2 1b` — the reservation from the
+  wall's release — with the rows after it re-laid; the fork's own grid did not move.
+* `tm/tests/cli_resume_replan.rs` — the future halves of `tm resume`'s request before and after the append differ on one
+  class only: the append lets a wall hold the block (D117) where the request without the `resume` line did not; a day
+  whose wall held the block before the resume too (the meeting's own pause the last timer mark, the interruption begun
+  inside it — the seed `c5076185…` the predecessor's run drew, kept, D46) is held to equality as before.
+* `tm/tests/planner_invariants.rs` — the held reservation is the reservation the `▶` row is elsewhere (`is_held_reservation`).
+
+**Declared classes, by name, each counted:** (1) an under-used row's note left to the renderer, as before; (2) **a routine
+read from the clock** (`forkclass::p126_want`) — a routine row of the fork's day at the release that neither the fork's
+day at `now` nor its rows after a break place, where the kernel draws another routine over the same span: a routine's
+urgency is read from `now`, so the fork asked twenty-odd minutes or five hours later places a routine neither planner
+places at `now`.  It took **1** row (`break-block/late (window)`'s `xaa` at 21:10).  Gap 5280.
+
+### 4. Gaps
+
+**Gap 5280** (four-part).  1. *Not done*: P126's comparand is fork 4748911 asked at the release, so a row whose content
+the fork reads from the clock — a routine's window and hotness — can differ from the kernel's at `now` for a reason that
+is not the hold; one such row is taken by a declared class (§3) rather than compared.  2. *Why*: the fork cannot reserve a
+paused or wall-held block at `now` (it refuses both), so the only fork day that holds the reservation is one asked at the
+release.  3. *Cost*: on the routine rows of a held day that the fork places only at the release, the kernel is held to
+nothing but their span.  4. *Clears it*: a fork transformation that plans at `now` with a reservation injected at the
+release (a `ForkAsk` field the oracle does not have), or the owner ruling that a routine's urgency is read at the release
+on a held day.
+
+**Gap 5281**.  1. *Not done*: a held day's plan hash and diagnostics are not compared with the fork's
+(`compare_held_day` compares the date, window, budget, priorities and every row).  2. *Why*: the fork's hash and notes are
+of a day planned at another instant (§8.2's hash covers the rows from `now`).  3. *Cost*: a held day's `drift_min` and
+notes are pinned by `cli_wall_hold.rs` and the witnesses only.  4. *Clears it*: the transformation of gap 5280.
+
+**Gap 5282**.  1. *Not done*: D77's two overrun-break laws are proved where no wall holds the block on either side; no
+law relates a running day whose block a wall holds to a twin whose log keeps the same pause marks.  2. *Why*: nothing in
+the law's hypotheses ties the twin's marks to the running day's, and the twin that drops them is a counterexample
+(`a_twin_without_the_meetings_pause_loses_the_hold`).  3. *Cost*: the held class of an overrun break is covered by the
+witnesses and the frozen `break-block/late` lines, not by a law.  4. *Clears it*: a planner step that states the twin over
+the replay's open block (its marks equal on both sides).
+
+**Gap 5283**.  1. *Not done*: `cli_resume_replan`'s held class (`(None, Some(release))`) was drawn on **0** of 128 cases
+in this step's runs, so its wall-end assertion ran on nothing there.  2. *Why*: the generator rarely resumes inside a wall
+it has not already paused the block for.  3. *Cost*: that branch is held by `cli_wall_hold.rs`'s D117 case alone.
+4. *Clears it*: a generator bias for a resume inside a wall (`support/plangen.rs`).
+
+### 5. Mutations (D40), in a clone (`scratchpad/w49/w2/mclone`, `mutate.py --write`)
+
+23 definitions owed at the start (11 new or re-bodied library definitions, 11 `PlannerWit` fixtures, `PlanOnce.dayPlanFrom`
+re-bodied); every constant PINNED but one: `Planner.PlanReq.currentBlockEnd` (`0`, `1`, `t`), `PlanReq.activeStop`
+(`0`, `1`, `t`), `PlanReq.wallHold` (`default`, `none`), `PlanReq.held` (`true`, `false`), `PlanReq.activeRun`
+(`default`, `none`), `PlanReq.activeRow` (`default`, `[]`, re-verified at its moved pin site), `WallTimer.blockMarks`
+(`default`, `[]`), `WallTimer.answer` (`default`), `WallTimer.heldFor` (`default`, `fun _ => none`), `WallTimer.holdOf`
+(`default`, `none`); `PlanReq.notTheStart := true` PINNED.  **`PlanReq.notTheStart := false` came back ALONE** — only
+`activeRun_spec`'s proof told it from the constant, because on every request the decoder builds `activeRun`'s earlier
+refusals (`interrupted`, the pause) answer the non-held clause and a held block's release is always after `now`; the
+step wrote `PlannerWit.the_reservation_start_guard_fires` (each clause read alone, both directions) and the re-run pinned
+it there (`PlannerWit.lean:13576`).  `dayPlanFrom` and the eleven fixtures are UNFOLDABLE (no `Inhabited`), eight of the
+fixtures declared witness fixtures; `dayPlanFrom` is pinned by nothing, as its committed row already said.  158 min for
+the sweep, 16 min for the re-run, on a shared machine (load 4–9).  Check 9 then: 881 rostered, 0 owed.
+
+### 6. Acceptance, measured on this tree (capped; `scratchpad/w49/w2`)
+
+`check.sh` seventeen lines, every one `ok` (exit 0): the build; totality; the axiom audit, 6,729 theorems; `Negative.lean`
+rejected; the FFI target, 97 tests; corpus 29/37 files and 4/5 whole plans; stage goals 1 (stage 6); prose citations;
+check 9, 881 rostered, 0 owed; parity P1–P126 with three declared holes (P123–P125), next free P127; twins 0 UNANSWERED;
+reach 1,645 reachable, 1,097 exempt; the field, input, sent-key and written-key gates; 96 modules replayed.
+`cargo test --workspace --no-fail-fast`: **2,991 passed / 0 failed / 53 ignored over 167 result lines, three runs** on
+this tree (17m54s, 17m51s, 18m36s; load 3.0, 5.2, 6.1 at their starts), and two more on the tree before the D40 witness
+was added (same totals).  A first run on the predecessor's tree with this step's harness changes failed four tests — the
+P56 file's and three TUI-world tests, all frozen lines P126 moves — answered in §3 before the runs above.  FFI crate
+(`kernel/tm-kernel-ffi`, `cargo test`): 105 passed.
+
+### 7. brief_corrections
+
+* The handover's "now rewrite the D77 corner witness" was already done: the tree built (`PlannerWit`'s
+  `a_twin_without_the_meetings_pause_loses_the_hold` and the two `…_as_d77_wrote_it_is_refuted`).  What was owed was:
+  `Check.lean` auditing `Tm.Planner.before_the_first_free_stretch_is_blocked`, a name that had moved to `WallTimer`
+  (check 3 failed on it); the mutation roster (check 9 failed on a drifted pin and 23 owed rows); four frozen-comparand
+  files the predecessor had not re-blessed (classes, batch, models, week grid) and two its own runs never reached (P56,
+  TUI); and `cli_resume_replan`'s held-class assertion, which a seed it had drawn falsified (§3).
+* The brief's figures at `e289738` (axiom audit 6,705; reach 1,639 reachable) are that tree's; this tree's are §6.
+
+### 8. Owed, by name
+
+Gaps 5280–5283 (§4).  The §5.13 human drive of the TUI's Now pane over a live meeting (the pane is tested from a
+hand-built day, not driven through a pty in this step).  The Land renumbers P126 down over the holes P123–P125.
+`tm-core/src/emit.rs` (track P's file) carries one new function, `resumes_at`, and nothing else.

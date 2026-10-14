@@ -8804,3 +8804,34 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_block_open_after_a_break
 #print axioms Tm.PlannerWit.the_apart_replay_holds_with_a_break_running_after_a_done
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_break_running_after_a_done
+
+-- ===========================================================================
+-- APPENDED 2026-10-13: stage 6, run W-49, TRACK W — the remainder after a wall that holds the running block (README
+-- gap 5217, parity P126; the owner's D110, D117 and D114).  `activeRun_spec`, `mem_activeRow`,
+-- `activeRow_is_an_energyless_block`, `the_reservation_row_is_exact`, `a_running_break_pauses_the_block`, the D77
+-- overrun-break laws and the other restated theorems keep their audit lines above, under their names.
+-- ===========================================================================
+#print axioms Tm.WallTimer.heldFor_without_a_break
+#print axioms Tm.WallTimer.heldFor_spec
+#print axioms Tm.WallTimer.heldFor_started_le
+#print axioms Tm.WallTimer.holdOf_spec
+#print axioms Tm.Planner.PlanReq.held_started
+#print axioms Tm.WallTimer.before_the_first_free_stretch_is_blocked
+#print axioms Tm.Planner.PlanReq.a_held_reservation_reaches_at_most_one_block
+#print axioms Tm.Planner.PlanReq.no_slot_before_the_reservation
+#print axioms Tm.Planner.PlanReq.the_reservation_starts_before_the_wind_down
+#print axioms Tm.Planner.the_reservation_row_is_at_most_one_block
+#print axioms Tm.PlannerWit.heldRun_resumes_ok
+#print axioms Tm.PlannerWit.the_held_block_is_reserved_from_the_walls_end
+#print axioms Tm.PlannerWit.nothing_drifts_when_the_wall_lets_the_block_go
+#print axioms Tm.PlannerWit.the_break_that_holds_the_block_releases_it_at_its_end
+#print axioms Tm.PlannerWit.the_reservation_starts_at_now_is_refuted
+#print axioms Tm.PlannerWit.the_reservation_row_starts_at_now_is_refuted
+#print axioms Tm.PlannerWit.a_running_break_pauses_the_block_as_w35_wrote_it_is_refuted
+#print axioms Tm.PlannerWit.the_held_reservation_bound_fires
+#print axioms Tm.PlannerWit.loggedAcrossRun_resumes_ok
+#print axioms Tm.PlannerWit.a_twin_without_the_meetings_pause_loses_the_hold
+#print axioms Tm.PlannerWit.the_cut_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted
+#print axioms Tm.PlannerWit.the_day_from_now_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted
+#print axioms Tm.PlannerWit.an_overrun_break_that_holds_the_block_reserves_nothing
+#print axioms Tm.PlannerWit.the_reservation_start_guard_fires

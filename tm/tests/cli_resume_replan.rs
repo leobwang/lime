@@ -167,6 +167,9 @@ fn rows(d: &DayPlan, keep: impl Fn(&tm_core::dayplan::Segment) -> bool) -> Vec<S
         .collect()
 }
 
+/// Days on which the append let a wall hold the block (P126, README gap 5217).
+static CENSUS_HELD: Mutex<u64> = Mutex::new(0);
+
 /// `[interrupted days, days whose interruption began before now, days with a row before now beside the lost one]`.
 static CENSUS: Mutex<[u64; 3]> = Mutex::new([0; 3]);
 
@@ -216,7 +219,32 @@ proptest! {
         };
         let (before, now) = day(&w.log, &w.replay);
         let (after, _) = day(&post_log, &post_replay);
-        prop_assert_eq!(rows(&before, |s| s.start >= now), rows(&after, |s| s.start >= now), "the future halves");
+        // **P126 (README gap 5217): the resume can let a wall hold the block.**  A resume inside a calendar wall — or at
+        // its start — is paused from the resume until the wall ends (the owner's D117), and a block a wall holds is
+        // reserved from the wall's release: on such a day the request without the `resume` line (the interruption
+        // still open in the log, which holds the block with no release) reserves nothing, and the day after the
+        // append reserves the block's remainder from the end of a Wall row.  That is the one class on which the
+        // future halves differ, and it is asserted as such, by its rows, rather than left out.
+        let held = |d: &DayPlan| -> Option<DateTime<Tz>> {
+            let a = st.active.as_ref().filter(|a| a.paused)?;
+            d.segments
+                .iter()
+                .find(|s| s.kind == SegKind::Block && s.energy.is_none() && s.start > now && s.item.as_ref() == Some(&a.id))
+                .map(|s| s.start)
+        };
+        // A day whose wall held the block before the resume as well (the meeting's own pause the last timer mark,
+        // the interruption begun inside it) holds it after too, from the same release: the future halves are equal.
+        match (held(&before), held(&after)) {
+            (None, Some(release)) => {
+                prop_assert!(
+                    after.segments.iter().any(|s| s.kind == SegKind::Wall && s.end == release),
+                    "the held reservation starts where no wall ends: {:?}",
+                    rows(&after, |s| s.start >= now)
+                );
+                *CENSUS_HELD.lock().unwrap_or_else(|p| p.into_inner()) += 1;
+            }
+            _ => prop_assert_eq!(rows(&before, |s| s.start >= now), rows(&after, |s| s.start >= now), "the future halves"),
+        }
         let began = intr.at < now;
         let mut expected = match post_replay.open_block.as_ref().filter(|_| !began) {
             None => rows(&before, |s| s.end <= now),
@@ -268,8 +296,8 @@ proptest! {
         if r[0] == generated {
             eprintln!(
                 "cli_resume_replan census (gap 4046): {} interrupted days, {} whose interruption began before now ({} with \
-                 other rows in the past half beside it)",
-                r[0], r[1], r[2]
+                 other rows in the past half beside it); {} on which the append let a wall hold the block (P126)",
+                r[0], r[1], r[2], *CENSUS_HELD.lock().unwrap_or_else(|p| p.into_inner())
             );
             prop_assert!(r[1] * 2 > r[0], "fewer than half the days had an interruption that began before now: {r:?}");
             prop_assert!(r[2] > 0, "no day held a past half beside the interruption: {r:?}");

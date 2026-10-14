@@ -3372,4 +3372,47 @@ theorem aPlanWithoutAnInputClearsTheLatest :
       Replay.bE 2 63924372000 (.plan ['h','3'] 1 0 [])]).days.get 739865).map (·.late) = some [] := by
   decide
 
+/- ===========================================================================
+   APPENDED 2026-10-13: stage 6, run W-49, TRACK W — the remainder after a
+   wall that holds the running block (README gap 5217, parity P126; the
+   owner's D110, D117 and D114).  Cheats 361-365.
+   =========================================================================== -/
+
+/- CHEAT 361 — the held block's reservation claimed to start at `now`, as
+   §8.2 choice 5b's did until W-49: inside the meeting at 13:30 it starts at
+   the meeting's end, 13:50, and `decide` computes it. -/
+set_option maxRecDepth 400000 in
+theorem theHeldReservationStartsAtNow :
+    PlannerWit.theHeldRequest.activeRun.map (·.start) = some PlannerWit.theHeldRequest.now.sec := by
+  decide
+
+/- CHEAT 362 — the held block's row claimed `▶`: it is not running at
+   `now`, and `Planner.PlanReq.activeRow` gives it no `▶` and no note. -/
+set_option maxRecDepth 400000 in
+theorem theHeldRowIsCurrent :
+    PlannerWit.theHeldRequest.activeRow.map (·.flags.current) = [true] := by
+  decide
+
+/- CHEAT 363 — the meeting claimed to reserve nothing, as the fork's
+   active_run refuses a paused timer: the reservation is there. -/
+set_option maxRecDepth 400000 in
+theorem theHeldBlockIsReservedNowhere :
+    PlannerWit.theHeldRequest.activeRun = none := by
+  decide
+
+/- CHEAT 364 — D114's break claimed to reserve nothing (W-35's
+   `a_running_break_pauses_the_block` as written): the block it holds past
+   the meeting is reserved from the break's end. -/
+set_option maxRecDepth 400000 in
+theorem theBreakThatHoldsReservesNothing :
+    PlannerWit.theBreakHeldRequest.activeRun = none := by
+  decide
+
+/- CHEAT 365 — an overrun break that holds the block claimed to release it
+   at `now`: its end is the user's to say, and nothing is reserved. -/
+set_option maxRecDepth 400000 in
+theorem theOverrunBreakReleasesAtNow :
+    PlannerWit.theOverrunHeldRequest.activeRun.isSome = true := by
+  decide
+
 end Tm

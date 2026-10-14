@@ -1126,6 +1126,10 @@ def answerRows (z : Cal.Tz) (q : Req) (ob : Replay.OpenBlock) (spans : List ((Na
     | some x => spanJson z x
   pure (.obj [("marks".toList, .arr es), ("pausedFor".toList, pf)])
 
+/-- **The marks of the open block `ob`'s ledger days**, from its own (`Replay.OpenBlock.day`) to `d`, and first the
+interruption the replay holds open, when it began before the block (README gap 4619) — what `answer` reads the rule over
+and what the planner's hold reads (`holdOf`), one reading (AGENTS §5.3; README gap 5217). -/
+def blockMarks (f : Seal.Answer) (ob : Replay.OpenBlock) (d : Nat) : List Replay.IdleMark := (match f.openInterrupt.bind (·.start) with | some s => if s.1 < ob.started.1 then [Replay.IdleMark.interrupt s] else [] | none => []) ++ (List.range' ob.day (d + 1 - ob.day)).flatMap (fun x => (((f.days.find? fun r => r.day == x).bind (·.seam)).map (·.idleMarks)).getD [])
 /-- **What the walls write, answered** (gap 3139): nothing while no block is open in the replay;
 otherwise `writes` over the open block, its marks, the walls of the request's day and the day
 before (`spansOf`, gap 3334), the running
@@ -1149,11 +1153,7 @@ def answer (v : JVal) (zo : Option Cal.Tz) (facts : Option Seal.Answer)
   | none => pure (.obj [("marks".toList, .arr []), ("pausedFor".toList, .null)])
   | some ob =>
     let spans := spansOf (ixOf z b) d
-    let dm := fun x => (((f.days.find? fun r => r.day == x).bind (·.seam)).map (·.idleMarks)).getD []
-    let held := match f.openInterrupt.bind (·.start) with
-      | some s => if s.1 < ob.started.1 then [Replay.IdleMark.interrupt s] else []
-      | none => []
-    let marks := held ++ (List.range' ob.day (d + 1 - ob.day)).flatMap dm
+    let marks := blockMarks f ob d
     match intSpans marks with
     | [] => answerRows z q ob spans marks []
     | i :: is => answerRows z q ob spans marks (i :: is)
@@ -1412,6 +1412,106 @@ theorem a_block_resumed_inside_a_wall_is_paused_from_its_resume_run :
     writes (⟨500, 0⟩ : Cal.Instant) (⟨2500, 0⟩ : Cal.Instant) none [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .interrupt ((⟨1200, 0⟩, Cal.Offset.utc) : Replay.At),
       .resume ((⟨1300, 0⟩, Cal.Offset.utc) : Replay.At)] [(1000, 2000)] = [(false, 1000, 2000)] := by
   decide
+
+/-! ## The hold a plan reserves after (README gap 5217, stage 6 W-49 track W) -/
+
+/-- **The span that HOLDS the running block, with when it lets go** (README gap 5217, stage 6 W-49 track W): `pausedFor`'s
+reading — the first joined span whose pause, at its pause second (`pauseSec`), is the last word on the timer, from that
+second on — widened by the owner's **D114**: past the span's end too while a break running since before that end
+(`breakHolds`) holds the block, the wall's `unpause` not yet written.  What the planner reserves the block's remainder
+after (`Planner.PlanReq.wallHold`): a block so held resumes by itself, at the wall's end or the break's, with no keystroke
+— unlike a pause the user typed or an interruption, which end when the user says.  Written by recursion, as `pausedFor`
+is (README gap 3333), and equal to it with no break running (`heldFor_without_a_break`). -/
+def heldFor (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (now : Cal.Instant)
+    (brk : Option Cal.Instant) (marks : List Replay.IdleMark) :
+    List ((Nat × Nat) × List Id) → Option ((Nat × Nat) × List Id)
+  | [] => none
+  | x :: xs =>
+    if (lastIsPauseAt marks ⟨pauseSec started ints x.1, 0⟩ &&
+        decide ((⟨pauseSec started ints x.1, 0⟩ : Cal.Instant) ≤ now) &&
+        (decide (now < ⟨x.1.2, 0⟩) || breakHolds brk x.1.2)) = true then some x
+    else heldFor started ints now brk marks xs
+
+/-- **With no break running, what holds the block is the meeting it is paused for**: `heldFor` is `pausedFor`. -/
+theorem heldFor_without_a_break (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (now : Cal.Instant)
+    (marks : List Replay.IdleMark) (spans : List ((Nat × Nat) × List Id)) :
+    heldFor started ints now none marks spans = pausedFor started ints now marks spans := by
+  induction spans with
+  | nil => rfl
+  | cons x xs ih => simp only [heldFor, pausedFor, breakHolds, Bool.or_false, ih]
+
+/-- **What `heldFor` names holds the block, now**: one of the spans, its pause the last timer mark, `now` at or after
+its pause second, and either inside it or past its end under a break running since before that end (D114). -/
+theorem heldFor_spec (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (now : Cal.Instant)
+    (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (spans : List ((Nat × Nat) × List Id))
+    (x : (Nat × Nat) × List Id) (h : heldFor started ints now brk marks spans = some x) :
+    x ∈ spans ∧ lastIsPauseAt marks ⟨pauseSec started ints x.1, 0⟩ = true ∧
+      (⟨pauseSec started ints x.1, 0⟩ : Cal.Instant) ≤ now ∧
+      (now < ⟨x.1.2, 0⟩ ∨ breakHolds brk x.1.2 = true) := by
+  induction spans with
+  | nil => simp [heldFor] at h
+  | cons y ys ih =>
+    unfold heldFor at h
+    split at h
+    · rename_i hc
+      have he := Option.some.inj h
+      subst he
+      simp only [Bool.and_eq_true, Bool.or_eq_true, decide_eq_true_eq] at hc
+      exact ⟨List.mem_cons_self .., hc.1.1, hc.1.2, hc.2⟩
+    · obtain ⟨hm, h1, h2, h3⟩ := ih h
+      exact ⟨List.mem_cons_of_mem _ hm, h1, h2, h3⟩
+
+/-- **A held block began at or before `now`**: its pause second is never before its start (`pauseSec_ge`). -/
+theorem heldFor_started_le (started : Cal.Instant) (ints : List (Cal.Instant × Cal.Instant)) (now : Cal.Instant)
+    (brk : Option Cal.Instant) (marks : List Replay.IdleMark) (spans : List ((Nat × Nat) × List Id))
+    (x : (Nat × Nat) × List Id) (h : heldFor started ints now brk marks spans = some x) : started ≤ now := by
+  have h2 := (heldFor_spec started ints now brk marks spans x h).2.2.1
+  have h3 := (pauseSec_ge started ints x.1).2
+  rw [Cal.Instant.le_iff] at h2 h3 ⊢; simp only at h2 h3 ⊢; omega
+
+/-- **What holds the open block at `now`** (README gap 5217, W-49 track W): `heldFor` over the marks of the block's
+ledger days as the LOG holds them (`blockMarks`) and the joined spans `spans`, under the running break `brk`.  `none`
+with no open block.  The log is where the hold is: the walls form writes D61's, D110's and D117's marks before any plan
+is asked of the day — the CLI's housekeeping appends them, and the TUI holds them in memory and hands them over in the
+request's log (`Ctx::log_now`, the owner's D96) — so the planner (`Planner.PlanReq.wallHold`) reads the hold off the
+log the request carries and never writes a mark of its own. -/
+def holdOf (f : Seal.Answer) (spans : List ((Nat × Nat) × List Id)) (d : Nat) (now : Cal.Instant)
+    (brk : Option Cal.Instant) : Option ((Nat × Nat) × List Id) :=
+  match f.openBlock with
+  | none => none
+  | some ob => heldFor ob.started.1 (intSpans (blockMarks f ob d)) now brk (blockMarks f ob d) spans
+
+/-- **What `holdOf` names holds the open block**: the replay holds a block open, the span is one of `spans`, the
+block began at or before `now`, and `now` is inside the span or past it under a break running since before its end. -/
+theorem holdOf_spec (f : Seal.Answer) (spans : List ((Nat × Nat) × List Id)) (d : Nat) (now : Cal.Instant)
+    (brk : Option Cal.Instant) (x : (Nat × Nat) × List Id) (h : holdOf f spans d now brk = some x) :
+    ∃ ob, f.openBlock = some ob ∧ x ∈ spans ∧ ob.started.1 ≤ now ∧
+      (now < ⟨x.1.2, 0⟩ ∨ breakHolds brk x.1.2 = true) := by
+  unfold holdOf at h
+  split at h
+  · simp at h
+  · rename_i ob hob
+    have hs := heldFor_spec _ _ _ _ _ _ x h
+    exact ⟨ob, hob, hs.1, heldFor_started_le _ _ _ _ _ _ x h, hs.2.2.2⟩
+
+/-- **Before the first free stretch everything is blocked** — the head of `Look.freeIntervals` starts at the first
+free second at or after `lo`: every second from `lo` up to it is covered by a blocked span.  What a held block's
+reservation starts after (README gap 5217): the wall, or the break, that holds it — nothing is placed in between. -/
+theorem before_the_first_free_stretch_is_blocked (lo hi : Nat) (ws : List (Nat × Nat)) (iv : Nat × Nat)
+    (rest : List (Nat × Nat)) (h : Look.freeIntervals lo hi ws = iv :: rest) (t : Nat) (h1 : lo ≤ t)
+    (h2 : t < iv.1) : ∃ w ∈ ws, w.1 ≤ t ∧ t < w.2 := by
+  have hmem : iv ∈ Look.freeIntervals lo hi ws := by rw [h]; exact List.mem_cons_self ..
+  have hw := Look.freeIntervals_inside_the_window hmem
+  have hord := Look.freeIntervals_are_in_order lo hi ws
+  rw [h] at hord
+  have hrest := (List.pairwise_cons.1 hord).1
+  refine Classical.byContradiction fun hno => ?_
+  have hfree : ∀ w ∈ ws, ¬ (w.1 ≤ t ∧ t < w.2) := fun w hw' hc => hno ⟨w, hw', hc⟩
+  obtain ⟨iv', hiv', ha, hb⟩ := (Look.freeIntervals_are_the_free_units lo hi ws t).2 ⟨h1, by omega, hfree⟩
+  rw [h] at hiv'
+  rcases List.mem_cons.1 hiv' with he | hr
+  · subst he; omega
+  · have := hrest iv' hr; omega
 
 end WallTimer
 end Tm

@@ -380,21 +380,33 @@ theorem nothing_fits_before_on_an_unassigned_day (r : PlanReq)
 /-- **§8.2 choice 5b's reservation is a work row of the day starting at `now` — `now` on the
 rows' own clock, `Planner.clampSec`, the one `Planner.segOf` draws every row on — and it names the
 running item.**  The row `PlanCheck.budgetLeft` counts against the budget, whatever else the day
-holds, and with no bound on `now`: the reservation starts where the planner's clock says `now` is. -/
+holds, and with no bound on `now`: the reservation starts where the planner's clock says `now` is.
+**Restated at W-49 track W** (README gap 5217): it starts at the reservation's own start, on the rows' clock — `now`
+unless a wall holds the block, then the release, never before `now`. -/
 theorem the_reservation_row_is_a_work_row_of_the_day (r : PlanReq) (q : ActiveRes)
     (hq : r.activeRun = some q) :
-    ∃ s ∈ (dayPlan r).segments, s.val.kind.isWork = true ∧ s.val.start = clampSec r.now.sec ∧
+    ∃ s ∈ (dayPlan r).segments, s.val.kind.isWork = true ∧ s.val.start = clampSec q.start ∧
+      clampSec r.now.sec ≤ s.val.start ∧ (r.held = false → s.val.start = clampSec r.now.sec) ∧
       s.val.item = r.state.activeId := by
   obtain ⟨t, ht⟩ : ∃ t, t ∈ reservationSegs r := by
     unfold reservationSegs PlanReq.activeRow
     rw [hq]
     exact ⟨_, List.mem_singleton_self _⟩
-  refine ⟨segOf t, ?_, ?_, ?_, ?_⟩
+  obtain ⟨q', hq', hst, -⟩ := r.mem_activeRow t ht
+  rw [hq] at hq'
+  cases Option.some.inj hq'
+  refine ⟨segOf t, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [dayPlan_segments]
     exact mem_dayRows_of_mem (by simp [ht])
   · rw [segOf_kind, reservationSegs_are_blocks r t ht]; rfl
-  · show clampSec t.start = clampSec r.now.sec
-    rw [(r.activeRow_is_an_energyless_block t ht).2.2.2.2]
+  · show clampSec t.start = clampSec q.start
+    rw [hst]
+  · show clampSec r.now.sec ≤ clampSec t.start
+    have := (r.activeRow_is_an_energyless_block t ht).2.2.2.2.1
+    unfold clampSec; omega
+  · intro hh
+    show clampSec t.start = clampSec r.now.sec
+    rw [(r.activeRow_is_an_energyless_block t ht).2.2.2.2.2 hh]
   · rw [segOf_item]; exact (r.activeRow_is_an_energyless_block t ht).2.2.2.1
 
 
@@ -763,10 +775,10 @@ theorem the_day_holds_every_block_the_walk_spent (r : PlanReq) :
     have hall : ∀ t ∈ reservationSegs r, ((fun s : WfSeg => s.val.kind.isWork &&
         decide (clampSec r.now.sec ≤ s.val.start)) ∘ segOf) t = true := by
       intro t ht
-      obtain ⟨hk, -, -, -, hst⟩ := r.activeRow_is_an_energyless_block t ht
+      obtain ⟨hk, -, -, -, hst, -⟩ := r.activeRow_is_an_energyless_block t ht
       simp only [Function.comp, segOf_kind, hk, SegKind.isWork, Bool.true_and, decide_eq_true_eq]
       show clampSec r.now.sec ≤ clampSec t.start
-      rw [hst]; exact Nat.le_refl _
+      exact clampSec_mono hst
     rw [List.countP_eq_length.2 hall]
     unfold reservationSegs PlanReq.activeRow PlanReq.activeSeed
     cases r.activeRun <;> rfl
@@ -2288,13 +2300,16 @@ theorem plan_tail_drop (r r' : PlanReq)
         exact rowLe_of_start_lt lt mt (by omega)
       · obtain ⟨lt, hlt, rfl⟩ := List.mem_map.1 hl
         obtain ⟨q, hq, hst, -, -, -, -, -⟩ := r.mem_activeRow lt hlt
-        obtain ⟨-, -, -, -, hs0, hlt0, -⟩ := r.activeRun_spec q hq
+        obtain ⟨-, -, -, -, -, hlt0, -⟩ := r.activeRun_spec q hq
         have hsl' : s ∈ r.todaySlots := r.energised_slot_is_a_slot (List.mem_of_getElem? hjs)
         have hne := r.a_slot_is_not_empty s hsl'
         have hfree := r.no_slot_touches_the_running_block q hq s hsl' (t := s.start)
           (Nat.le_refl _) hne
+        -- a held block's reservation starts after what holds it, where no slot is (README gap 5217)
+        have hbefore := r.no_slot_before_the_reservation q hq s hsl' (t := s.start) (Nat.le_refl _) hne
         apply rowLe_of_start_lt
         rw [hst, hms]
+        rw [hms] at hnow
         omega
     · obtain ⟨lt, hlt, rfl⟩ := List.mem_map.1 hl
       obtain ⟨i, e', s', hik, his, hls⟩ := htake_start lt hlt
@@ -2533,7 +2548,7 @@ theorem a_planned_row_starts_at_or_after_now (r : PlanReq) (t : Seg)
           show r.now.sec ≤ min (max r.bedSec r.now.sec) r.dayEnd
           omega
         · simp at ht
-  · exact Nat.le_of_eq (r.activeRow_is_an_energyless_block t ht).2.2.2.2.symm
+  · exact (r.activeRow_is_an_energyless_block t ht).2.2.2.2.1
   · exact r.an_assigned_row_starts_at_or_after_now t ht
   · obtain ⟨b, hb, hst, -⟩ := r.mem_keptBreakRows t ht
     rw [hst]; exact (r.a_kept_break_is_after_now b hb).1

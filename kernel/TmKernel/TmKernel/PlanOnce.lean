@@ -336,8 +336,9 @@ def dayPlanFrom (r : PlanReq) (m : Memo) (df : List Placed × Assign) : DayPlan 
     | none => []
     | some q =>
       [{ start := q.start, stop := q.stop, kind := .block, energy := none, item := some q.id,
-         inst := none, flags := { SegFlags.none with current := true },
-         planned := some q.leftMin, mult := r.candMult q.id, note := some (.runningLeft q.leftMin) }]
+         inst := none, flags := { SegFlags.none with current := !r.held },
+         planned := some q.leftMin, mult := r.candMult q.id,
+         note := if r.held then none else some (.runningLeft q.leftMin) }]
   -- `PlanReq.assignedRows`
   let assignedSegs : List Seg := (m.es.zip fa.slotOf).filterMap (fun p =>
     match p.2 with

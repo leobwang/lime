@@ -269,6 +269,15 @@ pub fn now_lines(app: &App, width: usize) -> Vec<Line<'static>> {
             if app.state.active.as_ref().is_some_and(|a| a.paused && seg.item.as_ref() == Some(&a.id)) {
                 second.push_str(" · paused");
             }
+            // **And a wall that holds the paused block says when it lets go** (README gap 5217,
+            // parity P126): with the meeting the head, the block's remainder is reserved from its
+            // end, and the pane names the block and the resume, as `tm now`'s header does
+            // (`emit::resumes_at`, one reading of it).
+            if let Some(a) = app.state.active.as_ref().filter(|a| a.paused && seg.item.as_ref() != Some(&a.id)) {
+                if let Some(t) = emit::resumes_at(&app.plan, app.now, &a.id) {
+                    second.push_str(&format!(" · {} resumes {}", a.id.token(), t.format("%H:%M")));
+                }
+            }
             out.push(Line::from(emit::clip(&second, width)));
         }
         None => out.push(Line::from(Span::styled(
