@@ -6252,7 +6252,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.EmitWire.rowJson_is_the_nine_cells_in_order
 #print axioms Tm.EmitWire.rowsJson_length
 #print axioms Tm.EmitWire.rowsOfReq_eq
-#print axioms Tm.EmitWire.readSegs_refuses_past_the_cap
 #print axioms Tm.EmitWire.readPrios_refuses_past_the_cap
 #print axioms Tm.EmitWire.readSegs_of_nil
 #print axioms Tm.EmitWire.readPrios_of_nil
@@ -8804,3 +8803,25 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_block_open_after_a_break
 #print axioms Tm.PlannerWit.the_apart_replay_holds_with_a_break_running_after_a_done
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_break_running_after_a_done
+
+/- ===========================================================================
+   APPENDED 2026-10-13: stage 6, run W-49, TRACK P — the planner's rows in one
+   call, at every length (the owner's D123 and D124; README gaps 5212 and 5130).
+   EmitWire.readSegs_refuses_past_the_cap is DELETED (D123 widened the reader
+   to the planner's day) and its negation is audited below.
+   =========================================================================== -/
+#print axioms Tm.EmitWire.readSegs_reads_every_list_whose_segments_read
+#print axioms Tm.EmitWire.readSeg_reads_a_rest_at_every_position
+#print axioms Tm.EmitWire.readSegs_refuses_past_the_cap_is_refuted
+#print axioms Tm.EmitWire.readSegs_reads_a_rest_and_refuses_a_record_without_a_start
+#print axioms Tm.EmitWire.answersRows_of_an_answer_without_rows
+#print axioms Tm.EmitWire.RowReq.ofDay_is_the_days_own
+#print axioms Tm.EmitWire.the_planned_days_rows_are_rowsOf
+#print axioms Tm.EmitWire.dayRowsPairs_is_the_rows_then_the_days_divider
+#print axioms Tm.EmitWire.dayRowsPairs_rows_length
+#print axioms Tm.EmitWire.the_door_writes_the_one_calls_pairs
+#print axioms Tm.EmitWire.answersRows_withPlan
+#print axioms Tm.EmitWire.answersRows_without_a_plan_key
+#print axioms Tm.PlanWire.runPlanner_answers_the_days_rows
+#print axioms Tm.PlanWire.runPlanner_refuses_a_plan_section_beside_it
+#print axioms Tm.PlanWire.planWithPlanner_spells_itself

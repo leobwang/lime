@@ -3372,4 +3372,25 @@ theorem aPlanWithoutAnInputClearsTheLatest :
       Replay.bE 2 63924372000 (.plan ['h','3'] 1 0 [])]).days.get 739865).map (·.late) = some [] := by
   decide
 
+/- ===========================================================================
+   APPENDED 2026-10-13: stage 6, run W-49, TRACK P — the planner's rows in one
+   call, at every length (the owner's D123 and D124; README gaps 5212 and 5130).
+   Cheats 331-332.
+   =========================================================================== -/
+
+/- CHEAT 331 — a planned day's answer claimed to carry its rows and no
+   divider, so the budget and the window's end would have to cross the wire a
+   second time (gap 5132): `EmitWire.dayRowsPairs` is the rows AND the day's own
+   divider, two pairs, and `rfl` cannot make two one. -/
+theorem aPlannedDaysRowsCarryNoDivider (r : Planner.PlanReq) (d : Planner.DayPlan) :
+    (EmitWire.dayRowsPairs r d).length = 1 := by
+  rfl
+
+/- CHEAT 332 — a day the planner answers claimed to fit under the old row cap
+   (`Planner.maxCands`), the bound D123 removed from the reader: the planner's
+   day has no segment bound (D28), so nothing proves it, and `omega` fails. -/
+theorem aPlannedDayFitsUnderTheOldRowCap (r : Planner.PlanReq) (d : Planner.DayPlan) :
+    (EmitWire.RowReq.ofDay r d).segs.length ≤ Planner.maxCands := by
+  omega
+
 end Tm

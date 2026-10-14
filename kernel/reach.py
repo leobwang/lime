@@ -737,10 +737,13 @@ def main(argv):
         for k, (reason, lineno) in sorted(classes.items()):
             spelled = k.replace("proof:", "proof ") if k.startswith("proof:") else "unsent " + k
             if k not in prev_classes:
-                bad.append("RATCHET: %s:%d  `CLASS %s` is a NEW class line, held by no "
-                           "line at HEAD -- this file may only SHRINK (D51), and a class "
-                           "answers every definition behind it (README gaps 3953 and "
-                           "4043)" % (EXEMPT_FILE.name, lineno, spelled))
+                # Growth the owner granted by name (`ratchet.GRANTS`; the owner's D124 for
+                # `CLASS unsent plan`), the line citing the granting decision, is not growth.
+                if not ratchet.granted(EXEMPT_FILE, "CLASS " + k, reason):
+                    bad.append("RATCHET: %s:%d  `CLASS %s` is a NEW class line, held by no "
+                               "line at HEAD -- this file may only SHRINK (D51), and a class "
+                               "answers every definition behind it (README gaps 3953 and "
+                               "4043)" % (EXEMPT_FILE.name, lineno, spelled))
             elif reason != prev_classes[k][0] and not SECTION_DATE.search(reason):
                 bad.append("RATCHET: %s:%d  `CLASS %s`'s reason has been "
                            "REWRITTEN and carries no ISO date (gap 2411's rule)"

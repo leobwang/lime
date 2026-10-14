@@ -7,10 +7,10 @@
 //! returns `String`s and geometry. No I/O, no clock — `now` and `wake` are
 //! parameters (§17.2).
 //!
-//! **A row's cells are the kernel's** (the owner's **D112**, W-47): the binary
-//! hands the day the kernel planned back through the `plan` section and gets
-//! §4.3's nine cells for each segment ([`DayPlan::cells`]; `Emit.rowOf` over the
-//! wire, `planwire::read_rows` the one decoder). This module PADS them
+//! **A row's cells are the kernel's** (the owner's **D112**, W-47): the kernel
+//! answers §4.3's nine cells for each segment of the day it planned, in the
+//! planner call itself since the owner's D124 (W-49 track P) ([`DayPlan::cells`];
+//! `Emit.rowOf` over the wire, `planwire::read_plan` the one decoder). This module PADS them
 //! ([`render_row`]) and selects among them; it builds none. The Rust builder of
 //! the same cells — a row-cell function and the eight cell functions it called —
 //! was deleted at W-47: the second implementation of one concept D30 Q6 (a)
@@ -630,9 +630,9 @@ pub fn render_plan_section(plan: &DayPlan, now: DateTime<Tz>) -> (String, String
 ///
 /// **Since the owner's D112 (W-47) these are the KERNEL's rows**: `rows[i]` is
 /// [`render_row`] of `plan.cells[i]`, the cells `Emit.rowOf` wrote for
-/// `plan.segments[i]` when the binary handed the day it planned back through
-/// the `plan` section (`planwire::rows_request`, `planwire::read_rows`, which
-/// refuses an answer that is not one row per segment). There is no Rust builder
+/// `plan.segments[i]` in the planner's own answer (the owner's D124, W-49 track P:
+/// `planwire::read_plan`, which refuses an answer that is not one row per
+/// segment). There is no Rust builder
 /// of a cell; this padder is the only Rust that touches one — D30 Q6 (a), "the
 /// kernel emits cells; one Rust function pads".
 ///

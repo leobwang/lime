@@ -36,9 +36,10 @@ so — three of the section's `Id`s reached the kernel with no bound at all, two
 W-25 track A closed**.  None of the three declares a number of its own: `CapWire.maxCandId`,
 `CapWire.maxRemaining` and `Cal.Instant.wf` are all older than this module, and
 `u32Within_is_the_logs_u32_width` and `secWithin_is_the_clause_Seg_wf_puts_on_a_stop` are the
-two "not a second bound" claims stated as theorems instead of as prose.  The segments' bound is
-`Planner.Capped` — **the wire's own candidate cap**.  (`CapWire.maxCandidates` is the same
-number under a second name, which is README gap **1330**, found here and not fixed here.) the priorities go through `Priority.yesterdayOf?` (the one reader of a
+two "not a second bound" claims stated as theorems instead of as prose.  The segments' bound was
+`Planner.Capped` — **the wire's own candidate cap** — until W-49 track P, and is now the planner's day's own: none (the
+owner's D123, `readSegs`).  (`CapWire.maxCandidates` is the same number as `Planner.maxCands` under a second name, which
+is README gap **1330**, found here and not fixed here.) the priorities go through `Priority.yesterdayOf?` (the one reader of a
 stored `p`), the multiplier through `CapWire.multiplierOfWire` (the one bounded-rational
 reader, `boundedPair` at the multiplier's constants), the batch through `Planner.mkBatch?`, the
 energy through `levelOf?`, the clock through `Field.parseClock`, `blockMin` through the
@@ -54,7 +55,7 @@ says it cannot turn an answer into a refusal.
 | wire value | bound | constructor | rejection theorem |
 |---|---|---|---|
 | a segment | `Seg.wf` — forwards, and inside the calendar | `Planner.mkSeg?` | `readSeg_refuses_an_inverted_segment`, `readSeg_refuses_past_the_horizon` |
-| the segment list | `Planner.maxCands` | `Planner.Capped.ofList?` | `readSegs_refuses_past_the_cap` |
+| the segment list | none of its own: `Planner.DayPlan.segments`' type, the planner's day (the owner's D123, W-49 track P) | — | `readSegs_refuses_past_the_cap_is_refuted`, `readSegs_reads_every_list_whose_segments_read` |
 | a batch's members, in number | `Planner.maxBatch` | `Planner.mkBatch?` | `readKind_refuses_a_batch_past_the_cap` |
 | a batch member's own id | `CapWire.maxCandId` | `idWithin` | `readKind_refuses_a_long_batch_member` |
 | a segment's `item` | `CapWire.maxCandId` | `idWithin` | `readSeg_refuses_a_long_item` |
@@ -126,8 +127,6 @@ inductive RowRefusal
   | blockMinAbsent
   /-- A key of the section itself. -/
   | bad (k : RowKey)
-  /-- More segments than the wire's own candidate cap. -/
-  | tooManySegments
   /-- More priorities than the wire's own candidate cap. -/
   | tooManyPriorities
   /-- The priority record at this position. -/
@@ -145,7 +144,6 @@ def RowRefusal.text : RowRefusal → String
   | .tzAbsent => "tzAbsent"
   | .blockMinAbsent => "blockMinAbsent"
   | .bad k => "bad " ++ k.name
-  | .tooManySegments => "tooManySegments"
   | .tooManyPriorities => "tooManyPriorities"
   | .badPriority i => "badPriority " ++ String.ofList (digitsOf i)
   | .badSegment i k => "badSegment " ++ String.ofList (digitsOf i) ++ " " ++ k.name
@@ -428,17 +426,14 @@ def readSeg (i : Nat) (v : JVal) : Except RowRefusal WfSeg := do
   | .ok s => pure s
   | .error e => throw (.segmentRefused i e)
 
-/-- The segments, read at their positions, refused past the wire's own cap **before** the map
-runs (D9-21: the length is measured once and the list is never walked twice). -/
-def readSegs (xs : List JVal) : Except RowRefusal (Capped WfSeg) :=
-  if Planner.maxCands < xs.length then .error .tooManySegments
-  else
-    match xs.zipIdx.mapM (fun p => readSeg p.2 p.1) with
-    | .error e => .error e
-    | .ok ss =>
-      match Capped.ofList? ss with
-      | some c => .ok c
-      | none => .error .tooManySegments
+/-- The segments, read at their positions — **at every length the planner's day can have** (the owner's D123, W-49
+track P, README gap 5212).  Until W-49 this refused past `Planner.maxCands`, a CANDIDATE count D48 reused, while
+`Planner.dayPlan`'s segment list has no bound at all (D28: the day is total and is never refused): a block open across
+600 or more pause pairs planned a day of more than 1,024 rows that this reader refused, and every planning verb with it.
+The one bound on a day's rows is the planner's own, `Planner.DayPlan.segments`' type, which is this reader's result type
+(`RowReq.ofDay` builds a request from ANY day the planner answers).  A segment is still refused by its own record. -/
+def readSegs (xs : List JVal) : Except RowRefusal (List WfSeg) :=
+  xs.zipIdx.mapM (fun p => readSeg p.2 p.1)
 
 /-- One `{"id": …, "p": …}` pair, the `p` through the one reader of a stored priority. -/
 def readPrio (i : Nat) (v : JVal) : Except RowRefusal (Id × Fin 8) :=
@@ -472,7 +467,8 @@ def readPrios (xs : List JVal) : Except RowRefusal (Capped (Id × Fin 8)) :=
 structure RowReq where
   bed   : Field.Clock
   prios : Capped (Id × Fin 8)
-  segs  : Capped WfSeg
+  /-- The day's segments, at any length (D123): `Planner.DayPlan.segments`' own type. -/
+  segs  : List WfSeg
   /-- **The day's budget in blocks and its window's end** (absolute seconds), both or neither (W-48 track R, README
   gaps 5031 and 1301): with them the section answers the `window ends` divider (`Emit.divider`) beside the rows.  The
   budget is the planner's — the binary sends back the planner answer's own `budgetBlocks` and `window.hi`, as it sends
@@ -507,7 +503,7 @@ def readRowSection (sec : JVal) : Except RowRefusal RowReq := do
 /-- **The rows this call answers** — `Emit.rowOf` over the segments the host sent, against the kernel's **own** loaded
 plan, a HOT row told on the request's `now` (the planned day, D112) when it carries one.  The caller `Emit.lean` lacked. -/
 def rowsOfReq (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) (now : Option Nat := none) : List Row :=
-  q.segs.val.map (fun s => match now with | some d => Emit.rowOf p z bm q.bed q.prios.val s.val d | none => Emit.rowOf p z bm q.bed q.prios.val s.val)
+  q.segs.map (fun s => match now with | some d => Emit.rowOf p z bm q.bed q.prios.val s.val d | none => Emit.rowOf p z bm q.bed q.prios.val s.val)
 
 /-- A batch row's members, whole, for the Rust fitter — `Emit.batchNames`, the one reader of
 them (`Emit.batchTitle_is_the_frame_over_batchNames`).  Every other kind answers `[]`. -/
@@ -534,7 +530,7 @@ It goes through `rowsOfReq` rather than mapping `Emit.rowOf` again: the day's ro
 definition and this is its serializer.  The `zip` is what lets `rowJson` reach the segment as
 well as the row, which it needs for the batch members only. -/
 def rowsJson (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) (now : Option Nat := none) : JVal :=
-  .arr ((q.segs.val.zip (rowsOfReq p z bm q now)).map (fun sr => rowJson p sr.1.val sr.2))
+  .arr ((q.segs.zip (rowsOfReq p z bm q now)).map (fun sr => rowJson p sr.1.val sr.2))
 
 /-- The nine keys, in `Row.cells`' order. -/
 def rowKeys : List (List Char) :=
@@ -554,7 +550,7 @@ def dividerPairs (z : Cal.Tz) (bm : Nat) (q : RowReq) : List (List Char × JVal)
   match q.div with
   | none => []
   | some (b, e) =>
-    [("divider".toList, match Emit.divider z (b * bm) e (q.segs.val.map (·.val)) with
+    [("divider".toList, match Emit.divider z (b * bm) e (q.segs.map (·.val)) with
       | none => .null
       | some (i, r) => dividerJson i r)]
 
@@ -682,14 +678,14 @@ theorem rowJson_is_the_nine_cells_in_order (p : PlanCore) (s : Seg) (r : Row) :
 
 /-- **One row per segment sent, and no other row** — the wire half of `Emit.rowsOf_length`. -/
 theorem rowsJson_length (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) :
-    ∃ xs, rowsJson p z bm q = .arr xs ∧ xs.length = q.segs.val.length := by
+    ∃ xs, rowsJson p z bm q = .arr xs ∧ xs.length = q.segs.length := by
   refine ⟨_, rfl, ?_⟩
   simp [rowsOfReq]
 
 /-- And the rows are `Emit.rowOf`'s image of those segments, pointwise. -/
 theorem rowsOfReq_eq (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) :
     rowsOfReq p z bm q =
-      q.segs.val.map (fun s => Emit.rowOf p z bm q.bed q.prios.val s.val) := rfl
+      q.segs.map (fun s => Emit.rowOf p z bm q.bed q.prios.val s.val) := rfl
 
 /-! ### The names, the shapes and the two helpers, witnessed
 
@@ -718,11 +714,11 @@ theorem segErrName_names_the_two :
 off `{"err":{"plan": …}}`. -/
 theorem the_refusals_spell_themselves :
     (RowRefusal.shape.text, RowRefusal.tzAbsent.text, RowRefusal.blockMinAbsent.text,
-     (RowRefusal.bad .bed).text, RowRefusal.tooManySegments.text,
+     (RowRefusal.bad .bed).text,
      RowRefusal.tooManyPriorities.text, (RowRefusal.badPriority 2).text,
      (RowRefusal.badSegment 3 .kind).text, (RowRefusal.segmentRefused 1 .inverted).text,
      RowRefusal.rowsWithCommands.text)
-      = ("shape", "tzAbsent", "blockMinAbsent", "bad bed", "tooManySegments",
+      = ("shape", "tzAbsent", "blockMinAbsent", "bad bed",
          "tooManyPriorities", "badPriority 2", "badSegment 3 kind",
          "segmentRefused 1 inverted", "rowsWithCommands") := rfl
 
@@ -766,18 +762,13 @@ theorem withPlan_appends_the_plan_key (kvs : List (List Char × JVal)) (v : JVal
 
 Each names the constructor the bound actually lives in, so nothing is re-bounded here. -/
 
-theorem readSegs_refuses_past_the_cap (xs : List JVal) (h : Planner.maxCands < xs.length) :
-    readSegs xs = .error .tooManySegments := by
-  unfold readSegs
-  rw [if_pos h]
-
 theorem readPrios_refuses_past_the_cap (xs : List JVal) (h : Planner.maxCands < xs.length) :
     readPrios xs = .error .tooManyPriorities := by
   unfold readPrios
   rw [if_pos h]
 
 /-- The empty section is the empty answer, so the two refusals above are not vacuous. -/
-theorem readSegs_of_nil : (readSegs []).map (fun c => c.val) = .ok [] := rfl
+theorem readSegs_of_nil : readSegs [] = .ok [] := rfl
 theorem readPrios_of_nil : (readPrios []).map (fun c => c.val) = .ok [] := rfl
 
 /-- **A stored `p` past seven is refused**, through `Priority.yesterdayOf?` — the one reader.
@@ -1131,7 +1122,7 @@ theorem readNote_accepts_the_seven_inside_their_bounds (i : Nat) :
 theorem readRowSection_accepts_an_empty_day :
     (readRowSection (.obj [("bed".toList, .str "22:00".toList),
       ("segments".toList, .arr [])])).map (fun q => (q.bed.val, q.prios.val.length,
-        q.segs.val.length)) = .ok (1320, 0, 0) := by
+        q.segs.length)) = .ok (1320, 0, 0) := by
   rfl
 
 /-! ## D111 — the kernel's table of places, answered at a request's `places` key (stage 6 W-47 track L, README gap 4904)
@@ -1185,7 +1176,7 @@ before. -/
 
 /-- **With a `now`, every row is told on that day**; without one, on its own start's local day. -/
 theorem rowsOfReq_tells_the_requests_day (p : PlanCore) (z : Cal.Tz) (bm d : Nat) (q : RowReq) :
-    rowsOfReq p z bm q (some d) = q.segs.val.map (fun s => Emit.rowOf p z bm q.bed q.prios.val s.val d) := rfl
+    rowsOfReq p z bm q (some d) = q.segs.map (fun s => Emit.rowOf p z bm q.bed q.prios.val s.val d) := rfl
 
 /-- **The twelfth note reads back** — `{"note":"soFar","workedMin":90}`, `PlanWire.noteJson`'s spelling of fork
 open_block_segment's `90m so far`, which this section had no reader for until W-47. -/
@@ -1200,7 +1191,7 @@ theorem readNote_reads_the_planners_key_and_refuses_the_other (i : Nat) :
 
 /-- **One row per segment sent, whichever day the rows are told on.** -/
 theorem rowsJson_length_on_a_day (p : PlanCore) (z : Cal.Tz) (bm : Nat) (q : RowReq) (now : Option Nat) :
-    ∃ xs, rowsJson p z bm q now = .arr xs ∧ xs.length = q.segs.val.length := by
+    ∃ xs, rowsJson p z bm q now = .arr xs ∧ xs.length = q.segs.length := by
   refine ⟨_, rfl, ?_⟩
   cases now <;> simp [rowsOfReq]
 
@@ -1259,7 +1250,7 @@ theorem dividerPairs_without_the_inputs (z : Cal.Tz) (bm : Nat) (q : RowReq) (h 
 
 /-- **With them, the `divider` key is `Emit.divider` of the segments sent, the budget counted in `bm`.** -/
 theorem dividerPairs_with_the_inputs (z : Cal.Tz) (bm b e : Nat) (q : RowReq) (h : q.div = some (b, e)) :
-    dividerPairs z bm q = [("divider".toList, match Emit.divider z (b * bm) e (q.segs.val.map (·.val)) with
+    dividerPairs z bm q = [("divider".toList, match Emit.divider z (b * bm) e (q.segs.map (·.val)) with
       | none => .null
       | some (i, r) => dividerJson i r)] := by
   simp only [dividerPairs, h]
@@ -1276,6 +1267,140 @@ theorem dividerPairs_on_the_wire :
 
 /-- **And with no extra pairs the `plan` object is the rows alone.** -/
 theorem withPlan_of_no_extra (r v : JVal) : withPlan r v [] = withPlan r v := rfl
+
+/-! ## W-49 track P — the planner's rows in one call, at every length (the owner's D123 and D124)
+
+APPENDED 2026-10-13.  **D123 (README gap 5212).**  The row reader is widened to every day the planner can answer:
+`readSegs` measures no length and `RowReq.segs` is a plain `List WfSeg`, `Planner.DayPlan.segments`' own type, so the
+one bound on a day's rows is the one the planner sets — and the planner sets none (D28: `Planner.dayPlan` is total and
+never refuses a day).  The witness that the bound is the planner's is `RowReq.ofDay`: a request of this section built
+from ANY day the planner answers, which could not be written while the reader's list was `Planner.Capped`.
+
+**D124 (README gap 5130).**  One planner call answers a planned day's rows: `dayRowsPairs` is what this section answers
+for `RowReq.ofDay` of the day the call just planned — the rows and the `window ends` divider — and
+`PlanWire.runPlanner` puts it in the planner's own `plan` object.  The budget and the window's end are the day's own
+(`Planner.DayPlan.budgetBlocks`, `window.2`; gap 5132) and `[day] bed` is the capacity section's (`r.look.day.bed`, the
+one the planner reads; gap 5133), so none of the three crosses the wire a second time.  The section itself stays — the
+test harness's door for days built by hand (the owner granted it, `CLASS unsent plan`). -/
+
+/-- **The `plan` section's request for a day the planner answered** — its own priorities, its own segments at any
+length, its own budget and window's end, and the `[day] bed` the planner read. -/
+def RowReq.ofDay (r : Planner.PlanReq) (d : Planner.DayPlan) : RowReq :=
+  ⟨r.look.day.bed, d.priorities, d.segments, some (d.budgetBlocks, d.window.2)⟩
+
+/-- **The rows and the divider of a day the planner answered**, as this section answers them for `RowReq.ofDay` —
+told on the day's own date, against the request's plan, zone and block length.  `PlanWire.runPlanner` writes these
+pairs into its `plan` object, so a planned day costs one call. -/
+def dayRowsPairs (r : Planner.PlanReq) (d : Planner.DayPlan) : List (List Char × JVal) :=
+  ("rows".toList, rowsJson r.plan.val r.tz r.blockMin (RowReq.ofDay r d) (some d.day))
+    :: dividerPairs r.tz r.blockMin (RowReq.ofDay r d)
+
+/-- **Whether an answer's `ok` object already carries a `plan` key** — the one `withPlan` writes for a request's `plan`
+section.  `PlanWire.runPlanner` refuses a `planner` section beside one by this, reading the answer rather than the
+request (a `jget` of the `plan` key there would make the planner the section's dispatcher to check 12's scan). -/
+def answersRows : JVal → Bool
+  | .obj [(_, .obj kvs)] => kvs.any (fun kv => kv.1 == "plan".toList)
+  | _ => false
+
+/-- **Every list whose segments read is read, at every length** (D123): the reader refuses a segment by its own record
+and never a list by its length. -/
+theorem readSegs_reads_every_list_whose_segments_read (xs : List JVal) (f : JVal × Nat → WfSeg)
+    (h : ∀ p ∈ xs.zipIdx, readSeg p.2 p.1 = .ok (f p)) : readSegs xs = .ok (xs.zipIdx.map f) := by
+  unfold readSegs
+  generalize xs.zipIdx = ys at h ⊢
+  induction ys with
+  | nil => rfl
+  | cons y ys ih =>
+    have hy := h y (by simp)
+    have hys := ih (fun p hp => h p (by simp [hp]))
+    rw [List.mapM_cons, hy, hys]
+    rfl
+
+/-- A rest segment's record, read at every position. -/
+theorem readSeg_reads_a_rest_at_every_position (i : Nat) :
+    readSeg i (.obj [("start".toList, .num 0), ("stop".toList, .num 60), ("kind".toList, .str "rest".toList)])
+      = .ok ⟨⟨0, 60, .rest, none, none, none, {}, none, none, none⟩, by decide⟩ := by
+  rfl
+
+/-- **One record reads to its segment, and a record with no `start` is refused at its position** — decided on the
+wire's own bytes, so the reader is told from a constant by more than one law. -/
+theorem readSegs_reads_a_rest_and_refuses_a_record_without_a_start :
+    readSegs [.obj [("start".toList, .num 0), ("stop".toList, .num 60), ("kind".toList, .str "rest".toList)]]
+      = .ok [⟨⟨0, 60, .rest, none, none, none, {}, none, none, none⟩, by decide⟩] ∧
+    readSegs [.obj [("start".toList, .num 0), ("stop".toList, .num 60), ("kind".toList, .str "rest".toList)],
+      .obj [("stop".toList, .num 60)]] = .error (.badSegment 1 .start) := by
+  constructor <;> rfl
+
+/-- **The bound W-24 put on the reader is REFUTED as the reader's law** (D123): a list of more segments than
+`Planner.maxCands` — 1,025 rest records — is read, one segment per record.  Until W-49 readSegs_refuses_past_the_cap
+said every such list was refused; the planner answers days that long (a block open across 600 or more pause pairs, README
+gap 5212), so the refusal was the reader's alone. -/
+theorem readSegs_refuses_past_the_cap_is_refuted :
+    ¬ ∀ xs : List JVal, Planner.maxCands < xs.length → ∀ ss, readSegs xs ≠ .ok ss := by
+  intro h
+  let v : JVal := .obj [("start".toList, .num 0), ("stop".toList, .num 60), ("kind".toList, .str "rest".toList)]
+  let s : WfSeg := ⟨⟨0, 60, .rest, none, none, none, {}, none, none, none⟩, by decide⟩
+  have hr : readSegs (List.replicate (Planner.maxCands + 1) v)
+      = .ok ((List.replicate (Planner.maxCands + 1) v).zipIdx.map (fun _ => s)) := by
+    apply readSegs_reads_every_list_whose_segments_read
+    intro p hp
+    have hv : p.1 = v := List.eq_of_mem_replicate (List.fst_mem_of_mem_zipIdx hp)
+    rw [hv]
+    exact readSeg_reads_a_rest_at_every_position p.2
+  exact h _ (by simp) _ hr
+
+/-- **`RowReq.ofDay` is the day's own fields**: its segments at any length, its priorities under the planner's own cap,
+its budget and window's end, and the planner's `[day] bed`. -/
+theorem RowReq.ofDay_is_the_days_own (r : Planner.PlanReq) (d : Planner.DayPlan) :
+    (RowReq.ofDay r d).segs = d.segments ∧ (RowReq.ofDay r d).prios = d.priorities ∧
+    (RowReq.ofDay r d).div = some (d.budgetBlocks, d.window.2) ∧ (RowReq.ofDay r d).bed = r.look.day.bed :=
+  ⟨rfl, rfl, rfl, rfl⟩
+
+/-- **The rows of the day the planner planned are `Emit.rowsOf`'s** — the one definition `Emit.lean` gives a planned
+day's rows, now on the binary's path (D124). -/
+theorem the_planned_days_rows_are_rowsOf (r : Planner.PlanReq) :
+    rowsOfReq r.plan.val r.tz r.blockMin (RowReq.ofDay r (Planner.dayPlan r)) (some (Planner.dayPlan r).day)
+      = Emit.rowsOf r := rfl
+
+/-- **The pairs are the rows, then the divider of the day's own budget and window's end** (gap 5132: neither crosses the
+wire twice). -/
+theorem dayRowsPairs_is_the_rows_then_the_days_divider (r : Planner.PlanReq) (d : Planner.DayPlan) :
+    dayRowsPairs r d =
+      [("rows".toList, rowsJson r.plan.val r.tz r.blockMin (RowReq.ofDay r d) (some d.day)),
+       ("divider".toList, match Emit.divider r.tz (d.budgetBlocks * r.blockMin) d.window.2 (d.segments.map (·.val)) with
+         | none => .null
+         | some (i, row) => dividerJson i row)] := rfl
+
+/-- **One row per segment of the day, and no other row** — at every length. -/
+theorem dayRowsPairs_rows_length (r : Planner.PlanReq) (d : Planner.DayPlan) :
+    ∃ xs, rowsJson r.plan.val r.tz r.blockMin (RowReq.ofDay r d) (some d.day) = .arr xs ∧
+      xs.length = d.segments.length :=
+  rowsJson_length_on_a_day _ _ _ _ _
+
+/-- **The door answers the day as the one call does**: the `plan` section, sent `RowReq.ofDay` of a planned day,
+writes into its `plan` object exactly the pairs `dayRowsPairs` writes into the planner's. -/
+theorem the_door_writes_the_one_calls_pairs (r : Planner.PlanReq) (d : Planner.DayPlan) (kvs : List (List Char × JVal)) :
+    withPlan (jone "ok" (.obj kvs)) (rowsJson r.plan.val r.tz r.blockMin (RowReq.ofDay r d) (some d.day))
+        (dividerPairs r.tz r.blockMin (RowReq.ofDay r d))
+      = jone "ok" (.obj (kvs ++ [("plan".toList, .obj (dayRowsPairs r d))])) := rfl
+
+/-- **An answer to a `plan` section carries the `plan` key `answersRows` reads.** -/
+theorem answersRows_withPlan (k : List Char) (kvs : List (List Char × JVal)) (v : JVal)
+    (extra : List (List Char × JVal)) : answersRows (withPlan (.obj [(k, .obj kvs)]) v extra) = true := by
+  simp [answersRows, withPlan]
+
+/-- **An answer to the capacity section alone carries no `plan` key, and a refusal none either** — decided, so the
+reader is told from `fun _ => true` by more than one law. -/
+theorem answersRows_of_an_answer_without_rows :
+    answersRows (jone "ok" (.obj [("docs".toList, .arr []), ("lookahead".toList, .obj [])])) = false ∧
+    answersRows (jone "err" (.str "shape".toList)) = false := by
+  constructor <;> rfl
+
+/-- **And an `ok` object with no `plan` key answers `false`.** -/
+theorem answersRows_without_a_plan_key (k : List Char) (kvs : List (List Char × JVal))
+    (h : ∀ kv ∈ kvs, kv.1 ≠ "plan".toList) : answersRows (.obj [(k, .obj kvs)]) = false := by
+  simp only [answersRows, List.any_eq_false, beq_iff_eq]
+  exact h
 
 end EmitWire
 end Tm

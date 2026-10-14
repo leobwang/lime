@@ -1710,3 +1710,16 @@ with_minute
 # `Check.lean`, and in `Goals.lean`'s stage-5 notes (track G's file this run); every sentence since writes it unbackticked.
 5 an_extend_changes_only_the_bookkeeping_and_its_extended_minutes
 1 Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes
+
+# W-49 TRACK P (README "Stage 6 — W-49 track P"): the owner's D123 widened the row reader to every day the planner can
+# answer, so EmitWire.readSegs_refuses_past_the_cap is DELETED (refuted beside it as `readSegs_refuses_past_the_cap_is_refuted`),
+# and the W-48 repair's refusal test is restated as D123's behaviour row; the owner's D124 put a planned day's rows in the
+# planner's own answer, so `tm-core`'s planwire::rows_request is DELETED and `kernel_planner_wire.rs`' test of the two
+# writers sharing one `plan` object is restated as the one writer's (its old name below).  Every citation counted here is in an
+# append-only README block that recorded the name while it stood (W-24, W-47 track L and its repair, W-48 tracks H and R,
+# the W-48 repair); every sentence since writes it unbackticked.
+6 planwire::rows_request
+3 rows_request
+2 readSegs_refuses_past_the_cap
+1 a_day_past_the_row_sections_cap_is_refused_by_name
+1 the_rows_and_the_day_share_one_plan_object

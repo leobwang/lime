@@ -462,12 +462,6 @@ pub struct PlannerAsk {
     pub want: u32,
     /// Whether the horizon clamped them.
     pub clamped: bool,
-    /// **What the rows of the day it plans are asked over** (the owner's D112):
-    /// the request's own documents and zone, read once with it, so the `plan`
-    /// section renders the day against the tree the planner planned it on.
-    pub rows_docs: Value,
-    /// The zone table the request carried (`tz`).
-    pub rows_tz: Value,
 }
 
 /// **[`planner_request`], with §9.1's what-if when `extend` names one** — `blocks`
@@ -512,8 +506,6 @@ fn planner_ask_over(
         days,
         want,
         clamped,
-        rows_docs: Value::Array(inputs.reads.docs.clone()),
-        rows_tz: inputs.reads.tz_wire.clone(),
     })
 }
 
@@ -629,31 +621,18 @@ pub fn read_day(ctx: &Ctx, ask: PlannerAsk) -> Result<Planned, CliError> {
         }
     }
     let read = planwire::DayCtx { tz: ctx.cfg.tz, cands: &ask.cands, prios: &answer.prios };
-    let mut day = planwire::read_plan(&resp["ok"]["plan"], &read).map_err(|e| {
+    // **The day's rows are the kernel's cells** (the owner's D112), and they ride this
+    // same answer (the owner's D124, W-49 track P, README gap 5130): `plan.rows` and
+    // `plan.divider` are `EmitWire.dayRowsPairs` of the day this call planned — the `plan`
+    // section's answer for the day's own request, its budget, window's end and `[day] bed`
+    // read where the planner read them (gaps 5132, 5133) — decoded with the day by
+    // `planwire::read_plan`. A planned day is ONE call and one whole-tree load; until W-49
+    // the day went back through the `plan` section in a second call over the same
+    // documents. The cells are what every surface pads (`emit::render_row`). `tm check`
+    // reads them too, so a row the kernel cannot render is a fault `tm check` meets where
+    // `tm plan` would (README gap 4711's rule).
+    let day = planwire::read_plan(&resp["ok"]["plan"], &read).map_err(|e| {
         CliError::Kernel(kernel_bridge::fault_issue(&format!("planner response: {e}"), ""))
-    })?;
-    // **The day's rows are the kernel's cells** (the owner's D112): the day it just
-    // planned goes back through the `plan` section — its segments and priorities as the
-    // kernel wrote them, over the same documents and zone — and the cells it answers are
-    // what every surface pads (`emit::render_row`). `tm check` asks them too, so a row
-    // the kernel cannot render is a fault `tm check` meets where `tm plan` would (README
-    // gap 4711's rule).
-    let rows = planwire::rows_request(
-        &ask.rows_docs,
-        &ask.rows_tz,
-        ctx.block_min(),
-        day.day.date,
-        ctx.cfg.day.bed,
-        &resp["ok"]["plan"],
-    );
-    let (rows_resp, _) = kernel_bridge::call_text(&rows)?;
-    day.day.cells = planwire::read_rows(&rows_resp, &day.day.segments).map_err(|e| {
-        CliError::Kernel(kernel_bridge::fault_issue(&format!("plan rows: {e}"), ""))
-    })?;
-    // **And the `window ends` divider, the kernel's** (W-48 track R, README gaps 5031 and
-    // 1301), from the planner's own budget sent back with the rows.
-    day.day.divider = planwire::read_divider(&rows_resp, &day.day.segments).map_err(|e| {
-        CliError::Kernel(kernel_bridge::fault_issue(&format!("plan rows: {e}"), ""))
     })?;
     let served = planwire::served_order(&resp["ok"]["plan"]["diagnostics"], &ask.order, &ask.cands).map_err(|e| {
         CliError::Kernel(kernel_bridge::fault_issue(&format!("planner response: {e}"), ""))

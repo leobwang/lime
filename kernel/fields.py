@@ -705,8 +705,9 @@ SENT_EXEMPT_FILE = HERE / "sent-exempt.txt"
 # shape, the file may only SHRINK.
 #
 # AND A VALUE COPIED WHOLE FROM THE KERNEL'S ANSWER IS THE KERNEL'S SERIALISER'S
-# (W-48 track H, README gap 4959).  `planwire::rows_request` sends the planner
-# answer's own `segments` and `priorities` back, `plan["segments"].clone()`; no
+# (W-48 track H, README gap 4959).  planwire::rows_request sent the planner
+# answer's own `segments` and `priorities` back, `plan["segments"].clone()` (until
+# the owner's D124 put the rows in the planner's answer, W-49 track P); no
 # key under them is a literal, so 35 decoded paths were unwritten and two lines
 # of `written-exempt.txt` answered them.  A key under such a copy is WRITTEN when
 # the host half (`sentkeys.RustProgram`, its copy_sources) traces every call to a key
@@ -741,7 +742,7 @@ def ratchet_file(path, shallow, under, why_stale, bad, sections):
     `fields-exempt.txt`, this script's other two, never had the escape: growth is the
     owner's to grant, in the commit that changes this script, and never a heading.  A
     heading stays a way to group lines.  Returns `{entry: lineno}`."""
-    entries, heading_of, headings = {}, {}, {}
+    entries, heading_of, headings, reasons = {}, {}, {}, {}
     text = path.read_text() if path.exists() else ""
     current = None
     for lineno, raw in enumerate(text.splitlines(), 1):
@@ -766,6 +767,7 @@ def ratchet_file(path, shallow, under, why_stale, bad, sections):
         if name in entries:
             bad.append("%s:%d  `%s` is listed twice" % (path.name, lineno, name))
         entries[name] = lineno
+        reasons[name] = reason
         heading_of[name] = current
     for e, lineno in sorted(entries.items(), key=lambda kv: kv[1]):
         if not any(p == e or under(p, e) for p in shallow):
@@ -783,6 +785,8 @@ def ratchet_file(path, shallow, under, why_stale, bad, sections):
                 held.add(ln.partition(" -- ")[0])
         for e in sorted(set(entries) - held):
             if any(under(e, q) for q in held):
+                continue
+            if ratchet.granted(path, e, reasons.get(e)):
                 continue
             bad.append("RATCHET: %s:%d  `%s` is a NEW exemption, under no key exempt at HEAD -- "
                        "this file may only SHRINK (D51), measured by the key paths it exempts (D121), whatever heading it sits under "

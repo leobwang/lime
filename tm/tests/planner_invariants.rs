@@ -1287,8 +1287,8 @@ proptest! {
     /// draws for the same day** (W-38, README gap 3282; restated at W-47 for the owner's D112) — (1)
     /// no day the kernel plans is refused by the `plan` section's wire (every R10 bound it carries is
     /// one a real day could exceed); (2) row for row, the rows the BINARY prints (`DayPlan::cells`:
-    /// the `plan` section asked over the planner's OWN segments and priorities, as the kernel wrote
-    /// them — `planwire::rows_request`, `kernel_capacity::read_day`'s call) against the `plan`
+    /// the planner's own answer since the owner's D124, W-49 track P — `EmitWire.dayRowsPairs`, the
+    /// `plan` section's answer for the day's own request, `kernel_capacity::read_day` reads it) against the `plan`
     /// section's answer over the SAME day as the host DECODED it and this file's encoder wrote it
     /// back (`rowwire::seg_json`), cell for cell and `batchNames` — so a field `planwire::read_plan`
     /// drops or bends on its way into a `Segment` is a cell that differs — with ONE rule for the

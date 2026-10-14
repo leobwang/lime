@@ -11,9 +11,10 @@
 //! allowed: `differences` reports every cell that differs and each caller
 //! declares its own holes.
 //!
-//! **Since the owner's D112 (W-47) this section is the BINARY's door to its
-//! rows**: `kernel_capacity::read_day` hands every day the kernel planned back
-//! through it (`planwire::rows_request`) and pads the cells it answers. There is
+//! **From the owner's D112 (W-47) until D124 (W-49 track P) this section was the
+//! BINARY's door to its rows**; since D124 the planner's own answer carries them
+//! (`EmitWire.dayRowsPairs`, the section's answer for the day's own request), and
+//! the section is the test harness's door alone (`CLASS unsent plan`). There is
 //! no Rust builder of a cell to compare with any more, so this module's jobs are
 //! two: a day a test builds by HAND gets the kernel's rows for its segments
 //! ([`with_kernel_cells`]), and a test can ask the door for the rows of any day

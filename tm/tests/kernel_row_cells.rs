@@ -12,8 +12,9 @@
 //! # What it does since D112
 //!
 //! The owner's D112 made the kernel's cells the rows the binary prints (the
-//! binary asks the `plan` section for them right after each planner call,
-//! `planwire::rows_request`, into `DayPlan::cells`) and deleted the Rust builder
+//! kernel answers them for every day it plans -- through the `plan` section in a
+//! second call until the owner's D124, in the planner's own answer since (W-49
+//! track P) -- into `DayPlan::cells`) and deleted the Rust builder
 //! (`emit::row_cells` and its cell functions) these cells used to be compared
 //! with. The comparison did not go with it: the builder's cells for this file's
 //! days were frozen **by value** at `49186d7`, the commit before the deletion,

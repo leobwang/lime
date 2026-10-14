@@ -183,6 +183,11 @@ inductive PlannerRefusal
   | eveningPastTheCalendar
   /-- **D80 (b)** (P72): a candidate whose wire `ci` is not the plan's — the id, the wire's value, the plan's (or none). -/
   | ciDisagrees (i : Id) (wire : Fin 6) (plan : Option (Fin 6))
+  /-- **A request carrying a `plan` section beside its `planner` section** (the owner's D124, W-49 track P, README gap
+  5130): the planner's answer carries the rows of the day it planned (`EmitWire.dayRowsPairs`), and the `plan` section
+  answers rows for the segments the host sent — two answers under one `rows` key of one `plan` object.  Refused by name
+  rather than either silently winning; the binary sends no `plan` section, which is the test harness's door alone. -/
+  | planWithPlanner
 deriving DecidableEq, Repr
 
 /-- `Planner.RoutineErr`'s six names, spelled where the wire can read them, **each with the id
@@ -215,6 +220,7 @@ def PlannerRefusal.text : PlannerRefusal → String
   | .badOvertime k => s!"badOvertime {k.name}"
   | .eveningPastTheCalendar => "eveningPastTheCalendar"
   | .ciDisagrees i w p => s!"ciDisagrees {String.ofList i} wire {w.val} plan {(p.map (fun c => toString c.val)).getD "none"}"
+  | .planWithPlanner => "planWithPlanner"
 
 /-- The refusal on the wire: `{"err": {"planner": "<name> <key>"}}` — `EmitWire`'s shape under
 this section's own key, so a host tells the two families apart by the key and not by the text. -/
@@ -1067,7 +1073,14 @@ def overtimeJson (r : Planner.PlanReq) : Option (Id × Nat × Option Planner.WfG
 /-- **The request, with its `planner` section.**  Without one this is `EmitWire.runRows`, byte for byte.  With one:
 `runRows` answers first, so every refusal that stood before this step still comes first and in the same order; then the
 section, then §16's `batchMaxMin`, then the request, then **the day** — `Planner.dayPlan`'s seven keys (compiled:
-`Planner.dayPlanOnce`, W-42's `@[csimp]` twin), into the same `plan` object `rows` is in.  **A section refusal yields to
+`Planner.dayPlanOnce`, W-42's `@[csimp]` twin) **and the day's `rows` and `window ends` divider** (`EmitWire.dayRowsPairs`
+of the day just planned; the owner's D124, W-49 track P, README gap 5130: a planned day is ONE call and one whole-tree
+load, its budget, window's end and `[day] bed` read where the planner read them, gaps 5132 and 5133), in one `plan`
+object.  A request that also carries a `plan` section is refused `planWithPlanner`, after every other refusal, because
+the two would write two answers under one `rows` key — read off the answer `runRowsP` already wrote
+(`EmitWire.answersRows`), never by a second `jget` of the request's `plan` key: a `match` on that key here would make
+this the `plan` section's dispatcher to check 12's scan (`sections.py`), and the binary sends no `plan` section since
+W-49 (`CLASS unsent plan`, the harness's door).  **A section refusal yields to
 D80 (a)** (`eveningFirst`; README gap 4793): on a day whose evening runs past the calendar the reader may refuse a
 routine window that evening carries past the calendar's last second, and the day is P71's, by P71's name.
 
@@ -1101,7 +1114,11 @@ def runPlanner (j : JVal) : Except JVal JVal :=
           | .ok req =>
             match readOvertime sec with
             | .error x => .error (plannerRefusalJson x)
-            | .ok ot => .ok (withPlanner r (planJson (Planner.dayPlan req) ++ overtimeJson req ot))
+            | .ok ot =>
+              if EmitWire.answersRows r then .error (plannerRefusalJson PlannerRefusal.planWithPlanner)
+              else
+                let d := Planner.dayPlan req
+                .ok (withPlanner r (planJson d ++ EmitWire.dayRowsPairs req d ++ overtimeJson req ot))
 
 /-- **The response value for a request's bytes**, `EmitWire.respondRows`' shape over `runPlanner` — and the
 kernel's table of places on an answer to a request with a `places` key (the owner's D111, `EmitWire.withPlaces`). -/
@@ -1144,15 +1161,25 @@ _as_runRows and its Rust twin a_readable_planner_section_changes_no_byte, both *
 and both written without backticks because neither exists any more.  Deleting them is not
 weakening a law (D5): the old statement said the response *equals* `EmitWire.runRows`', this one
 says it is that **with the day's seven keys added**, and the old statement is false of this
-definition exactly because the kernel now answers. -/
+definition exactly because the kernel now answers.
+
+**Restated at W-49 track P (the owner's D124, README gap 5130), D5.**  The answer gained the day's `rows` and its
+`window ends` divider (`EmitWire.dayRowsPairs`, the `plan` section's answer for the day's own `EmitWire.RowReq.ofDay`),
+and the success branch gained the `planWithPlanner` refusal, so the statement gained the pairs and the hypothesis `hn`
+(the answer `EmitWire.runRowsP` wrote holds no `plan` object, which `EmitWire.withPlan` writes for a `plan` section
+beside it).  The old statement is FALSE of this definition on every request it covered (the answer carries two more
+keys), so the new one does not imply it; the case `hn` excludes has its own law,
+`runPlanner_refuses_a_plan_section_beside_it`, and every request the old one covered is either answered here or is that
+refusal. -/
 theorem runPlanner_answers_the_day (j sec r : JVal) (b : Nat) (parts : CapParts)
     (q : PlannerIn) (req : Planner.PlanReq) (ot : Option (Id × Nat × Option Planner.WfGrown))
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
     (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
-    (ho : readOvertime sec = .ok ot) :
-    runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req) ++ overtimeJson req ot)) := by
-  simp only [runPlanner, hp, hr, hs, hb, hq, ho]
+    (ho : readOvertime sec = .ok ot) (hn : EmitWire.answersRows r = false) :
+    runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req)
+      ++ EmitWire.dayRowsPairs req (Planner.dayPlan req) ++ overtimeJson req ot)) := by
+  simp only [runPlanner, hp, hr, hs, hb, hq, ho, hn, Bool.false_eq_true, ↓reduceIte]
 
 /-- **Without an `overtime` key the day is answered exactly as before W-34** — the seven keys
 and nothing else.  This is `runPlanner_answers_the_day` as it stood until W-34, which is the
@@ -1163,10 +1190,42 @@ theorem runPlanner_answers_the_day_without_an_overtime (j sec r : JVal) (b : Nat
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
     (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
-    (ho : readOvertime sec = .ok none) :
-    runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req))) := by
-  rw [runPlanner_answers_the_day j sec r b parts q req none hp hr hs hb hq ho]
+    (ho : readOvertime sec = .ok none) (hn : EmitWire.answersRows r = false) :
+    runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req)
+      ++ EmitWire.dayRowsPairs req (Planner.dayPlan req))) := by
+  rw [runPlanner_answers_the_day j sec r b parts q req none hp hr hs hb hq ho hn]
   simp [overtimeJson]
+
+/-- **The rows the answer carries are `Emit.rowsOf` of the request it planned** (D124) — `runPlanner_answers_the_day`
+with its `rows` value read through `EmitWire.the_planned_days_rows_are_rowsOf`: the binary's rows are the one definition
+`Emit.lean` gives a planned day's, each beside its segment, from the same call. -/
+theorem runPlanner_answers_the_days_rows (j sec r : JVal) (b : Nat) (parts : CapParts)
+    (q : PlannerIn) (req : Planner.PlanReq) (ot : Option (Id × Nat × Option Planner.WfGrown))
+    (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
+    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
+    (ho : readOvertime sec = .ok ot) (hn : EmitWire.answersRows r = false) :
+    ∃ tail, runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req)
+      ++ ("rows".toList, .arr (((Planner.dayPlan req).segments.zip (Emit.rowsOf req)).map
+            (fun sr => EmitWire.rowJson req.plan.val sr.1.val sr.2))) :: tail)) := by
+  refine ⟨EmitWire.dividerPairs req.tz req.blockMin (EmitWire.RowReq.ofDay req (Planner.dayPlan req))
+    ++ overtimeJson req ot, ?_⟩
+  rw [runPlanner_answers_the_day j sec r b parts q req ot hp hr hs hb hq ho hn, ← EmitWire.the_planned_days_rows_are_rowsOf]
+  simp [EmitWire.dayRowsPairs, EmitWire.rowsJson, EmitWire.RowReq.ofDay]
+
+/-- **And a request carrying a `plan` section beside the `planner` section is refused `planWithPlanner`**, once
+every other refusal has had its say. -/
+theorem runPlanner_refuses_a_plan_section_beside_it (j sec r : JVal) (b : Nat) (parts : CapParts)
+    (q : PlannerIn) (req : Planner.PlanReq) (ot : Option (Id × Nat × Option Planner.WfGrown))
+    (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
+    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
+    (ho : readOvertime sec = .ok ot) (hn : EmitWire.answersRows r = true) :
+    runPlanner j = .error (plannerRefusalJson PlannerRefusal.planWithPlanner) := by
+  simp only [runPlanner, hp, hr, hs, hb, hq, ho, hn, ↓reduceIte]
+
+/-- **The refusal spells itself.** -/
+theorem planWithPlanner_spells_itself : PlannerRefusal.planWithPlanner.text = "planWithPlanner" := rfl
 
 /-- **And an `overtime` key the decoder refuses refuses the call, by its own name.** -/
 theorem runPlanner_refuses_an_overtime_the_decoder_refuses (j sec r : JVal) (b : Nat)

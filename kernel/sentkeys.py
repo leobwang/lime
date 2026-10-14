@@ -303,7 +303,8 @@ class Param:
 
 class Copy:
     """**A caller's JSON value, indexed by literal keys and copied WHOLE** (W-48
-    track H, README gap 4959): `plan["segments"].clone()` in `rows_request`, where
+    track H, README gap 4959): `plan["segments"].clone()` in rows_request (deleted at
+    W-49 track P, the owner's D124: no such copy stands today), where
     `plan` is a `&Value` parameter.  What it writes is whatever the caller handed
     in, at that key path -- so no key under it is a literal this reader sees, and
     until W-48 it was a leaf with every key under it unwritten.  its copy_sources
@@ -1302,8 +1303,9 @@ def merge(into, tree):
 # ===========================================================================
 # A VALUE COPIED WHOLE FROM A KERNEL ANSWER (W-48 track H, README gap 4959)
 #
-# `planwire::rows_request` sends the planner answer's own `segments` and
-# `priorities` back in the `plan` section, `plan["segments"].clone()`: no key
+# planwire::rows_request sent the planner answer's own `segments` and
+# `priorities` back in the `plan` section, `plan["segments"].clone()`, from W-47
+# until the owner's D124 (W-49 track P) put the rows in the planner's answer: no key
 # under them is a literal anything reads, so the written half had every key the
 # kernel decodes under them unwritten, and `written-exempt.txt` answered them by
 # two lines.  What the two arrays hold is what the kernel's own serialiser

@@ -136,8 +136,9 @@ fn trace_kinds(request: &str) -> Vec<&'static str> {
     if request.contains(r#""places":"#) {
         kinds.push("places");
     }
-    // The `plan` section — the rows of the day the binary just planned, asked
-    // back through it (the owner's D112, `planwire::rows_request`). Its first
+    // The `plan` section — the rows of a day asked back through it: the binary's
+    // every planned day from the owner's D112 (W-47) until D124 (W-49 track P) put
+    // the rows in the planner's answer, and a test harness's hand-built day since. Its first
     // key is `bed` (serde writes keys in order), which no candidate's nested
     // `plan` object carries, so the planner request is never counted here.
     if request.contains(r#""plan":{"bed":"#) {
