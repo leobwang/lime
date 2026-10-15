@@ -6,6 +6,5 @@
 # The file is W-27's shape -- an enumeration you join to be EXEMPT -- and it may only SHRINK:
 # a line for a field that is read now FAILS as STALE, a line the committed file does not hold
 # FAILS as RATCHET.  One line per field: `<Type>.<field> -- <dated reason naming its EXIT>`.
-RuntimeIn.yesterday -- 2026-09-26 (W-34 repair): `state.priorities_yesterday`, decoded by `mkYesterday?`; ranking reads each candidate's `Look.Cand.yesterday`, so this is a SECOND wire spelling of one fact with no reader (AGENTS 5.3), and README gap 605's "hysteresis is fed from `RuntimeIn.yesterday`" was false. EXIT: the field and `mkYesterday?` leave the request (a wire change under D19) at or before R3.
 PlanOverrides.estMin -- 2026-09-26 (W-34 repair): fork `PlanOverrides::apply` answers it by rewriting the candidate's `remaining_min`/`planned_min`/`need_min`, a candidate fact the kernel may not derive (D34). EXIT: the host applies the override to the candidate facts it sends and the field leaves the request, or the owner lifts D34 for it (README gaps 2680, 2731; parity P44).
 PlanOverrides.extraMin -- 2026-09-26 (W-34 repair): as `estMin` -- the `extending` override of §9.1's what-if, whose candidate growth is parity P44's class. EXIT: as `estMin`.

@@ -8190,7 +8190,7 @@ def theOpenBreakRequest : PlanReq := { theOpenRequest with run := openBreakRun }
 def theInterruptedOpenRequest : PlanReq :=
   { theOpenRequest with state :=
       ⟨some theOpenBlock, none, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 810).sec, 0⟩, none⟩,
-       Capped.nil, none⟩ }
+       none⟩ }
 
 set_option maxRecDepth 400000 in
 /-- **The day, end to end**: the worked stretch `[12:00, 14:00)`, the meeting it ran across, the
@@ -8469,7 +8469,7 @@ is `[14:00, 14:05)` and not the block's end. -/
 def theShortRunRequest : PlanReq :=
   { theRunBatchRequest with state :=
       ⟨some ⟨['m','1'], ⟨(Cal.instantOf Cal.chicago 739867 820).sec, 0⟩, 25, false⟩, none, none,
-       Capped.nil, none⟩ }
+       none⟩ }
 
 set_option maxRecDepth 400000 in
 /-- **§9.1's "x extend +1 block", answered**: the reservation grows to the block's end at 14:40,
@@ -10550,7 +10550,7 @@ def theMeetingInterruptedRequest (id : Option Id) : PlanReq :=
     look := { theOpenRequest.look with today0 :=
       { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 830).sec, 0⟩ } },
     state := ⟨some theOpenBlock, none, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 770).sec, 0⟩, id⟩,
-      Capped.nil, none⟩ }
+      none⟩ }
 
 set_option maxRecDepth 400000 in
 /-- **README gap 3281, computed: the Lost row and the Wall row that tie are drawn in fork `collect_walls`' order.**
@@ -13344,7 +13344,7 @@ def heldRun : Seal.Run :=
 
 /-- **The open Wednesday at 13:30, the meeting holding `m1`** (gap 5217). -/
 def theHeldRequest : PlanReq :=
-  { ({ theWallOnNowRequest with run := heldRun } : PlanReq) with state := ⟨some heldBlock, none, none, Capped.nil, none⟩ }
+  { ({ theWallOnNowRequest with run := heldRun } : PlanReq) with state := ⟨some heldBlock, none, none, none⟩ }
 
 /-- **The same day at 13:50, the meeting's `unpause` logged** — `m1` running again. -/
 def theReleasedRequest : PlanReq :=
@@ -13355,7 +13355,7 @@ def theReleasedRequest : PlanReq :=
 so it holds `m1` past it). -/
 def theBreakHeldRequest : PlanReq :=
   { ({ theHeldRequest with state := ⟨some heldBlock, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 820).sec, 0⟩, 30,
-      some .seat⟩, none, Capped.nil, none⟩ } : PlanReq) with look := { theOpenRequest.look with today0 :=
+      some .seat⟩, none, none⟩ } : PlanReq) with look := { theOpenRequest.look with today0 :=
       { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 835).sec, 0⟩ } } }
 
 set_option maxRecDepth 400000 in
@@ -13500,7 +13500,7 @@ def loggedAcrossRun : Seal.Run :=
 /-- **The held Wednesday at 13:20, a five-minute sit running since 13:00** inside the meeting that holds `m1`. -/
 def theBreakAcrossRequest : PlanReq :=
   { ({ theHeldRequest with state := ⟨some heldBlock, some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 780).sec, 0⟩, 5,
-      some .seat⟩, none, Capped.nil, none⟩ } : PlanReq) with look := { theOpenRequest.look with today0 :=
+      some .seat⟩, none, none⟩ } : PlanReq) with look := { theOpenRequest.look with today0 :=
       { theOpenRequest.look.today0 with now := ⟨(Cal.instantOf Cal.chicago 739867 800).sec, 0⟩ } } }
 
 /-- **A twin with the sit logged and no pause of the meeting's in its log.** -/

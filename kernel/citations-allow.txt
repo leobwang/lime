@@ -1733,3 +1733,17 @@ with_minute
 2 readSegs_refuses_past_the_cap
 1 a_day_past_the_row_sections_cap_is_refused_by_name
 1 the_rows_and_the_day_share_one_plan_object
+
+# W-49 TRACK Y (README "Stage 6 — W-49 track Y", gap 5161): `planner.state.yesterday` leaves the decoder, and with it its
+# readers (`PlanWire.readYesterdayPair`, `PlanWire.readYesterday`), the decoder they called (`Planner.mkYesterday?`), the
+# refusals they threw (`badYesterday`, `badYesterdayList`), the field `Planner.RuntimeIn.yesterday` and every law about
+# them.  Every citation counted here names one as it stood, in the append-only README blocks that built or audited them;
+# every sentence since writes the dead name unbackticked.
+1 PlanWire.readYesterday
+2 Planner.mkYesterday?
+1 badYesterday
+1 badYesterdayList
+7 mkYesterday?
+1 mkYesterday?_refuses_a_priority_past_seven
+1 mkYesterday?_refuses_too_many
+1 readYesterdayPair

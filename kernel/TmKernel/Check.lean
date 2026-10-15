@@ -4720,8 +4720,6 @@ open Tm
 #print axioms Tm.Planner.mkActive?_accepts
 #print axioms Tm.Planner.mkBreak?_refuses_a_start_after_now
 #print axioms Tm.Planner.mkBreak?_accepts
-#print axioms Tm.Planner.mkYesterday?_refuses_a_priority_past_seven
-#print axioms Tm.Planner.mkYesterday?_refuses_too_many
 #print axioms Tm.Planner.RuntimeIn.activeId_empty
 #print axioms Tm.Planner.PlanOverrides.isEmpty_empty
 #print axioms Tm.Planner.assignedOf_empty
@@ -6462,10 +6460,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlanWire.readBreak_accepts_a_running_break
 #print axioms Tm.PlanWire.readInterrupt_refuses_a_long_id
 #print axioms Tm.PlanWire.readInterrupt_accepts_an_open_interruption
-#print axioms Tm.PlanWire.readYesterday_refuses_a_priority_past_seven
-#print axioms Tm.PlanWire.readYesterday_accepts_seven
-#print axioms Tm.PlanWire.readYesterday_refuses_past_the_cap
-#print axioms Tm.PlanWire.readYesterday_of_nil
 #print axioms Tm.PlanWire.readState_of_an_empty_object
 #print axioms Tm.PlanWire.readState_accepts_a_running_day
 #print axioms Tm.PlanWire.readRoutine_refuses_a_long_id
@@ -8927,3 +8921,9 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_plan_of_an_earlier_date_keeps_the_slot
 #print axioms Tm.Replay.a_plan_with_an_input_is_the_latest_as_the_w48_repair_stated_it_is_refuted
 #print axioms Tm.Replay.a_plan_records_its_stamp_as_the_w48_repair_stated_it_is_refuted
+
+-- APPENDED W-49 TRACK Y (README "Stage 6 — W-49 track Y", gap 5161): `planner.state.yesterday`
+-- left the decoder with `Planner.RuntimeIn`'s field; six laws went with their subjects (named in the
+-- block) and one is new.
+#print axioms Tm.PlanWire.readState_leaves_yesterday_unread
+#print axioms Tm.PlanWire.readOptBreak_reads_the_break

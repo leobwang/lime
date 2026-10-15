@@ -99301,3 +99301,203 @@ All under `systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0` on th
 Owner: gap 5260 (D124's other four `plan.*` keys) and gap 5131 (the template `^t3`'s two estimates), both unasked
 until this land.  Work: goal 5181 and gap 5161 (W-49's phase 2), the tracks' gaps 5261, 5280-5283 and 5302-5306, and
 the §5.13 drive of the TUI over a live meeting and through D126.
+
+<!-- =====================================================================
+     APPENDED 2026-10-14: stage 6 (the planner), run **W-49**, phase 2,
+     **track Y** — `planner.state.yesterday` leaves the decoder (README gap
+     5161, on gap 4956's recipe).  Gaps 5360-5379 and cheats 441-460 are this
+     track's: gaps 5360-5362 and cheats 441-442 are taken.  No parity number
+     is issued (nothing the binary does moves).
+     ===================================================================== -->
+
+## Stage 6 — W-49 track Y: `RuntimeIn`'s stored priorities leave the decoder (gap 5161)
+
+### 1. What landed
+
+The decoder exit gap 5161 scheduled, as the W-47 repair took it for `lastHash` and `overrides` (gap 4956's recipe), in
+one wire step (D19).  Deleted, each with what it was about:
+
+* **`Planner.lean`**: the decoder mkYesterday? and its two laws (mkYesterday?_refuses_a_priority_past_seven,
+  mkYesterday?_refuses_too_many), and the field `RuntimeIn.yesterday` itself — `Planner.RuntimeIn` is four fields
+  (`active`, `brk`, `interrupt`, `worked`) and `RuntimeIn.empty` its four-place constructor.  Ranking reads each
+  candidate's own `Look.Cand.yesterday` (the capacity section's `candidates.items[].yesterday`), which is what made the
+  field a second wire spelling of one fact with no reader (AGENTS §5.3; `inputs-exempt.txt`'s line since W-34's
+  repair).
+* **`PlanWire.lean`**: the readers readYesterdayPair and readYesterday and their four laws
+  (readYesterday_refuses_a_priority_past_seven, readYesterday_accepts_seven, readYesterday_refuses_past_the_cap,
+  readYesterday_of_nil); the key constructor PlanKey.yesterday; the two refusals they threw, badYesterday and
+  badYesterdayList (`PlannerRefusal` is sixteen constructors, eighteen before); the two R10 rows and the
+  "a `yesterday` id" clause of the id row; and `readState`'s two binds.  `readState` reads four rows.
+* **`PlanDiff.lean`**: the `state.yesterday` conjunct of
+  `the_extension_moves_only_the_running_estimate_and_the_overrides`.
+* **`PlannerWit.lean`**: the `Capped.nil` of SIX anonymous `RuntimeIn` literals (`theInterruptedOpenRequest`,
+  `theShortRunRequest`, `theMeetingInterruptedRequest`, `theHeldRequest`, `theBreakHeldRequest`,
+  `theBreakAcrossRequest`), edited in place on their own lines, so no line of the file moved (gap 5161 counted two;
+  track W's Land 1 added three of them).  Nothing at the file's end was touched (track Q's).
+* **`inputs-exempt.txt`**'s `RuntimeIn.yesterday` line and **`written-exempt.txt`**'s `planner.state.yesterday` line:
+  both STALE the moment the field and the reader left, and gone.  Check 13's input half: **33 read of 35, 2 exempt**
+  (3 exempt before); its written half: **40 unwritten, 6 shallow** (one shallow line fewer).
+* **`Check.lean`**: the six deleted laws' audit lines; two new laws' appended (§3).  Axiom audit **6,793** (6,797
+  at Land 1: −6 + 2).
+* **`tm-core/src/planwire.rs`**: the module doc's account of what the kernel reads (no code: the encoder wrote no
+  `yesterday` before this step and writes none after it — `planner_json`'s test at `planwire.rs`, and
+  `kernel_planner_refusals.rs`' proptest over arbitrary host state holding stored priorities).
+
+`Replay.lean` is not touched: the `yesterday` W-49 track L removed (gap 5300) was the REPLAY's first-plan slot of a
+ledger day (`Replay.DayAcc`), a different field from the planner request's; D108's hysteresis input still reaches
+ranking through the capacity section's candidates, never through the planner section.
+
+### 2. What a request that still carries `state.yesterday` gets
+
+**It is left unread, as `lastHash` has been since the W-47 repair** — the `state` object's reader looks keys up by
+name and has no rule against an unknown one.  Pinned three ways, each of which fails on the deleted decoder:
+
+* `PlanWire.readState_leaves_yesterday_unread` (new, `rfl`): a `state` object carrying `"yesterday": "x"` — a value
+  the deleted decoder refused by the name badState yesterday — reads as `RuntimeIn.empty`, as the key's absence does.
+* `PlanWire.readState_accepts_a_running_day` keeps its `yesterday` key and now carries a stored `p` of **8** (it was
+  3): the record reads `active`, `break` and `interrupt` exactly, and the deleted decoder answered badYesterdayList.
+* `tm/tests/kernel_planner_wire.rs`' `a_stored_yesterday_is_left_unread` (replacing a_stored_priority_past_seven_is_refused,
+  whose subject is gone), through the FFI: the same request bare, with `"yesterday": [{"id":"m1","p":8}]` and with
+  `"yesterday": "not a list"` answers no `err` and three equal `ok.plan` objects.
+
+That test is a hand-built request of the test harness, not an expectation of the binary's own output, so RULE M has
+nothing to account for: the binary sends no `yesterday` (§1) and nothing it prints moves (§5).
+
+### 3. Laws: deleted, restated, new
+
+* **Deleted with their subjects** (six, audit lines with them): mkYesterday?_refuses_a_priority_past_seven,
+  mkYesterday?_refuses_too_many, readYesterday_refuses_a_priority_past_seven, readYesterday_accepts_seven,
+  readYesterday_refuses_past_the_cap, readYesterday_of_nil.  Each was about a definition that no longer exists; none
+  is narrowed, because nothing remains for it to be about.
+* **Restated over the narrower record** (D5) — each loses only the conjuncts about a deleted constructor or field, and
+  keeps every other conjunct exactly, so the new statement is the old one's restriction to what exists:
+  `the_extension_moves_only_the_running_estimate_and_the_overrides` (nine conjuncts, ten before; the old implies the
+  new and the new is the old minus the field that is gone), `planKey_names_are_the_wire_keys` (six keys, seven before),
+  `the_refusals_spell_themselves` (eight texts, ten before), `plannerRefusalJson_is_the_err_planner_shape` (stated at
+  `badBatchMaxMin`, which it was stated at badYesterdayList before — the same shape law at a constructor that
+  exists), and `readState_accepts_a_running_day` (§2: the answer tuple loses the field, the request keeps the key).
+* **Re-proved unchanged in statement**: `readState_of_an_empty_object`, `PlannerWit.readState_reads_active`,
+  `readState_answers_only_a_block_mkActive_built` and every law over `RuntimeIn.empty` and the six literals.
+* **New**, both audited: `PlanWire.readState_leaves_yesterday_unread` (§2), and
+  `PlanWire.readOptBreak_reads_the_break` — a `decide` witness that `readOptBreak` hands a break record on, written
+  because re-verifying `readOptBreak`'s drifted row came back **ALONE** at `default` (§5): its one pin,
+  `readState_accepts_a_running_day`'s `rfl`, was the whole of what told it from the constant, as
+  `readOptInterrupt_reads_the_interruption` was written for the interruption at W-41.  Probed at 8 GB under
+  `timeout 120` (0.4 s), and shown to bite with its `10` changed to `11`.  It is the file's last theorem, so no
+  pin site moved for it.
+* **Cheats 441-442** (`Negative.lean`, appended under this track's banner): projecting `yesterday` from a
+  `Planner.RuntimeIn` fails as Lean's invalidField error, and the refusal badYesterdayList as its unknownIdentifier error —
+  each checked for its stated reason with `-DmaxErrors=100000`, check 4's own flag.
+
+### 4. Checks 12 and 13 shrink; the census reasons that moved
+
+* Check 12 (`reach-exempt.txt`): no entry is added or removed — the four deleted definitions were all REACHED — and
+  three section reasons are re-derived with this date, the numbers the gate measured: `## PlanWire.lean` **41 of 44**
+  (43 of 46), `## Planner.lean` **167 of 289** (168 of 290), and `## Priority.lean` **15 of 23** (16 of 23).  The
+  last is not this track's module and moved because of it: `yesterdayOf?` was reached through mkYesterday?, the
+  planner section's decoder; its one remaining DIRECT call is `EmitWire.readPrio`'s, behind the granted
+  `CLASS unsent plan` line, so it is answered by that property, not by an entry.  It is live at run time all the
+  same: `CapWire.readCand` (the capacity section the binary sends) passes it to `optNatWith` as a hoisted static
+  closure (Boundary.c: the closure readCand___closed__1_value, whose m_fun is lp_TmKernel_Tm_yesterdayOf_x3f), which is the
+  first blind spot `callgraph.py`'s header declares — gap 5361.
+* Check 13: §1's two lines, gone.
+* Check 8 (`citations-allow.txt`): eight dead names counted where older append-only README blocks cite them as they
+  stood (W-24 track A's R2 block and its auditors; gap 5161 itself): PlanWire.readYesterday 1, Planner.mkYesterday?
+  2, badYesterday 1, badYesterdayList 2, mkYesterday? 7, its two laws 1 each, readYesterdayPair 1.  Every sentence
+  since writes them unbackticked.
+
+### 5. Mutations (D40): the pin drift, re-verified
+
+Deleting ~30 lines of `Planner.lean` and ~45 of `PlanWire.lean` moved the recorded pin site of **355** roster entries
+over **117** definitions (gap 5161 counted 129 rows), plus `PlanWire.readState`, whose body changed.  Each was re-run
+with `mutate.py --verify --write --only <def>` in one of four clones of this tree (`scratchpad/w49/y/clone1-4`), never
+re-anchored by hand, and its rewritten row copied back (`scratchpad/w49/y/merge.py` takes, per definition, the row
+the clone that finished it with `0 rostered definition(s) failed re-verification` wrote).  Over the runs — a few
+definitions ran twice where the work was rebalanced between clones — the constants came back **207 PINNED, 9
+UNFOLDABLE, 2 UNAVAILABLE and 1 ALONE**, and no SURVIVED or INVALID.  The one ALONE was `readOptBreak := default`
+(above): its row predates check 9's second pass and was never re-run since; with `readOptBreak_reads_the_break` in, it
+re-ran PINNED (`PlanWire.lean:626 readState_accepts_a_running_day also PlanWire.lean:2851
+readOptBreak_reads_the_break`).  `PlanWire.eveningFirst` held TWO rows (W-49 Land 1 re-verified it and the second
+copy stayed); the stale one is deleted, the re-verified one kept — gap 5362.  The six `PlannerWit` literals of §1
+changed body, so their rows were re-run too (each UNFOLDABLE, no `Inhabited PlanReq`, as before).  The two rows of the
+deleted readers (readYesterday, readYesterdayPair) left `mutations.txt` with their subjects.  Check 9: **889 new or changed since `86c4dc6`, 889 rostered, 0 owed** (891 at Land 1: the two deleted readers' rows), and `6 row(s) superseded by a re-audit` — gap 5362's six.
+
+### 6. Driven
+
+`tm init --example` at 2026-09-09 09:00 CDT, then `start ^d1`, `plan`, `now` and `plan --json` at 09:30, by this
+track's binary and by W-49 Land 1's (`w49-land1/target/debug/tm`): every command exits 0 on both, and every output and
+every file of the two trees is byte-identical but for the tree's own path and the replay checkpoint's kernel id (two
+kernels, D113).  `tm plan` begins
+
+```
+2026-09-09 · window 09:30–18:50 · budget 6 blocks
+09:30  4 p3 ▶ CS 234 pset 2                @O3  6b     running · 360m left
+10:30  ·      laundry 30m
+```
+
+on both.  Nothing the binary does moves, which is why no parity number is issued.
+
+### 7. Acceptance, capped
+
+All under `systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0` on this commit's tree
+(`scratchpad/w49/y/`; the machine shared with tracks Q and E, `uptime` with each run):
+
+* `check.sh` (load 3.9): seventeen lines, all ok — build; totality; axiom audit **6,793**; `Negative.lean` rejected;
+  FFI target 97; corpus 29/37 files and 4/5 whole plans; stage goals **1**; prose citations ok (66,558; 66,561 after this paragraph was written; 775 counted);
+  check 9 **889 rostered, 0 owed**; parity **P1-P125** (none issued); no two names, 0 UNANSWERED; reach **1,634**
+  reachable, **1,097** exempt (1,638 and 1,097 at Land 1: the three deleted definitions and `yesterdayOf?`, §4); fields 17
+  of 17 written; inputs **33 read of 35, 2 exempt**; sent 168 of 169 decoded; written 168 of 208, 40 unwritten (6
+  shallow); the kernel replays 96 modules.  Earlier runs failed checks 8, 9 and 12 on the steps §4 and §5 record, and
+  check 8 and 10 on this block's own first wording; each is answered above, and `citations.py` and `parity.py` were
+  re-run green after the block's last edit.
+* `cargo test --workspace --no-fail-fast`, **three runs** (980 s at load 7.4, 904 s at 7.3, 900 s at 4.8): **3,001
+  passed / 0 failed / 53 ignored over 170 result lines** each (Land 1's 3,000 + 1 with its one history-reading
+  failure; this branch's first parent is `acb8757`, so `fork_rebless_history` passes).  No `.proptest-regressions`
+  file moved.
+* FFI crate (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed / 0 failed** (8 + 90 + 7).
+
+### 8. brief_corrections
+
+* Gap 5161 named "two `RuntimeIn` constructors in `PlannerWit`": HEAD holds **six** anonymous literals (three since
+  W-49 track W's Land 1), plus the `RuntimeIn.empty` record-update literals, which needed nothing.
+* Gap 5161's list missed what else read the field or its names: `readState_accepts_a_running_day`, three spelling laws
+  of `PlanWire` (keys, refusal texts, the `err.planner` shape stated at badYesterdayList), the `PlanKey.yesterday` and
+  two `PlannerRefusal` constructors, `kernel_planner_wire.rs`' refusal test and `kernel_planner_refusals.rs`' three
+  CLASS rows and its two floors (constructors `>= 17` → `>= 16`, the enum's size; thrown pairs `>= 40` → `>= 38`, the
+  scan's count — each re-measured at its subject), and
+  `Priority.lean`'s census (§4).
+* Gap 5161 counted 129 drifted mutation rows; measured, 355 pin sites over 117 definitions (§5).
+* The brief's warning was right: W-49 track L's `yesterday` (gap 5300) is the replay's day slot, not this field (§1).
+
+### 9. Gaps
+
+**Gap 5161 — closed** (§1-§5).
+
+**Gap 5360 — `PlannerWit.readState_reads_active`'s doc comment still says "six binds" (A).**  1. *What.*  `readState`
+binds four times since this step (six before); the comment above `readState_reads_active`, whose proof splits every
+bind and is unchanged, still counts six.  2. *Why.*  `PlannerWit.lean` is shared with track Q this run, and this track
+edits only its `RuntimeIn` literals.  3. *Cost.*  A stale count in prose; the proof is generic over the binds.
+4. *Clears it.*  The Land, or the next step free to edit the file.
+
+**Gap 5361 — check 12 cannot see `yesterdayOf?`'s live call through a hoisted closure (A).**  1. *What.*  With
+mkYesterday? gone, `reach.py` counts `yesterdayOf?` as reached only through the unsent `plan` section, while the
+capacity section's `CapWire.readCand` calls it on every planning request through a static closure object the code
+generator hoisted (readCand___closed__1; `defaultPrioOf?` in readCand___closed__0 beside it is reached by a
+direct call elsewhere, so the census does not move for it).  2. *Why.*  The walk's nodes are emitted functions and globals; a `static const
+lean_closure_object` is neither, which `callgraph.py`'s header declares as its first blind spot.  3. *Cost.*  A
+census that says "reached only through `plan`" of a definition the binary runs: an under-count of reached
+definitions, never an exemption granted — nothing is hidden that the gate would otherwise fail.  4. *Clears it.*
+Whoever next touches `callgraph.py`: follow a `.m_fun = <sym>` of a static closure named by a reached body as an
+edge.
+
+**Gap 5362 — `mutations.txt` holds six keys twice (A).**  1. *What.*  `Replay.closePauseM`, `Replay.cutPieces`,
+`Replay.DayOp.alterFn`, `Replay.doneClose`, `Seal.cutReads` and `Seal.startReads` each have two rows (seven keys at
+HEAD, `PlanWire.eveningFirst` the seventh, §5).  2. *Why.*  A land that re-verifies a row another track also wrote
+keeps both sides of an append-only file; `mutate.py` reads the roster into a map, so the LAST row of a key is the one
+every gate reads and the first is read by nothing.  3. *Cost.*  A row nobody reads: its pin sites can rot unseen, and a
+reader of the file meets two verdicts for one definition.  4. *Clears it.*  The Land (`Replay.lean` and `Seal*` are
+not this track's), and `mutate.py` refusing a duplicate key.
+
+### 10. Owed
+
+Nothing of gap 5161.  Gap 5360 (one word of prose), gap 5361 (check 12's closure blind spot, one instance named) and gap 5362 (six duplicate roster keys).  The §5.13 drive of the TUI is unchanged by this step.
