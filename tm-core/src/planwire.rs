@@ -1994,6 +1994,8 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
         .map(|(i, s)| segment_of(s, ctx, &format!("plan.segments[{i}]")))
         .collect::<W<Vec<_>>>()?;
     let diagnostics = diagnostics_of(&plan["diagnostics"], &segments, ctx)?;
+    let cells = rows_of(plan, &segments)?;
+    let divider = divider_of(plan, &segments)?;
 
     // The kernel's `{id, p}` list against the host's pairs, as multisets.
     let mut theirs: BTreeMap<(String, u8), usize> = BTreeMap::new();
@@ -2023,10 +2025,12 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
         segments,
         diagnostics,
         priorities: ctx.cands.iter().zip(ctx.prios).map(|(c, p)| (c.id.clone(), p.clone())).collect(),
-        // The rows are asked of the kernel in a second call over this very day
-        // (`rows_request`, `read_rows`; the owner's D112).
-        cells: Vec::new(),
-        divider: None,
+        // The day's rows and its `window ends` divider ride this answer (the owner's D124,
+        // W-49 track P, README gap 5130): `plan.rows` and `plan.divider`, the kernel's cells for
+        // every segment of the day it planned (the owner's D112), read above by the one
+        // decoder of a row's cells.
+        cells,
+        divider,
     };
     let hash = text(&plan["hash"], "plan.hash")?.to_string();
     let ours = day.hash();
@@ -2043,46 +2047,28 @@ pub fn read_plan(plan: &Value, ctx: &DayCtx<'_>) -> W<KernelDay> {
 }
 
 // ---------------------------------------------------------------------------
-// The day's rows (the owner's D112): the kernel's cells, asked through the `plan` section
+// The day's rows (the owner's D112): the kernel's cells
 // ---------------------------------------------------------------------------
 
-/// **The request that asks the kernel for the rows of the day it planned** (the owner's
-/// **D112**: D30 Q6 (a) built — "the kernel emits cells; one Rust function pads"). `plan` is the
-/// planner answer's `plan` object, and its `segments` and `priorities` go back EXACTLY as the
-/// kernel wrote them — `PlanWire.segJson` and `PlanWire.planJson` are shaped for this round
-/// trip (W-27), so no field of a segment is re-encoded on this side. The request carries the
-/// planner request's own documents, zone and block length, and `now` is the planned day, the
-/// day a HOT row's deadline is told against (`EmitDue.hotCell`, fork `hot_note`'s
-/// `plan.date`). `bed` is §16's, the wind-down row's clock. **And the planner answer's own
-/// `budgetBlocks` and window's end** (W-48 track R, README gaps 5031 and 1301), so the kernel
-/// answers the `window ends` divider beside the rows ([`read_divider`]) from the budget the
-/// planner spent — the host no longer walks the rows against it.
-pub fn rows_request(docs: &Value, tz: &Value, block_min: u32, date: NaiveDate, bed: NaiveTime, plan: &Value) -> String {
-    json!({
-        "docs": docs,
-        "now": date.to_string(),
-        "blockMin": block_min,
-        "tz": tz,
-        "plan": {
-            "bed": fmt_time(bed),
-            "priorities": plan["priorities"].clone(),
-            "segments": plan["segments"].clone(),
-            "budgetBlocks": plan["budgetBlocks"].clone(),
-            "windowEnd": plan["window"]["hi"].clone(),
-        },
-    })
-    .to_string()
+/// **The kernel's cells for a day, from a response to the `plan` section** — the rows of a
+/// day the caller built by hand and sent through that section. Only the test harnesses send
+/// it since W-49 track P (the owner's D124, README gap 5130): the binary's planned day carries
+/// its rows in the planner's own answer, which [`read_plan`] reads. A refusal is a defect, and
+/// the rows are [`rows_of`]'s.
+pub fn read_rows(resp: &Value, segments: &[Segment]) -> W<Vec<RowCells>> {
+    if let Some(e) = resp.get("err") {
+        return Err(WireDefect::at(format!("plan rows: the kernel refused the day it was sent: {e}")));
+    }
+    rows_of(&resp["ok"]["plan"], segments)
 }
 
 /// **The kernel's cells for a day**, one per segment and in its order (`EmitWire.rowJson`: §4.3's
-/// nine and a batch's members) — the ONE decoder of a row's cells on this side of the wire. A
-/// refusal, a row count that is not the segments', or members on a row that is not a batch's is
-/// a defect, never a row printed beside the wrong segment.
-pub fn read_rows(resp: &Value, segments: &[Segment]) -> W<Vec<RowCells>> {
-    if let Some(e) = resp.get("err") {
-        return Err(WireDefect::at(format!("plan rows: the kernel refused the day it planned: {e}")));
-    }
-    let rows = array(&resp["ok"]["plan"]["rows"], "plan.rows")?;
+/// nine and a batch's members), from a `plan` object — the ONE decoder of a row's cells on this
+/// side of the wire, under the planner's answer ([`read_plan`]) and under the `plan` section's
+/// ([`read_rows`]) alike. A row count that is not the segments', or members on a row that is not
+/// a batch's, is a defect, never a row printed beside the wrong segment.
+fn rows_of(plan: &Value, segments: &[Segment]) -> W<Vec<RowCells>> {
+    let rows = array(&plan["rows"], "plan.rows")?;
     if rows.len() != segments.len() {
         return Err(WireDefect::at(format!("plan.rows: {} rows for {} segments", rows.len(), segments.len())));
     }
@@ -2093,14 +2079,22 @@ pub fn read_rows(resp: &Value, segments: &[Segment]) -> W<Vec<RowCells>> {
         .collect()
 }
 
-/// **The `window ends` divider of a day's rows** (W-48 track R, README gaps 5031 and 1301) — the
-/// kernel's (`Emit.divider`, through `EmitWire.dividerJson`): where it goes among the rows (`before`,
-/// a row index, or the number of rows when it comes last) and its cells, which `emit::render_row`
-/// pads as it pads a row. `None` where the day has none (`null`). A response that sent no budget
-/// carries no `divider` key, and that is a defect here: the binary sends the budget with every day.
+/// **The `window ends` divider of a day's rows, from a response to the `plan` section** (W-48
+/// track R, README gaps 5031 and 1301) — [`divider_of`] under the response's `plan` object.
 pub fn read_divider(resp: &Value, segments: &[Segment]) -> W<Option<(usize, RowCells)>> {
-    let v = match resp["ok"]["plan"].get("divider") {
-        None => return Err(WireDefect::at("plan.divider: absent from an answer to a section that sent its budget")),
+    divider_of(&resp["ok"]["plan"], segments)
+}
+
+/// **The `window ends` divider of a day's rows** — the kernel's (`Emit.divider`, through
+/// `EmitWire.dividerJson`): where it goes among the rows (`before`, a row index, or the number
+/// of rows when it comes last) and its cells, which `emit::render_row` pads as it pads a row.
+/// `None` where the day has none (`null`). Since W-49 (the owner's D124) the planner answer
+/// computes it from the day's own budget and window's end (`EmitWire.dayRowsPairs`), so a
+/// `plan` object with no `divider` key is a defect here: every planned day carries one, and a
+/// `plan` section request that sent no budget is answered none.
+fn divider_of(plan: &Value, segments: &[Segment]) -> W<Option<(usize, RowCells)>> {
+    let v = match plan.get("divider") {
+        None => return Err(WireDefect::at("plan.divider: absent from an answer that carries the day's budget")),
         Some(Value::Null) => return Ok(None),
         Some(v) => v,
     };
@@ -2411,6 +2405,9 @@ mod tests {
                     .map(|(i, w)| json!({"id": i.as_str(), "why": w.wire_name()})).collect::<Vec<_>>()},
             "priorities": day.priorities.iter().map(|(i, p)| json!({"id": i.as_str(), "p": p.p})).collect::<Vec<_>>(),
             "hash": day.hash(),
+            // The day's rows and divider ride the planner's answer (the owner's D124).
+            "rows": four_rows(),
+            "divider": null,
         })
     }
 
@@ -2491,6 +2488,8 @@ mod tests {
         day.priorities = cands.iter().zip(&prios).map(|(c, p)| (c.id.clone(), p.clone())).collect();
         let notes = [None, Some(json!({"note": "soFar", "workedMin": 12})), None, None];
         let v = kernel_shape(&day, &notes);
+        // The rows the answer carries are the day's cells (the owner's D124).
+        day.cells = read_rows(&json!({"ok": {"plan": {"rows": four_rows()}}}), &day.segments).expect("four rows");
 
         let got = read_plan(&v, &ctx).expect("the day reads back");
         assert_eq!(got.day, day, "the decoded day is the day");
@@ -2623,24 +2622,23 @@ mod tests {
         assert!(e.to_string().contains("refused"), "{e}");
     }
 
-    /// **The rows request sends the planned day back as the kernel wrote it** — the planner
-    /// answer's own `segments` and `priorities`, untouched, over the request's documents and
-    /// zone, with the planned date as `now` and §16's `bed` as `HH:MM`.
+    /// **The planner's answer carries the day's rows and divider, and a `plan` object
+    /// without them is a defect** (the owner's D124, W-49 track P, README gap 5130): the
+    /// binary asks no second call for them, so an answer that lacks them leaves a day no
+    /// surface can print — a fault, never an empty drawing.
     #[test]
-    fn the_rows_request_sends_the_planned_day_back_as_the_kernel_wrote_it() {
-        let plan = json!({"segments": [{"start": 1, "stop": 2, "kind": "block"}], "priorities": [{"id": "m1", "p": 3}],
-                          "hash": "00000000000000ff"});
-        let docs = json!([{"path": "backlog.md", "lines": ["# Untied"]}]);
-        let tzw = json!({"key": "America/Chicago"});
-        let date = NaiveDate::from_ymd_opt(2026, 9, 7).expect("date");
-        let bed = NaiveTime::from_hms_opt(22, 0, 0).expect("bed");
-        let req: Value = serde_json::from_str(&rows_request(&docs, &tzw, 50, date, bed, &plan)).expect("json");
-        assert_eq!(req["plan"]["segments"], plan["segments"], "the segments go back as written");
-        assert_eq!(req["plan"]["priorities"], plan["priorities"], "the priorities go back as written");
-        assert_eq!(req["plan"]["bed"], json!("22:00"));
-        assert_eq!((req["now"].clone(), req["blockMin"].clone()), (json!("2026-09-07"), json!(50)));
-        assert_eq!((req["docs"].clone(), req["tz"].clone()), (docs, tzw));
-        assert!(req["plan"].get("hash").is_none(), "only the two arrays and `bed` ride the section");
+    fn the_planners_answer_carries_the_rows_and_the_divider() {
+        // The divider's cells are the kernel's to word (`one_renderer`'s census): a placeholder here.
+        let plan = json!({"rows": four_rows(), "divider": {"before": 2, "time": "19:42", "ci": "-", "p": "",
+                          "mark": "", "title": "the kernel's divider", "parent": "", "est": "", "actual": "",
+                          "note": "", "batchNames": []}});
+        let rows = rows_of(&plan, &sample_segments()).expect("the rows");
+        assert_eq!(rows.len(), 4);
+        let (before, cells) = divider_of(&plan, &sample_segments()).expect("the divider").expect("one");
+        assert_eq!((before, cells.title.as_str()), (2, "the kernel's divider"));
+        assert_eq!(divider_of(&json!({"divider": null}), &sample_segments()).expect("none"), None);
+        assert!(divider_of(&json!({}), &sample_segments()).is_err(), "no divider key is a defect");
+        assert!(rows_of(&json!({}), &sample_segments()).is_err(), "no rows key is a defect");
     }
 
     #[test]

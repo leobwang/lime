@@ -340,7 +340,7 @@ inductive Event
   | skip (item : List Char) (inst : List Char)
   /-- A plan was computed.  **`yesterday`** (the owner's **D108**, README gap 4893, parity **P119**): the day's FIRST
   `plan` carries §7.4's hysteresis input — yesterday's `p` per item, the map `.tm/state.json`'s
-  `priorities_yesterday` caches — so the log derives it (`Replay.DayAcc.yesterday`) and deleting the cache moves no
+  `priorities_yesterday` caches — so the log derives it (`Replay.DayAcc.late`, since W-49) and deleting the cache moves no
   ranking.  Every other `plan` line carries none (an empty map is not written).  Fork 4748911 writes no such key and
   ignores it on read (its `define_events!` denies no unknown field). -/
   | plan (hash : List Char) (replansToday : U32) (driftMin : U32) (yesterday : List (Id × U8))
@@ -622,7 +622,7 @@ def prioStep : Option (List (List Char × U8)) → (List Char × JVal) → Optio
 
 /-- **A priority map's pairs, in order** (D108): every value a `u8`.  A `foldl` (D9-21): the map can be as long as a
 line.  A repeated key is kept as written; serde's `BTreeMap` keeps the last, and the one reader of the map
-(`Replay.DayAcc.yesterday`'s host decoder) builds its map in order, so the last wins there too. -/
+(`Replay.DayAcc.late`'s host decoder) builds its map in order, so the last wins there too. -/
 def allPrios (kvs : List (List Char × JVal)) : Option (List (List Char × U8)) :=
   (kvs.foldl prioStep (some [])).map List.reverse
 
@@ -3156,7 +3156,7 @@ theorem a_break_start_read_off_the_disk_is_at_a_place (n : Nat) (l : List Char) 
 /-! ## D108: the day's first `plan` carries §7.4's hysteresis input (README gap 4893, W-48 track A, parity P119) -/
 
 /-- **A `plan` line's hysteresis input is read as written** (the owner's D108): `{"d1":1,"m2":3}` at `yesterday` is the
-pairs `d1 1`, `m2 3`, in order — the field the day's first `plan` carries, from which `Replay.DayAcc.yesterday` and D42's
+pairs `d1 1`, `m2 3`, in order — the field the day's first `plan` carries, from which `Replay.DayAcc.late` and D42's
 rebuild of `.tm/state.json`'s `priorities_yesterday` read it. -/
 theorem a_plan_line_carries_its_hysteresis_input :
     emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h','1']),

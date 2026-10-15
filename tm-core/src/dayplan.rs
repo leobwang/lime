@@ -328,9 +328,9 @@ pub struct DayPlan {
     pub priorities: Vec<(Id, Prio)>,
     /// **The day's rows as the kernel's cells**, one per segment, in the
     /// segments' order (the owner's **D112**: D30 Q6 (a) built, "the kernel
-    /// emits cells; one Rust function pads"). The binary asks the kernel for
-    /// them through the `plan` section with the day it planned
-    /// (`planwire::rows_request`, `planwire::read_rows`); every surface that
+    /// emits cells; one Rust function pads"). The kernel answers them with the
+    /// day it planned, in the same call (the owner's D124, W-49 track P:
+    /// `planwire::read_plan` reads `plan.rows`); every surface that
     /// prints a row prints `emit::render_row` of one of these, and no Rust
     /// builds one. **Empty on a day nobody asked rows for** — the ghost row's
     /// days, drawn in the day bar alone.
@@ -342,7 +342,7 @@ pub struct DayPlan {
     pub cells: Vec<crate::emit::RowCells>,
     /// **The `window ends` divider, the kernel's** (W-48 track R, README gaps 5031 and
     /// 1301): its position among [`DayPlan::cells`] (a row index, or their number when it
-    /// comes last) and its cells, asked with the rows (`planwire::read_divider`). `None` on
+    /// comes last) and its cells, answered with the rows (`planwire::read_plan`). `None` on
     /// a day with no divider and on a day nobody asked rows for.
     #[serde(skip)]
     pub divider: Option<(usize, crate::emit::RowCells)>,

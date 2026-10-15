@@ -1670,6 +1670,9 @@ fn refusal(err: &Value) -> KernelIssue {
         // W-48 repair (README gap 5212). Until then it was the one section refusal the host did
         // not read, so a day of more than `Planner.maxCands` segments (a block open across
         // hundreds of logged pauses) reached the user as "unrecognised shape" (AGENTS §5.7).
+        // Since W-49 track P the row reader reads a day of any length (the owner's D123) and
+        // the binary sends no `plan` section at all (D124: the planner's answer carries the
+        // rows), so only a request a harness builds by hand meets these names.
         let (name, rest) = match text.split_once(' ') {
             Some((n, k)) => (n, Some(k)),
             None => (text, None),
@@ -1678,9 +1681,6 @@ fn refusal(err: &Value) -> KernelIssue {
             put("key", k.to_string());
         }
         let why = match name {
-            "tooManySegments" => "the planned day holds more segments than the row section reads \
-                 (`Planner.maxCands`, 1,024) — the kernel planned it, and its own row reader refuses \
-                 it (README gap 5212)",
             "tooManyPriorities" => "more priorities than the row section reads (`Planner.maxCands`)",
             _ => "a value of the row section is refused — see EmitWire.lean's `RowRefusal`",
         };
@@ -2015,7 +2015,8 @@ mod tests {
     #[test]
     fn every_section_refusal_the_kernel_answers_is_named() {
         for (err, name) in [
-            (serde_json::json!({"plan": "tooManySegments"}), "tooManySegments"),
+            (serde_json::json!({"plan": "tooManyPriorities"}), "tooManyPriorities"),
+            (serde_json::json!({"planner": "planWithPlanner"}), "planWithPlanner"),
             (serde_json::json!({"plan": "badSegment 3 kind"}), "badSegment"),
             (serde_json::json!({"plan": "rowsWithCommands"}), "rowsWithCommands"),
             (serde_json::json!({"planner": "eveningPastTheCalendar"}), "eveningPastTheCalendar"),

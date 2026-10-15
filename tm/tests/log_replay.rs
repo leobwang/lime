@@ -331,8 +331,47 @@ fn replay_is_json_safe_and_snapshotted() {
     let r = load();
     let json = serde_json::to_string(&r).unwrap();
     let back: Replay = serde_json::from_str(&json).unwrap();
-    assert_eq!(back, r);
+    // **The plan stamps do not travel through JSON, and equality sees that they did not** (W-49 track L, the W-48
+    // recheck's finding): `DayReplay`'s calendar-day plan slots are the host's bookkeeping, not serialised (the fork
+    // has no such field and T5 compares the fork's keys). Until W-49 equality skipped them, so this round trip
+    // passed by not looking; it now says exactly what travels — every day as it was, with its plan slots empty.
+    assert!(r.days.values().any(|d| d.plan_at.is_some()), "the fixture's plan lines fill the slots");
+    assert_ne!(back, r, "equality sees the slots JSON dropped");
+    let mut expect = r.clone();
+    for d in expect.days.values_mut() {
+        d.plan_at = None;
+        d.plan_hash = None;
+        d.plan_line = None;
+        d.late_at = None;
+        d.late_line = None;
+        d.late.clear();
+    }
+    assert_eq!(back, expect);
     insta::assert_yaml_snapshot!("three_days_replay", r);
+}
+
+/// **Two days that disagree only about a calendar day's plans are not equal** (W-49 track L; the W-48 recheck's
+/// finding: `impl PartialEq for DayReplay` skipped `plan_at`, `late_at` and `late`, so this compared EQUAL — the test
+/// that would have caught it).
+#[test]
+fn days_that_disagree_about_their_plans_are_not_equal() {
+    let r = load();
+    let day = r.days.values().find(|d| d.plan_at.is_some()).expect("a day with a plan").clone();
+    let t = at("2026-09-09T23:59:00-05:00");
+    let mut a = day.clone();
+    a.plan_at = Some(t);
+    assert_ne!(a, day, "the last plan's stamp");
+    let mut b = day.clone();
+    b.late_at = Some(t);
+    assert_ne!(b, day, "the input's stamp");
+    let mut c = day.clone();
+    c.late.insert("x1".into(), 3);
+    assert_ne!(c, day, "the input's map");
+    let mut d = day.clone();
+    d.plan_hash = Some("ffff".into());
+    d.plan_line = Some(9);
+    d.late_line = Some(9);
+    assert_ne!(d, day, "the hash and the lines");
 }
 
 /// Design §11.2, step R13: every observation carries the physical line of the

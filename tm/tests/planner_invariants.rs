@@ -275,6 +275,21 @@ fn routine_window_ends_at(w: &World, state: &RuntimeState, t: DateTime<Tz>) -> b
         .any(|c| c.window.is_some_and(|(_, end)| end == t))
 }
 
+/// **The reservation of a block a wall holds** (parity P123, README gap 5217): a Block row of the
+/// runtime's PAUSED block that takes no slot (no slot energy, as §8.2 choice 5b's reservation) and
+/// starts after `now`.
+fn is_held_reservation(s: &Segment, w: &World) -> bool {
+    s.kind == SegKind::Block
+        && s.energy.is_none()
+        && s.start > w.now
+        && w.state.active.as_ref().is_some_and(|a| a.paused && s.item.as_ref() == Some(&a.id))
+}
+
+/// The day's held reservation, if any ([`is_held_reservation`]).
+fn held_reservation<'a>(day: &'a DayPlan, w: &World) -> Option<&'a Segment> {
+    day.segments.iter().find(|s| is_held_reservation(s, w))
+}
+
 /// **§8.3's invariants, of one generated day** — see [`Planner`]. The checks
 /// are the ones this file's first arm made of the fork's day since stage 3,
 /// unchanged but for two readings: the planner's day is `p.day`, and "the
@@ -306,7 +321,20 @@ fn check_day_invariants(p: &dyn Planner, case: &Case, w: &World) -> Result<(), T
         // has already run (up to `now`).
         prop_assert!(seg.start <= w.now && seg.end >= w.now, "{seg:?}");
     }
-    let running_min = current.filter(|s| s.start >= w.now).map_or(0, Segment::minutes);
+    // **A block a wall HOLDS is reserved from the release** (parity P123, README gap 5217): §8.2
+    // choice 5b's reservation of a PAUSED block — a Block row of `state.active`'s item that takes
+    // no slot, starting after `now`, not `▶` (it is not running) — one at most, and only where the
+    // runtime's block is paused. It is the reservation the `▶` row is everywhere else, and every
+    // check below that reads the reservation reads it too.
+    let held = held_reservation(&day, w);
+    prop_assert!(
+        day.segments.iter().filter(|s| is_held_reservation(s, w)).count() <= 1,
+        "two held reservations: {day:?}"
+    );
+    if held.is_some() {
+        prop_assert!(current.is_none(), "a held reservation beside a running block: {day:?}");
+    }
+    let running_min = current.filter(|s| s.start >= w.now).map_or(0, Segment::minutes) + held.map_or(0, Segment::minutes);
 
     // --- no overbooking ---------------------------------------------
     // §9 gives the running block its minutes whatever the budget says
@@ -391,7 +419,7 @@ fn check_day_invariants(p: &dyn Planner, case: &Case, w: &World) -> Result<(), T
     let cands = w.candidates();
     let ci_of = |id: &Id| cands.iter().find(|c| c.id == *id).map_or(0, |c| c.ci);
     for seg in day.segments.iter().filter(|s| s.kind.is_work() && s.start >= w.now) {
-        if seg.flags.current {
+        if seg.flags.current || is_held_reservation(seg, w) {
             continue; // checked above: it is not in a slot at all
         }
         let energy = seg.energy.expect("a planned block has an energy");
@@ -492,7 +520,7 @@ fn check_day_invariants(p: &dyn Planner, case: &Case, w: &World) -> Result<(), T
     for seg in day
         .segments
         .iter()
-        .filter(|s| s.kind.is_work() && s.start >= w.now && !s.flags.current)
+        .filter(|s| s.kind.is_work() && s.start >= w.now && !s.flags.current && !is_held_reservation(s, w))
     {
         let Some(energy) = seg.energy else { continue };
         // A §7.5 batch is won by its leader and carries the rest of the
@@ -633,7 +661,7 @@ fn check_day_invariants(p: &dyn Planner, case: &Case, w: &World) -> Result<(), T
             day.segments
                 .iter()
                 .filter(|s| s.kind.is_work() && s.start >= w.now && s.items().contains(id))
-                .all(|s| s.flags.current),
+                .all(|s| s.flags.current || is_held_reservation(s, w)),
             "{id} is blocked and planned"
         );
     }
@@ -1287,8 +1315,8 @@ proptest! {
     /// draws for the same day** (W-38, README gap 3282; restated at W-47 for the owner's D112) — (1)
     /// no day the kernel plans is refused by the `plan` section's wire (every R10 bound it carries is
     /// one a real day could exceed); (2) row for row, the rows the BINARY prints (`DayPlan::cells`:
-    /// the `plan` section asked over the planner's OWN segments and priorities, as the kernel wrote
-    /// them — `planwire::rows_request`, `kernel_capacity::read_day`'s call) against the `plan`
+    /// the planner's own answer since the owner's D124, W-49 track P — `EmitWire.dayRowsPairs`, the
+    /// `plan` section's answer for the day's own request, `kernel_capacity::read_day` reads it) against the `plan`
     /// section's answer over the SAME day as the host DECODED it and this file's encoder wrote it
     /// back (`rowwire::seg_json`), cell for cell and `batchNames` — so a field `planwire::read_plan`
     /// drops or bends on its way into a `Segment` is a cell that differs — with ONE rule for the

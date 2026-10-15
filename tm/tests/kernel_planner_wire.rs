@@ -232,24 +232,33 @@ fn a_readable_planner_section_answers_the_day() {
     );
 }
 
-/// **The two writers of the `plan` key share one object** — `rows` is
-/// `EmitWire.withPlan`'s and the seven above are `PlanWire.planJson`'s, and
-/// `PlanWire.the_plan_objects_keys_are_disjoint` says they cannot collide.
-/// Driven here because a Lean theorem cannot see which object the linked
-/// archive actually writes into.
+/// **The day's rows and its divider ride the day's own `plan` object** (the owner's
+/// D124, W-49 track P, README gap 5130) — `EmitWire.dayRowsPairs` of the day the call
+/// planned, beside `PlanWire.planJson`'s seven keys, one row per segment — and **a `plan`
+/// section beside the `planner` section is refused by name** (`planWithPlanner`): the
+/// two would write two answers under one `rows` key. Until W-49 this test drove the two
+/// writers of the `plan` key into one object (the W-24 rows beside the W-27 day); the
+/// planner's answer is the one writer since. Driven here because a Lean theorem cannot see
+/// which object the linked archive actually writes into.
 #[test]
-fn the_rows_and_the_day_share_one_plan_object() {
+fn the_days_rows_ride_its_own_plan_object_and_a_plan_section_beside_it_is_refused() {
+    let resp = call(&request(Some(json!({}))));
+    let plan = &resp["ok"]["plan"];
+    assert!(!plan["day"].is_null(), "no plan.day: {resp}");
+    assert_eq!(
+        plan["rows"].as_array().map(Vec::len),
+        plan["segments"].as_array().map(Vec::len),
+        "one row per segment of the day, in the day's own answer: {resp}"
+    );
+    assert!(plan.get("divider").is_some(), "no plan.divider beside the rows: {resp}");
     let mut body: Value =
         serde_json::from_str(&request(Some(json!({})))).expect("the request is json");
     body["plan"] = json!({"bed": "22:00", "priorities": [], "segments": []});
-    let resp = call(&body.to_string());
-    let plan = &resp["ok"]["plan"];
-    assert!(plan["rows"].is_array(), "no plan.rows beside the day: {resp}");
-    assert!(!plan["day"].is_null(), "no plan.day beside the rows: {resp}");
+    let refused = call(&body.to_string());
     assert_eq!(
-        plan["rows"].as_array().map(Vec::len),
-        Some(0),
-        "an empty `plan` section rendered rows: {resp}"
+        refused["err"]["planner"].as_str(),
+        Some("planWithPlanner"),
+        "a plan section beside the planner section: {refused}"
     );
 }
 

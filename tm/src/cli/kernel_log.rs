@@ -1998,7 +1998,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         let date = d_date(dn, "a day's number")?;
         let rec = d_at(p, 1, "a day record")?;
         if !rec.is_null() {
-            let a = d_tuple(rec, 33, "a day record")?;
+            let a = d_tuple(rec, 35, "a day record")?;
             let g = |i: usize, what: &'static str| -> D<&Value> { d_at(a, i, what) };
             // Field 28, `durNet` (the owner's D100, README gap 4520b, parity P105): the minutes a break logged after a
             // `done` took off that `done`'s duration observation, by the observation's line.  The kernel nets the
@@ -2008,23 +2008,14 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 d_u64(d_at(c, 0, "a durNet line")?, "a durNet line")?;
                 d_u32(d_at(c, 1, "a durNet minute")?, "a durNet minute")?;
             }
-            // Field 29, `yesterday` (the owner's D108, README gap 4893, parity P119): §7.4's hysteresis input as the
-            // day's first `plan` line carries it, `[id, p]` in the line's order — a repeated id's last wins, as serde's
-            // map reads the line.
-            let mut priorities_yesterday = BTreeMap::new();
-            for c in d_arr(g(29, "yesterday")?, "yesterday")? {
-                let c = d_tuple(c, 2, "a yesterday pair")?;
-                priorities_yesterday.insert(
-                    d_str(d_at(c, 0, "a yesterday id")?, "a yesterday id")?,
-                    d_u8(d_at(c, 1, "a yesterday priority")?, "a yesterday priority")?,
-                );
-            }
-            // Fields 30-32 (the W-48 repair, README gaps 5210 and 5211): the last `plan`'s stamp, and the last `plan`
-            // that carried a hysteresis input — its stamp and its map — read by the stamps' local date
+            // Fields 29-34 (the W-48 repair, README gaps 5210 and 5211; W-49 track L, gap 5300): the latest calendar
+            // date's last `plan` — its stamp, hash and line — and its last `plan` that carried §7.4's hysteresis input
+            // (the owner's D108, parity P119) — its stamp, line and map — read by the stamps' local date
             // (`ctx::logged_plans`), because a calendar day's lines before the wake are filed under the previous
-            // ledger day.
+            // ledger day, and the later line wins across the two (the owner's D125).  Field 29 was `yesterday`, the
+            // ledger day's FIRST input, until W-49: a second answer to one question, which nothing read.
             let mut late = BTreeMap::new();
-            for c in d_arr(g(32, "late")?, "late")? {
+            for c in d_arr(g(34, "late")?, "late")? {
                 let c = d_tuple(c, 2, "a late pair")?;
                 late.insert(
                     d_str(d_at(c, 0, "a late id")?, "a late id")?,
@@ -2116,10 +2107,12 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 replans_today: d_u32(g(25, "replansToday")?, "replansToday")?,
                 drift_min: d_u32(g(26, "driftMin")?, "driftMin")?,
                 last_plan_hash: d_opt(g(27, "lastPlanHash")?, |x| d_str(x, "lastPlanHash"))?,
-                plan_at: d_opt(g(30, "planAt")?, |x| d_when(x, "planAt"))?,
-                late_at: d_opt(g(31, "lateAt")?, |x| d_when(x, "lateAt"))?,
+                plan_at: d_opt(g(29, "planAt")?, |x| d_when(x, "planAt"))?,
+                plan_hash: d_opt(g(30, "planHash")?, |x| d_str(x, "planHash"))?,
+                plan_line: d_opt(g(31, "planLine")?, |x| d_u64(x, "planLine"))?,
+                late_at: d_opt(g(32, "lateAt")?, |x| d_when(x, "lateAt"))?,
+                late_line: d_opt(g(33, "lateLine")?, |x| d_u64(x, "lateLine"))?,
                 late,
-                priorities_yesterday,
                 segments: d_arr(g(10, "segments")?, "segments")?
                     .iter()
                     .map(|s| {

@@ -1901,7 +1901,7 @@ pub fn order_worlds(parent: &ClassWorld) -> Vec<ClassWorld> {
 /// lines held P81 by its RULE until W-43 (`p81::planned_day`, a model of the fork's drawing), because
 /// an answer outside this list could move under no gate (W-42 track R's block, §0); the rule is now
 /// held to the frozen answer by value instead of standing in for it.
-pub const ANSWERS: [&str; 13] = ["day", "shipped", "d57", "d60", "whatif", "p45", "p52", "p55", "p56", "p64", "p67", "p69", "p81"];
+pub const ANSWERS: [&str; 14] = ["day", "shipped", "d57", "d60", "whatif", "p45", "p52", "p55", "p56", "p64", "p67", "p69", "p81", "p123"];
 
 /// **The answers every line carries, `null` where there is none** — the five a
 /// line has carried since W-36. The rest of [`ANSWERS`] are present only where
@@ -2434,6 +2434,18 @@ pub struct ClassTally {
     /// the lines whose rows were held to P67's comparand (`p67`) instead, where it departs.
     pub p45_after: usize,
     pub p45_kept: usize,
+    /// P123 days (a wall holds the running block, README gap 5217), the values compared by value
+    /// on them, the rows before the release against the comparand's, and from it against `p123`.
+    pub p123: usize,
+    /// P123 on a break day (counted among `p45`): the rows from the release held to `p123`.
+    pub p126_breaks: usize,
+    /// P123 routine rows taken by the declared "routine read from the clock" class (`p126_want`).
+    pub p126_clock: usize,
+    /// Under-used notes on P123 days, rendered as the fork wrote them.
+    pub p126_notes: usize,
+    pub p126_values: usize,
+    pub p126_before: usize,
+    pub p126_after: usize,
     pub p67: usize,
     /// Lines whose comparand reads the host's worked minutes (P55) or draws a
     /// meeting's pause as the wall alone against fork 4748911's drawing (P56).
@@ -2454,7 +2466,7 @@ impl ClassTally {
              parity-P44 days, {} ids; asked with the host's grown facts, {} parity-P52); break-day open rows \
              {} (the host's minutes departing from the log's on {}); rows after a running break against P45's \
              comparand {} ({} kept breaks; P67's on {} line(s)); P55 comparand days {}, P56 {}; P81's answer held on {}; \
-             {findings} difference(s) in all",
+             P123 held days {} ({} values, {} rows before the release, {} from it; {} break days among P45's; {} routine row(s) read from the clock, {} under-used note(s)); {findings} difference(s) in all",
             self.classes.len(),
             self.day.line("the non-P45 days", findings),
             self.p45,
@@ -2478,6 +2490,13 @@ impl ClassTally {
             self.p55,
             self.p56,
             self.p81,
+            self.p123,
+            self.p126_values,
+            self.p126_before,
+            self.p126_after,
+            self.p126_breaks,
+            self.p126_clock,
+            self.p126_notes,
         )
     }
 }
@@ -2571,6 +2590,96 @@ pub fn kernel_answer_with_grants(b: &Built) -> Result<(KernelDay, Vec<priority::
 /// [`kernel_answer_with_grants`]' day alone.
 pub fn kernel_answer(b: &Built) -> Result<KernelDay, String> {
     kernel_answer_with_grants(b).map(|(k, _)| k)
+}
+
+/// **P123's rows from the release, as the kernel draws them** (README gap 5217): fork 4748911's
+/// day planned AT the release with the block running again (`p123.rows`), its reservation — the
+/// `▶` row starting at the release — drawn with no `▶` and no note, because at `now` the block is
+/// held, not running (`Planner.PlanReq.activeRow`, P123's own clause); and two declared row
+/// classes against `krows`, the kernel's rows from the release: an under-used row's note, left to
+/// the renderer; and **a routine read from the clock** — a routine row of the fork's day at the
+/// release whose routine the fork's day at `now` (`now_rows`) does not place, where the kernel draws
+/// another routine over the same span: a routine's urgency is read from `now` (its window, its
+/// hotness), so the fork asked at a later instant places a routine that neither planner places at
+/// `now`; that is the clock, not the hold. Returns the rows and how many routine rows the second
+/// class took.
+pub fn p126_want(p: &Value, krows: &[Value], now_rows: &[Value]) -> (Vec<Value>, usize) {
+    let from = p["from"].clone();
+    let mut clock = 0;
+    let rows = p["rows"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .map(|r| {
+            let mut r = forkday::underused_note_left_to_the_renderer(r, krows).unwrap_or_else(|| r.clone());
+            if r["start"] == from && r["kind"] == "block" && r["flags"]["current"] == true {
+                r["flags"]["current"] = json!(false);
+                r["flags"]["note"] = Value::Null;
+            }
+            if r["kind"] == "routine" && !now_rows.iter().any(|n| n["kind"] == "routine" && n["item"] == r["item"]) {
+                if let Some(k) = krows.iter().find(|k| k["kind"] == "routine" && k["start"] == r["start"] && k["end"] == r["end"] && **k != r) {
+                    clock += 1;
+                    r = k.clone();
+                }
+            }
+            r
+        })
+        .collect();
+    (rows, clock)
+}
+
+/// **A held day, by value** (parity **P123**, README gap 5217, stage 6 W-49 track W): the date,
+/// the window, the budget and §7's answers against the comparand's day; every row before the
+/// release against the comparand's own (the replayed past and the walls that hold the block —
+/// what the fork draws there is what the kernel draws); and every row from the release against
+/// `p123`'s rows, fork 4748911's day planned at the release with the block running again (one
+/// declared class, as `p45`'s: an under-used row's note, left to the renderer). The diagnostics
+/// are not compared: a day planned at another instant writes other notes (a routine's window
+/// read from `now`), as P45's branch does not compare them either.
+pub fn compare_held_day(key: &str, k: &KernelDay, fork: &Value, p: &Value, t: &mut ClassTally) -> Vec<String> {
+    let mut findings = Vec::new();
+    let kv = serde_json::to_value(&k.day).expect("the kernel's day serialises");
+    let fv = &fork["day"];
+    t.p123 += 1;
+    for key2 in ["date", "window", "budget_blocks", "priorities"] {
+        t.p126_values += 1;
+        if kv[key2] != fv[key2] {
+            findings.push(format!("{key}: {key2}: kernel {} fork {}", kv[key2], fv[key2]));
+        }
+    }
+    let at = |v: &Value| DateTime::parse_from_rfc3339(v.as_str().unwrap_or_default()).ok();
+    let Some(from) = p["from"].as_str().and_then(|x| DateTime::parse_from_rfc3339(x).ok()) else {
+        return vec![format!("{key}: `p123` names no release")];
+    };
+    let rows = |v: &Value| -> Vec<Value> { v["segments"].as_array().map(Vec::as_slice).unwrap_or_default().to_vec() };
+    let (krows, frows) = (rows(&kv), rows(fv));
+    let before = |r: &Vec<Value>| -> Vec<Value> { r.iter().filter(|s| at(&s["start"]).is_some_and(|a| a < from)).cloned().collect() };
+    let (kb, fb) = (before(&krows), before(&frows));
+    t.p126_before += fb.len();
+    if kb != fb {
+        let first = kb.iter().zip(&fb).position(|(a, z)| a != z).unwrap_or(kb.len().min(fb.len()));
+        findings.push(format!(
+            "{key}: before the release (P123, from {}) the rows differ at {first} (fork {} rows, kernel {}):\n      fork   {}\n      kernel {}",
+            p["from"], fb.len(), kb.len(),
+            fb.get(first).map_or("—".to_string(), Value::to_string),
+            kb.get(first).map_or("—".to_string(), Value::to_string),
+        ));
+    }
+    let kafter: Vec<Value> = krows.iter().filter(|s| at(&s["start"]).is_some_and(|a| a >= from)).cloned().collect();
+    let (want, clock) = p126_want(p, &kafter, &frows);
+    t.p126_clock += clock;
+    t.p126_after += want.len();
+    if kafter != want {
+        let first = kafter.iter().zip(&want).position(|(a, z)| a != z).unwrap_or(kafter.len().min(want.len()));
+        findings.push(format!(
+            "{key}: from the release (P123, from {}) the rows differ at {first} (fork {} rows, kernel {}):\n      fork   {}\n      kernel {}",
+            p["from"], want.len(), kafter.len(),
+            want.get(first).map_or("—".to_string(), Value::to_string),
+            kafter.get(first).map_or("—".to_string(), Value::to_string),
+        ));
+    }
+    findings
 }
 
 /// **Compare one frozen class line with the kernel's answer**, by value.
@@ -2683,13 +2792,36 @@ pub fn compare_line(line: &Value, t: &mut ClassTally) -> Vec<String> {
                 .filter(|s| from.is_some_and(|f| at(&s["start"]).is_some_and(|a| a >= f)))
                 .cloned()
                 .collect();
-            let want: Vec<Value> = p["rows"]
+            let mut want: Vec<Value> = p["rows"]
                 .as_array()
                 .map(Vec::as_slice)
                 .unwrap_or_default()
                 .iter()
                 .map(|r| forkday::underused_note_left_to_the_renderer(r, &krows).unwrap_or_else(|| r.clone()))
                 .collect();
+            // **P123 on a break day** (README gap 5217): where a wall holds the block — the break
+            // begun inside it, or holding it past the wall's end (D114) — the rows from the release
+            // are fork 4748911's planned there with the block running again (`p123`), and the
+            // break's comparand holds the rows before it.
+            if let Some(h) = line.get("p123").filter(|v| !v.is_null()) {
+                if let Some(rel) = h["from"].as_str().and_then(|x| DateTime::parse_from_rfc3339(x).ok()) {
+                    let kafter: Vec<Value> = krows.iter().filter(|s| at(&s["start"]).is_some_and(|a| a >= rel)).cloned().collect();
+                    want.retain(|r| at(&r["start"]).is_some_and(|a| a < rel));
+                    let now_rows: Vec<Value> = fork["day"]["segments"]
+                        .as_array()
+                        .map(Vec::as_slice)
+                        .unwrap_or_default()
+                        .iter()
+                        .chain(p["rows"].as_array().map(Vec::as_slice).unwrap_or_default())
+                        .cloned()
+                        .collect();
+                    let (held, clock) = p126_want(h, &kafter, &now_rows);
+                    t.p126_clock += clock;
+                    t.p126_breaks += 1;
+                    t.p126_after += held.len();
+                    want.extend(held);
+                }
+            }
             t.p45_after += want.len();
             t.p45_kept += want.iter().filter(|r| r["kind"] == "break").count();
             t.p67 += usize::from(n == "P67");
@@ -2717,13 +2849,28 @@ pub fn compare_line(line: &Value, t: &mut ClassTally) -> Vec<String> {
             }
             None => fork,
         };
-        findings.extend(forkday::compare_day_with_fork(&key, &k, fork, now, &mut t.day));
+        match line.get("p123").filter(|v| !v.is_null()) {
+            // **P123: a wall holds the running block** (README gap 5217): the kernel's day against
+            // the comparand's before the release and against fork 4748911's own day planned AT the
+            // release from it (`forkplan::after_hold`, D77: the kernel's day does not change there).
+            Some(p) => findings.extend(compare_held_day(&key, &k, fork, p, t)),
+            None => findings.extend(forkday::compare_day_with_fork(&key, &k, fork, now, &mut t.day)),
+        }
         // The under-used note the kernel leaves to the renderer (by design,
         // `forkday`'s fourth class): the row's note cell — the kernel's since the
         // owner's D112, read at the segment's own position in the day's cells (W-48
         // track R, README gap 4952: the reader emit::note_cell stood here, finding
         // the position by value) — must be the fork's exact sentence.
-        let fork_rows = fork["day"]["segments"].as_array().map(Vec::as_slice).unwrap_or_default();
+        // On a P123 line the rows from the release are fork 4748911's planned there (`p123.rows`).
+        let fork_rows: Vec<Value> = line
+            .get("p123")
+            .and_then(|p| p["rows"].as_array())
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .chain(fork["day"]["segments"].as_array().map(Vec::as_slice).unwrap_or_default())
+            .cloned()
+            .collect();
         for (i, seg) in k.day.segments.iter().enumerate().filter(|(_, s)| s.flags.underused && s.flags.note.is_none()) {
             let sv = serde_json::to_value(seg).expect("a row serialises");
             let twin = fork_rows.iter().find(|f| f["start"] == sv["start"] && f["end"] == sv["end"] && f["item"] == sv["item"]);
@@ -2733,6 +2880,8 @@ pub fn compare_line(line: &Value, t: &mut ClassTally) -> Vec<String> {
             };
             let derived = cells.note.clone();
             match twin.and_then(|f| f["flags"]["note"].as_str()) {
+                // A held day's notes are counted apart: its rows are not `forkday`'s (P123).
+                Some(note) if note == derived && line.get("p123").is_some_and(|v| !v.is_null()) => t.p126_notes += 1,
                 Some(note) if note == derived => t.notes_rendered += 1,
                 other => findings.push(format!(
                     "{key}: the renderer derives `{derived}` for the kernel's under-used row at {} and the fork wrote {other:?}",
@@ -2787,7 +2936,10 @@ pub fn compare_line(line: &Value, t: &mut ClassTally) -> Vec<String> {
     // grown facts re-rank the day carries `grown` — the fork's
     // full what-if ranked as the kernel ranks the grown request — and is held to it (parity
     // P52, `grown.p52`).
-    match (&k.overtime, line.get("whatif").filter(|v| !v.is_null())) {
+    // **On a P123 line the what-if is fork 4748911's asked at the release** (README gap 5217): the
+    // kernel extends the held block's reservation, which the fork reserves only once it runs.
+    let whatif = line.get("p123").and_then(|p| p.get("whatif")).filter(|v| !v.is_null()).or_else(|| line.get("whatif").filter(|v| !v.is_null()));
+    match (&k.overtime, whatif) {
         (Some(kd), Some(w)) => {
             let kv = serde_json::to_value(kd).expect("a diff serialises");
             let p52 = !w["grown"].is_null();

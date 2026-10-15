@@ -79,6 +79,15 @@ def startReads (t : Replay.At) (d : Nat) (l : List Replay.Closed) : List Cal.Ins
   l.flatMap (fun C => if d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ t.1 ∨ (Replay.startEnd t C).1 ≤ p.s.1))
     then [] else redrawReads C.drawn (Replay.cutOut t (Replay.startEnd t C) C.spans))
 
+/-- **The instants the running break's netting reads the index at** (README gap 5180, W-49 track L; `Replay.runNet`): with
+a break running and a held piece drawn after its start, `closedReads` over the span `[s, Replay.runTo s)`; nothing
+otherwise. -/
+def runReads (m : Machine) : List Cal.Instant :=
+  match m.brkOpen with
+  | some o =>
+    if o.s.1 < (Replay.runTo o.s m.closed).1 then closedReads o.s (Replay.runTo o.s m.closed) o.day m.closed else []
+  | none => []
+
 /-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), the open block's pause start
 when the step closes it (`closePause`), and — since the owner's D99 (README gap 4520a) — the start of every piece the
 step draws for the open block that was not drawn before (`settleReads`, `cutReads`): a piece drawn before is moved by
@@ -89,6 +98,7 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
     match e.ev with
     | .start id pred rep hsw sleptMin loc _ _ =>
       startReads (e.t.val, e.off.val) (dy e.t.val) m.closed ++ cutReads m (e.t.val, e.off.val) ++ blockPaused m ++
+        runReads (Replay.cut dy (Replay.netStart dy (e.t.val, e.off.val) (dy e.t.val) m).1 (e.t.val, e.off.val)).1 ++
         settleReads (Replay.startedMachine m id (e.t.val, e.off.val) (dy e.t.val)
           (rep.map (fun rp => ⟨e.line, (e.t.val, e.off.val), dy e.t.val, pred, rp, hsw, loc, some sleptMin.val, none,
             some id, true⟩)))
@@ -117,12 +127,20 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       | none => settleReads { m with block := m.block.map (fun b => Replay.resumeBlock b none (e.t.val, e.off.val)) }
     | .stop id _ =>
       match m.block with
-      | some b => if b.id = id then cutReads m (e.t.val, e.off.val) ++ blockPaused m else []
+      | some b =>
+        if b.id = id then
+          cutReads m (e.t.val, e.off.val) ++ blockPaused m ++ runReads (Replay.cut dy m (e.t.val, e.off.val)).1
+        else []
       | none => []
-    | .done id .. =>
-      match m.block with
-      | some b => if b.id = id then cutReads m (e.t.val, e.off.val) ++ blockPaused m else []
-      | none => []
+    | .done id _ actual went _ ci _ =>
+      (match m.block with
+       | some b => if b.id = id then cutReads m (e.t.val, e.off.val) ++ blockPaused m else []
+       | none => []) ++
+      runReads { (Replay.doneClose dy m (e.t.val, e.off.val) id actual.val went).1 with
+        closed := Replay.doneClosed dy m e.line (e.t.val, e.off.val) id actual.val ci }
+    | .brkStart planned where_ =>
+      settleReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
+        runReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
     | .brk planned actual _ =>
       settleReads { m with brks := Replay.pruneBrks (⟨(e.t.val, e.off.val),
         Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)), dy e.t.val⟩ :: m.brks), brkOpen := none } ++
@@ -130,10 +148,171 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
         (dy e.t.val) m.closed
     | _ => []
 
-/-- **A step's queries read the index only at its own stamp** (D99): two indexes agreeing there give one list. -/
+/-! ### What a netting reads depends on the held blocks' days and spans alone (README gap 5180)
+
+The running break's netting is read over a machine a step has just written (a cut's, a `done`'s), whose held blocks
+carry days and credits the index gave — but `closedReads` and `Replay.runTo` read a held block's ledger day and its
+pieces' spans and nothing else, and those do not depend on the index.  So the queries still depend on the index only at
+the step's own stamp (`stepQueries_congr`). -/
+
+/-- **A re-draw's pieces are the spans it was given** (D99), in order. -/
+theorem redraw_fst_map (dy : Cal.Instant → Nat) (id : Log.Id) (old : List Replay.Piece) (P : List (Replay.At × Replay.At)) :
+    (Replay.redraw dy id old P).1.map (fun p => (p.s, p.e)) = P := by
+  unfold Replay.redraw
+  simp only [List.map_map]
+  refine (List.map_congr_left (fun q _ => ?_)).trans (List.map_id P)
+  simp only [Function.comp_apply, id_eq]
+  split
+  · rename_i p hf
+    have h1 := List.find?_some hf
+    unfold Replay.samePiece at h1
+    simp only [Bool.and_eq_true] at h1
+    rw [(Replay.atEq_iff _ _).1 h1.1, (Replay.atEq_iff _ _).1 h1.2]
+  · rfl
+
+theorem closedReads_shp (s e : Replay.At) (d : Nat) : ∀ (l₁ l₂ : List Replay.Closed),
+    l₁.map (fun C => (C.day, C.spans)) = l₂.map (fun C => (C.day, C.spans)) →
+      closedReads s e d l₁ = closedReads s e d l₂
+  | [], [], _ => rfl
+  | [], _ :: _, h => by simp at h
+  | _ :: _, [], h => by simp at h
+  | C₁ :: l₁, C₂ :: l₂, h => by
+    simp only [List.map_cons, List.cons.injEq, Prod.mk.injEq] at h
+    obtain ⟨⟨hd, hs⟩, ht⟩ := h
+    have ih := closedReads_shp s e d l₁ l₂ ht
+    unfold closedReads at ih ⊢
+    simp only [List.flatMap_cons]
+    rw [ih]
+    congr 1
+    have hall : ∀ C : Replay.Closed, C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) =
+        C.spans.all (fun q => decide (q.2.1 ≤ s.1 ∨ e.1 ≤ q.1.1)) := by
+      intro C; simp [Replay.Closed.spans, List.all_map, Function.comp_def]
+    have hrr : ∀ (C : Replay.Closed) (P : List (Replay.At × Replay.At)), redrawReads C.drawn P =
+        (P.filter (fun q => !C.spans.any (fun r => Replay.atEq r.1 q.1 && Replay.atEq r.2 q.2))).map (·.1.1) := by
+      intro C P; simp [redrawReads, Replay.Closed.spans, List.any_map, Replay.samePiece, Function.comp_def]
+    rw [hall C₁, hall C₂, hrr, hrr, hd, hs]
+
+theorem runTo_spans : ∀ (s : Replay.At) (l : List Replay.Closed),
+    Replay.runTo s l = (l.map (fun C => (C.day, C.spans))).foldl
+      (fun a S => S.2.foldl (fun b q => if b.1 < q.2.1 then q.2 else b) a) s
+  | _, [] => rfl
+  | s, C :: l => by
+    simp only [Replay.runTo, List.map_cons, List.foldl_cons]
+    rw [runTo_spans _ l]
+    congr 1
+    simp [Replay.Closed.spans, List.foldl_map]
+
+theorem runReads_shp (m₁ m₂ : Machine) (hk : m₁.brkOpen = m₂.brkOpen)
+    (hc : m₁.closed.map (fun C => (C.day, C.spans)) = m₂.closed.map (fun C => (C.day, C.spans))) :
+    runReads m₁ = runReads m₂ := by
+  unfold runReads
+  have hrt : ∀ s, Replay.runTo s m₁.closed = Replay.runTo s m₂.closed := fun s => by
+    rw [runTo_spans, runTo_spans, hc]
+  have hcr : ∀ s e d, closedReads s e d m₁.closed = closedReads s e d m₂.closed := fun s e d =>
+    closedReads_shp s e d _ _ hc
+  rw [hk]; simp only [hrt, hcr]
+
+theorem pruneClosed_shp : ∀ (l₁ l₂ : List Replay.Closed),
+    l₁.map (fun C => (C.day, C.spans)) = l₂.map (fun C => (C.day, C.spans)) →
+      (Replay.pruneClosed l₁).map (fun C => (C.day, C.spans)) = (Replay.pruneClosed l₂).map (fun C => (C.day, C.spans))
+  | [], [], _ => rfl
+  | [], _ :: _, h => by simp at h
+  | _ :: _, [], h => by simp at h
+  | c₁ :: l₁, c₂ :: l₂, h => by
+    simp only [List.map_cons, List.cons.injEq, Prod.mk.injEq] at h
+    obtain ⟨⟨hd, hs⟩, ht⟩ := h
+    have hf : ∀ (c : Replay.Closed) (l : List Replay.Closed), (Replay.pruneClosed (c :: l)).map (fun C => (C.day, C.spans)) =
+        (c.day, c.spans) :: ((l.map (fun C => (C.day, C.spans))).filter
+          (fun x => decide (((l.map (fun C => (C.day, C.spans))).foldl (fun a k => max a k.1) c.day) ≤ x.1 + 31))) := by
+      intro c l
+      simp only [Replay.pruneClosed, List.map_cons, List.filter_map, List.foldl_map, Function.comp_def]
+    rw [hf, hf, ht, hd, hs]
+
+theorem netOne_shp (dy₁ dy₂ : Cal.Instant → Nat) (s e : Replay.At) (d : Nat) (C : Replay.Closed) :
+    ((Replay.netOne dy₁ s e d C).1.day, (Replay.netOne dy₁ s e d C).1.spans) =
+      ((Replay.netOne dy₂ s e d C).1.day, (Replay.netOne dy₂ s e d C).1.spans) := by
+  unfold Replay.netOne
+  split
+  · rfl
+  · simp only [Replay.Closed.spans, redraw_fst_map]
+
+theorem netStart_shp (dy₁ dy₂ : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Machine) :
+    (Replay.netStart dy₁ t d m).1.closed.map (fun C => (C.day, C.spans)) =
+      (Replay.netStart dy₂ t d m).1.closed.map (fun C => (C.day, C.spans)) := by
+  show (m.closed.map (fun C => (Replay.netOne dy₁ t (Replay.startEnd t C) d C).1)).map _ =
+    (m.closed.map (fun C => (Replay.netOne dy₂ t (Replay.startEnd t C) d C).1)).map _
+  simp only [List.map_map]
+  apply List.map_congr_left
+  intro C _
+  exact netOne_shp dy₁ dy₂ t _ d C
+
+theorem cut_shp (dy₁ dy₂ : Cal.Instant → Nat) (M₁ M₂ : Machine) (t : Replay.At) (hb : M₁.block = M₂.block)
+    (hbr : M₁.brks = M₂.brks) (hi : M₁.interrupt = M₂.interrupt)
+    (hc : M₁.closed.map (fun C => (C.day, C.spans)) = M₂.closed.map (fun C => (C.day, C.spans))) :
+    (Replay.cut dy₁ M₁ t).1.closed.map (fun C => (C.day, C.spans)) =
+      (Replay.cut dy₂ M₂ t).1.closed.map (fun C => (C.day, C.spans)) := by
+  unfold Replay.cut
+  rw [hb]
+  cases hb2 : M₂.block with
+  | none => exact hc
+  | some b =>
+    simp only
+    have hP : Replay.cutPieces b M₁ t = Replay.cutPieces b M₂ t := by
+      simp only [Replay.cutPieces, Replay.blockSpans, Replay.openStop, hbr, hi]
+    apply pruneClosed_shp
+    simp only [List.map_cons, Replay.Closed.spans, redraw_fst_map, hP]
+    exact congrArg _ hc
+
+theorem doneClosed_shp (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : Replay.At) (id : Log.Id)
+    (actual : Nat) (ci : Log.U8) :
+    (Replay.doneClosed dy₁ m line t id actual ci).map (fun C => (C.day, C.spans)) =
+      (Replay.doneClosed dy₂ m line t id actual ci).map (fun C => (C.day, C.spans)) := by
+  unfold Replay.doneClosed
+  cases hb : m.block with
+  | some b =>
+    simp only
+    split
+    · apply pruneClosed_shp
+      simp only [List.map_cons, Replay.Closed.spans, redraw_fst_map]
+    · rfl
+  | none =>
+    simp only
+    split
+    · split <;> rfl
+    · rfl
+
+/-- **A step's queries read the index only at its own stamp** (D99): two indexes agreeing there give one list.
+*Re-proved at W-49 track L (README gap 5180)*, statement unchanged: the running break's netting is read over the held
+blocks' days and spans, which no index moves (`runReads_shp`). -/
 theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e : Entry) (h : dy₁ e.t.val = dy₂ e.t.val) :
     stepQueries dy₁ m e = stepQueries dy₂ m e := by
-  unfold stepQueries; rw [h]
+  unfold stepQueries
+  rw [h]
+  cases hev : e.ev <;> simp only
+  case start =>
+    rw [runReads_shp (Replay.cut dy₁ _ _).1 (Replay.cut dy₂ _ _).1
+      (by rw [Replay.cut_brkOpen, Replay.cut_brkOpen, (Replay.netStart_keeps dy₁ _ _ _).2.2.2.1,
+        (Replay.netStart_keeps dy₂ _ _ _).2.2.2.1])
+      (cut_shp dy₁ dy₂ _ _ _ (by rw [(Replay.netStart_keeps dy₁ _ _ _).1, (Replay.netStart_keeps dy₂ _ _ _).1])
+        (by rw [(Replay.netStart_keeps dy₁ _ _ _).2.2.1, (Replay.netStart_keeps dy₂ _ _ _).2.2.1])
+        (by rw [(Replay.netStart_keeps dy₁ _ _ _).2.1, (Replay.netStart_keeps dy₂ _ _ _).2.1])
+        (netStart_shp dy₁ dy₂ _ _ m))]
+  case stop =>
+    split
+    · split
+      · rw [runReads_shp (Replay.cut dy₁ m _).1 (Replay.cut dy₂ m _).1
+          (by rw [Replay.cut_brkOpen, Replay.cut_brkOpen]) (cut_shp dy₁ dy₂ m m _ rfl rfl rfl rfl)]
+      · rfl
+    · rfl
+  case done id est actual went tags ci isPartial =>
+    rw [runReads_shp { (Replay.doneClose dy₁ m (e.t.val, e.off.val) id actual.val went).1 with
+        closed := Replay.doneClosed dy₁ m e.line (e.t.val, e.off.val) id actual.val ci }
+      { (Replay.doneClose dy₂ m (e.t.val, e.off.val) id actual.val went).1 with
+        closed := Replay.doneClosed dy₂ m e.line (e.t.val, e.off.val) id actual.val ci }
+      (by show (Replay.doneClose dy₁ m (e.t.val, e.off.val) id actual.val went).1.brkOpen =
+            (Replay.doneClose dy₂ m (e.t.val, e.off.val) id actual.val went).1.brkOpen
+          rw [Replay.doneClose_brkOpen, Replay.doneClose_brkOpen])
+      (doneClosed_shp dy₁ dy₂ m e.line (e.t.val, e.off.val) id actual.val ci)]
 
 /-- **The tail without its settled undos** (§7.4): a settled undo cancels nothing after the cut. -/
 def unsettled (settled : List Nat) (bs : List Entry) : List Entry :=

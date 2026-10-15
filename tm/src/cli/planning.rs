@@ -454,6 +454,13 @@ pub struct ActiveOut {
     pub elapsed_min: u32,
     /// Timer paused.
     pub paused: bool,
+    /// **When a wall holding the block lets it go** (`HH:MM`; README gap 5217,
+    /// parity P123): the start of the remainder the plan reserves after the
+    /// wall, or the break, that holds the paused block — `emit::resumes_at`.
+    /// Absent when nothing is reserved for it (a pause the user typed, an
+    /// interruption, a release past the day).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resumes: Option<String>,
 }
 
 /// `tm now --json`.
@@ -524,6 +531,11 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
             // unreachable here.
             elapsed_min: super::day::shown_worked_min(&ctx, a),
             paused: a.paused,
+            resumes: if a.paused {
+                tm_core::emit::resumes_at(&plan, ctx.now_tz, &a.id).map(hhmm)
+            } else {
+                None
+            },
         }
     });
     let out = NowOut {
@@ -541,13 +553,14 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
             let mut s = String::new();
             match &out.active {
                 Some(a) => s.push_str(&format!(
-                    "▶ {} {} · started {} · {}m of {}m{}\n",
+                    "▶ {} {} · started {} · {}m of {}m{}{}\n",
                     a.id.token(),
                     a.title,
                     a.started,
                     a.elapsed_min,
                     a.est_min,
-                    if a.paused { " · paused" } else { "" }
+                    if a.paused { " · paused" } else { "" },
+                    a.resumes.as_deref().map(|t| format!(" · resumes {t}")).unwrap_or_default()
                 )),
                 None => s.push_str("nothing running\n"),
             }

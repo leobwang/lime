@@ -384,10 +384,15 @@ fn kernel_view(log: &Value) -> Facts {
             // line that carried a hysteresis input — its stamp and its map — which the host reads by the stamps'
             // local date. The first is the kernel's bookkeeping beside `lastPlanHash` (compared below as the fork's
             // `last_plan_hash`); the other two are null and empty on every fork log, as `yesterday` is, and asserted so.
-            assert_eq!(a.len(), 33, "a day record has 33 fields: {}", p[1]);
-            assert_eq!(j_arr(&a[29], "yesterday").len(), 0, "a day record carries a hysteresis input the fork's log cannot: {}", p[1]);
-            assert!(a[31].is_null(), "a day record carries an input-carrying plan the fork's log cannot: {}", p[1]);
-            assert_eq!(j_arr(&a[32], "late").len(), 0, "a day record carries a hysteresis input the fork's log cannot: {}", p[1]);
+            //
+            // 35 since W-49 track L (README gap 5300): `yesterday`, the ledger day's FIRST input, is gone (a second
+            // answer to one question), and the latest calendar date's last plan carries its stamp, hash and line
+            // (29-31) beside its last input-carrying plan's stamp, line and map (32-34). The input's three are null
+            // and empty on every fork log, as `yesterday` was, and asserted so.
+            assert_eq!(a.len(), 35, "a day record has 35 fields: {}", p[1]);
+            assert!(a[32].is_null(), "a day record carries an input-carrying plan the fork's log cannot: {}", p[1]);
+            assert!(a[33].is_null(), "a day record carries an input-carrying plan's line the fork's log cannot: {}", p[1]);
+            assert_eq!(j_arr(&a[34], "late").len(), 0, "a day record carries a hysteresis input the fork's log cannot: {}", p[1]);
             let mut ci_unknown = BTreeMap::new();
             for c in j_arr(&a[6], "ciUnknown") {
                 let c = j_arr(c, "a ciUnknown pair");

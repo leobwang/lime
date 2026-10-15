@@ -676,7 +676,7 @@ fn p45_rows_with(
 pub fn comparand_answers(b: &Built, prios: &[Prio], fp: &dyn ForkPlan) -> Result<Value, String> {
     let mut with = comparand_with(b, prios, fp, true)?;
     let without = comparand_with(b, prios, fp, false)?;
-    let p64 = ["day", "whatif", "p45", "p67", "p81"].iter().any(|k| with[*k] != without[*k]);
+    let p64 = ["day", "whatif", "p45", "p67", "p81", "p123"].iter().any(|k| with[*k] != without[*k]);
     if p64 {
         with["p64"] = json!({"p64": true});
     }
@@ -756,6 +756,7 @@ fn comparand_with(b: &Built, prios: &[Prio], fp: &dyn ForkPlan, runs: bool) -> R
     let p52 = whatif.as_ref().is_some_and(|w| !w["grown"].is_null());
     let (p45, p67) = after_break(b, prios, fp, runs)?;
     let p81 = p81_after(b, prios, fp, runs)?;
+    let p123 = after_hold(b, &comparand, &st1, fork_worked, prios, fp, runs)?;
     let flag = |set: bool, n: &str| {
         set.then(|| Value::Object(std::iter::once((n.to_string(), Value::Bool(true))).collect()))
     };
@@ -772,7 +773,153 @@ fn comparand_with(b: &Built, prios: &[Prio], fp: &dyn ForkPlan, runs: bool) -> R
         "p56": flag(p56, "p56"),
         "p69": flag(p69.is_some(), "p69"),
         "p81": p81,
+        "p123": p123,
     }))
+}
+
+/// **Where a calendar wall HOLDS the running block, the instant it lets go** — parity **P123**'s
+/// property (README gap 5217, stage 6 W-49 track W; the owner's D110, D117 and D114), read off the
+/// stored world and the comparand's own day, never off the kernel's answer: the runtime's block is
+/// paused, no interruption runs, the log's last `pause`/`unpause` of the block is a `pause` stamped
+/// inside a joined run of the day's Wall rows — D61's at the run's start, D110's at a start inside
+/// it, D117's at a resume inside it — at or before `now`, and either `now` is inside that run or a
+/// break running since before the run's end is still within its planned length (D114). The release
+/// is where the blocked spans from `now` — the Wall rows and the running break, as the kernel's
+/// blocked list holds them (an overrun break ends at `now`) — first let go (`None` where nothing
+/// holds the block).
+pub fn held_release(b: &Built, day: &Value) -> Option<DateTime<FixedOffset>> {
+    let st = &b.world.state;
+    let a = st.active.as_ref().filter(|a| a.paused)?;
+    if st.interrupt.is_some() {
+        return None;
+    }
+    let now = b.world.now.fixed_offset();
+    let last = b.world.log.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).filter(|e| {
+        (e["ev"] == "pause" || e["ev"] == "unpause") && e["id"].as_str() == Some(a.id.as_str())
+    }).last()?;
+    if last["ev"] != "pause" {
+        return None;
+    }
+    let paused_at = at(&last["t"])?;
+    if paused_at > now {
+        return None;
+    }
+    let walls: Vec<(DateTime<FixedOffset>, DateTime<FixedOffset>)> = segments_of(day)
+        .iter()
+        .filter(|s| s["kind"] == "wall")
+        .filter_map(|s| Some((at(&s["start"])?, at(&s["end"])?)))
+        .collect();
+    // The running break, as the kernel's blocked list holds it: from its start to its planned end,
+    // or to `now` once it has overrun (P45).
+    let brk = st.break_.as_ref().and_then(|x| {
+        let t = x.started_at(b.cfg.tz, b.world.now)?.fixed_offset();
+        let planned = t + Duration::minutes(i64::from(x.planned_min));
+        Some((t, planned, planned.max(now)))
+    });
+    // The joined run of Wall rows the pause is in: grown forward from it, then back.
+    let grow = |spans: &[(DateTime<FixedOffset>, DateTime<FixedOffset>)], from: DateTime<FixedOffset>| -> DateTime<FixedOffset> {
+        let mut hi = from;
+        while let Some(y) = spans.iter().filter(|(x, y)| *x <= hi && hi < *y).map(|(_, y)| *y).max() {
+            hi = y;
+        }
+        hi
+    };
+    let hi = grow(&walls, paused_at);
+    if hi == paused_at {
+        return None;
+    }
+    let mut lo = paused_at;
+    while let Some(x) = walls.iter().filter(|(x, y)| *x < lo && lo <= *y).map(|(x, _)| *x).min() {
+        lo = x;
+    }
+    if paused_at < lo {
+        return None;
+    }
+    let holds = now < hi || brk.is_some_and(|(t, planned, _)| t < hi && now < planned);
+    if !holds {
+        return None;
+    }
+    let mut blocked = walls.clone();
+    if let Some((t, _, end)) = brk {
+        blocked.push((t, end));
+    }
+    let release = grow(&blocked, now);
+    (release > now).then_some(release)
+}
+
+/// **P123's comparand** (README gap 5217): on a world [`held_release`] reads as held, fork
+/// 4748911's day planned at the release — the comparand's own state (`st2`: P69's start, P55's
+/// host minutes, P46's estimate) with the block running again and the wall's `unpause` logged
+/// there, as the binary's housekeeping logs it at the wall's end, and a running break ended and
+/// logged where the kernel's blocked list ends it (P67's reading, at any length) — its rows from
+/// the release, and on a running-block day its what-ifs asked there (§9.1; [`comparand_with`]'s
+/// shape). Since D77 the kernel's day does not change at that instant, so its rows and its
+/// what-if from the release are the fork's planned there. `{"p123": true, "from", "rows",
+/// "whatif"}`, its flag in its home.
+fn after_hold(
+    b: &Built,
+    comparand: &Value,
+    st1: &RuntimeState,
+    fork_worked: Option<u32>,
+    prios: &[Prio],
+    fp: &dyn ForkPlan,
+    runs: bool,
+) -> Result<Option<Value>, String> {
+    let Some(release) = held_release(b, comparand) else { return Ok(None) };
+    let Some(a) = st1.active.as_ref() else { return Ok(None) };
+    let tz = b.cfg.tz;
+    // The what-if is the running block's, asked where the kernel asks one: no break running at `now`.
+    let asks_whatif = forkclass::whatif_item(st1).is_some();
+    let mut unpaused = st1.clone();
+    if let Some(x) = unpaused.active.as_mut() {
+        x.paused = false;
+    }
+    let mut log_line = String::new();
+    if let Some(brk) = unpaused.break_.take() {
+        if let Some(t) = brk.started_at(tz, b.world.now) {
+            let taken = (b.world.now.max(t + Duration::minutes(i64::from(brk.planned_min))) - t).num_minutes();
+            log_line.push_str(&format!(
+                "{{\"t\":\"{}\",\"ev\":\"break\",\"planned_min\":{},\"actual_min\":{taken}}}\n",
+                t.to_rfc3339(),
+                brk.planned_min
+            ));
+        }
+    }
+    log_line.push_str(&format!("{{\"t\":\"{}\",\"ev\":\"unpause\",\"id\":\"{}\"}}\n", release.to_rfc3339(), a.id.as_str()));
+    let when = release.with_timezone(&tz);
+    // P46 at the release: the block running again, its worked minutes at or past its estimate.
+    let st = p46_state_at(&unpaused, fork_worked);
+    let mut base = fp.plan(b, &ForkAsk { state: &st, now: when, d60: true, p64: runs, prios, extend: None, log_line: Some(log_line.clone()) })?.day;
+    if is_p46_at(&unpaused, fork_worked) {
+        p46_row(when, &mut base);
+    }
+    let rows: Vec<Value> = segments_of(&base).iter().filter(|s| at(&s["start"]).is_some_and(|x| x >= release)).cloned().collect();
+    let mut out = json!({"p123": true, "from": release.to_rfc3339(), "rows": rows});
+    if asks_whatif {
+        let id = a.id.clone();
+        let bm = b.cfg.block_min();
+        let mut rt = unpaused.clone();
+        if let Some(x) = rt.active.as_mut() {
+            x.est_min = x.est_min.saturating_add(bm);
+        }
+        let rt = p46_state_at(&rt, fork_worked);
+        let whatif_day = |ps: &[Prio], full: bool| -> Result<Value, String> {
+            let ask = ForkAsk { state: &rt, now: when, d60: true, p64: runs, prios: ps, extend: full.then_some((&id, bm)), log_line: Some(log_line.clone()) };
+            let d = fp.plan(b, &ask)?.day;
+            fp.diff(tz, &base, &d)
+        };
+        let full = whatif_day(prios, true)?;
+        let grown = match grown_prios(b) {
+            Some(pg) => Some(whatif_day(&pg, true)?).filter(|g| *g != full),
+            None => None,
+        };
+        let mut w = json!({"est": whatif_day(prios, false)?, "full": full});
+        if let Some(g) = grown {
+            w["grown"] = g;
+        }
+        out["whatif"] = w;
+    }
+    Ok(Some(out))
 }
 
 /// **P81's comparand** (the owner's D87, parity P81; W-43 track C, README gap 4248): on a world

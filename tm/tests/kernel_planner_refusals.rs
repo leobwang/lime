@@ -136,6 +136,7 @@ const CLASS: &[(&str, Option<&str>, Why, &str)] = &[
     ("badOvertime", Some("plannedMin"), Why::HostType, "`Grown::planned_min: u32`"),
     ("eveningPastTheCalendar", None, Why::Licensed, "the owner's D80 (a), parity P71"),
     ("ciDisagrees", None, Why::Licensed, "the owner's D80 (b), parity P72"),
+    ("planWithPlanner", None, Why::NotSent, "the binary sends no `plan` section since the owner's D124 (W-49 track P): `CLASS unsent plan`, the test harness's door alone"),
 ];
 
 /// `text` with its Lean comments cut away (`--` to the end of the line, `/- … -/` nested), its strings kept.

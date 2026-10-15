@@ -20,9 +20,9 @@
 //! twice — by the Lean kernel's `Emit.rowOf`, which reached nothing, and by the
 //! Rust `emit::row_cells`, which the binary printed (D30 Q6 (a) said "the kernel
 //! emits cells; one Rust function pads", and R3 left the second builder
-//! standing). The binary now asks the kernel for the rows of every day it plans
-//! (`planwire::rows_request`: the day's own segments back through the `plan`
-//! section), decodes them once (`planwire::read_rows` into `DayPlan::cells`),
+//! standing). The kernel now answers the rows of every day it plans (in the
+//! planner's own answer since the owner's D124, W-49 track P; through the `plan`
+//! section in a second call before), decodes them once (`planwire::read_plan` into `DayPlan::cells`),
 //! every surface pads THOSE, and the Rust builder is deleted. [`exactly_one_function_composes_a_plan_row`] is the guard that keeps
 //! it deleted: the builder's names stay gone, and a `RowCells` is built by the
 //! decoder and nowhere else.

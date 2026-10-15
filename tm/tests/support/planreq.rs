@@ -210,23 +210,10 @@ pub fn kernel_day_of(resp: &Value, w: &World<'_>, order: &[usize]) -> Result<(Ke
     }
     let ans = planwire::read_capacity_answer(resp, order, true).map_err(|e| format!("capacity: {e}"))?;
     let ctx = DayCtx { tz: w.cfg.tz, cands: w.cands, prios: &ans.prios };
-    let mut day = planwire::read_plan(&resp["ok"]["plan"], &ctx).map_err(|e| format!("plan: {e}"))?;
-    // **The day's rows, as the binary asks for them** (the owner's D112,
-    // `kernel_capacity::read_day`): the day the kernel planned goes back through the
-    // `plan` section — its segments and priorities as the kernel wrote them — over the
-    // world's documents and zone, through the binary's own encoder and decoder.
-    let rows = planwire::rows_request(
-        &docs_json(w),
-        &tz_table::wire_for(None, w.cfg.tz),
-        w.cfg.block_min(),
-        day.day.date,
-        w.cfg.day.bed,
-        &resp["ok"]["plan"],
-    );
-    let raw = tm_kernel_ffi::call(&rows).expect("the kernel call returns");
-    let rows_resp: Value = serde_json::from_str(&raw).unwrap_or_else(|e| panic!("the response is JSON: {e}\n{raw}"));
-    day.day.cells = planwire::read_rows(&rows_resp, &day.day.segments).map_err(|e| format!("plan rows: {e}"))?;
-    day.day.divider = planwire::read_divider(&rows_resp, &day.day.segments).map_err(|e| format!("plan divider: {e}"))?;
+    // **The day's rows ride the answer** (the owner's D112 and D124; W-49 track P, README
+    // gap 5130): `plan.rows` and `plan.divider`, read with the day by the binary's own
+    // decoder (`planwire::read_plan`), as `kernel_capacity::read_day` reads them.
+    let day = planwire::read_plan(&resp["ok"]["plan"], &ctx).map_err(|e| format!("plan: {e}"))?;
     Ok((day, ans))
 }
 

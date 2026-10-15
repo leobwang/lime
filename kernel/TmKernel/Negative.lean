@@ -3259,14 +3259,14 @@ theorem aResumedBlockIsPausedAtTheWallsStart :
    Cheats 320-323 (whoever lands renumbers).
    =========================================================================== -/
 
-/- CHEAT 320 — the day's hysteresis input claimed to be its LAST `plan`'s: the
-   day keeps its first's (`DayOp.plan` sets it only at `plans = 0`), and
-   `decide` computes `a 6`. -/
-theorem theLastPlanCarriesTheHysteresisInput :
-    ((Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (.plan ['h','1'] 0 0 [(['a'], 6)]),
-      Replay.bE 2 63924370200 (.plan ['h','2'] 1 0 [(['b'], 3)])]).days.get 739865).map (·.yesterday)
-      = some [(['b'], 3)] := by
-  decide
+/- CHEAT 320 — **withdrawn at W-49 track L (README gap 5300; the owner's D125): the
+   day's hysteresis input IS its latest input-carrying `plan`'s, so the claim it
+   refuted is the law.**  It read: the day's input claimed to be its LAST `plan`'s,
+   `(·.yesterday) = some [(['b'], 3)]`, refuted while `DayOp.plan` kept the
+   ledger day's FIRST input in `yesterday` beside the latest in `late` — two
+   answers to one question.  `yesterday` is gone, and the positive statement is
+   `Replay.a_day_keeps_its_latest_plans_hysteresis_input`; what still must fail is
+   CHEAT 394, below — a line stamped on an EARLIER calendar date taking the slot. -/
 
 /- CHEAT 321 — an `extend` of the open block claimed to leave the block's own
    minutes where they were (the replay before D108): `extendFx` grows `ext`,
@@ -3370,6 +3370,111 @@ theorem theLatestInputIsTheDaysFirst :
 theorem aPlanWithoutAnInputClearsTheLatest :
     ((Replay.replay Replay.utcZone [Replay.bE 1 63924370200 (.plan ['h','2'] 0 0 [(['b'], 3)]),
       Replay.bE 2 63924372000 (.plan ['h','3'] 1 0 [])]).days.get 739865).map (·.late) = some [] := by
+  decide
+
+/- ===========================================================================
+   APPENDED 2026-10-13: stage 6, run W-49, TRACK P — the planner's rows in one
+   call, at every length (the owner's D123 and D124; README gaps 5212 and 5130).
+   Cheats 331-332.
+   =========================================================================== -/
+
+/- CHEAT 331 — a planned day's answer claimed to carry its rows and no
+   divider, so the budget and the window's end would have to cross the wire a
+   second time (gap 5132): `EmitWire.dayRowsPairs` is the rows AND the day's own
+   divider, two pairs, and `rfl` cannot make two one. -/
+theorem aPlannedDaysRowsCarryNoDivider (r : Planner.PlanReq) (d : Planner.DayPlan) :
+    (EmitWire.dayRowsPairs r d).length = 1 := by
+  rfl
+
+/- CHEAT 332 — a day the planner answers claimed to fit under the old row cap
+   (`Planner.maxCands`), the bound D123 removed from the reader: the planner's
+   day has no segment bound (D28), so nothing proves it, and `omega` fails. -/
+theorem aPlannedDayFitsUnderTheOldRowCap (r : Planner.PlanReq) (d : Planner.DayPlan) :
+    (EmitWire.RowReq.ofDay r d).segs.length ≤ Planner.maxCands := by
+  omega
+   APPENDED 2026-10-13: stage 6, run W-49, TRACK W — the remainder after a
+   wall that holds the running block (README gap 5217, parity P123; the
+   owner's D110, D117 and D114).  Cheats 361-365.
+   =========================================================================== -/
+
+/- CHEAT 361 — the held block's reservation claimed to start at `now`, as
+   §8.2 choice 5b's did until W-49: inside the meeting at 13:30 it starts at
+   the meeting's end, 13:50, and `decide` computes it. -/
+set_option maxRecDepth 400000 in
+theorem theHeldReservationStartsAtNow :
+    PlannerWit.theHeldRequest.activeRun.map (·.start) = some PlannerWit.theHeldRequest.now.sec := by
+  decide
+
+/- CHEAT 362 — the held block's row claimed `▶`: it is not running at
+   `now`, and `Planner.PlanReq.activeRow` gives it no `▶` and no note. -/
+set_option maxRecDepth 400000 in
+theorem theHeldRowIsCurrent :
+    PlannerWit.theHeldRequest.activeRow.map (·.flags.current) = [true] := by
+  decide
+
+/- CHEAT 363 — the meeting claimed to reserve nothing, as the fork's
+   active_run refuses a paused timer: the reservation is there. -/
+set_option maxRecDepth 400000 in
+theorem theHeldBlockIsReservedNowhere :
+    PlannerWit.theHeldRequest.activeRun = none := by
+  decide
+
+/- CHEAT 364 — D114's break claimed to reserve nothing (W-35's
+   `a_running_break_pauses_the_block` as written): the block it holds past
+   the meeting is reserved from the break's end. -/
+set_option maxRecDepth 400000 in
+theorem theBreakThatHoldsReservesNothing :
+    PlannerWit.theBreakHeldRequest.activeRun = none := by
+  decide
+
+/- CHEAT 365 — an overrun break that holds the block claimed to release it
+   at `now`: its end is the user's to say, and nothing is reserved. -/
+set_option maxRecDepth 400000 in
+theorem theOverrunBreakReleasesAtNow :
+    PlannerWit.theOverrunHeldRequest.activeRun.isSome = true := by
+   APPENDED 2026-10-13: stage 6, run W-49, TRACK L — a block closed, stopped
+   or paused while a logged break runs is read as it will be once the break's
+   line arrives (README gap 5180, `Replay.runNet`, `Replay.runSpan`).  Cheats
+   391-393; and D108's one answer (README gap 5300), cheat 394.
+   =========================================================================== -/
+
+/- CHEAT 391 — a `done` under a running break claimed to keep its whole
+   sixty minutes, the break's span read as block AND as break: `runNet` nets
+   it at the close, and `decide` computes thirty. -/
+theorem aDoneUnderARunningBreakKeepsItsMinutes :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924366600 (.brkStart 20 none),
+        Replay.bE 3 63924368400 (Replay.bDone ['a'] 60 false)]).items.get ['a']).map (·.minutes) = some 60 := by
+  decide
+
+/- CHEAT 392 — a block paused under a running break claimed to have worked
+   up to its pause: its drawing stops at the break's start (`runSpan`), and
+   `decide` computes thirty. -/
+theorem aPauseUnderARunningBreakWorksToThePause :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924366600 (.brkStart 20 none),
+        Replay.bE 3 63924368400 (.pause ['a'])]).openBlock.map (·.workedMin) = some 60 := by
+  decide
+
+/- CHEAT 393 — a `break_start` logged after a `done` and stamped inside its
+   block claimed to net nothing until the break's line arrives (the order a
+   sync appends two machines' lines in): the `break_start` arm nets the held
+   block (`runNet`), and `decide` computes thirty. -/
+theorem aBreakStartLoggedAfterADoneNetsNothing :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+        Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false),
+        Replay.bE 3 63924366600 (.brkStart 20 none)]).items.get ['a']).map (·.minutes) = some 60 := by
+  decide
+
+/- CHEAT 394 — a `plan` a clock behind the log stamped on an EARLIER calendar
+   date (23:59 on the 7th, logged after 00:26 on the 8th) claimed to take the
+   day's input: the slot keeps the later date's (`Replay.notBefore`, README gap
+   5300), and `decide` computes `a 6`. -/
+theorem anEarlierDatesLineTakesTheInput :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924361200 (.wake 0 none),
+      Replay.bE 2 63924423960 (.plan ['h','1'] 0 0 [(['a'], 6)]),
+      Replay.bE 3 63924422340 (.plan ['h','2'] 1 0 [(['b'], 3)])]).days.get 739865).map (·.late)
+      = some [(['b'], 3)] := by
   decide
 
 end Tm

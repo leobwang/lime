@@ -718,9 +718,10 @@ struct Traced {
     wall: Duration,
     calls: Vec<String>,
     planner: Vec<Duration>,
-    /// The rows call each planned day is followed by (the owner's D112,
-    /// `planwire::rows_request`), timed as the planner call is: from its trace
-    /// line to the next one, or to the end of stderr.
+    /// Calls carrying the `plan` section, timed as the planner call is. From the
+    /// owner's D112 (W-47) every planned day was followed by one, asking for that
+    /// day's rows; since the owner's D124 (W-49 track P, README gap 5130) the rows ride the planner's
+    /// answer and a verb makes none.
     rows: Vec<Duration>,
 }
 
@@ -806,13 +807,13 @@ fn t18_row(tm: &Tm, now: &str, label: &str) -> (Duration, Duration, Duration) {
         check.calls
     );
     let planner = check.planner[0];
-    // **And the day's rows, asked right after it** (the owner's D112): one rows
-    // call per planned day, a second whole-tree load with no log. `tm check` and
-    // `tm plan` above each pay it inside their walls; this is its own share.
-    assert_eq!(check.rows.len(), 1, "{label}: one rows call after the planner call: {:?}", check.calls);
-    let rows = check.rows[0];
+    // **And no rows call after it** (the owner's D124, W-49 track P): from the
+    // owner's D112 (W-47) until W-49 the day's rows were asked in a second call, a
+    // second whole-tree load with no log; they ride the planner's answer now, so the
+    // planner call's figure is the whole of what a planned day costs the kernel.
+    assert!(check.rows.is_empty(), "{label}: a rows call beside the planner call: {:?}", check.calls);
     eprintln!(
-        "T18 {label}: the planner call {planner:?}; the rows call {rows:?}; `tm check` {:?} over {} kernel call(s); `tm plan` {plan:?}",
+        "T18 {label}: the planner call {planner:?} (its rows in the same answer); `tm check` {:?} over {} kernel call(s); `tm plan` {plan:?}",
         check.wall,
         check.calls.len()
     );
@@ -896,6 +897,12 @@ fn t18_whatif(tm: &Tm, now: &str, label: &str) -> (Duration, Duration) {
             let (day, resp) = ask(&request);
             let v: serde_json::Value = serde_json::from_str(&resp).expect("the day's response parses");
             assert!(v["ok"]["plan"]["day"].is_string(), "{label}: the day: {resp:.300}");
+            // The day's rows ride the same answer (the owner's D124, W-49 track P).
+            assert_eq!(
+                v["ok"]["plan"]["rows"].as_array().map(Vec::len),
+                v["ok"]["plan"]["segments"].as_array().map(Vec::len),
+                "{label}: one row per segment in the day's own answer"
+            );
             let (took, resp) = ask(&whatif);
             let w: serde_json::Value = serde_json::from_str(&resp).expect("the what-if's response parses");
             assert!(w["ok"]["plan"]["overtime"].is_object(), "{label}: the what-if: {resp:.300}");
@@ -957,13 +964,11 @@ fn t18_the_planner_call_on_the_example_three_year_and_far_deadline_trees() {
 // main-thread stack, as T18's what-if does. A tick that holds its reload's
 // read pays build + call; one that re-reads pays read + build + call.
 //
-// **And since the owner's D112 (W-47) a tick is TWO calls**: the planner call,
-// then the day's rows asked back through the `plan` section
-// (`kernel_capacity::read_day`'s second call, `planwire::rows_request`). Until
-// W-47 this row timed the first alone, which after D112 would have been a
-// tick's figure that leaves out half of what a tick costs; the rows request
-// `tm check` traced is asked `k` times beside it, and a tick is build + planner
-// call + rows call.
+// **From the owner's D112 (W-47) until W-49 track P a tick was TWO calls**: the
+// planner call, then the day's rows asked back through the `plan` section in a
+// second call over the same documents, and this row timed both. Since W-49 (the owner's D124,
+// README gap 5130) the rows ride the planner's answer, so a tick is ONE call again — build
+// + call — and the row asserts that the answer it times carries the rows.
 //
 // These are MEASUREMENTS: no band is set here and none is moved. The machine's
 // load average is printed beside each row (README gap 1333).
@@ -1013,12 +1018,12 @@ fn t19_row(tm: &Tm, now: &str, label: &str) {
     let request = planners.next().unwrap_or_else(|| panic!("{label}: `tm check` traced no planner request")).to_string();
     assert!(planners.next().is_none(), "{label}: `tm check` traced two planner requests");
     let bytes = request.len();
-    // The day's rows, asked right after the planner call (D112): `plan`'s first key is `bed`.
-    let mut row_reqs = err.lines().filter_map(|l| l.strip_prefix("kernel request: ")).filter(|r| r.contains("\"plan\":{\"bed\":"));
-    let rows_request = row_reqs.next().unwrap_or_else(|| panic!("{label}: `tm check` traced no rows request")).to_string();
-    assert!(row_reqs.next().is_none(), "{label}: `tm check` traced two rows requests");
-    let rows_bytes = rows_request.len();
-    let (calls, rows): (Vec<Duration>, Vec<Duration>) = std::thread::Builder::new()
+    // No rows request beside it (the owner's D124, W-49 track P): `plan`'s first key was `bed`.
+    assert!(
+        !err.lines().filter_map(|l| l.strip_prefix("kernel request: ")).any(|r| r.contains("\"plan\":{\"bed\":")),
+        "{label}: `tm check` traced a rows request beside the planner's"
+    );
+    let calls: Vec<Duration> = std::thread::Builder::new()
         .stack_size(8 << 20)
         .spawn(move || {
             (0..T19_K)
@@ -1028,28 +1033,22 @@ fn t19_row(tm: &Tm, now: &str, label: &str) {
                     let took = t.elapsed();
                     let v: serde_json::Value = serde_json::from_str(&resp).expect("the response parses");
                     assert!(v["ok"]["plan"]["day"].is_string(), "the tick's day: {resp:.300}");
-                    let t = Instant::now();
-                    let resp = tm_kernel_ffi::call(&rows_request).expect("the kernel answers the rows");
-                    let rows_took = t.elapsed();
-                    let v: serde_json::Value = serde_json::from_str(&resp).expect("the rows response parses");
-                    assert!(v["ok"]["plan"]["rows"].is_array(), "the tick's rows: {resp:.300}");
-                    (took, rows_took)
+                    assert!(v["ok"]["plan"]["rows"].is_array(), "the tick's rows, in the day's own answer: {resp:.300}");
+                    took
                 })
-                .unzip()
+                .collect()
         })
         .expect("a thread")
         .join()
         .expect("the in-process kernel calls");
     let (bb, bm) = best_median(&builds);
     let (cb, cm) = best_median(&calls);
-    let (rb, rm) = best_median(&rows);
-    let ticks: Vec<Duration> = builds.iter().zip(&calls).zip(&rows).map(|((b, c), r)| *b + *c + *r).collect();
+    let ticks: Vec<Duration> = builds.iter().zip(&calls).map(|(b, c)| *b + *c).collect();
     let (tb, tmed) = best_median(&ticks);
     eprintln!(
-        "T19 {label}: the request {bytes} bytes; its read {read:?}; built best {bb:?} median {bm:?}; called best {cb:?} \
-         median {cm:?}; the rows request {rows_bytes} bytes, called best {rb:?} median {rm:?} (D112); a tick from its \
-         reload's read (build + call + rows) best {tb:?} median {tmed:?}; one that re-reads adds {read:?}; load \
-         {load_before} -> {}",
+        "T19 {label}: the request {bytes} bytes; its read {read:?}; built best {bb:?} median {bm:?}; called (rows \
+         included) best {cb:?} median {cm:?}; a tick from its reload's read (build + call) best {tb:?} median \
+         {tmed:?}; one that re-reads adds {read:?}; load {load_before} -> {}",
         load_average()
     );
 }

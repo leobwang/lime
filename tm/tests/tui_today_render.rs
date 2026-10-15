@@ -89,6 +89,42 @@ fn the_now_pane_says_paused_only_on_the_running_blocks_row() {
     assert!(pane.contains("· paused"), "the running block's own row says it: {pane}");
 }
 
+/// **A wall that holds the paused block says when it lets go** (parity P123, README gap 5217, W-49
+/// track W): at 13:00 the head is the meeting `g1` and `^t3` is paused; with the kernel's
+/// reservation of `^t3` from the meeting's end in the day — a Block of `^t3` that takes no slot,
+/// after `now` — the pane names the block and the resume, as `tm now`'s header does
+/// (`emit::resumes_at`); with no such row it says nothing of it, and a block that is not paused
+/// is not said to resume.
+#[test]
+fn the_now_pane_names_the_held_blocks_resume() {
+    use tm_core::dayplan::{SegFlags, SegKind};
+    let cfg = tui_common::config();
+    let mut meeting = tui_common::app_at(13, 0);
+    meeting.state.active.as_mut().expect("t3 runs").paused = true;
+    let before = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(!before.contains("resumes"), "no reservation, no resume: {before}");
+    let i = meeting
+        .plan
+        .segments
+        .iter()
+        .position(|s| s.kind == SegKind::Break && s.start == tui_common::at(&cfg, 13, 50))
+        .expect("the break after the meeting");
+    meeting.plan.segments[i] = tui_common::seg(
+        &cfg,
+        (13, 50),
+        (14, 10),
+        SegKind::Block,
+        None,
+        Some("t3"),
+        SegFlags { planned_min: Some(20), ..SegFlags::default() },
+    );
+    let pane = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(pane.contains("· ^t3 resumes 13:50"), "the pane names the resume: {pane}");
+    meeting.state.active.as_mut().expect("t3 runs").paused = false;
+    let running = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(!running.contains("resumes"), "a running block is not said to resume: {running}");
+}
+
 #[test]
 fn the_now_pane_with_nothing_running() {
     // 16:30 with no `active` and no segment flagged current: past the last

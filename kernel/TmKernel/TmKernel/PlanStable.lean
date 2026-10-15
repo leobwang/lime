@@ -161,13 +161,15 @@ theorem an_overrun_break_ends_at_now (r : PlanReq) (b : BreakState) (t : Cal.Ins
     show max (min (t.sec + 60 * b.plannedMin) r.dayEnd) r.now.sec ≤ r.now.sec
     omega
 
-/-- **A block the break paused stays paused, so nothing is reserved** — on either side of the break's end. -/
+/-- **A block the break paused stays paused, so nothing is reserved** — on either side of the break's end.
+**Restated at W-49 track W** (README gap 5217): where no wall holds it; a block a wall holds is reserved from the
+release (`Planner.PlanReq.activeRun`), paused or not. -/
 theorem nothing_is_reserved_while_the_block_is_paused (r : PlanReq)
-    (hpaused : ∀ a, r.state.active = some a → a.paused = true) : r.activeRun = none := by
+    (hpaused : ∀ a, r.state.active = some a → a.paused = true) (hheld : r.held = false) : r.activeRun = none := by
   unfold PlanReq.activeRun
   cases ha : r.state.active with
   | none => rfl
-  | some a => simp only [hpaused a ha, if_true]
+  | some a => simp only [hpaused a ha, hheld, Bool.not_false, Bool.and_true, if_true]
 
 /-- **One placement step, with walls ending by `now` appended to the blocked list**: the same placement,
 and the same walls still appended — every search of step 2 starts at or after `now`. -/
@@ -218,12 +220,20 @@ stays paused (`hpaused`): `tm break` ending a break also UN-PAUSES the block it 
 and the reservation that then appears from `now` is the block resuming, a second change the day should show.
 A break ended BEFORE its planned length frees the rest of that length, and the day rightly changes there too;
 on that class the counter half still holds (`the_running_break_and_its_logged_twin_count_alike` asks no
-length). -/
+length).
+
+**Restated at W-49 track W** (README gap 5217): with no wall holding the block on either side (`hheld`, `hheld'`).
+A meeting's pause in the log HOLDS the block and its remainder is reserved from the meeting's end, and nothing in the
+law ties the twin's pause marks to the running day's: a twin whose log drops the pause loses the hold and its
+reservation (`PlannerWit.a_twin_without_the_meetings_pause_loses_the_hold`).  As D77 stated it, without the two
+hypotheses, it is refuted (`PlannerWit.the_cut_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted`). -/
 theorem the_cut_does_not_change_when_an_overrun_break_is_logged (r : PlanReq) (run' : Seal.Run)
     (b : BreakState) (t : Cal.Instant)
     (hbrk : r.state.brk = some b) (hst : b.started = some t)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec)
     (hpaused : ∀ a, r.state.active = some a → a.paused = true)
+    (hheld : r.held = false)
+    (hheld' : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).held = false)
     (hstarts : (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
       (r.todayRecord.map (·.starts)).getD [])
     (hlogged : ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
@@ -236,8 +246,9 @@ theorem the_cut_does_not_change_when_an_overrun_break_is_logged (r : PlanReq) (r
   have hlook : r'.look = r.look := by subst hr'; rfl
   have hL := an_overrun_break_ends_at_now r b t hbrk hst hover
   have hbr' : breakRows r' = [] := by subst hr'; rfl
-  have hres : r.activeRun = none := nothing_is_reserved_while_the_block_is_paused r hpaused
-  have hres' : r'.activeRun = none := nothing_is_reserved_while_the_block_is_paused r' (by subst hr'; exact hpaused)
+  have hres : r.activeRun = none := nothing_is_reserved_while_the_block_is_paused r hpaused hheld
+  have hres' : r'.activeRun = none :=
+    nothing_is_reserved_while_the_block_is_paused r' (by subst hr'; exact hpaused) (by subst hr'; exact hheld')
   have hwalls : wallsToday r' = wallsToday r := by subst hr'; rfl
   have hint : interruptRows r' = interruptRows r := by subst hr'; rfl
   have hbb : r.blockedBeforeRoutines =
@@ -359,7 +370,7 @@ theorem the_window_ends_by_the_night (r : PlanReq) (hday : r.look.day.wf = true)
   | some w => exact the_stored_window_ends_by_the_night r w hs (hend w hs)
 
 /-- **Where the window ends by the night's end, no Block row of the day starts at or after a WindDown
-row** — not the reservation (it starts at `now`, before the wind-down), not a replayed row (it ends at
+row** — not the reservation (it starts at `now`, or at a holding wall's release — gap 5217 — before the wind-down), not a replayed row (it ends at
 `now`), and not a row of §8.2 step 5 (its slot lies in the window and outside the night, which begins at
 the wind-down).  `hwdcal` keeps the wind-down inside the calendar, where the rows' clock
 (`Planner.clampSec`) does not merge it with a later instant; `PlannerWit`'s W-40 block computes a day
@@ -376,7 +387,9 @@ theorem no_block_row_starts_at_or_after_a_wind_down_row_when_the_window_ends_by_
   · obtain ⟨-, h2, h3⟩ := replayedRows_end_at_now r t ht
     show clampSec t.start < r.windDownSec
     unfold clampSec; omega
-  · have hst : t.start = r.now.sec := (r.activeRow_is_an_energyless_block t ht).2.2.2.2
+  · -- the reservation starts at `now`, or at a wall's release (README gap 5217) — before the wind-down either way
+    obtain ⟨q, hq, hst, -⟩ := r.mem_activeRow t ht
+    have hbw := r.the_reservation_starts_before_the_wind_down q hq hnw
     show clampSec t.start < r.windDownSec
     rw [hst]; unfold clampSec; omega
   · obtain ⟨e, s, hs, hst, -, -⟩ := r.an_assigned_row_is_a_slot_of_the_day t ht
@@ -646,11 +659,14 @@ theorem lowestFree_drops_walls_ending_by (r : PlanReq) (lo hi d : Nat) (A L B : 
 /-- **What logging an overrun break leaves of the day before step 4**, on the class of states where a block the
 break paused stays paused: the twin — `r` with the break taken out of the state and `run'` in place of the replay —
 has the same cut, the same placed routines and the same blocked spans but the break's own (which ends by
-`now`), no reservation either side, and the same budget. -/
+`now`), no reservation either side, and the same budget — where no wall holds the block on either side (W-49 track W,
+README gap 5217; the cut's law says why). -/
 theorem the_logged_twins_inputs (r : PlanReq) (run' : Seal.Run) (b : BreakState) (t : Cal.Instant)
     (hbrk : r.state.brk = some b) (hst : b.started = some t)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec)
     (hpaused : ∀ a, r.state.active = some a → a.paused = true)
+    (hheld : r.held = false)
+    (hheld' : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).held = false)
     (hstarts : (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
       (r.todayRecord.map (·.starts)).getD [])
     (hlogged : ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
@@ -664,10 +680,10 @@ theorem the_logged_twins_inputs (r : PlanReq) (run' : Seal.Run) (b : BreakState)
     (∀ w ∈ (breakRows r).map (fun s => (s.start, s.stop)), w.2 ≤ r.now.sec) ∧
     remainingBudget r' = remainingBudget r := by
   intro r'
-  have hres : r.activeRun = none := nothing_is_reserved_while_the_block_is_paused r hpaused
-  have hres' : r'.activeRun = none := nothing_is_reserved_while_the_block_is_paused r' hpaused
+  have hres : r.activeRun = none := nothing_is_reserved_while_the_block_is_paused r hpaused hheld
+  have hres' : r'.activeRun = none := nothing_is_reserved_while_the_block_is_paused r' hpaused hheld'
   refine ⟨the_cut_does_not_change_when_an_overrun_break_is_logged r run' b t hbrk hst hover
-    hpaused hstarts hlogged harr, hres', hres, ?_,
+    hpaused hheld hheld' hstarts hlogged harr, hres', hres, ?_,
     an_overrun_break_ends_at_now r b t hbrk hst hover, ?_⟩
   · have hL := an_overrun_break_ends_at_now r b t hbrk hst hover
     have hbr' : breakRows r' = [] := rfl
@@ -897,12 +913,16 @@ paused (`hpaused`; no block at all pays it) — the frozen P45 comparand's own m
 ending a break also UN-PAUSES the block it paused (`day::end_break`), and the reservation that then appears from
 `now` is the block resuming, a second change the day should show.  A break ended BEFORE its planned length frees
 the rest of that length; the counter half (`the_running_break_and_its_logged_twin_count_alike`) holds at any
-length. -/
+length.  **Restated at W-49 track W** (README gap 5217): where no wall holds the block on either side, as the cut's
+law is; as D77 stated it, it is refuted
+(`PlannerWit.the_day_from_now_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted`). -/
 theorem the_day_from_now_does_not_change_when_an_overrun_break_is_logged (r : PlanReq) (run' : Seal.Run)
     (b : BreakState) (t : Cal.Instant)
     (hbrk : r.state.brk = some b) (hst : b.started = some t)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec)
     (hpaused : ∀ a, r.state.active = some a → a.paused = true)
+    (hheld : r.held = false)
+    (hheld' : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).held = false)
     (hstarts : (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
       (r.todayRecord.map (·.starts)).getD [])
     (hlogged : ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
@@ -914,7 +934,7 @@ theorem the_day_from_now_does_not_change_when_an_overrun_break_is_logged (r : Pl
         (fun s => decide (r.now.sec ≤ s.val.start))) =
       ((dayPlan r).segments.filter (fun s => decide (r.now.sec ≤ s.val.start))) := by
   obtain ⟨hcut, hres', hres, hpf, hL, hbud⟩ :=
-    the_logged_twins_inputs r run' b t hbrk hst hover hpaused hstarts hlogged harr hbd
+    the_logged_twins_inputs r run' b t hbrk hst hover hpaused hheld hheld' hstarts hlogged harr hbd
   have heve : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).eveningRows =
       r.eveningRows := by
     have hsl : PlanReq.isSleepInstance ({ r with state := { r.state with brk := none }, run := run' } : PlanReq) =

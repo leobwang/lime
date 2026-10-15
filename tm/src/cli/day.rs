@@ -1275,6 +1275,7 @@ pub fn start(g: &Globals, args: &super::StartArgs) -> Result<i32, CliError> {
     }
     super::kernel_bridge::gate(&ctx, "start")?;
     let rec = Recorder::start(&ctx, "start")?;
+    let replay_before = ctx.replay.clone();
     // **A running break ends first, and says so** — `tm break`'s line and its journal line
     // (the owner's D97, README gap 4391, parity P95): the one body every verb that ends a
     // break runs. Fork 4748911 ended it here too and wrote no journal line.
@@ -1341,6 +1342,7 @@ pub fn start(g: &Globals, args: &super::StartArgs) -> Result<i32, CliError> {
             rep.map(|r| format!(" rep={r}")).unwrap_or_default()
         ),
     )?;
+    correct_netted_estimates(&mut ctx, &replay_before, "start")?;
     rec.finish(&ctx, format!("start {}", id.token()))?;
 
     let out = StartOut {
@@ -1370,6 +1372,91 @@ pub fn start(g: &Globals, args: &super::StartArgs) -> Result<i32, CliError> {
         &out,
     )?;
     Ok(0)
+}
+
+/// One estimate [`correct_netted_estimates`] rewrote (the owner's D126).
+#[derive(Debug, Clone, Serialize)]
+pub struct EstCorrected {
+    /// The item.
+    pub id: Id,
+    /// The minutes its line's estimate read, as its closing `stop` (or partial `done`) wrote them.
+    pub from_min: u32,
+    /// The minutes it reads now: as the closing verb would have written them with the netted minutes.
+    pub to_min: u32,
+    /// What the late mark took from the closed block.
+    pub netted_min: u32,
+}
+
+/// **A late mark that nets a stopped or partly done block corrects the `est:` its closing verb wrote** — the owner's
+/// **D126** (W-49 track L; the W-48 recheck's fourth finding; parity **P125**). `tm stop` (and `tm done --partial`)
+/// writes the remainder — the estimate less the minutes worked — and a line logged after it and stamped inside its
+/// block — a late `start` (D115), a `break` or its running start (D100, README gap 5180), an interruption's `resume`
+/// (D119) — nets the block, so the replay counts fewer minutes worked while the line kept the stale remainder: after
+/// `tm stop` wrote `5m left`, a late `start` netted the block to thirty minutes and the Markdown kept `5m`, and the
+/// planner and `tm review day` read one block two ways (AGENTS §5.3). The verb that logs the late mark compares the
+/// replay before and after it: every item whose worked minutes FELL, whose last logged line is the `stop` or the
+/// partial `done` that closed the block (no `edit`, `extend` or later block of it since, so the estimate is still the
+/// one that verb wrote), and whose line is open, gets the remainder that verb would have written with the netted
+/// minutes — its estimate plus what the mark took — through the one estimate writer (D56, D62: `write_estimate`).
+/// A late line no verb wrote (a sync, a hand edit) is named by `tm check` instead (`lifecycle::stale_estimates`).
+fn correct_netted_estimates(
+    ctx: &mut Ctx,
+    before: &tm_core::log::Replay,
+    verb: &str,
+) -> Result<Vec<EstCorrected>, CliError> {
+    let mut out = Vec::new();
+    let fell: Vec<(String, u32)> = before
+        .items
+        .keys()
+        .filter_map(|k| {
+            let (was, now) = (before.block_minutes(k), ctx.replay.block_minutes(k));
+            (now < was).then(|| (k.clone(), was - now))
+        })
+        .collect();
+    for (key, netted) in fell {
+        let id = Id::new(&key);
+        let Some(item) = ctx.tree.get(&id) else { continue };
+        if is_stateless(item) || item.state.is_closed() {
+            continue;
+        }
+        let closing = ctx
+            .replay
+            .view()
+            .iter()
+            .rev()
+            .find(|r| !r.cancelled && r.id.as_deref() == Some(key.as_str()))
+            .is_some_and(|r| r.tag == "stop" || r.tag == "done");
+        if !closing {
+            continue;
+        }
+        let Some(from) = ctx.tree.remaining(&id) else { continue };
+        let to = from.saturating_add(netted);
+        let line = write_estimate(ctx, verb, &id, u64::from(to))?;
+        ctx.write_line(&id, &line)?;
+        // The correction is a fact the log holds, as a typed `tm edit est=` is: `tm check`'s half of D126 reads an
+        // item whose last line is still its `stop`, and this `edit` is what says the estimate was rewritten since.
+        ctx.append_event(Event::Edit {
+            id: id.to_string(),
+            field: "est".to_string(),
+            from: format!("{from}m"),
+            to: format!("{to}m"),
+        })?;
+        out.push(EstCorrected { id, from_min: from, to_min: to, netted_min: netted });
+    }
+    if !out.is_empty() {
+        ctx.reload()?;
+        for c in &out {
+            super::kernel_bridge::notice(format!(
+                "{}'s estimate is now {}m (was {}m): this line netted {}m from the block its `stop` closed, and the \
+                 remainder reads the minutes worked as the log now does (D126).",
+                c.id.token(),
+                c.to_min,
+                c.from_min,
+                c.netted_min
+            ));
+        }
+    }
+    Ok(out)
 }
 
 /// `tm start --json` on the block already running (the owner's **D107**, parity **P110**).
@@ -1950,6 +2037,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     };
     super::kernel_bridge::gate(&ctx, "break")?;
     let rec = Recorder::start(&ctx, "break")?;
+    let replay_before = ctx.replay.clone();
     // The ending arm is the one body every verb that ends a break runs (the owner's D97):
     // `end_break_first`, then `note_break_ended` below.
     let ended = end_break_first(&mut ctx)?;
@@ -2002,6 +2090,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             ),
         )?,
     }
+    correct_netted_estimates(&mut ctx, &replay_before, "break")?;
     rec.finish(&ctx, format!("break {}", out.action))?;
     emit(
         ctx.json,
@@ -2146,6 +2235,7 @@ pub fn interrupt(g: &Globals) -> Result<i32, CliError> {
     }
     super::kernel_bridge::gate(&ctx, "interrupt")?;
     let rec = Recorder::start(&ctx, "interrupt")?;
+    let replay_before = ctx.replay.clone();
     let ended = end_break_first(&mut ctx)?;
     let id = ctx.state.active.as_ref().map(|a| a.id.to_string());
     ctx.state.interrupt = Some(InterruptState {
@@ -2168,6 +2258,7 @@ pub fn interrupt(g: &Globals) -> Result<i32, CliError> {
             id.as_ref().map(|i| format!(" ^{i}")).unwrap_or_default()
         ),
     )?;
+    correct_netted_estimates(&mut ctx, &replay_before, "interrupt")?;
     rec.finish(&ctx, "interrupt")?;
 
     let out = InterruptOut {
@@ -2198,6 +2289,7 @@ pub fn resume(g: &Globals) -> Result<i32, CliError> {
         return Err(CliError::msg("nothing to resume"));
     };
     let rec = Recorder::start(&ctx, "resume")?;
+    let replay_before = ctx.replay.clone();
     // **The interruption's start is the log's** (the W-40 repair, README gaps 3821
     // and 3951, parity P69 — D75's clock, whose reason is this verb's too: a wrong
     // `lost_min` is a wrong fact written into the log). The instant of its own
@@ -2317,6 +2409,7 @@ pub fn resume(g: &Globals) -> Result<i32, CliError> {
             }
         ),
     )?;
+    correct_netted_estimates(&mut ctx, &replay_before, "resume")?;
     rec.finish(&ctx, format!("resume (lost {lost}m)"))?;
 
     let held = ctx

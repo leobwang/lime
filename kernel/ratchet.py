@@ -56,6 +56,42 @@ exactly as its HEAD comparand already did.
 
 import subprocess
 
+#: **GROWTH THE OWNER GRANTED, NAMED** (W-49 track P; the owner's D124, README gap 5130).
+#: "Growth is the owner's to grant, in the commit that changes this script" was a sentence in
+#: every gate's header and no gate had a place to read a grant from: the only route was moving
+#: `BASE` past the commit that grew a file, which no commit can do for itself (its own hash is
+#: not known until it is made), and the HEAD comparand refuses the growth before it is
+#: committed at all.  So a grant is a ROW HERE, keyed by the file and the gate's own key
+#: spelling (`reach.py`'s `CLASS <key>`, `fields.py`'s key path), carrying the decision that
+#: grants it -- and the line it licenses must cite that decision in its own reason
+#: (`granted`), so a grant licenses ONE line with ONE reason and not a key whatever it says.
+#: Every gate that holds a file against HEAD or against its history asks `granted` before it
+#: calls a new key growth.  WHAT IT CANNOT SEE, declared: a granted line deleted and later
+#: re-added with the same citation passes again -- the row is a standing grant until a commit
+#: deletes it, which is the owner's too.
+GRANTS = {
+    ("reach-exempt.txt", "CLASS plan"): "D124",
+    ("written-exempt.txt", "plan.bed"): "D124",
+    # D124 named `plan.bed`, measured by the W-48 probe on a tree where `plan.segments` and
+    # `plan.priorities` still had lines of their own and the divider's two keys did not exist;
+    # on W-49's tree the section's other four keys are unwritten with it, and the grant's stated
+    # scope -- the `plan` section as the harness's door -- covers them (README gap 5260, which
+    # asks the owner to confirm it).
+    ("written-exempt.txt", "plan.segments"): "D124",
+    ("written-exempt.txt", "plan.priorities"): "D124",
+    ("written-exempt.txt", "plan.budgetBlocks"): "D124",
+    ("written-exempt.txt", "plan.windowEnd"): "D124",
+}
+
+
+def granted(path, key, reason=None):
+    """Whether the owner granted `key` in `path` (a row of `GRANTS`), and -- when `reason` is
+    given -- whether that line's own reason cites the granting decision."""
+    d = GRANTS.get((path.name, key))
+    if d is None:
+        return False
+    return reason is None or d in reason
+
 #: `17a13c2`, the commit every W-41 track branched from: the strict rule (D81, gap
 #: 3953) took effect inside W-41, so the walk covers the whole of it.  It was
 #: `122e153` until the owner's D88 rewrote W-40's and W-41's lands into single
@@ -120,6 +156,8 @@ def grown(path, keys, allowed=None):
         held = keys(prev)
         for key in sorted(keys(cur) - held, key=str):
             if allowed is not None and allowed(sha, key, held):
+                continue
+            if granted(path, key):
                 continue
             out.append("RATCHET (committed): %s grew at %s -- `%s` is held by no entry of its "
                        "first parent, and this file may only SHRINK (D51; README gap 4132: "

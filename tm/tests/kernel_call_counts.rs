@@ -326,9 +326,11 @@ struct Counts {
     walls: u32,
     /// `planner` sections — the day R3's `tm plan` asks for (W-41 repair).
     planner: u32,
-    /// `rows` calls — the `plan` section the binary asks right after each day it
-    /// plans, for that day's rows (the owner's **D112**, `planwire::rows_request`):
-    /// a second whole-tree load, and no log.
+    /// `rows` calls — a request carrying the `plan` section. The binary asked one
+    /// right after each day it planned, for that day's rows, from the owner's
+    /// **D112** (W-47) until the owner's **D124** (W-49 track P, README gap 5130),
+    /// when the rows began to ride the planner's own answer (`EmitWire.dayRowsPairs`).
+    /// It is pinned to 0: a second call per planned day is a second whole-tree load.
     rows: u32,
     /// Any other request shape reaching the FFI.
     other: u32,
@@ -514,16 +516,20 @@ fn every_verb_reads_the_log_through_the_kernel_after_the_switch() {
         );
     }
 
-    // **The rows column, pinned to the planner column** (the owner's D112, W-47):
-    // every day the binary plans, it asks the kernel for that day's rows once —
-    // `kernel_capacity::read_day`'s second call, a whole-tree load the planner
-    // call already made once. A verb that plans with no rows call prints rows no
-    // kernel wrote; a verb that asks twice pays a third load.
+    // **The rows column, pinned to ZERO** (the owner's D124, W-49 track P, README gap
+    // 5130). From the owner's D112 (W-47) every day the binary planned cost a second
+    // call — the day handed back through the `plan` section for its rows, a whole-tree
+    // load the planner call had already made — and this pinned it EQUAL to the planner
+    // column. The rows ride the planner's answer now (`EmitWire.dayRowsPairs`, read by
+    // `planwire::read_plan`), so a verb that asks for rows in a call of their own is
+    // paying the second load again. That the rows ARE in the planned day is not this
+    // column's to see: `cli_plan`'s every planning test prints them, and
+    // `planwire::read_plan` refuses an answer that is not one row per segment.
     for (name, c) in &table {
         assert_eq!(
-            c.rows, c.planner,
-            "`tm {name}` asked the kernel for {} day's rows over {} planned day(s) — one rows call \
-             per planned day is D112's shape (`planwire::rows_request`)",
+            c.rows, 0,
+            "`tm {name}` asked the kernel for a day's rows in {} call(s) of their own over {} planned \
+             day(s) — the rows ride the planner's answer since W-49 (the owner's D124)",
             c.rows, c.planner
         );
         assert_eq!(c.other, 0, "`tm {name}` traced a request shape nobody named: {:?}", c.lines);
@@ -728,16 +734,9 @@ fn every_capacity_verb_replays_the_log_a_second_time_inside_its_capacity_call() 
             c.multi,
             1 + cuts
         );
-        // D112: the three that plan ask for the day's rows once, in a call of its
-        // own (no log, no capacity); `tm review week` ranks without planning.
-        let want_rows = u32::from(expected_capacity_line(name).ends_with("+planner"));
-        assert_eq!(c.rows, want_rows, "`tm {name}` asked for the day's rows {} time(s): {:?}", c.rows, c.lines);
-        assert_eq!(
-            c.lines.iter().filter(|l| l.as_str() == "rows").count() as u32,
-            want_rows,
-            "`tm {name}`'s rows call carried another section: {:?}",
-            c.lines
-        );
+        // The day's rows ride the planner's answer (the owner's D124, W-49 track P):
+        // no capacity verb asks for them in a call of its own.
+        assert_eq!(c.rows, 0, "`tm {name}` asked for the day's rows {} time(s): {:?}", c.rows, c.lines);
         let want_line = expected_capacity_line(name);
         assert!(
             c.lines.iter().any(|l| l == want_line),

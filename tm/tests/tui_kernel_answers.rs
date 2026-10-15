@@ -1261,6 +1261,19 @@ fn the_frozen_tui_comparison_bites_a_bent_line() {
     let lounge = forkplan::kernel_day_with_loc(&b, "lounge").expect("the kernel plans the lounge day");
     let mut agreeing = meeting.clone();
     agreeing["day"] = forkclass::frozen_day(&lounge.day);
+    // Since P123 (README gap 5217) the meeting holds the running block, and the line's rows from the
+    // release are `p123`'s: the lounge day stands in for those too.
+    if let Some(from) = meeting["p123"]["from"].as_str().and_then(|x| forkplan::at(&json!(x))) {
+        let rows: Vec<Value> = serde_json::to_value(&lounge.day).expect("a day")["segments"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .filter(|r| forkplan::at(&r["start"]).is_some_and(|a| a >= from))
+            .cloned()
+            .collect();
+        agreeing["p123"]["rows"] = json!(rows);
+    }
     assert!(held(&agreeing).iter().any(|f| f.contains("tui MeetingNow")), "a meeting line holding the lounge day passed: {:?}", held(&agreeing));
 }
 

@@ -6252,7 +6252,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.EmitWire.rowJson_is_the_nine_cells_in_order
 #print axioms Tm.EmitWire.rowsJson_length
 #print axioms Tm.EmitWire.rowsOfReq_eq
-#print axioms Tm.EmitWire.readSegs_refuses_past_the_cap
 #print axioms Tm.EmitWire.readPrios_refuses_past_the_cap
 #print axioms Tm.EmitWire.readSegs_of_nil
 #print axioms Tm.EmitWire.readPrios_of_nil
@@ -8684,8 +8683,6 @@ the binary sends back. -/
 #print axioms Tm.Replay.extendFx_machines
 #print axioms Tm.Replay.an_open_blocks_extends_are_its_own
 #print axioms Tm.Replay.a_start_begins_the_extends_again
-#print axioms Tm.Replay.a_day_keeps_its_first_plans_hysteresis_input
-#print axioms Tm.Replay.a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first
 #print axioms Tm.Log.a_wake_is_a_state_change_and_a_plan_is_not
 
 -- ===========================================================================
@@ -8730,7 +8727,6 @@ The goal stays in `Goals.lean`. -/
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_at_the_mid_break_request
 #print axioms Tm.PlannerWit.the_apart_replay_fails_at_the_pre_d100_request
 #print axioms Tm.PlannerWit.closeUnderBreakRun_resumes_ok
-#print axioms Tm.PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break
 #print axioms Tm.PlanCheck.netOne_draws_beside_the_break
 
 /-! APPENDED 2026-10-11 (stage 6, run W-48, TRACK K, third commit): the owner's D115 (a late `start` stamped inside a
@@ -8804,3 +8800,130 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_block_open_after_a_break
 #print axioms Tm.PlannerWit.the_apart_replay_holds_with_a_break_running_after_a_done
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_with_a_break_running_after_a_done
+
+/- ===========================================================================
+   APPENDED 2026-10-13: stage 6, run W-49, TRACK P — the planner's rows in one
+   call, at every length (the owner's D123 and D124; README gaps 5212 and 5130).
+   EmitWire.readSegs_refuses_past_the_cap is DELETED (D123 widened the reader
+   to the planner's day) and its negation is audited below.
+   =========================================================================== -/
+#print axioms Tm.EmitWire.readSegs_reads_every_list_whose_segments_read
+#print axioms Tm.EmitWire.readSeg_reads_a_rest_at_every_position
+#print axioms Tm.EmitWire.readSegs_refuses_past_the_cap_is_refuted
+#print axioms Tm.EmitWire.readSegs_reads_a_rest_and_refuses_a_record_without_a_start
+#print axioms Tm.EmitWire.answersRows_of_an_answer_without_rows
+#print axioms Tm.EmitWire.RowReq.ofDay_is_the_days_own
+#print axioms Tm.EmitWire.the_planned_days_rows_are_rowsOf
+#print axioms Tm.EmitWire.dayRowsPairs_is_the_rows_then_the_days_divider
+#print axioms Tm.EmitWire.dayRowsPairs_rows_length
+#print axioms Tm.EmitWire.the_door_writes_the_one_calls_pairs
+#print axioms Tm.EmitWire.answersRows_withPlan
+#print axioms Tm.EmitWire.answersRows_without_a_plan_key
+#print axioms Tm.PlanWire.runPlanner_answers_the_days_rows
+#print axioms Tm.PlanWire.runPlanner_refuses_a_plan_section_beside_it
+#print axioms Tm.PlanWire.planWithPlanner_spells_itself
+-- ===========================================================================
+-- APPENDED 2026-10-13: stage 6, run W-49, TRACK W — the remainder after a wall that holds the running block (README
+-- gap 5217, parity P123; the owner's D110, D117 and D114).  `activeRun_spec`, `mem_activeRow`,
+-- `activeRow_is_an_energyless_block`, `the_reservation_row_is_exact`, `a_running_break_pauses_the_block`, the D77
+-- overrun-break laws and the other restated theorems keep their audit lines above, under their names.
+-- ===========================================================================
+#print axioms Tm.WallTimer.heldFor_without_a_break
+#print axioms Tm.WallTimer.heldFor_spec
+#print axioms Tm.WallTimer.heldFor_started_le
+#print axioms Tm.WallTimer.holdOf_spec
+#print axioms Tm.Planner.PlanReq.held_started
+#print axioms Tm.WallTimer.before_the_first_free_stretch_is_blocked
+#print axioms Tm.Planner.PlanReq.a_held_reservation_reaches_at_most_one_block
+#print axioms Tm.Planner.PlanReq.no_slot_before_the_reservation
+#print axioms Tm.Planner.PlanReq.the_reservation_starts_before_the_wind_down
+#print axioms Tm.Planner.the_reservation_row_is_at_most_one_block
+#print axioms Tm.PlannerWit.heldRun_resumes_ok
+#print axioms Tm.PlannerWit.the_held_block_is_reserved_from_the_walls_end
+#print axioms Tm.PlannerWit.nothing_drifts_when_the_wall_lets_the_block_go
+#print axioms Tm.PlannerWit.the_break_that_holds_the_block_releases_it_at_its_end
+#print axioms Tm.PlannerWit.the_reservation_starts_at_now_is_refuted
+#print axioms Tm.PlannerWit.the_reservation_row_starts_at_now_is_refuted
+#print axioms Tm.PlannerWit.a_running_break_pauses_the_block_as_w35_wrote_it_is_refuted
+#print axioms Tm.PlannerWit.the_held_reservation_bound_fires
+#print axioms Tm.PlannerWit.loggedAcrossRun_resumes_ok
+#print axioms Tm.PlannerWit.a_twin_without_the_meetings_pause_loses_the_hold
+#print axioms Tm.PlannerWit.the_cut_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted
+#print axioms Tm.PlannerWit.the_day_from_now_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted
+#print axioms Tm.PlannerWit.an_overrun_break_that_holds_the_block_reserves_nothing
+#print axioms Tm.PlannerWit.the_reservation_start_guard_fires
+-- ===========================================================================
+-- APPENDED 2026-10-13: stage 6, run W-49, TRACK L — the replay reads a block closed, stopped or paused while a logged
+-- break runs as it will once the break's line arrives (README gap 5180: `Replay.runNet`, `Replay.runSpan`; the seal's
+-- queries read the netting at `Seal.runReads`).  the_close_under_a_running_break_lays_its_block_across_the_break is
+-- deleted with its audit line (its statement decided the defect this closes); its successor is
+-- `the_close_under_a_running_break_is_netted_from_its_block`.  `the_break_start_arm_opens_the_running_break` is restated
+-- and keeps its audit line above.
+-- ===========================================================================
+#print axioms Tm.PlannerWit.the_break_law_holds_whole_at_the_close_under_a_running_break
+#print axioms Tm.PlannerWit.the_close_under_a_running_break_is_netted_from_its_block
+#print axioms Tm.Replay.a_break_start_logged_after_a_done_nets_it
+#print axioms Tm.Replay.a_done_under_a_running_break_is_netted_by_it
+#print axioms Tm.Replay.a_pause_under_a_running_break_draws_up_to_its_start
+#print axioms Tm.Replay.applyEffect_machine_comm
+#print axioms Tm.Replay.applyEffects_machine_comm
+#print axioms Tm.Replay.a_running_break_after_a_done_nets_nothing
+#print axioms Tm.Replay.a_start_under_a_running_break_cuts_the_open_block_at_the_break
+#print axioms Tm.Replay.a_stop_under_a_running_break_is_netted_by_it
+#print axioms Tm.Replay.conserves_doneFx
+#print axioms Tm.Replay.conserves_runNet
+#print axioms Tm.Replay.cutOut_runTo_starts
+#print axioms Tm.Replay.doneClose_noMachine
+#print axioms Tm.Replay.netClosed_headOk
+#print axioms Tm.Replay.noMachine_of_plain
+#print axioms Tm.Replay.noMachine_of_safe
+#print axioms Tm.Replay.runNet_blockOnly
+#print axioms Tm.Replay.runNet_cases
+#print axioms Tm.Replay.runNet_conserves
+#print axioms Tm.Replay.runNet_duration
+#print axioms Tm.Replay.runNet_energy
+#print axioms Tm.Replay.runNet_headOk
+#print axioms Tm.Replay.runNet_keeps
+#print axioms Tm.Replay.runNet_machines
+#print axioms Tm.Replay.runNet_mem
+#print axioms Tm.Replay.runNet_noMachine
+#print axioms Tm.Replay.runNet_obs
+#print axioms Tm.Replay.runNet_pendLines
+#print axioms Tm.Replay.runNet_sleptOk
+#print axioms Tm.Replay.runTo_ge
+#print axioms Tm.Replay.settle_avoids_the_running_break
+#print axioms Tm.Replay.the_break_start_arm_as_d105_stated_it_is_refuted
+#print axioms Tm.Replay.the_break_start_arm_writes_only_the_running_break_with_nothing_open_or_drawn_after_it
+#print axioms Tm.Replay.the_running_breaks_line_moves_nothing_it_netted
+#print axioms Tm.Seal.closedReads_shp
+#print axioms Tm.Seal.cut_shp
+#print axioms Tm.Seal.doneClosed_shp
+#print axioms Tm.Seal.netOne_shp
+#print axioms Tm.Seal.netStart_shp
+#print axioms Tm.Seal.piece_start_run_mi
+#print axioms Tm.Seal.pruneClosed_shp
+#print axioms Tm.Seal.redraw_fst_map
+#print axioms Tm.Seal.runNet_congr
+#print axioms Tm.Seal.runNet_lastCut_cases
+#print axioms Tm.Seal.runNet_lastCut_day
+#print axioms Tm.Seal.runNet_mi
+#print axioms Tm.Seal.runReads_mi
+#print axioms Tm.Seal.runReads_settle
+#print axioms Tm.Seal.runReads_shp
+#print axioms Tm.Seal.runReads_starts
+#print axioms Tm.Seal.runTo_spans
+
+-- ===========================================================================
+-- APPENDED 2026-10-13: stage 6, run W-49, TRACK L — D108's one answer (README gap 5300; the owner's D125): the day
+-- keeps the latest calendar date's last `plan` and last input, with their lines (`Replay.DayAcc.planHash`, `planLine`,
+-- `lateLine`; `Replay.notBefore`).  a_day_keeps_its_first_plans_hysteresis_input and
+-- a_plan_sets_the_hysteresis_input_iff_it_is_the_days_first are deleted with their audit lines: they were the
+-- first-of-the-ledger-day answer, now gone.  `a_plan_records_its_stamp`,
+-- `a_plan_with_an_input_is_the_latest_and_one_without_keeps_it` and
+-- `the_latest_input_and_the_last_plan_are_read_at_their_stamps` are restated and keep their audit lines above.
+-- ===========================================================================
+#print axioms Tm.Replay.a_clock_behind_the_log_moves_no_later_dates_answer
+#print axioms Tm.Replay.a_day_keeps_its_latest_plans_hysteresis_input
+#print axioms Tm.Replay.a_plan_of_an_earlier_date_keeps_the_slot
+#print axioms Tm.Replay.a_plan_with_an_input_is_the_latest_as_the_w48_repair_stated_it_is_refuted
+#print axioms Tm.Replay.a_plan_records_its_stamp_as_the_w48_repair_stated_it_is_refuted
