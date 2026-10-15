@@ -13587,5 +13587,127 @@ theorem the_reservation_start_guard_fires :
     theReleasedRequest.notTheStart theReleasedRequest.now.sec = false := by
   refine ⟨by decide, by decide, by decide, by decide, by decide⟩
 
+/-! ############################################################################
+## W-49 track Q — the last goal (README gap 5181): what the fold discharges, and two worlds it fails on
+
+`PlanCheck.hopen_on_a_resumed_run` discharges the reduction's `hopen` over every run `Seal.resumeRun` builds from the
+empty checkpoint, within two named bounds (`BreakFold`'s two fold invariants).  Below: that theorem applied at a day
+whose `hopen` has a subject (`theOpenAfterBreakRequest`, the W-48 repair's block left open across a break), and the
+two worlds on which the goal as written fails at a request whose run the decoder builds — each standing on a reading
+recorded as a gap (README gaps 5340 and 5341), so neither is a refutation (the campaign's lesson 4).
+############################################################################ -/
+
+/-- **The run behind `theOpenAfterBreakRequest` is a genesis run.** -/
+theorem openAfterBreakRun_resumes :
+    Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) openAfterBreakLines = .ok openAfterBreakRun := by
+  unfold openAfterBreakRun
+  split
+  · rename_i run h; rw [h]
+  · rename_i e h; exact absurd openAfterBreakRun_resumes_ok (by simp [runOk, h])
+
+set_option maxRecDepth 400000 in
+/-- **The fold's `hopen` at a day with a subject**: `m1`'s open block runs from 07:25, after the 07:10-07:25 break
+today's record holds (`the_apart_replay_holds_with_a_block_open_after_a_break`), and the theorem — not `decide` over
+the claim — says so, from the two bounds alone. -/
+theorem the_fold_discharges_the_open_block_clause_at_the_open_after_break_request :
+    ∀ ob ∈ theOpenAfterBreakRequest.run.answer.openBlock.toList, ∀ s ∈ ob.since.toList,
+      ∀ k ∈ (theOpenAfterBreakRequest.todayRecord.map (·.segments)).getD [], (pastKind k.kind).1 = SegKind.brk →
+        k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec :=
+  PlanCheck.hopen_on_a_resumed_run theOpenAfterBreakRequest Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago)
+    openAfterBreakLines openAfterBreakRun_resumes (BreakFold.the_genesis_restore_holds Cal.chicago)
+    (by decide) (by decide)
+
+set_option maxRecDepth 400000 in
+/-- **The goal's statement on that day, whole, with `hopen` from the fold.** -/
+theorem the_break_law_holds_whole_at_the_open_after_break_request_by_the_fold (b k : WfSeg)
+    (hb : b ∈ (dayPlan theOpenAfterBreakRequest).segments) (hk : k ∈ (dayPlan theOpenAfterBreakRequest).segments)
+    (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :
+    b.val.stop ≤ k.val.start ∨ k.val.stop ≤ b.val.start :=
+  PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run theOpenAfterBreakRequest Cal.chicago 739867
+    (Seal.Ckpt.empty Cal.chicago) openAfterBreakLines openAfterBreakRun_resumes
+    (BreakFold.the_genesis_restore_holds Cal.chicago) (by decide) (by decide) (by decide)
+    the_apart_replay_holds_with_a_block_open_after_a_break.2.2.1
+    the_apart_replay_holds_with_a_block_open_after_a_break.2.2.2.2 b k hb hk hbk hkk
+
+/-! ### The host's running break (README gaps 4761 and 5340) -/
+
+/-- **The decoder hands the planner the host's runtime as it was sent**: the request `PlanWire.planReqOf` answers carries
+`q.state` — the host's running break among it — and none of the decoder's clauses compares it with the replay's
+(`Seal.Answer.openBreak`; README gap 4761). -/
+theorem planReqOf_keeps_the_hosts_runtime (parts : CapParts) (bm : Nat) (q : PlanWire.PlannerIn) (r : PlanReq)
+    (h : PlanWire.planReqOf parts bm q = .ok r) : r.state = q.state := by
+  unfold PlanWire.planReqOf at h
+  repeat' (first | (split at h) | (simp only [Except.ok.injEq] at h))
+  all_goals (try cases h)
+  all_goals rfl
+
+/-- **The host's running break, begun at 07:30**, where the log's `break_start` is at 08:30 (`breakAfterDoneLines`). -/
+def hostBreakAt0730State : RuntimeIn :=
+  { RuntimeIn.empty with brk := some ⟨some ⟨(Cal.instantOf Cal.chicago 739867 450).sec, 0⟩, 15, none⟩ }
+
+/-- The break-after-done day with the host's runtime disagreeing with its own replay. -/
+def theHostBreakRequest : PlanReq :=
+  { theCensusRequest with run := breakAfterDoneRun, state := hostBreakAt0730State }
+
+set_option maxRecDepth 400000 in
+/-- **A host's running break the replay does not hold lays a replayed Block across the break** (README gaps 4761 and
+5340): the replay's running break began at 08:30 and the host's at 07:30; `m1`'s Block (07:05-08:05, today's record)
+and the running Break row (from 07:30) overlap.  The request differs from `theBreakAfterDoneRequest` — on which the goal
+holds whole — by the host's copy alone, and the decoder hands either copy through as it was sent (`planReqOf_keeps_the_hosts_runtime`). -/
+theorem the_hosts_running_break_lays_a_block_across_it :
+    theHostBreakRequest.run.answer.openBreak.map (fun o => o.s.1.sec) = some (Cal.instantOf Cal.chicago 739867 510).sec ∧
+    (theHostBreakRequest.state.brk.bind (·.started)).map (·.sec) = some (Cal.instantOf Cal.chicago 739867 450).sec ∧
+    ((dayPlan theHostBreakRequest).segments.any (fun b => decide (b.val.kind = SegKind.block) &&
+      (dayPlan theHostBreakRequest).segments.any (fun k => decide (k.val.kind = SegKind.brk) &&
+        decide (k.val.start < b.val.stop) && decide (b.val.start < k.val.stop)))) = true :=
+  ⟨by decide, by decide, by decide⟩
+
+/-! ### A break running since the ledger day before (README gap 5341) -/
+
+/-- **Machine A's 2026-09-08 wake.** -/
+def ydWakeLine : Log.Line := ⟨1, some ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','8','T','0','6',':','0','5',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','w','a','k','e','"',',','"','s','l','e','p','t','_','m','i','n','"',':','4','9','0','}']⟩
+
+/-- **Machine A's `tm break` at 23:00 on 2026-09-08**, still running: its `break` line has not been logged. -/
+def ydBreakStartLine : Log.Line := ⟨2, some ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','8','T','2','3',':','0','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','b','r','e','a','k','_','s','t','a','r','t','"',',','"','p','l','a','n','n','e','d','_','m','i','n','"',':','1','5','}']⟩
+
+/-- **Two machines on one synced log**: A's wake and `break_start` on 2026-09-08, then B's 2026-09-09 — `witLines`' wake,
+arrival, `m1`'s 07:05 `start` and 08:05 `done` — appended after them.  The binary on one machine never writes it:
+`tm wake` and `tm start` refuse or end a running break first (D81, D101). -/
+def ydBreakLines : List Log.Line :=
+  [ydWakeLine, ydBreakStartLine] ++ (witLines.take 4).map (fun l => ⟨l.n + 2, l.text⟩)
+
+set_option maxRecDepth 400000 in
+theorem ydBreakRun_resumes_ok : runOk Cal.chicago 739867 ydBreakLines = true := by decide
+
+def ydBreakRun : Seal.Run :=
+  match h : Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) ydBreakLines with
+  | .ok run => run
+  | .error _ => absurd ydBreakRun_resumes_ok (by simp [runOk, h])
+
+/-- **The runtime the binary rebuilds from that log** (D42, D105): the break begun at 23:00 the day before, running. -/
+def ydBreakState : RuntimeIn :=
+  { RuntimeIn.empty with brk := some ⟨some ⟨(Cal.instantOf Cal.chicago 739866 1380).sec, 0⟩, 15, none⟩ }
+
+/-- The census day with that log and that runtime. -/
+def theYdBreakRequest : PlanReq :=
+  { theCensusRequest with run := ydBreakRun, state := ydBreakState }
+
+set_option maxRecDepth 400000 in
+/-- **A break running since the ledger day before lays today's Block across it** (README gap 5341): the replay's
+running break began at 23:00 on 2026-09-08, on that ledger day, and the host's copy agrees; `m1`'s 07:05-08:05 Block is
+credited whole on 2026-09-09 — the owner's D94 nets a break only on a block's own ledger days and later
+(`Replay.runSpan`, `Replay.spansFor`) — and the day draws the running Break row from the day's start across it. -/
+theorem a_break_running_since_the_day_before_lays_todays_block_across_it :
+    theYdBreakRequest.run.answer.openBreak.map (fun o => (o.s.1.sec, o.day))
+        = some ((Cal.instantOf Cal.chicago 739866 1380).sec, 739866) ∧
+    (theYdBreakRequest.state.brk.bind (·.started)).map (·.sec) = some (Cal.instantOf Cal.chicago 739866 1380).sec ∧
+    ((theYdBreakRequest.todayRecord.map (·.segments)).getD []).any (fun g =>
+      decide ((pastKind g.kind).1 = SegKind.block ∧ g.start.1.sec = (Cal.instantOf Cal.chicago 739867 425).sec ∧
+        g.stop.1.sec = (Cal.instantOf Cal.chicago 739867 485).sec)) = true ∧
+    ((dayPlan theYdBreakRequest).segments.any (fun b => decide (b.val.kind = SegKind.block) &&
+      (dayPlan theYdBreakRequest).segments.any (fun k => decide (k.val.kind = SegKind.brk) &&
+        decide (k.val.start < b.val.stop) && decide (b.val.start < k.val.stop)))) = true :=
+  ⟨by decide, by decide, by decide, by decide⟩
+
 end PlannerWit
 end Tm

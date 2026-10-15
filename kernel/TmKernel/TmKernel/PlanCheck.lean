@@ -1,4 +1,5 @@
 import TmKernel.PlanFold
+import TmKernel.BreakFold
 /-!
 # L26's eleven single-run laws, as one checker battery (stage 6, track G)
 
@@ -6580,6 +6581,68 @@ theorem netOne_draws_beside_the_break (dy : Cal.Instant → Nat) (s e : Replay.A
       · simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
         rcases hx with rfl | rfl | rfl <;> simp at hxg
       · simp at hx
+
+/-! ### W-49 track Q — the reduction's `hopen`, discharged over resumed runs (README gap 5181)
+
+The replay's two fold invariants are `BreakFold.lean`'s (`BreakFold.OpenAfter`, `BreakFold.BrkHeld`); what is here reads
+them at the planner's request. -/
+
+/-- **`hopen` of `PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay`, on every request whose run is a
+resume** — from the empty checkpoint, or from one whose restored state holds both invariants — **within its two named
+bounds**: the open block's ledger day is not after the plan's day (`hday`; the clock is not behind the log, D94), and
+the plan's day is within 31 ledger days of the newest break the run's machine holds (`hkeep`; README gap 4914's
+`pruneBrks`). -/
+theorem hopen_on_a_resumed_run (r : PlanReq) (z : Cal.Tz) (T : Nat) (K : Seal.Ckpt) (b : List Log.Line)
+    (h : Seal.resumeRun z T K b = .ok r.run)
+    (hK : ∀ n, BreakFold.OpenAfter (Seal.restore K n).machine ∧ BreakFold.BrkHeld (Seal.restore K n))
+    (hday : ∀ ob ∈ r.run.answer.openBlock.toList, ob.day ≤ r.today)
+    (hkeep : r.run.state.machine.brks.foldl (fun a k => max a k.day) 0 ≤ r.today + 31) :
+    ∀ ob ∈ r.run.answer.openBlock.toList, ∀ s ∈ ob.since.toList,
+      ∀ k ∈ (r.todayRecord.map (fun (a : Replay.DayAcc) => a.segments)).getD [], (pastKind k.kind).1 = Planner.SegKind.brk →
+        k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec := by
+  intro ob hob s hs k hk hkk hlt
+  unfold PlanReq.todayRecord at hk
+  cases hf : r.run.answer.days.find? (fun d => decide (d.day = r.today)) with
+  | none => rw [hf] at hk; cases hk
+  | some rec =>
+    rw [hf] at hk
+    have hrec := List.mem_of_find?_eq_some hf
+    have hday' : rec.day = r.today := by simpa using List.find?_some hf
+    cases hacc : rec.record with
+    | none => simp [hacc] at hk
+    | some acc =>
+      simp only [hacc, Option.bind_some, Option.map_some, Option.getD_some] at hk
+      obtain ⟨w, hw⟩ : ∃ w, k.kind = Replay.SegKind.brk w := by
+        cases hkd : k.kind <;> simp [hkd, pastKind] at hkk ⊢
+      have hlt' : k.start.1 < k.stop.1 := (Cal.Instant.lt_iff _ _).2 (Or.inl hlt)
+      rcases BreakFold.the_resumed_open_block_runs_after_every_break z T K b r.run h hK ob hob s hs rec hrec acc
+        (by simp [hacc]) k hk w hw hlt' with h1 | h1 | h1
+      · rcases (Cal.Instant.le_iff _ _).1 h1 with h1 | h1 <;> omega
+      · have := hday ob hob; omega
+      · omega
+
+/-- **`Goals.plan_places_no_block_over_a_break` as written, on a resumed run, with `hopen` discharged**: what the
+reduction still needs is `hrec` and `hrun` and the two bounds of `hopen_on_a_resumed_run` (README gap 5181, W-49
+track Q). -/
+theorem plan_places_no_block_over_a_break_on_a_resumed_run (r : PlanReq) (z : Cal.Tz) (T : Nat) (K : Seal.Ckpt)
+    (b : List Log.Line) (h : Seal.resumeRun z T K b = .ok r.run)
+    (hK : ∀ n, BreakFold.OpenAfter (Seal.restore K n).machine ∧ BreakFold.BrkHeld (Seal.restore K n))
+    (hday : ∀ ob ∈ r.run.answer.openBlock.toList, ob.day ≤ r.today)
+    (hkeep : r.run.state.machine.brks.foldl (fun a k => max a k.day) 0 ≤ r.today + 31)
+    (hnowcal : r.now.sec + 1 < LogStamp.yearEnd)
+    (hrec : ∀ g ∈ (r.todayRecord.map (fun (a : Replay.DayAcc) => a.segments)).getD [], ∀ k ∈ (r.todayRecord.map (fun (a : Replay.DayAcc) => a.segments)).getD [],
+      (pastKind g.kind).1 = Planner.SegKind.block → (pastKind k.kind).1 = Planner.SegKind.brk →
+        g.start.1.sec < g.stop.1.sec → k.start.1.sec < k.stop.1.sec →
+          g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec)
+    (hrun : ∀ bs ∈ r.state.brk.toList, ∀ t ∈ bs.started.toList,
+      ∀ g ∈ (r.todayRecord.map (fun (a : Replay.DayAcc) => a.segments)).getD [], (pastKind g.kind).1 = Planner.SegKind.block →
+        g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec)
+    (bw kw : WfSeg) (hb : bw ∈ (dayPlan r).segments) (hk : kw ∈ (dayPlan r).segments)
+    (hbk : bw.val.kind = Planner.SegKind.block) (hkk : kw.val.kind = Planner.SegKind.brk) :
+    bw.val.stop ≤ kw.val.start ∨ kw.val.stop ≤ bw.val.start :=
+  PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay r hnowcal hrec
+    (hopen_on_a_resumed_run r z T K b h hK hday hkeep) hrun bw kw hb hk hbk hkk
+
 
 end PlanCheck
 end Tm

@@ -272,7 +272,7 @@ b8109f228b60 TmKernel/TmKernel/EmitWire.lean Tm.EmitWire.readSeg unfoldable no I
 a85a20f2d9c7 TmKernel/TmKernel/EmitWire.lean Tm.EmitWire.readSegs default EmitWire.lean:1316 readSegs_reads_every_list_whose_segments_read also EmitWire.lean:1332 readSegs_reads_a_rest_and_refuses_a_record_without_a_start
 77d1a8697145 TmKernel/TmKernel/EmitWire.lean Tm.EmitWire.readPrios unfoldable no Inhabited (Except RowRefusal (Capped (Id × Fin 8)))
 0c3a48279c9a TmKernel/TmKernel/EmitWire.lean Tm.EmitWire.readRowSection unfoldable no Inhabited (Except RowRefusal RowReq)
-24548a6dc6ec TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.pastHalf unfoldable,d no Inhabited DayPlan; PlanCheck.lean:3750 pastHalf_segments
+24548a6dc6ec TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.pastHalf unfoldable,d no Inhabited DayPlan; PlanCheck.lean:3751 pastHalf_segments then PlannerWit.lean:5293 the_replayed_half_is_a_strict_part_of_the_day
 d7fb41bd5254 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theOverBudgetRequest unfoldable no Inhabited PlanReq
 411bbcad52ad TmKernel/TmKernel/EmitWire.lean Tm.EmitWire.u32Within default EmitWire.lean:859 readSeg_refuses_a_planned_past_the_bound
 ce9b0efcab4b TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.PlainStore True,False PlanCheck.lean:3950 WallsArePlain_of_a_plain_store; PlanCheck.lean:3950 WallsArePlain_of_a_plain_store
@@ -284,7 +284,7 @@ ce9b0efcab4b TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.PlainStore True,False
 3c66d0810d56 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.toTomorrowsMeeting unfoldable no Inhabited WfSeg
 1721de03aaa6 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theRelabelledWallDay unfoldable no Inhabited DayPlan
 8e73160e95f0 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theHourLaterRequest unfoldable no Inhabited PlanReq
-c248aef20e9f TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.futureHalf unfoldable,d no Inhabited DayPlan; PlanCheck.lean:4174 futureHalf_segments
+c248aef20e9f TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.futureHalf unfoldable,d no Inhabited DayPlan; PlanCheck.lean:4175 futureHalf_segments then PlannerWit.lean:5892 the_future_half_is_not_the_whole_day
 a3dd7bd04942 TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.holeFree true,false PlanCheck.lean:4204 holeFree_iff; PlanCheck.lean:4204 holeFree_iff
 0e5bb041c418 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theFutureHalfOfTheCensusDay unfoldable no Inhabited DayPlan
 ac5d05dd9c8e TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theTailRemainderDay unfoldable no Inhabited DayPlan
@@ -594,7 +594,7 @@ fede3be4942b TmKernel/TmKernel/WallTimer.lean Tm.WallTimer.answer default WallTi
 0a03a440eba3 TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.rankedBefore true,false PlanCheck.lean:5574 rankedBefore_iff then PlannerWit.lean:1540 the_battery_bites_over_a_produced_day; PlanCheck.lean:5574 rankedBefore_iff then PlannerWit.lean:7059 the_three_empty_checks_are_empty_at_every_day_that_assigns_and_pays
 0d69e41606ca TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.rankPairOk true,false PlanCheck.lean:404 rankPairOk_iff then PlannerWit.lean:10025 the_rank_check_refuses_a_planted_violation_of_the_planners_order; PlanCheck.lean:403 rankPairOk_iff then PlannerWit.lean:1397 the_stored_day_passes_the_whole_battery
 37c255a842c6 TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.eligibleBefore true,false PlanCheck.lean:2129 an_unassigned_day_admits_nothing_under_its_budget also PlanCheck.lean:5466 eligibleBefore_iff; PlanCheck.lean:2129 an_unassigned_day_admits_nothing_under_its_budget also PlanCheck.lean:5466 eligibleBefore_iff
-375338e6b7b0 TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.checksEligible default,[] PlanCheck.lean:554 checksOf_length also PlanCheck.lean:627 monotone_in_rank_from_the_battery; PlanCheck.lean:554 checksOf_length also PlanCheck.lean:627 monotone_in_rank_from_the_battery
+375338e6b7b0 TmKernel/TmKernel/PlanCheck.lean Tm.PlanCheck.checksEligible default,[] PlanCheck.lean:555 checksOf_length also PlanCheck.lean:628 monotone_in_rank_from_the_battery; PlanCheck.lean:555 checksOf_length also PlanCheck.lean:628 monotone_in_rank_from_the_battery
 1878b17a338e TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theOpenImpossibleRequest unfoldable no Inhabited PlanReq
 b710316a0ea6 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theRowlessImpossibleDay unfoldable no Inhabited DayPlan
 c8d52dc182b7 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.contiguityFindingWitness default,[] PlannerWit.lean:9797 step_five_drops_an_owed_impossible_item_its_filter_admitted_before_the_walk (its statement, decided false); PlannerWit.lean:9797 step_five_drops_an_owed_impossible_item_its_filter_admitted_before_the_walk (its statement, decided false)
@@ -1042,3 +1042,14 @@ bf711c833c38 TmKernel/TmKernel/Replay.lean Tm.Replay.openEnd unfoldable,(⟨0,0�
 cf33cd2e50dd TmKernel/TmKernel/Replay.lean Tm.Replay.runTo unfoldable,fun_=>s,fun_=>(⟨0,0⟩,⟨true,0⟩) no Inhabited (List Closed → At); Replay.lean:6534 runTo_ge also Replay.lean:11937 the_break_start_arm_as_d105_stated_it_is_refuted; Replay.lean:6530 runTo_ge also Replay.lean:11937 the_break_start_arm_as_d105_stated_it_is_refuted
 cc7349b0cb9e TmKernel/TmKernel/Replay.lean Tm.Replay.runNet unfoldable,(⟨none,none,none,[],none,[]⟩,[]) no Inhabited (Machine × List Effect); Replay.lean:5458 runNet_cases also Replay.lean:10334 the_replay_warnings_are_the_unknown_statuses_in_file_order_as_c4_stated_it_is_refuted
 544e03c49d3e TmKernel/TmKernel/SealResume.lean Tm.Seal.runReads default,[] SealResume.lean:213 runReads_shp then SealStep.lean:164 runNet_congr; SealResume.lean:213 runReads_shp then SealStep.lean:164 runNet_congr
+6b20a5fd27f4 TmKernel/TmKernel/BreakFold.lean Tm.BreakFold.OpenAfter True,False BreakFold.lean:41 openAfter_congr also BreakFold.lean:48 openAfter_of_no_block; BreakFold.lean:41 openAfter_congr also BreakFold.lean:48 openAfter_of_no_block
+3a77ca9b2d10 TmKernel/TmKernel/BreakFold.lean Tm.BreakFold.NoBrkSeg True,False BreakFold.lean:193 noBrkSeg_nil also BreakFold.lean:196 noBrkSeg_append; BreakFold.lean:193 noBrkSeg_nil also BreakFold.lean:196 noBrkSeg_append
+13dc5df3be59 TmKernel/TmKernel/BreakFold.lean Tm.BreakFold.BrkHeld True,False BreakFold.lean:670 stepWith_brkHeld also BreakFold.lean:725 restore_empty_holds; BreakFold.lean:670 stepWith_brkHeld also BreakFold.lean:725 restore_empty_holds
+97672c5e0ae7 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.hostBreakAt0730State unfoldable no Inhabited RuntimeIn
+4467f37ce067 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theHostBreakRequest unfoldable no Inhabited PlanReq
+b78dd7b0dca3 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.ydWakeLine unfoldable,⟨0,none⟩ no Inhabited Log.Line; PlannerWit.lean:13680 ydBreakRun_resumes_ok (its statement, decided false)
+524b6518646a TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.ydBreakStartLine unfoldable,⟨0,none⟩ no Inhabited Log.Line; PlannerWit.lean:13710 a_break_running_since_the_day_before_lays_todays_block_across_it (its statement, decided false)
+aba9d1ce7717 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.ydBreakLines default,[] PlannerWit.lean:13710 a_break_running_since_the_day_before_lays_todays_block_across_it (its statement, decided false); PlannerWit.lean:13710 a_break_running_since_the_day_before_lays_todays_block_across_it (its statement, decided false)
+0a24d71a8b4b TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.ydBreakRun unfoldable no Inhabited Seal.Run
+caf20656c489 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.ydBreakState unfoldable no Inhabited RuntimeIn
+6f38f341b104 TmKernel/TmKernel/PlannerWit.lean Tm.PlannerWit.theYdBreakRequest unfoldable no Inhabited PlanReq

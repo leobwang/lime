@@ -1287,7 +1287,21 @@ minutes where it read sixty — the span read two ways, a kernel reading (gap 51
 campaign's lesson 4), and the goal stays.  It is discharged by: the kernel netting a running break from a block closed
 under it (gap 5180, a definition of `Replay.lean`'s, not this track's), then the fold invariant that gives (hrec) and
 (hopen) over `Seal.resumeRun`'s runs with gaps 4914's and 4917's bounds in its hypotheses or removed, and (hrun)
-stated against the run's own running break (`Seal.Answer.openBreak`) — README gap 5181. -/
+stated against the run's own running break (`Seal.Answer.openBreak`) — README gap 5181.
+
+**W-49 track Q discharged `hopen` and found that `hrun` cannot be had** (README "Stage 6 — W-49 track Q", gaps 5181,
+5340 and 5341).  Gap 5180 is closed (W-49 track L).  `BreakFold.lean` carries two invariants of the replay's fold through
+every step and every resume from a state holding them — every run from the empty checkpoint — and
+`PlanCheck.hopen_on_a_resumed_run` gives `hopen` from them within two named bounds (the open block's ledger day not
+after the plan's, the plan's day within 31 of the newest held break: README gap 4914); so
+`PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run` proves this statement on a resumed run from `hrec`,
+`hrun` and the bounds.  `hrun` is false on two requests whose run the decoder builds, each standing on a reading, so
+neither is a refutation: the host's running break disagreeing with the replay's, which the decoder hands through
+(`PlannerWit.the_hosts_running_break_lays_a_block_across_it`, `PlannerWit.planReqOf_keeps_the_hosts_runtime`; README
+gaps 4761 and 5340), and a break running since the ledger day before a Block today's record credits, host and replay
+agreeing (`PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it`; the owner's D94 day rule against
+the running-break row, gap 5341).  `hrec` over the runs `Seal.resumeRun` builds — the drawn-pieces accounting — is not
+done. -/
 theorem plan_places_no_block_over_a_break (r : PlanReq) (b k : WfSeg)
     (hb : b ∈ (dayPlan r).segments) (hk : k ∈ (dayPlan r).segments)
     (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :

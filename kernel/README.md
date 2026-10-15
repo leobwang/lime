@@ -99301,3 +99301,220 @@ All under `systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0` on th
 Owner: gap 5260 (D124's other four `plan.*` keys) and gap 5131 (the template `^t3`'s two estimates), both unasked
 until this land.  Work: goal 5181 and gap 5161 (W-49's phase 2), the tracks' gaps 5261, 5280-5283 and 5302-5306, and
 the §5.13 drive of the TUI over a live meeting and through D126.
+
+<!-- =====================================================================
+     APPENDED 2026-10-14: stage 6 (the planner), run **W-49**, **track Q** —
+     the last goal, `Goals.plan_places_no_block_over_a_break` (gap 5181).
+     Gaps 5340-5343 are this step's.  No cheat, no parity number issued
+     (proof work: nothing the binary does moves).  Whoever merges renumbers.
+     ===================================================================== -->
+
+## Stage 6 — W-49 track Q: the last goal's `hopen` discharged by the fold, and why `hrun` cannot be had
+
+**The burn-down stays 1.**  Of the three facts W-48 track G reduced the goal to (`PlanCheck.plan_places_no_block_over_a_break_on_an_apart_replay`:
+`hrec`, `hopen`, `hrun`), this step proves `hopen` over every run `Seal.resumeRun` builds from the empty checkpoint,
+within two named bounds, and finds `hrun` false on two requests whose run the decoder builds — each standing on a
+reading recorded below, so neither is a refutation (the campaign's lesson 4) and the goal is not narrowed.  `hrec` over
+the runs `Seal.resumeRun` builds is not done.  The goal stays in `Goals.lean` with its doc comment brought to this.
+
+### 1. The fold invariants (`BreakFold.lean`, a new module; `TmKernel.lean` imports it)
+
+Two invariants of the replay's state, each carried through every step (`Replay.stepWith`, the step `Seal.tailFold`
+folds) and so through every resume from a state that holds them:
+
+* **`BreakFold.OpenAfter`** (of the machine) — the open block's `since`, while its clock runs, is at or after the end
+  of every nonempty span `Replay.blockSpans` holds: its own idle spans and the held breaks of its ledger days (the
+  owner's D94 and D99).  `BreakFold.arm_openAfter` takes `Replay.arm`'s arms one by one: every machine an arm writes is
+  settled (`BreakFold.settle_openAfter`, from `Replay.runFrom_step_ge`), or is a settled one whose closed blocks alone
+  moved (`netClosed`, `runNet`: `Replay.netClosed_keeps`, `Replay.runNet_keeps`), or holds no block (a cut, a `done`'s
+  close: `BreakFold.cut_block`, `BreakFold.doneClose_keeps`), or keeps the block and the held breaks (an `extend`, a
+  `done` of another item).  `BreakFold.stepWith_openAfter` reads the step's machine through `Seal.stepWith_machine_eq`.
+* **`BreakFold.BrkHeld`** (of the state) — every Break segment of a day's record is a break the machine holds with
+  that segment's span on that ledger day, or the day is more than 31 ledger days behind the newest break the machine
+  holds (`Replay.pruneBrks`' bound, README gap 4914).  A day's segments after a step were there before or were drawn by
+  one of its effects (`BreakFold.applyEffects_seg_src`; an un-drawing only removes); a Break segment is drawn by a
+  `break` line's own day half alone (`BreakFold.arm_noBrkSeg`, `BreakFold.completionArm_noBrkSeg`, over
+  `BreakFold.NoBrkSeg` of every block-family effect list), beside the held break `brkFx` pushes with its span and day
+  (`BreakFold.stepWith_brks_of_brk`); every other held break moves only by `pruneBrks`, which drops a break only when
+  the newest day it keeps is more than 31 ahead (`BreakFold.prune_keeps`), and that day never falls
+  (`BreakFold.hi_grows`, `BreakFold.hi_pruneBrks`).
+
+`BreakFold.resumeRun_holds` carries both through `Seal.resumeRun` (`Seal.resumeRun_ok`), and the empty checkpoint's
+restored state holds both (`BreakFold.restore_empty_holds`: no block, no day).
+`BreakFold.the_resumed_open_block_runs_after_every_break` reads them at the answer: for every day record of a resumed
+answer and every nonempty Break segment of it, the open block's `since` is at or after the segment's end — unless the
+day is before the open block's ledger day, or more than 31 behind the newest held break.
+
+### 2. `hopen`, discharged at the planner's request (`PlanCheck.lean`, appended)
+
+`PlanCheck.hopen_on_a_resumed_run` is the reduction's `hopen` verbatim, on every request whose run is a resume from a
+state holding both invariants, with two hypotheses naming the bounds: `hday` (the open block's ledger day is not after
+the plan's day — a clock behind the log, the owner's D94 netting a break on a block's ledger days alone) and `hkeep`
+(the plan's day is within 31 ledger days of the newest break the run's machine holds, gap 4914).
+`PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run` is the goal's statement on such a request from `hrec`,
+`hrun` and the bounds.  `PlannerWit.the_fold_discharges_the_open_block_clause_at_the_open_after_break_request` applies it
+at the W-48 repair's day with an open block left across a break (`m1` running from 07:25 after the 07:10-07:25 break,
+`PlannerWit.the_apart_replay_holds_with_a_block_open_after_a_break`), its genesis run named by
+`PlannerWit.openAfterBreakRun_resumes` — the bounds by `decide`, the clause by the theorem, never by computing it — and
+`PlannerWit.the_break_law_holds_whole_at_the_open_after_break_request_by_the_fold` gives the goal's statement on that
+day through it.
+
+**Laws restated: none.**  No existing theorem's statement changed.
+
+### 3. Two worlds on which `hrun` fails at a request whose run the decoder builds
+
+**(a) The host's running break (README gaps 4761 and 5340).**  The planner draws the running break from the request's
+`state.brk`, the host's copy, and `PlanWire.planReqOf` hands that copy through as it was sent
+(`PlannerWit.planReqOf_keeps_the_hosts_runtime`) — no clause of the decoder compares it with the replay's
+(`Seal.Answer.openBreak`).  `PlannerWit.the_hosts_running_break_lays_a_block_across_it` (`decide`): the break-after-done
+day (`m1` done 07:05-08:05, a `break_start` at 08:30, on which the goal holds whole) with the host's break begun at
+07:30 lays `m1`'s replayed Block across the running Break row from 07:30.  The shipped binary never sends it — driven,
+a hand-edited `.tm/state.json` is overwritten from the log before the planner is asked:
+
+```
+$ tm --dir H --now 2026-09-09T06:05:00-05:00 wake; … start ^t1 (07:05); … done (08:05)
+$ tm --dir H --now 2026-09-09T08:30:00-05:00 break 15m          → state.json "break": {"started": "08:30", …}
+  (hand edit: "started": "07:30")
+$ tm --dir H --now 2026-09-09T09:00:00-05:00 plan
+tm: .tm/state.json said a break began at 07:30 (15m) and .tm/log.jsonl says one began at 08:30 (15m) — the log decides (§10.2 is a cache of it, D42, D105)
+07:05  5    ✓ Read ch.6 §1–2               @m3  1b  (60m)
+08:30  ·      break 30m
+```
+
+so the two readers are kept equal by the host's reconcile, not by the kernel — gap 4761's own words — and the goal as
+written over the requests the decoder accepts cannot be proved while the planner reads the host's copy.
+
+**(b) A break running since the ledger day before (README gap 5341).**  Two machines on one synced plan directory
+(D78's world, forward clocks): machine A takes `tm break` at 23:00 on 2026-09-08; machine B, which has not seen it, wakes
+on 2026-09-09 and works `^t1` 07:05-08:05; the sync appends B's lines after A's.  Driven on this branch's binary
+(`cargo build -p tm`, scratch target, America/Chicago):
+
+```
+$ tm --dir A init --example; tm --dir A --now 2026-09-08T06:05:00-05:00 wake; cp -a A B
+$ tm --dir A --now 2026-09-08T23:00:00-05:00 break 15m   → {"t":"2026-09-08T23:00:00-05:00","ev":"break_start","planned_min":15}
+$ tm --dir B --now 2026-09-09T06:05:00-05:00 wake; … arrive lounge (07:00); … start ^t1 (07:05); … done (08:05)
+     → ✓ ^t1 Read ch.6 §1–2 · 60m/60m
+$ (B's five new lines appended to A's log; rm A/.tm/state.json)
+$ tm --dir A --now 2026-09-09T09:00:00-05:00 plan
+tm: RESTORED from the log: `break` — began 23:00, 15m planned — from the `break_start` `tm break` logged (D105).
+00:00  ·      break 9h
+07:05  5 p3 ✓ Read ch.6 §1–2               @m3  1b  (60m)
+$ tm --dir A --json … plan     → segments[0] {"start":"00:00","end":"09:00","kind":"break"}, segments[1] {"start":"07:05","end":"08:05","kind":"block"}
+$ tm --dir A --json … review day   → "block_min": 60, "load": 60.0
+```
+
+Here host and replay agree on the running break, so it is not gap 4761: the replay credits the block whole because
+the running break began on a ledger day before the block's — `Replay.runSpan` nets a running break only on the block's
+own ledger day or later, as `Replay.spansFor` does a held one (the owner's D94: "one filed on a ledger day before the
+block's stops no clock") — while the planner draws the running break from the day's start (P45), so 07:05-08:05 is read
+as block and as break.  The kernel's computation of the same day is
+`PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it` (`decide`; the log `PlannerWit.ydBreakLines`,
+a genesis run `PlannerWit.ydBreakRun_resumes_ok`, the runtime the binary rebuilds).  The falsifier stands on D94's day
+rule meeting P45's running-break row, a reading the owner has not ruled on for a break that crosses a wake, so it is
+not a refutation.
+
+### 4. Mutations (D40)
+
+Eleven definitions are new — three `Prop`s of `BreakFold.lean`, which emit no code, and eight fixtures of
+`PlannerWit.lean` — each mutated by `kernel/mutate.py --write` in a `git clone --shared` of this tree (scratch
+`w49/q/mclone`, capped 16 GB; 88 min at load 15-25, the machine shared with two other tracks' builds), eleven rows
+appended to `kernel/mutations.txt`; the run's last line: *11 definition(s) audited (6 pinned, … 7 unfoldable, 0
+unavailable, 5 witness fixtures, 0 pinned by nothing)*.
+
+| definition | constants | verdict |
+|---|---|---|
+| `BreakFold.OpenAfter` | `True`, `False` | PINNED by both: `openAfter_congr`, `openAfter_of_no_block` |
+| `BreakFold.NoBrkSeg` | `True`, `False` | PINNED by both: `noBrkSeg_nil`, `noBrkSeg_append` |
+| `BreakFold.BrkHeld` | `True`, `False` | PINNED by both: `stepWith_brkHeld`, `restore_empty_holds` |
+| `PlannerWit.ydWakeLine` | `default` (no `Inhabited Log.Line`), `⟨0, none⟩` | PINNED by `⟨0, none⟩`: `ydBreakRun_resumes_ok`, decided false |
+| `PlannerWit.ydBreakStartLine` | `default`, `⟨0, none⟩` | PINNED by `⟨0, none⟩`: `a_break_running_since_the_day_before_lays_todays_block_across_it`, decided false |
+| `PlannerWit.ydBreakLines` | `default`, `[]` | PINNED by both, the same theorem |
+| `PlannerWit.hostBreakAt0730State`, `ydBreakState` | `default` | UNFOLDABLE (no `Inhabited RuntimeIn`), witness fixtures |
+| `PlannerWit.theHostBreakRequest`, `theYdBreakRequest` | `default` | UNFOLDABLE (no `Inhabited PlanReq`), witness fixtures |
+| `PlannerWit.ydBreakRun` | `default` | UNFOLDABLE (no `Inhabited Seal.Run`), a witness fixture |
+
+The one `import` line `PlanCheck.lean` gained (`import TmKernel.BreakFold`) moved three of its rows' pin sites by a
+line (`Tm.PlanCheck.checksEligible`, `pastHalf`, `futureHalf`); each was re-verified in the clone with
+`mutate.py --verify --write --only <def>` (0 failed re-verification, pin sites rewritten), as were the three
+`BreakFold` rows after the module's header was reworded.
+
+### 5. Acceptance
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`, 16 GB for the mutation run,
+8 GB with `timeout 120` for every new `decide` probed in scratch first — the whole `PlannerWit` appendix elaborated in
+3.5 s), from the worktree `w49-q` over the tree this commit holds (base `acb8757`).  The machine was shared with other
+tracks' builds throughout; every timing carries its `uptime`.
+
+* **`check.sh`** (`scratchpad/w49/q/check2.log`; 23:43:04, load 15.77, 6m37s) — **seventeen lines, every one ok,
+  exit 0**: the build; totality; the axiom audit **6,858** theorems (61 appended by this block); `Negative.lean` rejected;
+  FFI **97** tests; the corpus 29/37 files and 4/5 whole plans; stage goals **1** (`Goals.plan_places_no_block_over_a_break`,
+  all stage 6); prose citations 66,656 (62,816 resolved, 3,840 allowed, 0 allow entries unused); new definitions mutated
+  **902 rostered, 0 owed**; parity **P1-P125** (none issued); no two names for one definition, 0 unanswered; reach 1,638
+  reachable, 1,097 exempt, 0 unanswered (Land 1's figures: this step emits no reachable code); the four field and key
+  checks 0 unanswered; the kernel replays 97 modules.  The first pass (`check1.log`) was red on check 8 alone, two stale
+  names in `BreakFold.lean`'s header, repaired, and on check 9, the rows owed then.
+* **`cargo test --workspace --no-fail-fast`, five runs**: **3,001 passed / 0 failed / 53 ignored over 170 result lines on
+  three** (`ws-c.log` 23:11-23:30, load 23.63 → 25.45; `ws-d.log` 23:49-00:06, load 8.73 → 11.24; `ws-e.log`
+  00:06-00:22, load 11.24 → 9.40).  The two runs before them failed in `cli_latency` alone — `ws-a.log` (22:32-22:52,
+  load 16.70 → 20.25) `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`, `ws-b.log` (22:52-23:11,
+  load 20.25 → 23.63) `t18_…` and `t19_…`, every one `tm drop ^a1 was still running after 5s`, the three-year tree's
+  first verb under the mutation run and two other tracks' builds — gaps 4901 and 5306's class: a measurement, no band
+  moved.  This step adds no code a binary runs (check 12's reachable set is Land 1's 1,638).  No `.proptest-regressions`
+  file moved in any run.
+* **The FFI crate, `cargo test` in `kernel/tm-kernel-ffi`**: 105 passed / 0 failed.
+* **The drives** (§3): `cargo build -p tm` into `scratchpad/w49/q/target` from this tree, the trees in
+  `scratchpad/w49/q/drive` (`A` the merged log, `B` machine B, `H` the hand-edited runtime).
+
+### 6. Gaps 5340-5343, and 5181 restated
+
+**Gap 5181 — the last goal: `hopen` discharged, `hrun` blocked, `hrec` owed** (restated).  1. *What.*
+`Goals.plan_places_no_block_over_a_break` stays, burn-down 1.  `PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run`
+proves it on a resumed run from `hrec`, `hrun` and `hopen_on_a_resumed_run`'s two bounds.  2. *Why.*  `hrun` is false on
+requests the decoder builds (gaps 5340 and 5341, each on a reading); `hrec` needs the drawn-pieces accounting (gap 5342);
+the invariants are carried from the empty checkpoint, not yet across a sealed one (gap 5343).  3. *Cost.*  The goal is
+not discharged; the planner's past half still carries `hrec`/`hrun` wherever a lift reaches the whole day.
+4. *Clears it.*  Gaps 5340 and 5341 decided (the first is work, the second the owner's), then 5342 and 5343, then the
+goal as written over the requests the decoder accepts, with gap 4914's bound in its hypotheses or removed.
+
+**Gap 5340 — the goal is false on a request the decoder accepts, by the host's running break.**  1. *What.*  The
+planner's running-break row is drawn from `RuntimeIn.brk`, the host's copy, which `PlanWire.planReqOf` passes through
+unchecked (`PlannerWit.planReqOf_keeps_the_hosts_runtime`); a copy that began before a Block today's record holds lays
+that Block across the break (`PlannerWit.the_hosts_running_break_lays_a_block_across_it`).  2. *Why.*  README gap 4761:
+two readers of the running break, kept equal by the host's D42/D105 reconcile (driven, §3a).  3. *Cost.*  The goal as
+written over the requests the decoder accepts cannot be proved; `hrun` stays a hypothesis.  4. *Clears it.*  Gap 4761's
+own clearance — the planner reads `r.run.answer.openBreak` and the request stops carrying `brk` (`Planner.lean` and
+`PlanWire.lean`, track Y's this phase), or the decoder refuses a disagreement by name (a new refusal, the owner's); then
+`hrun` is stated against the run's own running break.
+
+**Gap 5341 — a break running since the ledger day before is drawn across a Block today's record credits whole.**
+1. *What.*  §3b: a `break_start` stepped on ledger day `d - 1` and still running nets nothing from a block of day `d`
+(`Replay.runSpan`, `Replay.spansFor`: a break nets a block's own ledger days and later), while the day's plan draws the
+running break from its start (P45), so `tm plan` draws the break 00:00-09:00 and `^t1`'s 07:05-08:05 block over it and
+`tm review day` counts 60 minutes.  2. *Why.*  The owner's D94 ("one filed on a ledger day before the block's stops no
+clock"), kept by W-49 track L for the running break; the binary on one machine never writes it (`tm wake` refuses over a
+running break, D81; `tm start` ends one first, D101), two machines on one synced directory do.  3. *Cost.*  One span read
+two ways (§5.3) on that log while the break runs; `hrun` is false on a run the decoder builds with host and replay
+agreeing, so gap 5340's clearance does not by itself discharge it.  4. *Clears it.*  An owner decision: a running break
+nets a block of a later ledger day too (a `Replay.lean` change, its laws re-proved under D5, a parity number and a
+behaviour row), or the planner clips the running-break row to the plan's own ledger day, or the reading stands and `hrun`
+names the bound.
+
+**Gap 5342 — `hrec` over the runs `Seal.resumeRun` builds is not proved.**  1. *What.*  No theorem says no Block segment
+of a day record lies across a Break segment of it on a resumed run.  2. *Why.*  It needs W-48 track G §4's accounting:
+every Block segment of a day record is a drawn piece of the open block or a held closed block, or of a block no longer
+held (gap 4917's bound), carried through `Replay.redraw`'s un-drawings and drawings; not reached in this step.
+3. *Cost.*  `hrec` stays a hypothesis of the reduction.  4. *Clears it.*  The accounting as a third invariant beside
+`BreakFold.OpenAfter` and `BreakFold.BrkHeld`, with gap 4917's bound named.
+
+**Gap 5343 — the invariants are carried from the empty checkpoint, not across a sealed one.**  1. *What.*
+`BreakFold.resumeRun_holds` needs the checkpoint's restored state to hold both; that is proved for `Seal.Ckpt.empty`
+alone.  2. *Why.*  A sealed checkpoint's machine and open days are the genesis fold's at its cut, which law 2
+(`Seal.resume_is_replay`) states of the answer and not of the restored state.  3. *Cost.*  `hopen_on_a_resumed_run`
+reaches the binary's runs (resumed from `.tm/cache/replay/ckpt.json`) only through law 2's answer equality, not yet
+written.  4. *Clears it.*  `restore (ckptOf …)` holds both invariants (the fold's state at the cut holds them, by
+`BreakFold.foldl_openAfter` and `BreakFold.foldl_brkHeld`), or `hopen` carried by law 2's answer equality.
+
+### 7. Owed, by name
+
+Gaps 5181 (as restated), 5340 (gap 4761's clearance — track Y's files), 5341 (the owner's), 5342, 5343, 4914, 4917.  Not
+done: `hrec`; a TUI drive.
