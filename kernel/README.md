@@ -99487,9 +99487,14 @@ All capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`; 16
 * **The oracle arms** (`--include-ignored`, `TM_ORACLE`): the week grid, P85, separator, start and TUI binaries 25,
   22, 22, 26 and 55 passed / 0 failed against the re-blessed lines; `emit_planner`'s
   `the_frozen_fork_renderings_are_the_forks_oracle_answer_today` holds its snapshot from the committed history, so it
-  read `2b` until this commit lands and is re-run after it (§9).
+  read `2b` until part 2 was history — re-run on `881c2f6`, `emit_planner --include-ignored` 35 passed / 0 failed.
 
-### 8. Gaps opened
+### 8. Gaps closed and opened
+
+**Gaps 4749, 4976 and 5131 — CLOSED** (the owner's D127): `tm init --example` writes `^t3` with one estimate (§1,
+P129), the eight-then-68 frozen lines of its world are re-blessed under the D64 clause (d) gap 5131 asked for (§2,
+§3), and every other expectation that moved is named (§4, §5).
+
 
 **Gap 5380 — the TUI harness's hand-built day still plans `^t3` at 2b × 1.6.**  1. *What.*  `tui_common::day_plan`
 gives `^t3`'s block `planned_min: 192` and `tui_common::state` its running `est_min: 192` (2b × 1.6), so after
@@ -99539,8 +99544,6 @@ over every template file (the class, not D127's one line).
 
 ### 10. Owed
 
-* After the land: `emit_planner`'s oracle arm `the_frozen_fork_renderings_are_the_forks_oracle_answer_today` with
-  `TM_ORACLE`, which holds the committed snapshot (it reads `1b` once this commit is history).
 * Gaps 5380 (the TUI harness's 192 minutes, a D64(c) re-bless), 5381 (the spec's §4.3 and the README's example, the
   owner's), 5382 (D64(d) in the four class blesses and a clause for the rendering bless), 5383 (`^m2`'s two equal
   estimates, the owner's).
