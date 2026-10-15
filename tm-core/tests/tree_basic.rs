@@ -194,9 +194,29 @@ fn effective_shape_and_due() {
     assert_eq!(t.prep_need(&id("m1")), 0);
 }
 
+/// The fixture tree with a hand-typed two-estimate `^t3` (the owner's D127: the shipped one carries
+/// one estimate since parity P129), for the rollup's `est:` against the leading estimate.
+fn load_with_two_estimate_t3() -> (Tree, Config) {
+    let cfg = Config::load(fixture_dir().join("config.toml")).unwrap();
+    let parsed: Vec<ParsedFile> = FILES
+        .iter()
+        .map(|rel| {
+            let text = std::fs::read_to_string(fixture_dir().join(rel)).unwrap();
+            let text = if *rel == "week/2026-W37.md" {
+                assert_eq!(text.matches("- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3").count(), 1, "the fixture's one-estimate `^t3`");
+                text.replacen("- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3", "- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3", 1)
+            } else {
+                text
+            };
+            parse_file(rel, &text, &cfg)
+        })
+        .collect();
+    (Tree::build(&parsed, &cfg), cfg)
+}
+
 #[test]
 fn remaining_rolls_up() {
-    let (t, _) = load();
+    let (t, _) = load_with_two_estimate_t3();
     // Own estimate wins over the children (m1 has t3 below it).
     assert_eq!(t.remaining(&id("m1")), Some(6 * 60));
     // est: overrides the leading estimate.

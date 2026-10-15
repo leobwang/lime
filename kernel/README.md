@@ -99301,3 +99301,247 @@ All under `systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0` on th
 Owner: gap 5260 (D124's other four `plan.*` keys) and gap 5131 (the template `^t3`'s two estimates), both unasked
 until this land.  Work: goal 5181 and gap 5161 (W-49's phase 2), the tracks' gaps 5261, 5280-5283 and 5302-5306, and
 the §5.13 drive of the TUI over a live meeting and through D126.
+
+<!-- =====================================================================
+     Stage 6 — W-49 track E: the example tree carries one estimate (the
+     owner's D127; README gaps 5131, 4976 and 4749), and D64 gains clause
+     (d) for a frozen world that IS the shipped template.  Gaps 5380-5399
+     are this track's; parity `P129` (`P126-P128` declared holes until the
+     Land renumbers); no cheat taken (no Lean changed).  Kept current with
+     each commit.
+     ===================================================================== -->
+
+## Stage 6 — W-49 track E: the example tree carries one estimate, and D64(d)
+
+### 1. What changed, and why
+
+`tm init --example` wrote `^t3` as `- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3`: a leading estimate beside an
+`est:` key, D56's two-estimates-on-one-line class in the tree the binary itself writes (gap 4749) — the row printed
+`2b×1.6`, the planner planned `est:1b`, and the TUI's overtime box read `est 2b = 1h`.  Since the owner's D127 it writes
+
+```
+- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3
+```
+
+The estimate kept is the one the planner already read: `remaining` was `est:1b` and is the leading `1b` now, so the
+planner's day over the example tree does not move (every fork answer below is byte-identical), and the one moved
+display is `^t3`'s estimate cell, `2b` → `1b`.  The template IS `plan-basic` (§17.1,
+`the_example_templates_are_the_plan_basic_fixture`), so the change is four lines: `tm/templates/example/week.md`
+and `tm-core/tests/fixtures/plan-basic/week/2026-W37.md` (the line above), and the two day files' static row
+`09:20  4 p1 ▶ Exercises 5.3–5.5            @m1  2b×1.6` → `… @m1  1b×1.6`, columns unmoved.  `kernel/corpus/`
+is untouched (a verbatim copy of an older tree; no test compares it with the template — the suite is green with it
+unchanged), and so are the other fixture trees that carry the two-estimate line (`plan-home-day`, `plan-travel-day`,
+`plan-conflicts`): they are hand-typed worlds of their own, which D127 keeps.
+
+**Parity P129 taken**: `tm init --example`'s `^t3` carries one estimate, the leading `1b` with no `est:` key, where fork 4748911's template wrote the leading `2b` beside `est:1b`; the planner's day over the example tree is unchanged (the fork read `est:1b`), and `^t3`'s estimate cell reads `1b` / `1b×1.6` where the fork's read `2b` / `2b×1.6` (the owner's D127).
+
+**Behaviour row (P129).**  On a fresh `tm init --example` tree: before, `week/2026-W37.md` held `^t3` with `2b` and
+`est:1b`, `tm plan` printed `… @m1  2b`, `tm now` in overtime printed `70m of 60m`, and the TUI's overtime box
+`est 2b = 1h`; after, the line holds `1b` alone and all three say `1b` / `of 60m` / `est 1b = 1h`.  A verb that
+writes the estimate (`tm stop`, `tm done --partial`, `tm extend`, D62) rewrites the leading `1b` in place on that
+tree, so `^t3` never gains an `est:` there.  A hand-typed line carrying both behaves exactly as before.
+
+### 2. D64(d) — a frozen world that IS the shipped template
+
+D64(b) does not reach these lines — the committed worlds are ones a user can still type and the binary can still
+hold — so D127 adds clause (d), and `tm/tests/support/frozenhist.rs` is its one definition
+(`frozenhist::template_redraw_allows`).  A committed frozen line may be recomputed under (d) when, all checked and
+none declared by a caller:
+
+1. its reason is dated, names `D64(d)`, and names a parity number `kernel/parity.txt` registers — the behaviour
+   change the template's change is (`frozenhist::is_d64d_reason`);
+2. the shipped template (`tm/templates/example/`) moved LINE FOR LINE between the committed version and the one
+   recomputed over — the same files, the same number of lines in each (`frozenhist::template_pairs`; a bless reads
+   HEAD against the working copy, `template_pairs_since_head`; the plain history check reads the two commits);
+3. the world moved by the template's own lines and nothing else: every string the two worlds hold differs only in
+   whole lines, each moved line one of the template's pairs, an item line's state box aside (a verb the world ran may
+   have set `[~]` — the week grid's dropped `^t3`) (`frozenhist::moved_only_by_template`); and every key of the line
+   but the world, its answers and the two re-draw records is byte for byte, the steps included.
+
+The fork is asked again, as for a D64(b) re-draw; the line then carries `d64d` (`why`, kept with any earlier one,
+and `moved`), kept by every later bless while its world stands.  Wired: the plain history check
+(`fork_rebless_history.rs`' `every_committed_frozen_line_kept_its_world_and_the_shipped_answer` admits it through
+`frozenhist::template_redrawn`), and the five blesses whose worlds hold the template, under one variable,
+`TM_TEMPLATE_REDRAW` (read strictly: a value that is not a D64(d) reason fails the bless) — the week grid, the P85,
+separator, start and TUI days; the start and TUI files' "the bless would write the committed line" checks carry the
+record and hold its reason to (1).  The planner-classes, batch, models and P56 files hold no template line (0 of
+their lines carries `^t3` or `Read ch.6`, measured), so their blesses keep their own clauses (gap 5382).
+
+**Both directions.**  `fork_rebless_history.rs`' `d64d_admits_a_template_world_and_refuses_one_that_is_not` admits the
+template's pair moving (and the same pair under a `[~]` a verb set), and refuses by name a world that moved by a
+hand-typed two-estimate line, one that gained a line, a moved log line, a box that moved with the pair, a template
+that did not move, moved steps, and reasons undated, naming D64(b), naming no number, and naming one the register does
+not hold; `fork_week_grid.rs`' `the_grid_rebless_gate_holds_d64` asks the same of a grid line.  **Driven in a
+separate clone** (the gate committed, the template and fixture changed, `TM_P85_BLESS=1` with `TM_ORACLE` and
+`TM_TEMPLATE_REDRAW`): plant A — the fixture's `inbox.md` line `- ask Kun about the dinner place` changed with the
+template untouched beside it, a world that is not the shipped template's — refused, `p85 a start inside a logged
+break: world.docs[3][1], line 2: '- ask Kun about the dinner place' → '- ask Kun about the lunch place' is not one
+of the shipped template's own lines` (both lines); plant B — the fixture's `^t3` changed and the template not —
+refused, `the shipped template did not move, so D64(d) does not reach this line` (both lines); control — template and
+fixture together — `2 re-drawn … 0 refused`.
+
+### 3. The frozen lines re-blessed, each under D64(d)
+
+Through `tm-oracle` (fork 4748911, `build-oracle.sh` run fresh for this step) with `TM_TEMPLATE_REDRAW="2026-10-14
+D64(d): the owner's D127 — tm init --example's ^t3 carries one estimate, the leading 1b, where fork 4748911 wrote 2b
+beside est:1b (parity P129)"`.  Every line's world is `plan-basic` and its steps; on all **68** only `world` and the
+new `d64d` moved — every fork answer (`shipped`, `fork`, `day`, the comparand departures) is byte-identical to the
+committed one, measured key by key:
+
+* `fork-4748911-week-grid.jsonl`, 46 of 46: `cli/meeting`, `cli/straddle`, `cli/plain`, `cli/week`, `cli/week-sealed`,
+  `cli/midnight`, `week draw 0`–`week draw 31`, `midnight draw 0`–`midnight draw 7` (24 move the week line and the
+  day row, 22 the week line alone — a `[~]` `^t3` among them);
+* `fork-4748911-planner-tui.jsonl`, 13 of 13 (the lines' names, `tui` and the world): At(12, 51), At(13, 1),
+  At(13, 8), Tight, For("m1", 300, 15, 2), Paused(13, 4), Midnight, IdleThenRunning,
+  TightAt(12, 51), Replanned { arrival: true }, Replanned { arrival: false }, AfterMidnight(1, 0), MeetingNow;
+* `fork-4748911-planner-separators.jsonl`, 5 of 5: `unedited`, `tab-box`, `tab-ci`, `nbsp-ci`, `nbsp-box`;
+* `fork-4748911-planner-starts.jsonl`, 2 of 2: `p68 a block started after now`, `p69 a block begun before midnight`;
+* `fork-4748911-planner-p85.jsonl`, 2 of 2: `p85 a start inside a logged break`, `p85 an unpause inside a logged break`.
+
+And the fork's frozen renderings (`emit_planner.rs`' `the_frozen_fork_renderings_are_blessed`, `TM_EMIT_BLESS=1`),
+whose world is the same template: `emit_planner__plan_basic_early_emit.snap` (`07:00  4 p3   Exercises 5.3–5.5
+@m1  2b` → `1b`) and `emit_planner__plan_basic_late_emit.snap` (`15:10 … 2b` → `1b`), one line each, named here
+because that bless holds no clause of its own (gap 5382); `plan_home_day_emit` did not move.
+
+### 4. Expectations of the example tree moved under RULE M (P129)
+
+Each is the binary's (or the fork library's) output over the template, and each moved line is `^t3`'s estimate:
+
+* `kernel_row_cells.rs`: `FROZEN_DAY`'s `^t3` cell and `FROZEN_DAY_ROWS`' row, `2b×1.6` → `1b×1.6` (the frozen
+  Rust builder's day over the fixture, re-blessed by hand under D64(d) — the builder read the leading estimate, now
+  `1b`);
+* the TUI snapshots `tui_today_render__the_timeline_pane`, `__the_now_pane`, `__the_whole_screen_at_120_columns`,
+  `__the_whole_screen_at_90_columns_stacks_the_panes`, `tui_today_prompts__a_prompt_is_drawn_over_the_screen`,
+  `__the_help_overlay_is_drawn_over_the_screen`, `__the_overtime_box`, `__the_overtime_box_names_what_extending_would_drop`:
+  each `2b×1.6` → `1b×1.6` or `est 2b ×1.6` → `est 1b ×1.6`, nothing else (gap 5380 is what they still say);
+* `cli_day.rs` `done_partial_keeps_the_line_open_with_a_remainder`: the line is now exactly
+  `- [ ] 4 30m Exercises 5.3–5.5            @m1 ^t3` (was: contains `est:30m`);
+* `cli_runtime_state_d108.rs` `deleting_the_runtime_state_mid_extend_keeps_the_planned_minutes_p119`:
+  `- [>] 4 2h25m Exercises 5.3–5.5            @m1 ^t3` (was: contains `est:145m`);
+* `cli_start_continues.rs`' two D107 worlds: `- [ ] 4 10m …` and `- [ ] 4 5m …` (were: contain `est:10m`, `est:5m`)
+  — gap 4976's measurement predicted exactly these;
+* tm-core (the fork-point library over the fixture): `grammar_fixtures__week_2026-W37_items.snap` (`^t3`'s
+  `est` is now `~` and its `est_original` `1b`, the `est:1b` token gone), `grammar_fixtures.rs`
+  `edit_in_file_changes_only_that_line` (the setter now adds `est:0b` beside the leading `1b`), `store_fs.rs`
+  `one_file_that_is_not_utf8_does_not_make_the_tree_unreadable` (`[x] 4 1b Exercises`).
+
+### 5. D56's case keeps its own world
+
+Tests whose subject is a line carrying BOTH estimates are given one: `cli_common::Tm::with_two_estimate_t3` (the
+plan-basic copy with the old `^t3` written back, asserted found once), `horizon_close.rs`' `plan()` (all of its
+fork-library close tests, whose expectations are about `est:1b` beside `2b`), `tree_basic.rs`'
+`load_with_two_estimate_t3` (`remaining_rolls_up`: `est:` over the leading estimate, planned from the leading), and
+`kernel_row_cells.rs`' `two_estimate_docs` (`the_two_closed_holes_are_the_specs_own_cells`, gap 1101's leading-first
+cell, and `the_estimate_column_is_the_written_estimate_times_the_multiplier`).  On them: `cli_items.rs`'
+`edit_est_moves_the_remaining_estimate_not_the_one_as_written` and `edit_unset_removes_a_key`, `cli_one_estimate.rs`'
+`a_token_slot_is_written_in_canonical_minutes`, and the second half of `done_partial_keeps_the_line_open_with_a_remainder`
+(`est:30m` beside `2b`).  No expectation of these moved.
+
+### 6. Driven (the binary built from this tree)
+
+```
+$ tm --dir t --now 2026-09-07T08:00:00-05:00 init --example ; grep t3 t/week/2026-W37.md
+- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3
+$ tm --dir t --now 2026-09-07T09:20:00-05:00 start ^t3 --energy 4
+▶ ^t3 Exercises 5.3–5.5 · 09:20 · pred 5 rep 4
+$ tm --dir t --now 2026-09-07T09:40:00-05:00 plan | grep Exercises
+09:20  4 p3   Exercises 5.3–5.5            @m1  1b     20m so far
+09:40  4 p3 ▶ Exercises 5.3–5.5            @m1  1b     running · 40m left
+$ tm --dir t --now 2026-09-07T09:40:00-05:00 --json plan      # ^t3: 20 + 40 minutes, need_min 78 (60 × 1.3)
+$ tm --dir t --now 2026-09-07T10:30:00-05:00 now | head -3
+▶ ^t3 Exercises 5.3–5.5 · started 09:20 · 70m of 60m
+10:30  4 p3 ▶ Exercises 5.3–5.5            @m1  1b     running · 0m left
+  10:30–11:20 · elapsed 1h10m · left 0m
+$ script -qfc "stty cols 120 rows 40; tm --dir t --now 2026-09-07T10:30:00-05:00 tui" tui.raw   # the overtime box:
+Exercises 5.3–5.5     est 1b = 1h · elapsed 1h10m
+```
+
+The row, the planner's minutes, `tm now`'s header and the TUI's overtime box read one estimate, `1b` = 60 minutes.
+And on a second tree: `done --partial` at 09:50 → `✓ ^t3 Exercises 5.3–5.5 · 30m/60m · 30m left`, the line
+`- [ ] 4 30m Exercises 5.3–5.5            @m1 ^t3`; the week close a week later drops it into its milestone as
+`- [~] 4 30m …` — no `est:` appears on the example tree's `^t3` through any of them.  (The pty drive gives the
+frame at a fixed `--now`; the clock does not advance, §5.13.)
+
+### 7. Measured
+
+All capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`; 16G for the oracle and the blesses).
+
+* **Before the change** (this branch at `acb8757` with the four lines alone, 21:24–21:48, load 9.4 → 9.8): `cargo
+  test --workspace --no-fail-fast` 2,968 passed / **33 failed** / 53 ignored over 170 result lines, in **18**
+  binaries — the five frozen-world tests, `emit_planner` (three), `kernel_row_cells` (four), `tui_today_prompts` (four),
+  `tui_today_render` (four), and the 14 tests of §4 and §5.
+* **Part 1** (`4917535`, the gate alone, template unchanged): `check.sh` 17 lines ok (axiom audit 6,797; goals 1;
+  check 9 891 rostered; parity P1–P125; reach 1,638 reachable); workspace 3,002 / 0 / 53 over 170, **one run**
+  (tests only, 21:54–22:21, load 12 → 20); FFI crate 105 passed.
+* **Part 2** (this commit): `check.sh` 17 lines ok — `lake build` ok, totality ok, axiom audit ok (6,797 theorems),
+  Negative.lean rejected, FFI-through-check 97 tests, corpus 29/37 files and 4/5 plans, stage goals 1, prose citations
+  ok, new definitions mutated ok (891 rostered), parity register ok (126 registered, P1–P129 with 3 declared holes),
+  twins ok, reach ok (1,638 reachable from `tm_kernel_call`), the four wire checks ok, replay ok (96 modules) — and
+  re-run after this block was filled.  FFI crate 105 passed.  Workspace, **four runs**: 3,003 / 0 / 53 over 170
+  (22:33–22:53, load 38 → 20), 3,003 / 0 / 53 (–23:12, load 22), **3,002 / 1 / 53** (–23:31, load 22 → 26: the one
+  failure `cli_latency`'s `t19_the_minute_tick_…` — `` `tm drop ^a1` was still running after 5s `` on the three-year
+  tree), and 3,003 / 0 / 53 (23:38–23:55, load 11.9 → 11.9).  The third run's miss is the machine's, not this change's:
+  re-run alone three times at load 21–27 it missed 2, 3 and 1 rows (the same `tm drop` bound), and on the base (the
+  clone at part 1, template unchanged) at load 19–21 it missed 2 — a measurement under load (gaps 4901, 5306), no band
+  moved.  The one new test is gap 5383's class test in `init_tree.rs`.
+* **The oracle arms** (`--include-ignored`, `TM_ORACLE`): the week grid, P85, separator, start and TUI binaries 25,
+  22, 22, 26 and 55 passed / 0 failed against the re-blessed lines; `emit_planner`'s
+  `the_frozen_fork_renderings_are_the_forks_oracle_answer_today` holds its snapshot from the committed history, so it
+  read `2b` until this commit lands and is re-run after it (§9).
+
+### 8. Gaps opened
+
+**Gap 5380 — the TUI harness's hand-built day still plans `^t3` at 2b × 1.6.**  1. *What.*  `tui_common::day_plan`
+gives `^t3`'s block `planned_min: 192` and `tui_common::state` its running `est_min: 192` (2b × 1.6), so after
+D127 the overtime-box snapshots read `est 1b ×1.6 = 3h12m` — a hand-built depiction of §4.3's printed day, not the
+binary's (driven: `est 1b = 1h`).  2. *Why not here.*  The 13 frozen TUI worlds are built from that state, so
+correcting it moves a world by lines that are not the template's — a harness correction, D64(c)'s, which (d)
+rightly refuses.  3. *Cost.*  One snapshot family shows a number no binary prints.  4. *Clears it.*  The harness
+made 96 minutes (1b × 1.6) with a D64(c) re-bless of the TUI file naming this gap.
+
+**Gap 5381 — the spec and the root README still print the two-estimate `^t3`.**  1. *What.*  `tm-spec-v1.md` §4.3
+(its week file and day file) and `README.md`'s worked example print `- [>] 4 2b … @m1 est:1b ^t3` and
+`… 2b×1.6`, while `tm init --example` (which says "the example tree is §4.3's") writes `1b` alone.  2. *Why.*  The
+spec is the owner's document and not this track's file.  3. *Cost.*  §4.3 and the tree it names differ by one line.
+4. *Clears it.*  The owner's edit of §4.3 (two lines) and of the README's example.
+
+**Gap 5382 — four blesses hold no D64(d), and the rendering bless no clause at all.**  1. *What.*  The planner-classes,
+batch, models and P56 blesses re-draw only under D64(b); `emit_planner.rs`' rendering bless writes what the oracle
+answers and prints the moved lines, judged by no clause.  2. *Why.*  None of the four files holds a template line
+(measured), and the renderings' worlds are held to `forkday::FROZEN_DAYS` by value.  3. *Cost.*  A template change
+that reached those worlds would need (d) wired there first; a rendering re-bless is judged by its diff and its README
+naming.  4. *Clears it.*  `frozenhist::template_redraw` called from those blesses when a template change first reaches
+them; the rendering bless given the (d) check over its snapshot's world.
+
+**Gap 5383 — the example month's `# Demoted` record `^m2` carries two estimates.**  1. *What.*
+`tm/templates/example/month.md` holds `- [-] 4 3b Rollback path passes tests @O2 est:3b demoted:W37 ^m2`: a leading
+`3b` beside `est:3b` — equal, so no reader disagrees today, but D56's shape.  2. *Why not here.*  D127 names `^t3`;
+a `# Demoted` record is what a close files, and whether the close's record keeps `est:` is the writer's rule, not the
+template's.  3. *Cost.*  None visible (the two are equal); a later edit of one would split them.  4. *Clears it.*
+The owner: either the record drops its leading estimate as D127 did `^t3`'s (a D64(d) re-bless of the same 68
+lines' worlds), or D127's rule is stated to exempt a demoted record.  `init_tree.rs`'
+`no_item_line_of_a_shipped_template_carries_two_estimates_but_the_demoted_record` holds the set at exactly this line,
+over every template file (the class, not D127's one line).
+
+### 9. Brief corrections
+
+1. The brief's quoted line `- [>] 4 2b Exercises 5.3–5.5 @m1 est:1b ^t3` is the two-estimate line D127 removes; the
+   one-estimate line is `- [>] 4 1b … @m1 ^t3` (W-47 §5's choice, kept: it is the estimate the planner read).
+2. W-47's "33 tests in 19 binaries, eight frozen comparands": at HEAD it is 33 in **18** — `fork_rebless_history`'s
+   two and `fork_frozen_refile` no longer fail on a rebuilt world (the history check reads committed lines), while
+   `cli_runtime_state_d108` (P119) and `kernel_row_cells`' two frozen-cell tests (D112's cells) joined.  D127's "eight
+   frozen lines" are **68** lines in five files plus two rendering snapshots; every fork answer on them is unchanged.
+3. The brief lists the planner-classes, batch, models and P56 bless gates for (d): none of their files holds a template
+   line, so (d) is wired where template worlds live and the four keep their clauses (gap 5382).
+4. `kernel/corpus/` and the other two-estimate fixture trees are compared with the template by no test (green with
+   them untouched).
+5. The template carries a second two-estimate line D127 does not name, `^m2`'s `# Demoted` record (gap 5383).
+
+### 10. Owed
+
+* After the land: `emit_planner`'s oracle arm `the_frozen_fork_renderings_are_the_forks_oracle_answer_today` with
+  `TM_ORACLE`, which holds the committed snapshot (it reads `1b` once this commit is history).
+* Gaps 5380 (the TUI harness's 192 minutes, a D64(c) re-bless), 5381 (the spec's §4.3 and the README's example, the
+  owner's), 5382 (D64(d) in the four class blesses and a clause for the rendering bless), 5383 (`^m2`'s two equal
+  estimates, the owner's).
+* The Land renumbers P129 (P126–P128 are holes here).

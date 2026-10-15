@@ -409,6 +409,14 @@ fn every_frozen_start_world_is_the_binarys_own_output() {
         if let Some(why) = l.get("d64b") {
             again["d64b"] = why.clone();
         }
+        // A D64(d) re-draw's record (the owner's D127) rides on the line, its reason held to D64(d)'s rule.
+        frozenhist::keep_template_record(l, &mut again);
+        let why = frozenhist::d64d_why(l);
+        if !why.is_empty() {
+            if let Err(e) = frozenhist::is_d64d_reason(why, &forkclass::registered_parity()) {
+                bad.push(format!("{}: {e}", s.name));
+            }
+        }
         if !l["day"].is_null() {
             for key in forkclass::ANSWERS.iter().filter(|k| **k != "shipped") {
                 forkclass::set_answer(&mut again, key, l[*key].clone());

@@ -948,7 +948,7 @@ fn one_file_that_is_not_utf8_does_not_make_the_tree_unreadable() {
     // And an id-addressed write still finds its line past the bad file.
     let old = line_with(&fs::read_to_string(root.join(WEEK)).unwrap(), "t3");
     store.write_line(&Id::new("t3"), &old.replacen("[>]", "[x]", 1)).unwrap();
-    assert!(fs::read_to_string(root.join(WEEK)).unwrap().contains("[x] 4 2b Exercises"));
+    assert!(fs::read_to_string(root.join(WEEK)).unwrap().contains("[x] 4 1b Exercises"));
     assert_eq!(fs::read(root.join(bad)).unwrap(), [0x2d, 0x20, 0xe9, 0x0a], "and left it alone");
 }
 

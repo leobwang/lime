@@ -274,8 +274,10 @@ fn edit_in_file_changes_only_that_line() {
     assert_eq!(
         diff,
         vec![(
-            "- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3",
-            "- [>] 4 2b Exercises 5.3–5.5            @m1 est:0b ^t3"
+            // The fixture's `^t3` carries one estimate since the owner's D127 (parity P129), so the
+            // library's token setter adds the key the line no longer carries.
+            "- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3",
+            "- [>] 4 1b Exercises 5.3–5.5            @m1 est:0b ^t3"
         )]
     );
 }

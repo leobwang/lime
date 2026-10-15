@@ -15,6 +15,6 @@ planned: 20
 
 # Tasks
 - [ ] 5 1b Read ch.6 §1–2               @m3 ^t1
-- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3
+- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3
 - [ ] 3 1b Claude Code drafts tests     @m2 ^t4
 - [ ] 3 1b Review the drafts            @m2 after:^t4 ^t5

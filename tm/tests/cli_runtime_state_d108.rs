@@ -99,7 +99,7 @@ fn deleting_the_runtime_state_after_the_days_first_plan_keeps_the_hysteresis_p11
     );
 }
 
-/// **Mid-extend, under a learned multiplier** (gap 4876's world): `^t3` (`est:1b`, 78 minutes at
+/// **Mid-extend, under a learned multiplier** (gap 4876's world): `^t3` (`1b`, 78 minutes at
 /// ×1.3) started at 09:00 and extended 25 minutes and 1 block: `tm extend` says `now 163m`, and the
 /// rebuild says 163 (`round(60 × 1.3) + 85`), not `round(145 × 1.3)` = 189.
 #[test]
@@ -112,7 +112,8 @@ fn deleting_the_runtime_state_mid_extend_keeps_the_planned_minutes_p119() {
     let two = tm.ok_at(&at(7, "09:40"), &["extend", "1b"]);
     assert!(two.stdout.contains("now 163m"), "{}", two.stdout);
     assert_eq!(state(&tm)["active"]["est_min"], 163);
-    assert!(tm.line("week/2026-W37.md", "t3").contains("est:145m"), "{}", tm.line("week/2026-W37.md", "t3"));
+    // One estimate since the owner's D127 (parity P129): `tm extend` rewrites the leading `1b` (D62).
+    assert_eq!(tm.line("week/2026-W37.md", "t3"), "- [>] 4 2h25m Exercises 5.3–5.5            @m1 ^t3");
 
     let notice = delete_and_compare(&tm, &at(7, "09:50"));
     assert!(

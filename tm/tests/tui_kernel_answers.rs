@@ -1047,6 +1047,15 @@ fn every_frozen_tui_world_is_the_one_its_tests_build() {
         if let Some(why) = l.get("d64b") {
             again["d64b"] = why.clone();
         }
+        // A D64(d) re-draw's record (the owner's D127) rides on the line as a D64(b) one does, and its
+        // reason is held to D64(d)'s rule: dated, naming D64(d) and a registered parity number.
+        frozenhist::keep_template_record(l, &mut again);
+        let why = frozenhist::d64d_why(l);
+        if !why.is_empty() {
+            if let Err(e) = frozenhist::is_d64d_reason(why, &forkclass::registered_parity()) {
+                bad.push(format!("{}: {e}", tui_name(w)));
+            }
+        }
         if again != *l {
             bad.push(format!("{}: the bless would write another line ({})", tui_name(w), forkplan::first_difference("line", l, &again).unwrap_or_default()));
         }

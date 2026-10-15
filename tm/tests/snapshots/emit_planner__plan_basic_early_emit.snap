@@ -4,7 +4,7 @@ expression: "rendered(&day, &fx.tree, &fx.cfg, 7, 0)"
 ---
 <!-- tm:plan start 07:00 -->
 06:10  ·    ✓ breakfast 30m                         (30m)
-07:00  4 p3   Exercises 5.3–5.5            @m1  2b
+07:00  4 p3   Exercises 5.3–5.5            @m1  1b
 08:00  5 p3   Finish ch.5 exercises        @O1  6b
 09:00  1 p0 ⚠ Pick up package                   20m     due today
 09:20  5 p3   Finish ch.5 exercises        @O1  6b

@@ -11,7 +11,7 @@ budget: 6
 07:00  5 p1 ✓ Read ch.6 §1–2               @m3  1b  (67m)
 08:00  5 p1 ✓ Read ch.6 §3                 @m3  1b  (58m)
 09:00  ·     ✓ break 20m                        (24m)
-09:20  4 p1 ▶ Exercises 5.3–5.5            @m1  2b×1.6
+09:20  4 p1 ▶ Exercises 5.3–5.5            @m1  1b×1.6
 11:20  ·       lunch 30m
 11:50  4↓p3    Claude Code drafts tests    @m2  1b     ↓ slot 4, item 3
 12:50  ⏰      Meeting w/ host              1h

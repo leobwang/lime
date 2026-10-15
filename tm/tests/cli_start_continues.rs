@@ -77,7 +77,8 @@ fn a_restart_of_the_running_block_continues_it_and_the_stop_counts_both_stretche
     assert_eq!(stop.stdout.trim(), "stopped ^t3 after 50m · 10m left", "{}", stop.stdout);
     assert_eq!(tags(&tm), ["start", "stop"], "one block, one start");
     assert_eq!(reviewed_minutes(&tm, &at("09:51")), 50, "the review counts what the stop counted");
-    assert!(t3_line(&tm).contains("est:10m"), "the estimate less the fifty minutes: {}", t3_line(&tm));
+    // The leading estimate rewritten in place (D62): the example `^t3` carries one since D127 (P129).
+    assert_eq!(t3_line(&tm), "- [ ] 4 10m Exercises 5.3–5.5            @m1 ^t3", "the estimate less the fifty minutes");
 }
 
 /// **Gap 4892's second world, "resume after a break"**: `start` 09:00, `break` 09:30, `start ^t3`
@@ -106,7 +107,7 @@ fn resuming_after_a_break_by_starting_the_block_ends_the_break_and_continues_it(
     assert!(stop.stdout.starts_with("stopped ^t3 after 60m · "), "{}", stop.stdout);
     assert_eq!(reviewed_minutes(&tm, &at("10:21")), 60, "the review counts what the stop counted");
     // Sixty of sixty minutes worked: §6.4's floor, not the thirty the fork wrote.
-    assert!(t3_line(&tm).contains("est:5m"), "{}", t3_line(&tm));
+    assert_eq!(t3_line(&tm), "- [ ] 4 5m Exercises 5.3–5.5            @m1 ^t3", "one estimate (D127, P129)");
 }
 
 /// **Nothing is written by a continuation with no break running** — not the log, not

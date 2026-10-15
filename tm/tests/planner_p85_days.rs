@@ -487,7 +487,7 @@ fn the_frozen_p85_days_are_blessed() {
             refused.push(format!("{k}: a frozen line no world builds any more"));
         }
     }
-    eprintln!("P85 days: {added} line(s) added, {} re-drawn under D64(b) ({}), {} refused", redrawn.len(), redrawn.join("; "), refused.len());
+    eprintln!("P85 days: {added} line(s) added, {} re-drawn under D64(b) or D64(d) ({}), {} refused", redrawn.len(), redrawn.join("; "), refused.len());
     assert!(refused.is_empty(), "the P85 bless is refused and wrote nothing:\n  {}", refused.join("\n  "));
     let out_path = std::env::var_os("TM_P85_BLESS_OUT").map(PathBuf::from).unwrap_or(path);
     std::fs::write(out_path, out).expect("the frozen P85 days are written");

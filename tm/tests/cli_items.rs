@@ -264,8 +264,9 @@ fn edit_est_moves_the_remaining_estimate_not_the_one_as_written() {
     // — that token *is* the estimate the user is changing. Writing the leading
     // one instead would leave §6.4's `remaining` exactly where it was (the
     // edit would report success and change nothing) and would rewrite the
-    // history §11's estimate calibration measures actual/est against.
-    let tm = Tm::new();
+    // history §11's estimate calibration measures actual/est against. The line is hand-typed with
+    // both since the owner's D127 (the shipped `^t3` carries one).
+    let tm = Tm::with_two_estimate_t3();
     let before = tm.json(&["plan"]);
 
     let json = tm.json(&["edit", "^t3", "est=3b"]);
@@ -406,7 +407,8 @@ fn demote_then_readopt_in_the_same_week_leaves_one_line() {
 
 #[test]
 fn edit_unset_removes_a_key() {
-    let tm = Tm::new();
+    // A hand-typed two-estimate `^t3` (the owner's D127: the shipped one carries one estimate).
+    let tm = Tm::with_two_estimate_t3();
     let json = tm.json(&["edit", "^t3", "--unset", "est"]);
     assert_eq!(json["changes"][0]["field"], "est");
     assert_eq!(json["changes"][0]["from"], "1b");

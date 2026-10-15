@@ -554,14 +554,11 @@ expression: items
   state: Active
   ci: 4
   ci_explicit: true
-  est:
+  est: ~
+  est_original:
     minutes: 60
     unit:
       Blocks: 1
-  est_original:
-    minutes: 120
-    unit:
-      Blocks: 2
   dur: ~
   priority: ~
   parent: m1
@@ -605,7 +602,7 @@ expression: items
           text: "4"
           kind: Ci
         - lead: " "
-          text: 2b
+          text: 1b
           kind: Est
         - lead: " "
           text: Exercises 5.3–5.5
@@ -613,10 +610,6 @@ expression: items
         - lead: "            "
           text: "@m1"
           kind: Parent
-        - lead: " "
-          text: "est:1b"
-          kind:
-            Key: est
         - lead: " "
           text: ^t3
           kind: Id
