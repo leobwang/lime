@@ -682,6 +682,7 @@ fn the_frozen_start_days_are_blessed() {
     }
     let oracle = the_oracle().expect("TM_STARTS_BLESS asks the fork: set TM_ORACLE");
     let redraw = std::env::var("TM_STARTS_BLESS_REDRAW").ok();
+    let template = frozenhist::template_redraw_reason();
     let because = forkclass::because_of("TM_STARTS_BLESS_BECAUSE");
     let harness = forkclass::harness_of("TM_STARTS_BLESS_HARNESS");
     let registered = forkclass::registered_parity();
@@ -698,6 +699,13 @@ fn the_frozen_start_days_are_blessed() {
         }
         match held.get(s.name) {
             None => added += 1,
+            // **D64(d)** (the owner's D127): a world that IS the shipped template, moved by its own lines.
+            Some(old) if old["world"] != line["world"] && template.is_some() => {
+                match frozenhist::template_redraw(old, &mut line, template.as_deref().unwrap_or_default()) {
+                    Ok(n) => changed.push(format!("{} re-drawn under D64(d) ({n} template line(s))", s.name)),
+                    Err(e) => refused.push(e),
+                }
+            }
             Some(old) if old["world"] != line["world"] || old["steps"] != line["steps"] => match redraw.as_deref() {
                 Some(why) if forkclass::is_d64b_reason(why) => {
                     line["d64b"] = json!(frozenhist::redraw_why(why, old));
@@ -713,6 +721,7 @@ fn the_frozen_start_days_are_blessed() {
                 if let Some(why) = old.get("d64b") {
                     line["d64b"] = why.clone();
                 }
+                frozenhist::keep_template_record(old, &mut line);
                 match starts_gate(old, &line, &shipped, &because, harness.as_deref(), &registered) {
                     Err(e) => refused.push(e),
                     Ok(keys) if !keys.is_empty() => changed.push(format!("{} `{}`", s.name, keys.join("`, `"))),

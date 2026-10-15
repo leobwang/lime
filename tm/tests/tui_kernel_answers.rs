@@ -1143,6 +1143,7 @@ fn the_frozen_tui_days_are_blessed() {
     let because = forkclass::because_of("TM_TUI_BLESS_BECAUSE");
     let harness = forkclass::harness_of("TM_TUI_BLESS_HARNESS");
     let redraw = std::env::var("TM_TUI_BLESS_REDRAW").ok();
+    let template = frozenhist::template_redraw_reason();
     let registered = forkclass::registered_parity();
     let held = frozenhist::held(&tui_path(), frozenhist::key_of("name")).unwrap_or_else(|e| panic!("{e}"));
     eprintln!("{}", held.census(FROZEN_TUI));
@@ -1154,6 +1155,13 @@ fn the_frozen_tui_days_are_blessed() {
         let mut line = tui_line(w, &b, &answers);
         match held.get(&tui_name(w)) {
             None => added += 1,
+            // **D64(d)** (the owner's D127): a world that IS the shipped template, moved by its own lines.
+            Some(old) if old["world"] != line["world"] && template.is_some() => {
+                match frozenhist::template_redraw(old, &mut line, template.as_deref().unwrap_or_default()) {
+                    Ok(n) => changed.push(format!("{} re-drawn under D64(d) ({n} template line(s))", tui_name(w))),
+                    Err(e) => refused.push(e),
+                }
+            }
             Some(old) if old["world"] != line["world"] => match redraw.as_deref() {
                 Some(why) if forkclass::is_d64b_reason(why) => {
                     line["d64b"] = json!(frozenhist::redraw_why(why, old));
@@ -1168,6 +1176,7 @@ fn the_frozen_tui_days_are_blessed() {
                 if let Some(why) = old.get("d64b") {
                     line["d64b"] = why.clone();
                 }
+                frozenhist::keep_template_record(old, &mut line);
                 let ask = forkplan::ForkAsk { state: &b.world.state, now: b.world.now, d60: false, p64: false, prios: &prios, extend: None, log_line: None };
                 let shipped = forkplan::ForkPlan::plan(&oracle, &b, &ask).unwrap_or_else(|e| panic!("{w:?}: {e}")).fork_day;
                 match forkclass::d64_allows(old, &line, &shipped, &because, harness.as_deref(), &registered) {

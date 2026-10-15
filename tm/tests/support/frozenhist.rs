@@ -362,6 +362,272 @@ pub fn redrawn(old: &Value, new: &Value) -> bool {
     new["d64b"] != old["d64b"] && why.starts_with("20") && why.contains("D64(b)")
 }
 
+// ---------------------------------------------------------------------------------------------
+// **D64(d) — a frozen world that IS a shipped template** (the owner's D127; W-49 track E, README
+// gaps 5131, 4976 and 4749). A frozen comparand line whose world was built over the shipped example
+// template (`tm/templates/example/`, which IS `plan-basic`, §17.1) may be recomputed when that
+// template changes under a registered behaviour change. D64(b) does not reach it — the committed
+// world is one a user can still type, and the binary can still hold it — so the clause is its own,
+// and it is held to three facts, every one checked here and never declared by a caller:
+//
+// 1. **the reason**: dated (`20…`), naming `D64(d)`, and naming the registered parity number the
+//    template's change is (`P<n>`, a row of `kernel/parity.txt`) — [`is_d64d_reason`];
+// 2. **the template moved**: the shipped template's files differ between the committed version the
+//    line was frozen over and the version it is recomputed over, LINE FOR LINE (the same files, the
+//    same number of lines) — [`template_pairs`], whose pairs are the template's own moved lines;
+// 3. **the world moved by those lines and nothing else**: every string the two worlds hold is the
+//    same but for whole lines, and every line that moved is one of the template's pairs — an item
+//    line's state box aside, which a verb the world ran may have set — [`moved_only_by_template`].
+//    So a world that is NOT the shipped template's (a line it holds that the template does not, a
+//    hand-typed two-estimate line, a world whose template did not move) is refused by name.
+//
+// The steps, the provenance and every key but the world and the answers stay byte for byte; the
+// answers (the fork's days) move with the world, as a D64(b) re-draw's do: the fork is asked again.
+// ---------------------------------------------------------------------------------------------
+
+/// The shipped example template, `tm/templates/example/`.
+pub fn template_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/example")
+}
+
+/// **The shipped template's files at `rev`** — `"WORKTREE"` for the working copy — by file name.
+/// What git cannot read is an `Err` (UNCHECKED), never an empty template.
+pub fn template_at(rev: &str) -> Result<BTreeMap<String, String>, String> {
+    let dir = template_dir();
+    let unchecked = |why: String| format!("UNCHECKED: the shipped template at {rev}: {why}");
+    let mut out = BTreeMap::new();
+    if rev == "WORKTREE" {
+        for e in std::fs::read_dir(&dir).map_err(|e| unchecked(e.to_string()))? {
+            let e = e.map_err(|e| unchecked(e.to_string()))?;
+            let name = e.file_name().into_string().map_err(|_| unchecked("a file name that is not UTF-8".into()))?;
+            out.insert(name, std::fs::read_to_string(e.path()).map_err(|e| unchecked(e.to_string()))?);
+        }
+    } else {
+        let names = git(&dir, &["ls-tree", "--name-only", rev, "--", "./"]).ok_or_else(|| unchecked("git ls-tree failed".into()))?;
+        for name in names.lines().filter(|n| !n.trim().is_empty()) {
+            let text = show(&dir.join(name), rev).ok_or_else(|| unchecked(format!("git cannot show {name}")))?;
+            out.insert(name.to_string(), text);
+        }
+    }
+    if out.is_empty() {
+        return Err(unchecked("no file".into()));
+    }
+    Ok(out)
+}
+
+/// **The shipped template's own moved lines, `old` → `new`**: every `(old line, new line)` pair of a
+/// file both versions hold, in file order. The change must be LINE FOR LINE — the same files and, in
+/// each, the same number of lines — or it is no template change clause (d) can follow: an `Err`.
+pub fn template_pairs(old: &BTreeMap<String, String>, new: &BTreeMap<String, String>) -> Result<Vec<(String, String)>, String> {
+    if old.keys().ne(new.keys()) {
+        return Err("the shipped template gained or lost a file — not a line-for-line change".into());
+    }
+    let mut out = Vec::new();
+    for (name, a) in old {
+        let (la, lb): (Vec<&str>, Vec<&str>) = (a.lines().collect(), new[name].lines().collect());
+        if la.len() != lb.len() {
+            return Err(format!("the shipped template's {name} gained or lost a line — not a line-for-line change"));
+        }
+        out.extend(la.iter().zip(&lb).filter(|(x, y)| x != y).map(|(x, y)| (x.to_string(), y.to_string())));
+    }
+    Ok(out)
+}
+
+/// **A D64(d) reason, as the owner's D127 demands it**: dated (`20…`), naming `D64(d)`, and naming
+/// a parity number `kernel/parity.txt` registers (`P<n>`) — the registered behaviour change the
+/// template's change is. `Ok(n)`, the number; an `Err` says which part is missing.
+pub fn is_d64d_reason(why: &str, registered: &BTreeSet<u32>) -> Result<u32, String> {
+    if !why.starts_with("20") || !why.contains("D64(d)") {
+        return Err(format!("`{why:.80}` is not a D64(d) reason — dated (20…), naming D64(d)"));
+    }
+    let named: Vec<u32> = why
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter_map(|w| w.strip_prefix('P'))
+        .filter_map(|d| d.parse().ok())
+        .collect();
+    named
+        .iter()
+        .copied()
+        .find(|n| registered.contains(n))
+        .ok_or_else(|| format!("`{why:.80}` names no registered parity number (P<n>) for the template's change"))
+}
+
+/// The parity numbers `kernel/parity.txt` registers (every row that is not a `hole`).
+pub fn registered_parity() -> Result<BTreeSet<u32>, String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/parity.txt");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("UNCHECKED: {}: {e}", path.display()))?;
+    Ok(text
+        .lines()
+        .filter_map(|l| l.split_whitespace().next())
+        .filter_map(|w| w.strip_prefix('P'))
+        .filter_map(|d| d.parse().ok())
+        .collect())
+}
+
+/// An item line's state box and the rest of it: `- [x] rest` → `('x', "rest")`.
+fn boxed(line: &str) -> Option<(char, &str)> {
+    let rest = line.strip_prefix("- [")?;
+    let mut cs = rest.chars();
+    let b = cs.next()?;
+    let tail = cs.as_str().strip_prefix("] ")?;
+    Some((b, tail))
+}
+
+/// One moved line `a` → `b` is the template's pair `ta` → `tb`: byte for byte, or both item lines
+/// whose state boxes agree with each other and whose rest is the template pair's rest.
+fn is_template_move(a: &str, b: &str, pairs: &[(String, String)]) -> bool {
+    pairs.iter().any(|(ta, tb)| {
+        (a == ta && b == tb)
+            || match (boxed(a), boxed(b), boxed(ta), boxed(tb)) {
+                (Some((x, ra)), Some((y, rb)), Some((_, rta)), Some((_, rtb))) => x == y && ra == rta && rb == rtb,
+                _ => false,
+            }
+    })
+}
+
+/// **A world moved by the shipped template's own lines and nothing else** — [`template_redraw_allows`]'
+/// third fact. `Ok(n)`, the number of lines that moved (at least one); an `Err` names the first
+/// place the two worlds differ otherwise: a key, a value that is not a string, a string whose lines
+/// do not pair, or a moved line that is none of the template's.
+pub fn moved_only_by_template(old: &Value, new: &Value, pairs: &[(String, String)]) -> Result<usize, String> {
+    fn walk(at: &str, a: &Value, b: &Value, pairs: &[(String, String)], n: &mut usize) -> Result<(), String> {
+        match (a, b) {
+            (Value::Object(x), Value::Object(y)) => {
+                if x.keys().ne(y.keys()) {
+                    return Err(format!("{at}: its keys moved"));
+                }
+                x.iter().try_for_each(|(k, v)| walk(&format!("{at}.{k}"), v, &y[k], pairs, n))
+            }
+            (Value::Array(x), Value::Array(y)) => {
+                if x.len() != y.len() {
+                    return Err(format!("{at}: its length moved"));
+                }
+                x.iter().zip(y).enumerate().try_for_each(|(i, (v, w))| walk(&format!("{at}[{i}]"), v, w, pairs, n))
+            }
+            (Value::String(x), Value::String(y)) if x != y => {
+                let (lx, ly): (Vec<&str>, Vec<&str>) = (x.split_inclusive('\n').collect(), y.split_inclusive('\n').collect());
+                if lx.len() != ly.len() {
+                    return Err(format!("{at}: it gained or lost a line"));
+                }
+                for (i, (p, q)) in lx.iter().zip(&ly).enumerate() {
+                    if p == q {
+                        continue;
+                    }
+                    let (pe, qe) = (p.strip_suffix('\n'), q.strip_suffix('\n'));
+                    if pe.is_some() != qe.is_some() || !is_template_move(pe.unwrap_or(p), qe.unwrap_or(q), pairs) {
+                        return Err(format!("{at}, line {}: `{}` → `{}` is not one of the shipped template's own lines", i + 1, p.trim_end(), q.trim_end()));
+                    }
+                    *n += 1;
+                }
+                Ok(())
+            }
+            _ if a == b => Ok(()),
+            _ => Err(format!("{at}: a value that is not a string's lines moved")),
+        }
+    }
+    let mut n = 0usize;
+    walk("world", old, new, pairs, &mut n)?;
+    if n == 0 {
+        return Err("no line of the world moved, so there is nothing for D64(d) to license".into());
+    }
+    Ok(n)
+}
+
+/// The D64(d) reason a line carries: its `d64d.why`, `""` for none.
+pub fn d64d_why(line: &Value) -> &str {
+    line["d64d"]["why"].as_str().unwrap_or_default()
+}
+
+/// **A template re-draw's reason keeps an earlier one**, as [`redraw_why`] does for D64(b).
+pub fn template_redraw_why(why: &str, old: &Value) -> String {
+    let was = d64d_why(old);
+    if was.is_empty() || why.contains(was) {
+        why.to_string()
+    } else {
+        format!("{why} — earlier: {was}")
+    }
+}
+
+/// **The owner's D64(d), as a gate** (D127): may the committed line `old` be recomputed as `new`,
+/// for the reason `why`, over the shipped template's moved lines `pairs`? The three facts this
+/// section's head names; and every key of the line but its world, its answers ([`is_answer`]) and
+/// the two re-draw records (`d64b`, `d64d`) byte for byte — the steps the world was built by
+/// included, so a world built by other verbs is no template re-draw. `Ok(n)`, the lines that moved.
+pub fn template_redraw_allows(old: &Value, new: &Value, why: &str, registered: &BTreeSet<u32>, pairs: &[(String, String)]) -> Result<usize, String> {
+    let who = old["name"].as_str().or_else(|| old["class"].as_str()).unwrap_or("<unnamed>");
+    is_d64d_reason(why, registered).map_err(|e| format!("{who}: {e}"))?;
+    if pairs.is_empty() {
+        return Err(format!("{who}: the shipped template did not move, so D64(d) does not reach this line"));
+    }
+    let keys: BTreeSet<&String> = old.as_object().into_iter().flatten().chain(new.as_object().into_iter().flatten()).map(|(k, _)| k).collect();
+    for k in keys {
+        let k = k.as_str();
+        if k == "world" || k == "d64b" || k == "d64d" || is_answer(old, k) || is_answer(new, k) {
+            continue;
+        }
+        if old[k] != new[k] {
+            return Err(format!("{who}: `{k}` moved, which is its provenance — D64(d) moves the world alone"));
+        }
+    }
+    moved_only_by_template(&old["world"], &new["world"], pairs).map_err(|e| format!("{who}: {e}"))
+}
+
+/// **A D64(d) re-draw between two committed versions of one line** — the plain history check's
+/// reading (`fork_rebless_history.rs`): the newer version carries a `d64d` the older does not, and
+/// [`template_redraw_allows`] holds over the shipped template's move between the two commits
+/// (`"WORKTREE"` for the working copy). A history git cannot read is no re-draw.
+pub fn template_redrawn(old: &Value, new: &Value, was: &str, now: &str) -> bool {
+    if new["d64d"] == old["d64d"] {
+        return false;
+    }
+    let (Ok(a), Ok(b), Ok(reg)) = (template_at(was), template_at(now), registered_parity()) else { return false };
+    let Ok(pairs) = template_pairs(&a, &b) else { return false };
+    template_redraw_allows(old, new, d64d_why(new), &reg, &pairs).is_ok()
+}
+
+/// **The template's move a bless recomputes over**: the shipped template committed at HEAD → the
+/// working copy's. A bless that re-draws under D64(d) runs before the commit that moves the template.
+pub fn template_pairs_since_head() -> Result<Vec<(String, String)>, String> {
+    template_pairs(&template_at("HEAD")?, &template_at("WORKTREE")?)
+}
+
+/// **A bless's D64(d) reason, read strictly**: `TM_TEMPLATE_REDRAW`, absent → `None`; present, it
+/// must be a D64(d) reason ([`is_d64d_reason`]) or the bless FAILS rather than skipping it.
+pub fn template_redraw_reason() -> Option<String> {
+    let why = std::env::var("TM_TEMPLATE_REDRAW").ok()?;
+    let reg = registered_parity().unwrap_or_else(|e| panic!("{e}"));
+    if let Err(e) = is_d64d_reason(&why, &reg) {
+        panic!("TM_TEMPLATE_REDRAW: {e}");
+    }
+    Some(why)
+}
+
+/// **One bless's D64(d) decision for one line, the same in every bless**: with `why` set and the
+/// committed line's world moved, the recomputed line `new` is admitted when [`template_redraw_allows`]
+/// holds over [`template_pairs_since_head`], and then carries `d64d` (the reason, kept with any
+/// earlier one, and what moved); `Err` names why it is refused. A line that already carries a
+/// `d64d` keeps it while its world stands (call [`keep_template_record`]).
+pub fn template_redraw(old: &Value, new: &mut Value, why: &str) -> Result<usize, String> {
+    let reg = registered_parity()?;
+    let pairs = template_pairs_since_head()?;
+    let n = template_redraw_allows(old, new, why, &reg, &pairs)?;
+    new["d64d"] = serde_json::json!({
+        "why": template_redraw_why(why, old),
+        "moved": format!("{n} line(s), each one of the shipped example template's own moved lines (tm/templates/example), and nothing else"),
+    });
+    if !old["d64b"].is_null() && new["d64b"].is_null() {
+        new["d64b"] = old["d64b"].clone();
+    }
+    Ok(n)
+}
+
+/// A line whose world stands keeps the `d64d` record the committed line carries.
+pub fn keep_template_record(old: &Value, new: &mut Value) {
+    if !old["d64d"].is_null() {
+        new["d64d"] = old["d64d"].clone();
+    }
+}
+
 /// **The commits a merge in progress is merging** — `MERGE_HEAD`'s lines (an octopus names
 /// several), empty when no merge is in progress.
 pub fn merge_heads(dir: &Path) -> Vec<String> {

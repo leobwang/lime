@@ -233,7 +233,9 @@ fn every_frozen_line_keeps_every_reason_it_was_redrawn_for() {
 /// consecutive versions both hold, (1) **the shipped fork's answer** (`frozenhist::shipped_answer`)
 /// and (2) **every key of the world and the provenance** (all but `frozenhist::is_answer`'s) are
 /// byte-identical — unless the newer version is a D64(b) re-draw (`frozenhist::redrawn`), whose
-/// world moved and whose fork was asked again. So a hand-moved world, class, test list or shipped
+/// world moved and whose fork was asked again, or since the owner's D127 a D64(d) one
+/// (`frozenhist::template_redrawn`): a world that IS the shipped template, moved by the template's own
+/// lines between the two commits and nothing else, its steps and provenance byte for byte. So a hand-moved world, class, test list or shipped
 /// day fails a plain run on the commit that moved it. And since W-43 track C (README gap 4320) a
 /// key that LEAVES the file is judged too: paired with the arrived line that holds its world
 /// (`frozenhist::refiles`), it is held as one line moving, its key's own fields licensed only by a
@@ -291,7 +293,10 @@ fn every_committed_frozen_line_kept_its_world_and_the_shipped_answer() {
             for (k, a) in old {
                 let Some(b) = new.get(k) else { continue };
                 pairs += 1;
-                if frozenhist::redrawn(a, b) {
+                // A D64(b) re-draw, or since the owner's D127 a D64(d) one — a world that IS the shipped
+                // template, moved by the template's own lines between the two versions and nothing else
+                // (`frozenhist::template_redrawn`, which reads the template at both commits).
+                if frozenhist::redrawn(a, b) || frozenhist::template_redrawn(a, b, was, now) {
                     continue;
                 }
                 let tag = |what: &str| format!("{name}: `{k}` {what} between {} and {}", &was[..was.len().min(9)], &now[..now.len().min(9)]);
@@ -320,6 +325,62 @@ fn every_committed_frozen_line_kept_its_world_and_the_shipped_answer() {
         "held {pairs} line-version pair(s) across every frozen file's history and the working copy ({refiled} of them a \
          line moved to a new key); {before} change(s) before this check landed, counted and not judged"
     );
+}
+
+/// **D64(d) admits a world the shipped template's own lines moved, and refuses one that is not the
+/// template's** (the owner's D127; W-49 track E; AGENTS §5.8, both directions). Over a synthetic line:
+/// the template's `^t3` pair moving in the world, the fork's answer asked again, is admitted — and so is
+/// the same pair on a line whose state box a verb set (`[~]`); refused by name are a world that moved
+/// by a line the template does not hold (a hand-typed two-estimate line), a world that gained a line,
+/// a world whose template did not move, steps that moved, a reason undated, one naming D64(b), and one
+/// naming no registered number. And the template's own move is read line for line: a template that
+/// gains a line is no change clause (d) can follow.
+#[test]
+fn d64d_admits_a_template_world_and_refuses_one_that_is_not() {
+    let reg: std::collections::BTreeSet<u32> = [1].into();
+    let (t_old, t_new) = ("- [>] 4 2b Ex 5.3  @m1 est:1b ^t3", "- [>] 4 1b Ex 5.3  @m1 ^t3");
+    let pairs = vec![(t_old.to_string(), t_new.to_string())];
+    let week = |t: &str, other: &str| format!("# Tasks\n{t}\n{other}\n");
+    let hand = "- [ ] 3 2b Hand-typed  est:1b ^t9";
+    let old = json!({"name": "w", "steps": [{"at": "a", "args": ["start"], "code": 0}],
+                     "world": [["week/2026-W37.md", week(t_old, hand)], [".tm/log.jsonl", "{}\n"]], "fork": {"heat": [1]}});
+    let why = "2026-10-14 D64(d): the owner's D127 — the example tree's ^t3 carries one estimate (parity P1)";
+    let mut new = old.clone();
+    new["world"][0][1] = json!(week(t_new, hand));
+    new["fork"]["heat"] = json!([2]);
+    assert_eq!(frozenhist::template_redraw_allows(&old, &new, why, &reg, &pairs), Ok(1), "the template's own move was refused");
+    let mut boxed_old = old.clone();
+    boxed_old["world"][0][1] = json!(week(&t_old.replace("[>]", "[~]"), hand));
+    let mut boxed_new = new.clone();
+    boxed_new["world"][0][1] = json!(week(&t_new.replace("[>]", "[~]"), hand));
+    assert_eq!(frozenhist::template_redraw_allows(&boxed_old, &boxed_new, why, &reg, &pairs), Ok(1), "a box a verb set refused the move");
+    let mut box_moved = boxed_new.clone();
+    box_moved["world"][0][1] = json!(week(&t_new.replace("[>]", "[x]"), hand));
+    assert!(frozenhist::template_redraw_allows(&boxed_old, &box_moved, why, &reg, &pairs).is_err(), "a box that moved with it passed");
+    let mut not_template = new.clone();
+    not_template["world"][0][1] = json!(week(t_new, "- [ ] 3 1b Hand-typed  ^t9"));
+    let e = frozenhist::template_redraw_allows(&old, &not_template, why, &reg, &pairs).expect_err("a hand-typed line passed");
+    assert!(e.contains("is not one of the shipped template's own lines"), "{e}");
+    let mut gained = new.clone();
+    gained["world"][0][1] = json!(format!("{}- [ ] 1 New ^t8\n", week(t_new, hand)));
+    assert!(frozenhist::template_redraw_allows(&old, &gained, why, &reg, &pairs).is_err(), "a world that gained a line passed");
+    let mut log = new.clone();
+    log["world"][1][1] = json!("{\"ev\":\"x\"}\n");
+    assert!(frozenhist::template_redraw_allows(&old, &log, why, &reg, &pairs).is_err(), "a log line moved with it");
+    assert!(frozenhist::template_redraw_allows(&old, &new, why, &reg, &[]).is_err(), "a template that did not move licensed a re-draw");
+    let mut steps = new.clone();
+    steps["steps"][0]["args"] = json!(["stop"]);
+    assert!(frozenhist::template_redraw_allows(&old, &steps, why, &reg, &pairs).is_err(), "moved steps passed");
+    // `P2` is registered, but not in this test's register: a number the register does not hold.
+    for bad in ["D64(d): undated P1", "2026-10-14 D64(b): P1", "2026-10-14 D64(d): no number", "2026-10-14 D64(d): P2"] {
+        assert!(frozenhist::template_redraw_allows(&old, &new, bad, &reg, &pairs).is_err(), "`{bad}` licensed a re-draw");
+    }
+    assert!(frozenhist::template_redraw_allows(&old, &old, why, &reg, &pairs).is_err(), "nothing moved, and (d) licensed it");
+    let one = |t: &str| std::collections::BTreeMap::from([("week.md".to_string(), t.to_string())]);
+    assert_eq!(frozenhist::template_pairs(&one(&format!("a\n{t_old}\n")), &one(&format!("a\n{t_new}\n"))), Ok(pairs.clone()));
+    assert!(frozenhist::template_pairs(&one("a\n"), &one("a\nb\n")).is_err(), "a template that gained a line is a line-for-line change");
+    let head = frozenhist::template_at("HEAD").unwrap_or_else(|e| panic!("{e}"));
+    assert!(head.contains_key("week.md") && head.contains_key("day.md"), "the shipped template at HEAD: {:?}", head.keys());
 }
 
 /// **The plain history check bites** (AGENTS §5.8): over a synthetic repository, a line whose
