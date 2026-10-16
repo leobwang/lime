@@ -42,10 +42,12 @@
 //!   facts.
 //!
 //! and it writes **none** of `state.lastHash`, `state.yesterday` or
-//! `overrides`, because the kernel reads none of them: `kernel/inputs-exempt.txt`
-//! names `RuntimeIn.lastHash`, `RuntimeIn.yesterday`, `PlanOverrides.estMin` and
-//! `PlanOverrides.extraMin` as decoded and read by no definition of the day, and
-//! each of their EXITs is that the field leaves the request. An encoder that
+//! `overrides`, because the kernel reads none of them: `state.lastHash` and
+//! `state.yesterday` are no longer decoded at all (the owner's D112 at the W-47
+//! repair; W-49 track Y, README gap 5161 — ranking reads each candidate's own
+//! `yesterday`), and `kernel/inputs-exempt.txt` names `PlanOverrides.estMin` and
+//! `PlanOverrides.extraMin` as decoded and read by no definition of the day,
+//! each EXIT being that the field leaves the request. An encoder that
 //! sent them would be the input-side composition gap W-34 found, spelled on the
 //! host. (`overrides.drop` is read, by `PlanReq.activeRun`, but no shipped path
 //! builds a drop what-if — the TUI's one what-if is §9.1's extension — so it has
@@ -1195,7 +1197,7 @@ fn clock_sec(tz: Tz, date: NaiveDate, t: NaiveTime) -> i64 {
 /// **§9's three running records** as the section's `state` object
 /// (`PlanWire.readState`): `active`, `break` and `interrupt`, each present only
 /// when the state holds it. `lastHash` and `yesterday` are not written (module
-/// docs: the kernel reads neither).
+/// docs: the kernel decodes neither).
 ///
 /// **A start the log holds is read from the log** (the W-40 repair, README gaps
 /// 3943 and 3829, parity **P69**; the owner's **D75**, whose clock this is): the

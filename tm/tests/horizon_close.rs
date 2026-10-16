@@ -64,8 +64,19 @@ fn plan() -> (TempDir, FsStore) {
     let dir = TempDir::new().unwrap();
     let root = dir.path().join("plan");
     copy_dir(&fixture_dir(), &root);
+    // **The fork-point library's closes are tested on a hand-typed two-estimate `^t3`** (the owner's
+    // D127, W-49 track E): the shipped example `^t3` carries one estimate since D127 (parity P126), and
+    // these tests are about a line carrying both — the leading `2b` as written, `est:1b` the remainder
+    // a close resets — so their world keeps it, as the fixture held it until D127.
+    let week = root.join(WEEK);
+    let text = fs::read_to_string(&week).unwrap();
+    assert_eq!(text.matches(ONE_ESTIMATE_T3).count(), 1, "the fixture's one-estimate `^t3`");
+    fs::write(&week, text.replacen(ONE_ESTIMATE_T3, TWO_ESTIMATE_T3, 1)).unwrap();
     (dir, FsStore::new(root))
 }
+
+const ONE_ESTIMATE_T3: &str = "- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3";
+const TWO_ESTIMATE_T3: &str = "- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3";
 
 /// Every `.md` file under the plan root, `path -> text`.
 fn tree_text(store: &FsStore) -> BTreeMap<String, String> {

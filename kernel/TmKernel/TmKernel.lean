@@ -81,6 +81,7 @@ import TmKernel.MidnightCut
 import TmKernel.PlanDiff
 import TmKernel.PlanOnce
 import TmKernel.PlanFold
+import TmKernel.BreakFold
 import TmKernel.PlanCheck
 import TmKernel.EmitDue
 import TmKernel.Emit

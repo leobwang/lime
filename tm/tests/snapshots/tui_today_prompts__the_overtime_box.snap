@@ -5,7 +5,7 @@ expression: "overlay(|f|\n{\n    prompts::draw(f, Rect::new(0, 0, 80, 12),\n    
 "                                                                                "
 "                                                                                "
 "         ┌ Overtime ─────────────────────────────────────────────────┐          "
-"         │Exercises 5.3–5.5     est 2b ×1.6 = 3h12m · elapsed 3h19m  │          "
+"         │Exercises 5.3–5.5     est 1b ×1.6 = 3h12m · elapsed 3h19m  │          "
 "         │  x  extend +1 block      → drops: nothing                 │          "
 "         │  s  stop, demote rest    → 5m stays in the week queue     │          "
 "         │  d  done                                                  │          "

@@ -125,13 +125,14 @@ fn every_estimate_writer_leaves_one_estimate_on_a_leading_estimate_line() {
 /// wrote the verb's own `est:2b`; the value is the same 120 minutes.
 #[test]
 fn a_token_slot_is_written_in_canonical_minutes() {
-    let tm = Tm::new();
+    // Both trees carry the hand-typed two-estimate `^t3` (the owner's D127: the shipped one carries one).
+    let tm = Tm::with_two_estimate_t3();
     tm.ok(&["wake", "06:05", "--slept", "8h10m"]);
     tm.ok(&["start", "^t3", "--energy", "4"]);
     tm.ok(&["extend", "1b"]);
     let line = tm.line("week/2026-W37.md", "t3");
     assert_eq!(line, "- [>] 4 2b Exercises 5.3–5.5            @m1 est:120m ^t3");
-    let edited = Tm::new();
+    let edited = Tm::with_two_estimate_t3();
     edited.ok(&["edit", "^t3", "est=2b"]);
     assert!(
         edited.line("week/2026-W37.md", "t3").ends_with("est:120m ^t3"),

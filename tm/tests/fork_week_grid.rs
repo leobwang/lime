@@ -311,6 +311,19 @@ fn the_grid_rebless_gate_holds_d64() {
     let mut cells_and_world = cells.clone();
     cells_and_world["world"] = json!([["a.md", "y"]]);
     assert!(forkgrid::rebless_allows(&old, &cells_and_world, &[], None, why, &reg).is_err(), "a world moved under (c)");
+    // The owner's D127, D64(d) (W-49 track E): a world that IS the shipped template, moved by the template's
+    // own line `x` → `y` with the fork's grid asked again, is admitted with a dated D64(d) reason naming a
+    // registered number; a world that moved by any other line is not the template's, and is refused.
+    let d = "2026-10-14 D64(d): the shipped template's change (P1)";
+    let pairs = vec![("x".to_string(), "y".to_string())];
+    assert_eq!(frozenhist::template_redraw_allows(&old, &world, d, &reg, &pairs), Ok(1), "the template's own move was refused");
+    let mut elsewhere = world.clone();
+    elsewhere["world"] = json!([["a.md", "z"]]);
+    assert!(frozenhist::template_redraw_allows(&old, &elsewhere, d, &reg, &pairs).is_err(), "a world that is not the template's passed (d)");
+    assert!(frozenhist::template_redraw_allows(&old, &world, d, &reg, &[]).is_err(), "(d) passed with the template unmoved");
+    let mut redrawn_steps = world.clone();
+    redrawn_steps["steps"] = json!([{"at": "a", "args": ["plan"], "code": 0}]);
+    assert!(frozenhist::template_redraw_allows(&old, &redrawn_steps, d, &reg, &pairs).is_err(), "(d) passed with the steps moved");
 }
 
 /// **A line cannot be shadowed** (AGENTS §5.8): a frozen grid file carrying one name twice is
@@ -482,6 +495,7 @@ fn the_frozen_week_grids_are_blessed() {
         .filter_map(|s| s.trim().trim_start_matches('P').parse().ok())
         .collect();
     let redraw = std::env::var("TM_GRID_BLESS_REDRAW").ok();
+    let template = frozenhist::template_redraw_reason();
     let harness = forkclass::harness_of("TM_GRID_BLESS_HARNESS");
     let reg = registered();
     let held: Vec<Value> = if forkgrid::frozen_path().exists() { forkgrid::frozen_lines() } else { Vec::new() };
@@ -546,6 +560,14 @@ fn the_frozen_week_grids_are_blessed() {
     for n in &mut fresh {
         match committed.get(n["name"].as_str().unwrap_or_default()) {
             None => added += 1,
+            // **D64(d)** (the owner's D127): a world that IS the shipped template, moved by the template's
+            // own lines and nothing else, with its fork asked again (`frozenhist::template_redraw`).
+            Some(o) if o["world"] != n["world"] && template.is_some() => {
+                match frozenhist::template_redraw(o, n, template.as_deref().unwrap_or_default()) {
+                    Ok(k) => changed.push(format!("{} re-drawn under D64(d) ({k} template line(s))", n["name"])),
+                    Err(e) => refused.push(e),
+                }
+            }
             Some(o) => match forkgrid::rebless_allows(o, n, &because, redraw.as_deref(), harness.as_deref(), &reg) {
                 Err(e) => refused.push(e),
                 Ok(k) => {
@@ -560,6 +582,7 @@ fn the_frozen_week_grids_are_blessed() {
                     } else if let Some(why) = o.get("d64b") {
                         n["d64b"] = why.clone();
                     }
+                    frozenhist::keep_template_record(o, n);
                     if !k.is_empty() {
                         changed.push(format!("{} `{}`", n["name"], k.join("`, `")));
                     }

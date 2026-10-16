@@ -10,6 +10,11 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// The shipped example tree's `^t3` since the owner's D127 (parity P126): one estimate, the leading `1b`.
+pub const ONE_ESTIMATE_T3: &str = "- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3";
+/// The same line as it stood until D127, a hand-typed two-estimate line (D56's case).
+pub const TWO_ESTIMATE_T3: &str = "- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3";
 use std::process::Command;
 
 use serde_json::Value;
@@ -95,6 +100,19 @@ impl Tm {
             .join("../tm-core/tests/fixtures/plan-basic");
         copy_dir(&fixture, &plan);
         Tm { tmp, plan }
+    }
+
+    /// **The `plan-basic` copy with a hand-typed two-estimate `^t3`** (the owner's D127, W-49 track E):
+    /// the example tree's week line as it stood until D127 — `- [>] 4 2b … @m1 est:1b ^t3`, a leading
+    /// estimate beside an `est:` key, the line D56 and D62 are about — so a test whose subject is a
+    /// line carrying both keeps it in its OWN world, now that the shipped template carries one.
+    pub fn with_two_estimate_t3() -> Tm {
+        let tm = Tm::new();
+        let week = tm.plan.join("week/2026-W37.md");
+        let text = fs::read_to_string(&week).expect("the fixture week");
+        assert_eq!(text.matches(ONE_ESTIMATE_T3).count(), 1, "the fixture's one-estimate `^t3`");
+        fs::write(&week, text.replacen(ONE_ESTIMATE_T3, TWO_ESTIMATE_T3, 1)).expect("the week");
+        tm
     }
 
     /// An empty temp directory (for `tm init`).

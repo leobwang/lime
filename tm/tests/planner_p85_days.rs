@@ -427,6 +427,7 @@ fn the_frozen_p85_days_are_blessed() {
     let (mut out, mut refused, mut added) = (String::new(), Vec::new(), 0usize);
     let mut redrawn: Vec<&str> = Vec::new();
     let draw_because = std::env::var("TM_PLANNER_DRAW_BECAUSE").ok();
+    let template = frozenhist::template_redraw_reason();
     if let Some(why) = draw_because.as_deref() {
         assert!(forkclass::is_d64b_reason(why), "TM_PLANNER_DRAW_BECAUSE: `{why}` is not a D64(b) reason — dated (20…), naming D64(b)");
     }
@@ -437,6 +438,13 @@ fn the_frozen_p85_days_are_blessed() {
         let mut l = line_of(w, &ran, &world, &shipped, &p85);
         match held.get(w.name) {
             None => added += 1,
+            // **D64(d)** (the owner's D127): a world that IS the shipped template, moved by its own lines.
+            Some(old) if old["world"] != l["world"] && template.is_some() => {
+                match frozenhist::template_redraw(old, &mut l, template.as_deref().unwrap_or_default()) {
+                    Ok(_) => redrawn.push(w.name),
+                    Err(e) => refused.push(e),
+                }
+            }
             Some(old) if old["world"] != l["world"] && old["steps"] == l["steps"] && draw_because.is_some() => {
                 // D64(b), held to P100's line alone (the owner's D105).
                 match moved_only_by_p100(old, &l) {
@@ -468,6 +476,7 @@ fn the_frozen_p85_days_are_blessed() {
                 if !old["d64b"].is_null() {
                     l["d64b"] = old["d64b"].clone();
                 }
+                frozenhist::keep_template_record(old, &mut l);
             }
         }
         out.push_str(&serde_json::to_string(&l).expect("a line serialises"));
@@ -478,7 +487,7 @@ fn the_frozen_p85_days_are_blessed() {
             refused.push(format!("{k}: a frozen line no world builds any more"));
         }
     }
-    eprintln!("P85 days: {added} line(s) added, {} re-drawn under D64(b) ({}), {} refused", redrawn.len(), redrawn.join("; "), refused.len());
+    eprintln!("P85 days: {added} line(s) added, {} re-drawn under D64(b) or D64(d) ({}), {} refused", redrawn.len(), redrawn.join("; "), refused.len());
     assert!(refused.is_empty(), "the P85 bless is refused and wrote nothing:\n  {}", refused.join("\n  "));
     let out_path = std::env::var_os("TM_P85_BLESS_OUT").map(PathBuf::from).unwrap_or(path);
     std::fs::write(out_path, out).expect("the frozen P85 days are written");

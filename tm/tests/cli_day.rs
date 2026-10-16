@@ -116,11 +116,20 @@ fn done_partial_keeps_the_line_open_with_a_remainder() {
     let json = tm.json_at("2026-09-07T09:30:00-05:00", &["done", "--partial"]);
     assert_eq!(json["partial"], true);
 
-    // ^t3 is `- [>] 4 2b … est:1b`: 60 remaining − 30 worked = 30m left.
+    // ^t3 is `- [>] 4 1b …` since the owner's D127 (parity P126): 60 remaining − 30 worked = 30m
+    // left, written in the one slot `remaining` reads (D62) — the line carries one estimate.
     let line = tm.line("week/2026-W37.md", "t3");
-    assert!(line.starts_with("- [ ]"), "{line}");
-    assert!(line.contains("est:30m"), "{line}");
+    assert_eq!(line, "- [ ] 4 30m Exercises 5.3–5.5            @m1 ^t3");
     assert_eq!(tm.last()["partial"], true);
+
+    // D56's case stays tested: on a hand-typed `- [>] 4 2b … est:1b` the slot is the `est:` token.
+    let two = Tm::with_two_estimate_t3();
+    two.ok(&["wake", "06:05", "--slept", "8h10m"]);
+    two.ok(&["start", "^t3", "--energy", "4"]);
+    two.json_at("2026-09-07T09:30:00-05:00", &["done", "--partial"]);
+    let line = two.line("week/2026-W37.md", "t3");
+    assert!(line.starts_with("- [ ] 4 2b"), "{line}");
+    assert!(line.contains("est:30m"), "{line}");
 }
 
 #[test]

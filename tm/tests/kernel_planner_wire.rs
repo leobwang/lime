@@ -488,18 +488,29 @@ fn the_last_hash_and_the_overrides_are_left_unread() {
     assert_eq!(carried["ok"]["plan"], bare["ok"]["plan"], "an unread key moves nothing");
 }
 
-/// **A stored priority past seven**, through `Planner.mkYesterday?` — the one
-/// reader of a stored `p` (§7.4).
+/// **`yesterday` is no longer read** (W-49 track Y, README gap 5161): `Planner.RuntimeIn` holds no stored priorities
+/// since ranking reads each candidate's own `yesterday`, and the binary has sent none since W-34's repair.  A request
+/// that still carries the key — even a stored `p` of 8, which the deleted decoder refused as badYesterdayList — is
+/// answered with exactly the day the same request without it is.
 #[test]
-fn a_stored_priority_past_seven_is_refused() {
-    let resp = call(&request(state(
-        json!({"yesterday": [{"id": "m1", "p": 8}]}),
-    )));
-    assert_eq!(
-        planner_err(&resp).as_deref(),
-        Some("badYesterdayList"),
-        "{resp}"
-    );
+fn a_stored_yesterday_is_left_unread() {
+    let routines = json!([{"id": "lunch", "winLo": NOW, "winHi": NOW + 7200, "durMin": 30}]);
+    let bare = call(&request_with_docs(Some(json!({"routines": routines.clone()})),
+        Some(capacity(Some(json!(20)), true)), routine_docs()));
+    let carried = call(&request_with_docs(Some(json!({
+        "state": {"yesterday": [{"id": "m1", "p": 8}]},
+        "routines": routines.clone()
+    })), Some(capacity(Some(json!(20)), true)), routine_docs()));
+    let malformed = call(&request_with_docs(Some(json!({
+        "state": {"yesterday": "not a list"},
+        "routines": routines
+    })), Some(capacity(Some(json!(20)), true)), routine_docs()));
+    assert_eq!(planner_err(&bare), None, "{bare}");
+    assert_eq!(planner_err(&carried), None, "the old decoder's refusal is gone: {carried}");
+    assert_eq!(planner_err(&malformed), None, "the old `badState yesterday` is gone: {malformed}");
+    assert!(bare["ok"]["plan"].is_object(), "the bare request plans a day: {bare}");
+    assert_eq!(carried["ok"]["plan"], bare["ok"]["plan"], "an unread key moves nothing");
+    assert_eq!(malformed["ok"]["plan"], bare["ok"]["plan"], "an unread key moves nothing");
 }
 
 /// **A routine window past the calendar**, at its position, through

@@ -38,7 +38,7 @@ a third name for a bound is the defect this kernel is named after.
 
 | wire value | bound | constructor | rejection theorem |
 |---|---|---|---|
-| every id (`active.id`, `interrupt.id`, a routine's `id` and `inst`, a `yesterday` id) | `CapWire.maxCandId` | `EmitWire.idWithin` | `readActive_refuses_a_long_id`, `readInterrupt_refuses_a_long_id`, `readRoutine_refuses_a_long_id` |
+| every id (`active.id`, `interrupt.id`, a routine's `id` and `inst`) | `CapWire.maxCandId` | `EmitWire.idWithin` | `readActive_refuses_a_long_id`, `readInterrupt_refuses_a_long_id`, `readRoutine_refuses_a_long_id` |
 | `active.estMin` | `Look.maxPlanMinutes` (the fork's `u32`, D81 gap 3902), through the wf predicate | `Planner.mkActive?` | `readActive_refuses_an_estimate_past_the_width` |
 | `active.started`, `brk.started`, `interrupt.started`, a routine's `winLo`/`winHi` | `Cal.Instant.wf` | `Cal.mkInstant?`, through `EmitWire.secWithin` | `instantWithin_refuses_past_the_calendar`, `readRoutine_refuses_a_window_past_the_calendar` |
 | `active.started`, `interrupt.started` after `now` | NONE since W-41: D78 plans both as fork 4748911 does, from `now` | — | `readActive_accepts_a_start_after_now`, `readInterrupt_accepts_a_start_after_now` |
@@ -47,8 +47,6 @@ a third name for a bound is the defect this kernel is named after.
 | `active.workedMin` | `Look.maxPlanMinutes` (W-41, the width again) | `Planner.workedOf?` | `readOptWorked_refuses_a_reading_past_the_width` |
 | the day's evening (D80 (a), P71) | `LogStamp.yearEnd` | `Planner.PlanReq.eveningInsideTheCalendar`, in `planReqRefusal` | `planReqRefusal_names_an_evening_past_the_calendar` |
 | a candidate's wire `ci` (D80 (b), P72) | the plan's `ci` for the item | `Planner.PlanReq.ciDisagreement`, in `planReqRefusal` | `planReqRefusal_names_a_candidate_whose_ci_disagrees` |
-| a `yesterday` priority | `Fin 8`, through the one reader of a stored `p` | `Planner.mkYesterday?` | `readYesterday_refuses_a_priority_past_seven` |
-| the `yesterday` list | `Planner.maxCands` | `Planner.mkYesterday?` | `readYesterday_refuses_past_the_cap` |
 | a routine's `durMin` | `CapWire.maxRemaining` (fork `u32`) | `EmitWire.u32Within` | `readRoutine_refuses_a_duration_past_the_width` |
 | `prio.batchMaxMin` | `CapWire.maxRemaining` (fork `u32`) | `EmitWire.u32Within` | `readBatchMaxMin_refuses_past_the_width` |
 | the routine list, and each instance's rule | `Planner.maxCands`, `Planner.mkRoutine?` | `Planner.mkRoutines?` | already proved — `mkRoutines?_refuses_too_many`, and `PlannerWit.mkPlanReq?_refuses_a_routine_the_rule_refuses` carries it out |
@@ -106,7 +104,7 @@ open Planner (RuntimeIn RoutineIn PlanOverrides ActiveBlock BreakState BreakPlac
 
 /-- A key of the `planner` section, or of one of its records. -/
 inductive PlanKey
-  | state | active | brk | interrupt | yesterday
+  | state | active | brk | interrupt
   | routines | batchMaxMin
   | id | inst | started | estMin | paused | plannedMin | place
   | winLo | winHi | durMin | mandatory
@@ -120,7 +118,7 @@ deriving DecidableEq, Repr
 
 def PlanKey.name : PlanKey → String
   | .state => "state" | .active => "active" | .brk => "break"
-  | .interrupt => "interrupt" | .yesterday => "yesterday"
+  | .interrupt => "interrupt"
   | .routines => "routines" | .batchMaxMin => "batchMaxMin"
   | .id => "id" | .inst => "inst" | .started => "started" | .estMin => "estMin"
   | .paused => "paused" | .plannedMin => "plannedMin" | .place => "place"
@@ -143,10 +141,6 @@ inductive PlannerRefusal
   | badBreak (k : PlanKey)
   /-- A key of `state.interrupt`. -/
   | badInterrupt (k : PlanKey)
-  /-- The `yesterday` record at this position. -/
-  | badYesterday (i : Nat)
-  /-- More stored priorities than the candidate cap, or a `p` past seven. -/
-  | badYesterdayList
   /-- A key of the routine record at this position. -/
   | badRoutine (i : Nat) (k : PlanKey)
   /-- §16's `[priority] batch_max_min` is absent or past the fork's `u32`. -/
@@ -208,8 +202,6 @@ def PlannerRefusal.text : PlannerRefusal → String
   | .badActive k => s!"badActive {k.name}"
   | .badBreak k => s!"badBreak {k.name}"
   | .badInterrupt k => s!"badInterrupt {k.name}"
-  | .badYesterday i => s!"badYesterday {i}"
-  | .badYesterdayList => "badYesterdayList"
   | .badRoutine i k => s!"badRoutine {i} {k.name}"
   | .badBatchMaxMin => "badBatchMaxMin"
   | .capacityAbsent => "capacityAbsent"
@@ -336,21 +328,6 @@ def readOptInterrupt (v : JVal) : Except PlannerRefusal (Option InterruptState) 
   | .error e => .error e
   | .ok none => .ok none
   | .ok (some w) => (readInterrupt w).map some
-/-- One `{"id": …, "p": …}` pair of `state.yesterday`, the id bounded and the `p` left to
-`mkYesterday?` — the one reader of a stored priority. -/
-def readYesterdayPair (i : Nat) (v : JVal) : Except PlannerRefusal (Id × Nat) := do
-  let idS ← EmitWire.strAtP v "id" (PlannerRefusal.badYesterday i)
-  let id ← EmitWire.idWithin (PlannerRefusal.badYesterday i) idS
-  let p ← EmitWire.natAtP v "p" (PlannerRefusal.badYesterday i)
-  pure (id, p)
-/-- `state.priorities_yesterday` (§7.4), the cap and the `Fin 8` both through
-`Planner.mkYesterday?`.  Nothing here restates either. -/
-def readYesterday (xs : List JVal) : Except PlannerRefusal (Capped (Id × Fin 8)) :=
-  match xs.zipIdx.mapM (fun p => readYesterdayPair p.2 p.1) with
-  | .error e => .error e
-  | .ok ps => match Planner.mkYesterday? ps with
-    | some c => .ok c
-    | none => .error PlannerRefusal.badYesterdayList
 /-- `state.active.workedMin`, the host's worked minutes (W-36, gap 2920), through `Planner.workedOf?`; absent is `none`. -/
 def readOptWorked (sec : JVal) : Except PlannerRefusal (Option (Fin (Look.maxPlanMinutes + 1))) :=
   match EmitWire.optAtP sec "active" (PlannerRefusal.badState PlanKey.active) with
@@ -358,17 +335,14 @@ def readOptWorked (sec : JVal) : Except PlannerRefusal (Option (Fin (Look.maxPla
     | .ok (some n) => match Planner.workedOf? n with | some w => .ok (some w) | none => .error (PlannerRefusal.badActive PlanKey.workedMin)
     | .ok none => .ok none | .error e => .error e
   | .ok none => .ok none | .error e => .error e
-/-- **§9's five rows.**  Every one is optional and every absence is the field's own empty. -/
+/-- **§9's four rows.**  Every one is optional and every absence is the field's own empty.  A `yesterday` key is
+left unread since W-49 track Y (README gap 5161): ranking reads each candidate's own `Look.Cand.yesterday`, and the
+binary has sent none since W-34's repair. -/
 def readState (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal RuntimeIn := do
   let active ← readOptActive sec
   let brk ← readOptBreak now sec
   let interrupt ← readOptInterrupt sec
-  let ys ← match ← EmitWire.optAtP sec "yesterday" (PlannerRefusal.badState PlanKey.yesterday) with
-    | none => pure []
-    | some (.arr xs) => pure xs
-    | some _ => throw (PlannerRefusal.badState PlanKey.yesterday)
-  let yesterday ← readYesterday ys
-  pure ⟨active, brk, interrupt, yesterday, ← readOptWorked sec⟩
+  pure ⟨active, brk, interrupt, ← readOptWorked sec⟩
 /-! ## `routines` — §8.2 step 2's window instances, host-collected until F2 (K3) -/
 
 /-- One `RoutineIn`.  The cap and the per-instance rule are `Planner.mkRoutines?`' and are not
@@ -454,8 +428,8 @@ def readPlannerSection (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal 
 the test that reads it fails, rather than the wire quietly changing. -/
 theorem planKey_names_are_the_wire_keys :
     (PlanKey.state.name, PlanKey.active.name, PlanKey.brk.name, PlanKey.interrupt.name,
-     PlanKey.yesterday.name, PlanKey.routines.name, PlanKey.batchMaxMin.name)
-      = ("state", "active", "break", "interrupt", "yesterday", "routines", "batchMaxMin") := rfl
+     PlanKey.routines.name, PlanKey.batchMaxMin.name)
+      = ("state", "active", "break", "interrupt", "routines", "batchMaxMin") := rfl
 
 /-- And the record keys. -/
 theorem planKey_record_names_are_the_wire_keys :
@@ -471,11 +445,10 @@ theorem the_refusals_spell_themselves :
     (PlannerRefusal.shape.text, (PlannerRefusal.badState PlanKey.active).text,
      (PlannerRefusal.badActive PlanKey.id).text, (PlannerRefusal.badBreak PlanKey.place).text,
      (PlannerRefusal.badInterrupt PlanKey.wf).text,
-     (PlannerRefusal.badYesterday 3).text, PlannerRefusal.badYesterdayList.text,
      (PlannerRefusal.badRoutine 2 PlanKey.winLo).text,
      PlannerRefusal.badBatchMaxMin.text, PlannerRefusal.capacityAbsent.text)
       = ("shape", "badState active", "badActive id", "badBreak place",
-         "badInterrupt wf", "badYesterday 3", "badYesterdayList",
+         "badInterrupt wf",
          "badRoutine 2 winLo",
          "badBatchMaxMin", "capacityAbsent") := rfl
 
@@ -483,8 +456,8 @@ theorem the_refusals_spell_themselves :
 inside — `EmitWire`'s `{"err":{"plan":…}}`.  A host that sees `planner` knows the request could
 not be *built*; a host that sees `plan` knows a row could not be *read*. -/
 theorem plannerRefusalJson_is_the_err_planner_shape :
-    plannerRefusalJson PlannerRefusal.badYesterdayList
-      = jone "err" (jone "planner" (.str "badYesterdayList".toList)) := rfl
+    plannerRefusalJson PlannerRefusal.badBatchMaxMin
+      = jone "err" (jone "planner" (.str "badBatchMaxMin".toList)) := rfl
 
 /-- **The two families' wire keys are different words**, which is what lets one `plan` object
 carry both R3's keys and W-24's without a reader having to guess. -/
@@ -618,38 +591,24 @@ theorem readInterrupt_accepts_an_open_interruption :
       ("id".toList, .str "m1".toList)])
       = .ok ⟨some ⟨900, 0⟩, some "m1".toList⟩ := by rfl
 
-/-- **A stored `p` past seven is refused**, through `Planner.mkYesterday?` — the one reader. -/
-theorem readYesterday_refuses_a_priority_past_seven :
-    readYesterday [.obj [("id".toList, .str "m1".toList), ("p".toList, .num 8)]]
-      = .error PlannerRefusal.badYesterdayList := by rfl
-
-/-- And seven reads, so the refusal is not the only outcome. -/
-theorem readYesterday_accepts_seven :
-    (readYesterday [.obj [("id".toList, .str "m1".toList), ("p".toList, .num 7)]]).map
-        (fun c => c.val.map (fun p => (p.1, p.2.val))) = .ok [("m1".toList, 7)] := by rfl
-
-/-- **More stored priorities than the candidate cap is refused**, through the same constructor
-— `Planner.maxCands`, not a number written here. -/
-theorem readYesterday_refuses_past_the_cap (xs : List JVal) (ps : List (Id × Nat))
-    (hp : xs.zipIdx.mapM (fun p => readYesterdayPair p.2 p.1) = .ok ps)
-    (h : Planner.maxCands < ps.length) :
-    readYesterday xs = .error PlannerRefusal.badYesterdayList := by
-  simp only [readYesterday, hp, Planner.mkYesterday?_refuses_too_many ps h]
-
-/-- The empty list reads, so the two refusals above are not vacuous. -/
-theorem readYesterday_of_nil : (readYesterday []).map (fun c => c.val) = .ok [] := rfl
-
 /-- **The empty `state` object is `RuntimeIn.empty`** — every field's own absence, and not a
 defaulted value picked by the reader (AGENTS §5.6). -/
 theorem readState_of_an_empty_object (now : Cal.Instant) :
     readState now (.obj []) = .ok RuntimeIn.empty := rfl
 
+/-- **A `yesterday` key is left unread** (W-49 track Y, README gap 5161), whatever it carries: a value that is not
+even a list — which the deleted decoder refused, by the name badState yesterday — reads as the empty state, as the
+key's absence does.  The binary has sent none since W-34's repair; ranking reads each candidate's `Look.Cand.yesterday`. -/
+theorem readState_leaves_yesterday_unread (now : Cal.Instant) :
+    readState now (.obj [("yesterday".toList, .str "x".toList)]) = .ok RuntimeIn.empty := rfl
+
 /-- **A day with everything running reads.**  This theorem exists because `mutate.py` said it
 had to: `readState_of_an_empty_object` above is satisfied by a reader that answers `none`
 whatever it is given, and the three optional readers all came back **SURVIVED** at `:= default`
 until a request with `active`, `break`, `interrupt`, `lastHash` and `yesterday` all present was
-written down.  Since the owner's D112 (W-47 repair) `lastHash` is no field of `RuntimeIn`: the request below still
-carries it, and the reader leaves it unread.  An absence proves an optional reader nothing (AGENTS §9.2). -/
+written down.  Since the owner's D112 (W-47 repair) `lastHash` is no field of `RuntimeIn`, and since W-49 track Y
+(README gap 5161) neither is `yesterday`: the request below still carries both, and the reader leaves them unread —
+even a stored `p` of 8, which the deleted decoder refused.  An absence proves an optional reader nothing (AGENTS §9.2). -/
 theorem readState_accepts_a_running_day :
     (readState ⟨1000, 0⟩ (.obj
       [("active".toList, .obj [("id".toList, .str "m2".toList),
@@ -660,13 +619,11 @@ theorem readState_accepts_a_running_day :
           ("id".toList, .str "m1".toList)]),
        ("lastHash".toList, .str "00000000000000ff".toList),
        ("yesterday".toList, .arr [.obj [("id".toList, .str "m1".toList),
-          ("p".toList, .num 3)]])])).map (fun st =>
-        (st.active, st.brk, st.interrupt,
-         st.yesterday.val.map (fun q => (q.1, q.2.val))))
+          ("p".toList, .num 8)]])])).map (fun st =>
+        (st.active, st.brk, st.interrupt))
       = .ok (some ⟨"m2".toList, ⟨900, 0⟩, 60, false⟩,
              some ⟨some ⟨940, 0⟩, 10, some BreakPlace.walk⟩,
-             some ⟨some ⟨950, 0⟩, some "m1".toList⟩,
-             [("m1".toList, 3)]) := by rfl
+             some ⟨some ⟨950, 0⟩, some "m1".toList⟩) := by rfl
 
 /-! ### `routines`' rejection theorems (R10) -/
 
@@ -2883,6 +2840,15 @@ theorem respondPlanner_is_respondRows_without_a_planner_section_is_refuted :
   rw [he] at h1
   rw [h1] at h2
   exact Bool.noConfusion h2
+
+/-- **The optional reader hands the break on, decided** (W-49 track Y, check 9's second pass): re-verifying the row this
+step's deletions drifted found `readOptBreak` ALONE at `default` — `readState_accepts_a_running_day`'s `rfl` was the one
+proof that told it from the constant — so a reader that answered a constant is refused by `decide` here, as
+`readOptInterrupt_reads_the_interruption` refuses one for the interruption. -/
+theorem readOptBreak_reads_the_break :
+    (match readOptBreak ⟨1000, 0⟩ (.obj [("break".toList, .obj [("started".toList, .num 940),
+        ("plannedMin".toList, .num 10), ("place".toList, .str "walk".toList)])]) with
+      | .ok (some x) => decide (x = ⟨some ⟨940, 0⟩, 10, some BreakPlace.walk⟩) | _ => false) = true := by decide
 
 end PlanWire
 end Tm

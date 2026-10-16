@@ -12,7 +12,6 @@
 # Since W-48 (README gap 4959) a key under a value the program copies WHOLE from the kernel's parsed
 # answer is written when the kernel's own serialiser emits it there (`fields.copied_paths`): the
 # `plan` section's `segments` and `priorities`, whose two lines left this file then.
-planner.state.yesterday -- 2026-09-28: decoded and read by no definition of the day (inputs-exempt.txt's `RuntimeIn.yesterday`); ranking reads each candidate's `Look.Cand.yesterday` (inputs-exempt.txt: a second wire spelling of one fact). EXIT: the day reads it and the codec writes it, or PlanWire stops decoding it.
 
 ## W-40 track E (2026-09-30): the written half asks every section at every place a request is built (README gap 3717)
 cmds[].min -- 2026-09-30: the `est` op's MINUTES form, which `Boundary.parseCmd` keeps beside D56's `value` form and refuses together with it (`estValueAndMin`); no function of the program writes it since W-35 (`kernel_bridge`'s `est` sends `value` and `blockMin`), only FFI tests do (README gap 3906). EXIT: the kernel retires the minutes form (a wire change), or a verb sends it again.

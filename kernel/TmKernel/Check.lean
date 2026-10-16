@@ -4720,8 +4720,6 @@ open Tm
 #print axioms Tm.Planner.mkActive?_accepts
 #print axioms Tm.Planner.mkBreak?_refuses_a_start_after_now
 #print axioms Tm.Planner.mkBreak?_accepts
-#print axioms Tm.Planner.mkYesterday?_refuses_a_priority_past_seven
-#print axioms Tm.Planner.mkYesterday?_refuses_too_many
 #print axioms Tm.Planner.RuntimeIn.activeId_empty
 #print axioms Tm.Planner.PlanOverrides.isEmpty_empty
 #print axioms Tm.Planner.assignedOf_empty
@@ -6462,10 +6460,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlanWire.readBreak_accepts_a_running_break
 #print axioms Tm.PlanWire.readInterrupt_refuses_a_long_id
 #print axioms Tm.PlanWire.readInterrupt_accepts_an_open_interruption
-#print axioms Tm.PlanWire.readYesterday_refuses_a_priority_past_seven
-#print axioms Tm.PlanWire.readYesterday_accepts_seven
-#print axioms Tm.PlanWire.readYesterday_refuses_past_the_cap
-#print axioms Tm.PlanWire.readYesterday_of_nil
 #print axioms Tm.PlanWire.readState_of_an_empty_object
 #print axioms Tm.PlanWire.readState_accepts_a_running_day
 #print axioms Tm.PlanWire.readRoutine_refuses_a_long_id
@@ -8927,3 +8921,79 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_plan_of_an_earlier_date_keeps_the_slot
 #print axioms Tm.Replay.a_plan_with_an_input_is_the_latest_as_the_w48_repair_stated_it_is_refuted
 #print axioms Tm.Replay.a_plan_records_its_stamp_as_the_w48_repair_stated_it_is_refuted
+
+-- APPENDED W-49 TRACK Y (README "Stage 6 — W-49 track Y", gap 5161): `planner.state.yesterday`
+-- left the decoder with `Planner.RuntimeIn`'s field; six laws went with their subjects (named in the
+-- block) and one is new.
+#print axioms Tm.PlanWire.readState_leaves_yesterday_unread
+#print axioms Tm.PlanWire.readOptBreak_reads_the_break
+
+-- ===========================================================================
+-- APPENDED 2026-10-14 by stage 6 W-49 track Q (README "Stage 6 — W-49 track Q", gap 5181): the
+-- replay's two fold invariants behind the last goal's `hopen` (`BreakFold.lean`: `OpenAfter`, `BrkHeld`, carried
+-- through every step and every resume from a state holding them), `hopen` discharged at the planner's request
+-- (`PlanCheck.hopen_on_a_resumed_run`) and the reduction with it (`PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run`),
+-- and `PlannerWit`'s witnesses: the fold's `hopen` at a day with a subject, and the two worlds on which the goal as
+-- written fails at a request the decoder builds (README gaps 5340 and 5341).
+-- ===========================================================================
+#print axioms Tm.BreakFold.applyEffect_days
+#print axioms Tm.BreakFold.applyEffects_seg_src
+#print axioms Tm.BreakFold.arm_noBrkSeg
+#print axioms Tm.BreakFold.arm_openAfter
+#print axioms Tm.BreakFold.brkFx_noBrkSeg
+#print axioms Tm.BreakFold.closePause_noBrkSeg
+#print axioms Tm.BreakFold.completionArm_noBrkSeg
+#print axioms Tm.BreakFold.creditFx_noBrkSeg
+#print axioms Tm.BreakFold.cut_block
+#print axioms Tm.BreakFold.cut_noBrkSeg
+#print axioms Tm.BreakFold.dayArm_noBrkSeg
+#print axioms Tm.BreakFold.DayOp.alterFn_segments
+#print axioms Tm.BreakFold.DayOp.apply_segments
+#print axioms Tm.BreakFold.doneClose_keeps
+#print axioms Tm.BreakFold.doneClose_noBrkSeg
+#print axioms Tm.BreakFold.doneFx_noBrkSeg
+#print axioms Tm.BreakFold.extendFx_noBrkSeg
+#print axioms Tm.BreakFold.finish_segments
+#print axioms Tm.BreakFold.flatten_noBrkSeg
+#print axioms Tm.BreakFold.fm_attain
+#print axioms Tm.BreakFold.fm_ge_init
+#print axioms Tm.BreakFold.fm_ge_mem
+#print axioms Tm.BreakFold.fm_le
+#print axioms Tm.BreakFold.fm_mono
+#print axioms Tm.BreakFold.foldl_brkHeld
+#print axioms Tm.BreakFold.foldl_openAfter
+#print axioms Tm.BreakFold.hi_grows
+#print axioms Tm.BreakFold.hi_pruneBrks
+#print axioms Tm.BreakFold.netClosed_noBrkSeg
+#print axioms Tm.BreakFold.netOne_noBrkSeg
+#print axioms Tm.BreakFold.netStart_noBrkSeg
+#print axioms Tm.BreakFold.noBrkSeg_append
+#print axioms Tm.BreakFold.noBrkSeg_nil
+#print axioms Tm.BreakFold.noBrkSeg_of_no_segment
+#print axioms Tm.BreakFold.obsFx_noBrkSeg
+#print axioms Tm.BreakFold.openAfter_congr
+#print axioms Tm.BreakFold.openAfter_of_no_block
+#print axioms Tm.BreakFold.prune_keeps
+#print axioms Tm.BreakFold.redraw_noBrkSeg
+#print axioms Tm.BreakFold.restore_empty_holds
+#print axioms Tm.BreakFold.resumedAnswer_day_src
+#print axioms Tm.BreakFold.resumeRun_holds
+#print axioms Tm.BreakFold.runNet_noBrkSeg
+#print axioms Tm.BreakFold.settle_noBrkSeg
+#print axioms Tm.BreakFold.settle_openAfter
+#print axioms Tm.BreakFold.stepWith_brkHeld
+#print axioms Tm.BreakFold.stepWith_brks
+#print axioms Tm.BreakFold.stepWith_brks_of_brk
+#print axioms Tm.BreakFold.stepWith_openAfter
+#print axioms Tm.BreakFold.the_genesis_restore_holds
+#print axioms Tm.BreakFold.the_resumed_open_block_runs_after_every_break
+#print axioms Tm.BreakFold.uncreditFx_noBrkSeg
+#print axioms Tm.PlanCheck.hopen_on_a_resumed_run
+#print axioms Tm.PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run
+#print axioms Tm.PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it
+#print axioms Tm.PlannerWit.openAfterBreakRun_resumes
+#print axioms Tm.PlannerWit.planReqOf_keeps_the_hosts_runtime
+#print axioms Tm.PlannerWit.the_break_law_holds_whole_at_the_open_after_break_request_by_the_fold
+#print axioms Tm.PlannerWit.the_fold_discharges_the_open_block_clause_at_the_open_after_break_request
+#print axioms Tm.PlannerWit.the_hosts_running_break_lays_a_block_across_it
+#print axioms Tm.PlannerWit.ydBreakRun_resumes_ok

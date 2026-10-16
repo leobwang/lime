@@ -556,6 +556,55 @@ fn the_example_templates_are_the_plan_basic_fixture() {
     }
 }
 
+/// **No item line of a shipped template carries two estimates — but the one D127 left** (the owner's D127,
+/// parity P126; W-49 track E). A line with a leading estimate AND an `est:` key is D56's two-estimates
+/// class: the row prints one and the planner reads the other. Asked of EVERY markdown file under
+/// `tm/templates/` (the class, not the `^t3` line D127 names), the set of such lines is exactly the one
+/// `# Demoted` record `^m2` in `example/month.md`, whose two estimates are equal and which no decision
+/// has reached (README gap 5383); `^t3` left the set at D127, and a template line that joins it fails here.
+#[test]
+fn no_item_line_of_a_shipped_template_carries_two_estimates_but_the_demoted_record() {
+    fn is_duration(t: &str) -> bool {
+        t.starts_with(|c: char| c.is_ascii_digit())
+            && t.ends_with(|c: char| "bmhd".contains(c))
+            && t.chars().all(|c| c.is_ascii_digit() || "bmhd".contains(c))
+    }
+    // `- [x] [ci] [!k] <estimate> …` with an `est:` key on the same line.
+    fn two_estimates(line: &str) -> bool {
+        let Some(rest) = line.trim_start().strip_prefix("- [").and_then(|r| r.get(1..)).and_then(|r| r.strip_prefix("] ")) else {
+            return false;
+        };
+        let mut words = rest.split_whitespace().peekable();
+        if words.peek().is_some_and(|w| w.len() == 1 && w.chars().all(|c| c.is_ascii_digit())) {
+            words.next();
+        }
+        if words.peek().is_some_and(|w| w.starts_with('!')) {
+            words.next();
+        }
+        words.next().is_some_and(is_duration) && rest.split_whitespace().any(|w| w.starts_with("est:"))
+    }
+    assert!(two_estimates("- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3"), "the reader sees D56's class");
+    assert!(!two_estimates("- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3"), "and not a line with one estimate");
+    assert!(!two_estimates("- [ ] 3 Write the intro est:1b ^t9"), "nor an `est:` key alone");
+    let mut found = Vec::new();
+    let mut files = 0usize;
+    let mut stack = vec![template("")];
+    while let Some(dir) = stack.pop() {
+        for e in std::fs::read_dir(&dir).expect("the templates") {
+            let path = e.expect("an entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|x| x == "md") {
+                files += 1;
+                let text = std::fs::read_to_string(&path).expect("a template");
+                found.extend(text.lines().filter(|l| two_estimates(l)).map(|l| l.trim().to_string()));
+            }
+        }
+    }
+    assert!(files >= 8, "the walk read {files} template file(s)");
+    assert_eq!(found, ["- [-] 4 3b Rollback path passes tests @O2 est:3b demoted:W37 ^m2"], "two-estimate template lines");
+}
+
 /// **The bare-`tm init` landmine, cleared at the kernel** (kernel/README.md,
 /// 2026-09-12 "a comment is prose" block).  The starter templates' guidance
 /// comments carry their natural `- [ ]` example lines again — ids, an

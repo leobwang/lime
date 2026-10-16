@@ -3477,4 +3477,20 @@ theorem anEarlierDatesLineTakesTheInput :
       = some [(['b'], 3)] := by
   decide
 
+/- ===== APPENDED W-49 TRACK Y (README "Stage 6 — W-49 track Y", gap 5161): cheats 441-442.  The
+   planner section's `state.yesterday` left the decoder with the field it filled; these two say the
+   type now forbids what the deleted decoder bounded. ===== -/
+
+/- CHEAT 441 — a planner request's runtime claimed to carry yesterday's stored
+   priorities: `Planner.RuntimeIn` has no such field since W-49 track Y (ranking
+   reads each candidate's `Look.Cand.yesterday`, one spelling of the fact), so
+   the projection is an invalid field. -/
+def aRuntimeCarriesYesterday (s : Planner.RuntimeIn) := s.yesterday
+
+/- CHEAT 442 — the planner section's refusal of a stored priority past seven
+   claimed to stand: `PlanWire.PlannerRefusal` holds no such constructor since
+   W-49 track Y, so the name is unknown. -/
+def theYesterdayRefusalStands : PlanWire.PlannerRefusal :=
+  PlanWire.PlannerRefusal.badYesterdayList
+
 end Tm

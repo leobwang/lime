@@ -83,20 +83,21 @@ and G3's, over the `dayPlan` P5 will have built.
 Bounded here, each with its constructor **and** its rejection theorem:
 `BatchIds` (`mkBatch?`), `Seg` (`mkSeg?`), `Capped` and its `IdList` instance
 (`Capped.ofList?`, `Capped.cons?`), `Budget` (`mkBudget?`),
-`ActiveBlock` (`mkActive?`), `BreakState` (`mkBreak?`) — `InterruptState` has none since W-41 (D78) —
-and yesterday's priorities (`mkYesterday?`).  `PlanHash` (mkHash?) and `PlanOverrides` (mkOverrides?) had
-decoders until the W-47 repair, when the owner's D112 took `lastHash` and `overrides` off the wire (README gap 5021).
+`ActiveBlock` (`mkActive?`) and `BreakState` (`mkBreak?`) — `InterruptState` has none since W-41 (D78).
+`PlanHash` (mkHash?) and `PlanOverrides` (mkOverrides?) had decoders until the W-47 repair, when the owner's D112 took
+`lastHash` and `overrides` off the wire (README gap 5021), and yesterday's priorities (mkYesterday?) until W-49 track Y,
+when the field went with its decoder (README gap 5161).
 
 **Reused rather than re-bounded** (design §9's own "reuse" column): `Look.WakeClock.wf` and
 its `badWake`; `Field.Clock` for a stored arrival and a stored window; `Field.parseDate`'s
-calendar bound for `state.date`; `Look.maxLocName` for the location name; `yesterdayOf?`
-for a stored `p`.  Five of §9's twelve rows are already `Look.Today`'s and are read through it
+calendar bound for `state.date`; `Look.maxLocName` for the location name (and, until W-49 track Y, `yesterdayOf?`
+for a stored `p`).  Five of §9's twelve rows are already `Look.Today`'s and are read through it
 — re-declaring them would have been the defect this module's header warns about.
 
 ## D9-21, the recursion rule
 
-`Capped.ofList?` and `mkYesterday?` recurse over lists the wire can make
-large, and each is a `List.length` test plus core's own `List` operations.  `Seg.items` is
+`Capped.ofList?` recurses over lists the wire can make
+large (mkYesterday? did too, until W-49 track Y), and it is a `List.length` test plus core's own `List` operations.  `Seg.items` is
 core `Subtype.val`/`Option.toList`.
 
 *(W-32 repair, the same gap 2223: this paragraph closed **"`dayPlan` folds over nothing: its
@@ -652,46 +653,17 @@ theorem mkActive?_refuses_a_start_after_now_is_refuted :
   fun h => absurd (h ⟨0, 0⟩ ⟨['m','1'], ⟨10, 0⟩, 60, false⟩ (by decide))
     (by decide)
 
-/-- `state.priorities_yesterday`, decoded (§7.4).  Each stored `p` goes through
-`yesterdayOf?` — the kernel's one reader of a stored priority — and the length is refused
-**before** the map runs, so a wire-sized list is measured once and never walked twice.
-D9-21: the only recursion is core's `List.length` and `List.mapM`. -/
-def mkYesterday? (ps : List (Id × Nat)) : Option (Capped (Id × Fin 8)) :=
-  if ps.length ≤ maxCands then
-    (ps.mapM (fun p => (yesterdayOf? p.2).map (fun v => (p.1, v)))).bind Capped.ofList?
-  else none
-
-theorem mkYesterday?_refuses_a_priority_past_seven (ps : List (Id × Nat)) (i : Id) (n : Nat)
-    (hmem : (i, n) ∈ ps) (h : 8 ≤ n) : mkYesterday? ps = none := by
-  unfold mkYesterday?
-  have hm : ps.mapM (fun p => (yesterdayOf? p.2).map (fun v => (p.1, v))) = none := by
-    induction ps with
-    | nil => cases hmem
-    | cons a as ih =>
-      rcases List.mem_cons.mp hmem with rfl | hmem'
-      · simp [List.mapM_cons, yesterdayOf?_refuses_eight n h]
-      · cases ha : (yesterdayOf? a.2).map (fun v => (a.1, v)) with
-        | none => simp [List.mapM_cons, ha]
-        | some _ => simp [List.mapM_cons, ha, ih hmem']
-  split
-  · rw [hm]; rfl
-  · rfl
-
-theorem mkYesterday?_refuses_too_many (ps : List (Id × Nat)) (h : maxCands < ps.length) :
-    mkYesterday? ps = none := by
-  unfold mkYesterday?
-  rw [if_neg (by omega)]
-
-/-- **§9's five remaining rows**, decoded.  The other seven are `Look.Today`'s and are read
-through `PlanReq.look` (see this section's opening comment). -/
+/-- **§9's remaining rows**, decoded — four since W-49 track Y.  The other seven are `Look.Today`'s and are read
+through `PlanReq.look` (see this section's opening comment).  Yesterday's priorities were a fifth field until W-49 track Y
+(README gap 5161): decoded and read by no definition of the day, because ranking reads each candidate's own
+`Look.Cand.yesterday` — a second wire spelling of one fact, deleted with its decoder mkYesterday? and its laws. -/
 structure RuntimeIn where
   active    : Option ActiveBlock
   brk       : Option BreakState
   interrupt : Option InterruptState
-  yesterday : Capped (Id × Fin 8)
   worked    : Option (Fin (Look.maxPlanMinutes + 1))  -- the host's worked minutes (W-36, gap 2920; W-41's width)
 /-- Nothing running, nothing planned yet. -/
-def RuntimeIn.empty : RuntimeIn := ⟨none, none, none, Capped.nil, none⟩
+def RuntimeIn.empty : RuntimeIn := ⟨none, none, none, none⟩
 
 /-- The item the running block holds, if any — the exception five of §8.3's laws are restated
 around (design §6.3, D29). -/

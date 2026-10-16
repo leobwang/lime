@@ -5,7 +5,7 @@ expression: "render_lines(&today::timeline_lines(&app(), 38, 14), 38)"
 "07:00  5 p1 ✓ Read ch.6…  @m3  1b  (6…"
 "08:07  5 p1 ✓ Read ch.6   @O1  3b  (6…"
 "09:08  ·    ✓ break 20m            (2…"
-"09:32  4 p1 ▶ Exercises…  @m1  2b×1.6 "
+"09:32  4 p1 ▶ Exercises…  @m1  1b×1.6 "
 "11:20  ·      lunch 30m               "
 "11:50  4↓p3   Claude Co…  @m2  1b    …"
 "12:50  ⏰     Meeting w…       1h     " Hidden by multi-width symbols: [(8, " ")]

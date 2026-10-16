@@ -68,11 +68,13 @@ use tui_common::rowwire::{differences, kernel_cells, kernel_sec, request};
 // ---------------------------------------------------------------------------
 
 /// The fixture day's nine cells per row, as `emit::row_cells` wrote them.
+/// `^t3`'s `est` cell is `1b×1.6` since the owner's D127 (parity P126, re-blessed under D64(d)): the
+/// fixture's line carries the one estimate `1b`, which is the estimate as written the builder read.
 const FROZEN_DAY: [[&str; 9]; 13] = [
     ["07:00", "5", "p1", "✓", "Read ch.6 §1–2", "@m3", "1b", "(67m)", ""],
     ["08:07", "5", "p1", "✓", "Read ch.6", "@O1", "3b", "(61m)", ""],
     ["09:08", "·", "", "✓", "break 20m", "", "", "(24m)", ""],
-    ["09:32", "4", "p1", "▶", "Exercises 5.3–5.5", "@m1", "2b×1.6", "", ""],
+    ["09:32", "4", "p1", "▶", "Exercises 5.3–5.5", "@m1", "1b×1.6", "", ""],
     ["11:20", "·", "", " ", "lunch 30m", "", "", "", ""],
     ["11:50", "4↓", "p3", " ", "Claude Code drafts tests", "@m2", "1b", "", "↓ slot 4, item 3"],
     ["12:50", "⏰", "", " ", "Meeting w/ host", "", "1h", "", ""],
@@ -88,7 +90,7 @@ const FROZEN_DAY_ROWS: [&str; 13] = [
     "07:00  5 p1 ✓ Read ch.6 §1–2               @m3  1b  (67m)",
     "08:07  5 p1 ✓ Read ch.6                    @O1  3b  (61m)",
     "09:08  ·    ✓ break 20m                             (24m)",
-    "09:32  4 p1 ▶ Exercises 5.3–5.5            @m1  2b×1.6",
+    "09:32  4 p1 ▶ Exercises 5.3–5.5            @m1  1b×1.6",
     "11:20  ·      lunch 30m",
     "11:50  4↓p3   Claude Code drafts tests     @m2  1b     ↓ slot 4, item 3",
     "12:50  ⏰     Meeting w/ host                   1h",
@@ -174,6 +176,14 @@ fn docs() -> Vec<Value> {
     tui_common::docs_json()
 }
 
+/// [`docs`] with a hand-typed two-estimate `^t3` — `- [>] 4 2b … @m1 est:1b ^t3`, the example tree's
+/// line until the owner's D127 (parity P126) — for the cell that reads a line carrying both.
+fn two_estimate_docs() -> Vec<Value> {
+    let text = serde_json::to_string(&docs()).expect("the docs serialise");
+    assert_eq!(text.matches("- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3").count(), 1, "the fixture's one-estimate `^t3`");
+    serde_json::from_str(&text.replacen("- [>] 4 1b Exercises 5.3–5.5            @m1 ^t3", "- [>] 4 2b Exercises 5.3–5.5            @m1 est:1b ^t3", 1)).expect("the docs parse")
+}
+
 // ---------------------------------------------------------------------------
 // The comparisons
 // ---------------------------------------------------------------------------
@@ -251,7 +261,8 @@ fn the_kernels_cells_padded_are_the_day_files_bytes() {
 fn the_two_closed_holes_are_the_specs_own_cells() {
     let cfg = tui_common::config();
     let plan = tui_common::day_plan(&cfg);
-    let lean = kernel_cells(docs(), &plan, &cfg);
+    // `^t3` hand-typed with both estimates: the shipped one carries one since D127 (P126).
+    let lean = kernel_cells(two_estimate_docs(), &plan, &cfg);
     let row = |title: &str| lean.iter().find(|c| c.title == title).unwrap_or_else(|| panic!("no `{title}` row"));
     let hot = row("Pick up package");
     assert_eq!((hot.mark.as_str(), hot.note.as_str()), ("⚠", "due today"), "gap 1102: {hot:?}");
@@ -331,7 +342,8 @@ fn the_estimate_column_is_the_written_estimate_times_the_multiplier() {
             seg
         })
         .collect();
-    let lean = kernel_cells(docs(), &plan, &cfg);
+    // `^t3` hand-typed with both estimates (D127, P126): the cell shows the one as written.
+    let lean = kernel_cells(two_estimate_docs(), &plan, &cfg);
     let est: Vec<&str> = lean.iter().map(|c| c.est.as_str()).collect();
     assert_eq!(est, ["2b×1.6", "1b", "30m×1.25"], "{lean:?}");
 }

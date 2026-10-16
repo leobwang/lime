@@ -396,6 +396,7 @@ fn the_frozen_separator_days_are_blessed() {
         return;
     }
     let oracle = the_oracle().expect("TM_SEPARATORS_BLESS asks fork 4748911: set TM_ORACLE");
+    let template = frozenhist::template_redraw_reason();
     let path = frozen_path();
     let held = frozenhist::held(&path, frozenhist::key_of("name")).unwrap_or_else(|e| panic!("{e}"));
     eprintln!("{}", held.census(FROZEN_SEPARATORS));
@@ -405,9 +406,15 @@ fn the_frozen_separator_days_are_blessed() {
         let b = Built::of(w.clone());
         let day = shipped_day(&b, &oracle).unwrap_or_else(|e| panic!("{name}: {e}"));
         no_departure(name, &b, &day, &oracle);
-        let l = line_of(name, line, &w, &day);
+        let mut l = line_of(name, line, &w, &day);
         match held.get(name) {
             None => added += 1,
+            // **D64(d)** (the owner's D127): a world that IS the shipped template, moved by its own lines.
+            Some(old) if old["world"] != l["world"] && template.is_some() => {
+                if let Err(e) = frozenhist::template_redraw(old, &mut l, template.as_deref().unwrap_or_default()) {
+                    refused.push(e);
+                }
+            }
             Some(old) if old["world"] != l["world"] || old["line"] != l["line"] => {
                 refused.push(format!("{name}: the suite builds another world now — a re-draw, which D64(b) must decide"))
             }
@@ -415,7 +422,7 @@ fn the_frozen_separator_days_are_blessed() {
                 "{name}: the SHIPPED fork's day moved over the same world ({}), and no comparand parity number moves it (D64, clause 2)",
                 forkplan::first_difference("shipped", &old["shipped"], &l["shipped"]).unwrap_or_default()
             )),
-            Some(_) => {}
+            Some(old) => frozenhist::keep_template_record(old, &mut l),
         }
         out.push_str(&serde_json::to_string(&l).expect("a line serialises"));
         out.push('\n');
