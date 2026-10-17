@@ -8997,3 +8997,11 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.PlannerWit.the_fold_discharges_the_open_block_clause_at_the_open_after_break_request
 #print axioms Tm.PlannerWit.the_hosts_running_break_lays_a_block_across_it
 #print axioms Tm.PlannerWit.ydBreakRun_resumes_ok
+
+-- APPENDED 2026-10-17 by stage 6 W-49 repair (README "Stage 6 — W-49 repair", gap 5411): the two
+-- `hrun`-false worlds are whole requests the decoder builds, and the planner wire refuses neither.
+#print axioms Tm.PlannerWit.breakAfterDoneRun_resumes
+#print axioms Tm.PlannerWit.ydBreakRun_resumes
+#print axioms Tm.PlannerWit.witBuildsHostBreak
+#print axioms Tm.PlannerWit.witBuildsYdBreak
+#print axioms Tm.PlannerWit.the_host_and_yd_break_requests_are_not_refused

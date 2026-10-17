@@ -7591,10 +7591,10 @@ theorem a_dated_demoted_record_is_a_month_item_with_a_date :
 def exampleNow : Day := Cal.toDay ⟨2026, 9, 14⟩
 def exampleW38 : Region := ⟨week, Cal.weekOrdinal exampleNow⟩
 
-/-- §4.3's example week, month and backlog **byte for byte** (`tm/templates/example/`,
-what `tm init --example` writes), with the backlog's `# Overdue` appended at its end
-and the live week 2026-W38 as its initial text — the two things the host hands over
-for a close (README gap 56's host half). -/
+/-- §4.3's PRINTED example week, month and backlog byte for byte — the pre-D127 template;
+the shipped `tm/templates/example/` differs from it by `^t3` since D127 (README gap 5381) —
+with the backlog's `# Overdue` appended at its end and the live week 2026-W38 as its initial
+text, the two things the host hands over for a close (README gap 56's host half). -/
 def exampleWeekWitness : List ReqDoc :=
   [⟨"week/2026-W37.md", some closeW37,
      ["---".toList,
@@ -7649,7 +7649,7 @@ def exampleWeekWitness : List ReqDoc :=
       "# Overdue".toList]⟩]
 
 set_option maxRecDepth 100000 in
-/-- **§4.3's example week closes a week after init** (README gap 55, closed).  At
+/-- **§4.3's printed example week closes a week on** (README gap 55, closed).  At
 Monday 2026-09-14: every open milestone of 2026-W37 is left behind as `[-]`; `^d1`
 (`due:2026-09-11T23:59`, past due, `persist`) is not among them — it sits at the end
 of the backlog's `# Overdue`, `[ ]`, its `due:` and every byte kept; `^m2` is **one**
@@ -7845,8 +7845,8 @@ set_option maxRecDepth 40000 in
 theorem the_parent_tree_loads : loadsOk parentTreeWitness = true := by decide
 
 set_option maxRecDepth 40000 in
-/-- **§4.3's literal example tree loads with its parents read** — every `@O1`,
-`@m2`, `@x1` of `tm init --example`'s week, month and backlog resolves inside the
+/-- **§4.3's printed example tree loads with its parents read** — every `@O1`,
+`@m2`, `@x1` of its week, month and backlog (pre-D127, gap 5381) resolves inside the
 request (the witness `the_example_week_closes_with_d1_in_the_backlog_overdue`
 closes; this is the load alone, decided). -/
 theorem the_example_tree_loads_with_its_parents : loadsOk exampleWeekWitness = true := by decide

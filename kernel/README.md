@@ -100034,3 +100034,178 @@ after this land, built by a later step), and gaps 5381 and 5383 (the spec's and 
 equal estimates) are the owner's.  Work: D129; gap 5340 (gap 4761's clearance, the decoder reading the replay's
 break rather than the host's); goal 5181's `hrec` (gap 5342) and the invariants across a sealed checkpoint (gap
 5343); gaps 5360-5362 and 5380, 5382; and the §5.13 drive of the TUI over a live meeting and through D126.
+
+<!-- =====================================================================
+     Stage 6 — W-49 repair: after W-49 Land 2's audit and critic.  One
+     track, on `w49-r` from `dc1a8b8`.  Gaps 5410-5429 are this block's
+     (5410-5413 taken); cheats 481-490 reserved, none taken; no parity
+     number (nothing here changes what the binary does).  Kept current
+     with each commit.
+     ===================================================================== -->
+
+## Stage 6 — W-49 repair: D64(d)'s number is the template change's own, gap 5341 restated, and four records corrected
+
+### 1. D64(d)'s reason names the TEMPLATE'S number (gap 5410, closed)
+
+**Gap 5410 — D64(d)'s reason gate admitted any registered parity number.**  1. *What.*  `frozenhist::is_d64d_reason`
+(W-49 track E) asked that a re-draw's reason name *a* number `kernel/parity.txt` registers.  The W-49 critic planted an
+UNREGISTERED edit of `tm/templates/example/inbox.md` with the plan-basic fixture moved to match and all 68 frozen template
+lines re-blessed naming `P1` (the capacity mixture's number), and every gate passed, `fork_rebless_history` included.
+2. *Why.*  The owner's D127 reads "under a registered behaviour change": the number must be THE TEMPLATE CHANGE'S, and the
+gate read a LIST (every registered number) where the rule is a CLASS (the numbers that are a template change).  3. *Cost.*
+Any template edit could re-bless every frozen line over the shipped template under any number.  4. *Cleared here*, in
+`tm/tests/support/frozenhist.rs`:
+* `TemplateParity` — the numbers whose OWN register row names `tm init --example` or `tm/templates/example` (today P126
+  alone) — built only from a register's text (`TemplateParity::of_register`, `TemplateParity::read`), so no caller can
+  hand the gate a plain set of every number; `is_d64d_reason`, `template_redraw_allows`, `template_redraw`,
+  `template_redraw_reason` and the two bless-side readers (`planner_w41_starts.rs`, `tui_kernel_answers.rs`) read it.
+* the history half: `template_redrawn` (what `fork_rebless_history`'s plain check calls) also asks
+  `d64d_reason_new_since` — the reason's template number was NOT yet registered at the commit the line's older version
+  stands at (`registered_parity_at`, `git show` of `kernel/parity.txt`).  So a number licenses the re-draw it was
+  registered with, and a later template edit cannot ride on it.  The bless side keeps the row rule alone: a bless runs
+  before the commit that registers its number is made, and nothing there is cheap to compare it against.
+* bites (AGENTS §5.8), `fork_rebless_history.rs`' new `d64d_names_the_template_changes_own_number_over_the_real_register`,
+  over `kernel/parity.txt` as committed: `P126` admitted; `P1` refused, and so is every one of the other registered
+  numbers, one by one; the critic's plant kept as a case (a template pair, a world moved by it, the fork asked again,
+  reason `P1` — refused; `P126` — admitted); `P126` is new since `acb8757` and not since `d1822b1`; and over the REAL
+  history, a TUI line Land 2 re-drew (`acb8757` → `d1822b1`) is admitted by `template_redrawn` as committed and refused
+  with its reason rewritten to `P1`.  The synthetic test `d64d_admits_a_template_world_and_refuses_one_that_is_not` reads
+  a synthetic register whose `P1` row names the template, and `fork_week_grid.rs`' bite reads the real one under `P126`.
+* track E's §2 item 1 above is corrected in place to what the gate checks (a correction this block owns, marked there).
+
+### 2. Gap 5341, restated: one machine writes the picture too, by two routes
+
+Gap 5341's item 2 says "the binary on one machine never writes it".  **False.**  `tm break --now <earlier>` is accepted
+after a block is logged, and the replay then reads it as gap 5341 says.  Driven on this tree's binary (`cargo build -p
+tm`, `TZ=America/Chicago`, every call capped at 8 GB):
+
+```
+ROUTE 1 — a ledger day earlier
+$ tm --dir T init --example
+$ tm --dir T --now 2026-09-08T06:05:00-05:00 wake            → wake 06:05 · slept 0m
+$ tm --dir T --now 2026-09-09T06:05:00-05:00 wake            → wake 06:05 · slept 0m
+$ tm --dir T --now 2026-09-09T07:00:00-05:00 arrive lounge   → arrive lounge 07:00 · window 07:00–15:00 · budget 6 blocks
+$ tm --dir T --now 2026-09-09T07:05:00-05:00 start ^t1       → ▶ ^t1 Read ch.6 §1–2 · 07:05 · pred 4
+$ tm --dir T --now 2026-09-09T08:05:00-05:00 done            → ✓ ^t1 Read ch.6 §1–2 · 60m/60m
+$ tm --dir T --now 2026-09-08T23:00:00-05:00 break 15m       → break 15m   [exit 0]
+  (log's last line: {"t":"2026-09-08T23:00:00-05:00","ev":"break_start","planned_min":15})
+$ tm --dir T --now 2026-09-09T09:00:00-05:00 plan
+2026-09-09 · window 07:00–15:00 · budget 6 blocks
+00:00  ·      break 9h
+07:05  5    ✓ Read ch.6 §1–2               @m3  1b  (60m)
+$ … check        → no problems
+$ … review day   → Day 2026-09-09 · lounge · 1/6 blocks · load 60.0 · …
+$ … now          → nothing running
+
+ROUTE 2 — the same ledger day
+$ tm --dir T init --example; … 2026-09-08 06:05 wake; 07:00 arrive lounge; 07:05 start ^t1; 08:05 done (60m/60m)
+$ tm --dir T --now 2026-09-08T06:30:00-05:00 break 15m       → break 15m   [exit 0]
+$ tm --dir T --now 2026-09-08T09:00:00-05:00 plan
+2026-09-08 · window 07:00–15:00 · budget 6 blocks
+06:30  ·      break 2h30m
+  (no ^t1 row at all)
+$ … check        → no problems
+$ … review day   → Day 2026-09-08 · lounge · 1/6 blocks · load 0.0 · …
+$ … now          → nothing running
+```
+
+Route 1 is gap 5341's picture on one machine: the break drawn across a block the record credits whole.  Route 2 is
+D100's late-break netting over the whole block (the break, never ended, runs to `now` and nets all 60 minutes): the
+plan draws no block and the review counts load 0.0 for a block `tm done` reported as 60m/60m.  In both, `tm now` says
+"nothing running" while `tm plan` draws a running break — a third reading of the same span.  **The owner's D129, refined
+at `dc1a8b8` to STAMP order, answers both**: a running break ends at the first `start` stamped after it, whatever order
+the lines were written in — so route 1's break ends at 07:05 on 2026-09-09 and route 2's at 07:05 the same day, and
+neither covers the block.  **D129 is not built here; it is owed** (a `Replay.lean` change with its laws re-proved under
+D5, a parity number and a behaviour row).  Gap 5341's own paragraph above is left as written (append-only); this is its
+restatement.  `PlannerWit.ydBreakLines`' docstring, which said the same false thing, now says one machine writes the
+same stamps with its `break_start` line last (its line count kept).
+
+### 3. Two things that claimed to be the shipped template (gap 5412, closed)
+
+**Gap 5412 — docs that still called the two-estimate `^t3` tree the shipped template.**  1. *What.*
+`Boundary.exampleWeekWitness`' docstring ("byte for byte (`tm/templates/example/`, what `tm init --example` writes)"),
+`the_example_tree_loads_with_its_parents`' ("`tm init --example`'s week") and
+`the_example_week_closes_with_d1_in_the_backlog_overdue`'s ("a week after init"), and `tm/tests/emit_fixture/mod.rs`'
+`texts()` ("the `plan-basic` files") hold `- [>] 4 2b … est:1b ^t3`, which since D127 is §4.3's PRINTED tree and the
+pre-D127 template, not what the binary writes.  2. *Why.*  Track E moved the template and not these docs.  3. *Cost.*  A
+reader takes a witness for the shipped tree.  4. *Cleared here*, doc text only: each now says it is §4.3's printed tree,
+the pre-D127 template, differing from the shipped one by `^t3` (gap 5381).  Every edited Lean docstring keeps its line
+count, so no mutation pin site moves (check 9 below).
+
+### 4. The two `hrun`-false worlds are requests the decoder builds (gap 5411, closed)
+
+**Gap 5411 — Land 2 said "requests the decoder builds" and proved it of the runs alone.**  1. *What.*  Land 2's block
+and commit say track Q's `theHostBreakRequest` and `theYdBreakRequest` are requests the decoder builds; what was proved
+decoder-built was their RUN (`breakAfterDoneRun_resumes_ok`, `ydBreakRun_resumes_ok`).  2. *Why.*  The whole-request
+equation was not written.  3. *Cost.*  The claim "`hrun` is false on a request the decoder builds" stood on prose.
+4. *Cleared here*: appended at the end of `PlannerWit.lean`, in `witBuildsCensus`' shape, `breakAfterDoneRun_resumes`,
+`ydBreakRun_resumes`, `witBuildsHostBreak` (`mkPlanReq? {witReqInCensus with lines := breakAfterDoneLines, state :=
+hostBreakAt0730State} = .ok theHostBreakRequest`), `witBuildsYdBreak` (the same over `ydBreakLines`/`ydBreakState`), and
+`the_host_and_yd_break_requests_are_not_refused` (`PlanWire.planReqRefusal` is `none` on both, `decide`), each audited in
+`Check.lean` under its own banner.  Probed first in a scratch file at 8 GB / `timeout 120`: 2.8 s.  The W-49 auditor's
+probe proved the same equations; these are its statements, committed.  **The claim now stands.**
+
+### 5. Records corrected (no code)
+
+* `a87bb7e`'s message says "the 118 drifted mutation rows".  Re-derived from that commit's diff of `kernel/mutations.txt`:
+  it rewrites **124** rows and removes 2 (the rows of the two `planner.state.yesterday` readers track Y deleted);
+  of the 124, **117** have moved pin sites (3 of them — `PlanKey.name`, `PlannerRefusal.text`, `RuntimeIn.empty` —
+  with a new body sha too), and **7** have a new body sha with their pin sites unmoved: `Tm.PlanWire.readState` and six
+  `PlannerWit` request witnesses whose `RuntimeIn` literal track Y edited (`theInterruptedOpenRequest`,
+  `theShortRunRequest`, `theMeetingInterruptedRequest`, `theHeldRequest`, `theBreakHeldRequest`,
+  `theBreakAcrossRequest`).  So "118 drifted" is 117 rows whose pins drifted plus `readState`, and it leaves out the
+  six witnesses re-verified for a new body.
+  The rewritten rows name **411** pin-site occurrences (**234** distinct per row; 392 occurrences not in the old row).
+  The W-49 repair's brief said "355 pin sites"; that figure does not reproduce by either count.  Landed history is not
+  rewritten; this is the correction.
+
+### 6. A new gap: a week close over a RUNNING block (gap 5413, open)
+
+**Gap 5413 — the week close drops a running block and a later `tm stop` rewrites the dropped line inside the closed week
+file.**  1. *What.*  Driven (this tree's binary, as §2):
+
+```
+$ tm --dir T init --example          (week/2026-W37.md:18  - [>] 4 1b Exercises 5.3–5.5            @m1 ^t3)
+$ … --now 2026-09-07T06:05 wake; 07:00 arrive lounge; 10:20 start ^t3  → ▶ ^t3 Exercises 5.3–5.5 · 10:20 · pred 4
+$ tm --dir T --now 2026-09-14T10:00:00-05:00 now
+▶ ^t3 Exercises 5.3–5.5 · started 10:20 · 10060m of 60m
+10:00  4    ▶ Exercises 5.3–5.5            @m1  1b     running · 0m left
+  (week/2026-W37.md:16 is now  - [~] 4 1b Exercises 5.3–5.5            @m1 ^t3 — the week close dropped it, B3)
+$ tm --dir T --now 2026-09-14T10:30:00-05:00 stop --at 10:20
+stopped ^t3 after 10080m · 5m left · ended 10:20
+  (week/2026-W37.md:16 is now  - [ ] 4 5m Exercises 5.3–5.5            @m1 ^t3 — reopened, inside the closed W37)
+$ … check   → no problems
+```
+
+The first verb of 2026-09-14 week-closes W37 and drops `^t3` (`[~]`, §6.3's child rule) while the block it is the item
+of stays running; `tm now` shows it running at 10,060 minutes; `tm stop` then credits 10,080 minutes and rewrites the
+dropped line as an open `[ ]` with `5m` in a file the close sealed, and `tm check` names nothing.  Pre-existing (the
+critic found it at `acb8757` as well).  2. *Why.*  The close (`Close.lean`, the week row) reads the plan and not the
+replay's open block, and the stop's estimate write-back reads the item wherever it stands.  3. *Cost.*  A closed week
+file is edited after its close; a dropped item reopens in place, outside every live horizon; a week of wall clock is
+credited as work.  4. *Clears it.*  **An owner question — a behaviour choice**: stop the block at the close (at the
+period's end, or at the last activity?), refuse the close while a block runs, or carry the running item into the live
+week instead of dropping it; then `tm check` names a dropped or settled line that a running block points at.  Not fixed
+here.
+
+### 7. Acceptance
+
+Measured on this block's tree, every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`):
+* `check.sh`: **all seventeen lines ok** — build, totality, axiom audit **6,859** theorems (6,854 before this block; +5,
+  the §4 theorems), Negative rejected, FFI 97 tests, corpus 29/37 and 4/5, stage goals **1** (unchanged), prose citations
+  ok (66,911 citations, 0 unresolved — after one fix: this block first cited the two deleted `yesterday` readers by
+  name, and check 8 refused it), check 9 **900 rostered / 0 owed** (no new definition; no pin site moved), parity P1-P126
+  (no number issued), twins, reach (1,634 reachable, 1,097 exempt), fields, inputs, sent, written, replay (97 modules).
+  34 s warm; the first run after the Lean edits 15 m 44 s (load 4.8).
+* `cargo test --workspace --no-fail-fast`, **three runs** on the final tree: **3,004 passed / 0 failed / 53 ignored over
+  170 result lines** each (16 m 9 s, 15 m 46 s, 15 m 41 s; one-minute load 7.1, 9.3, 7.2).  No `.proptest-regressions`
+  file moved.  The R1 commit (`tm/tests` and track E's sentence alone) had check.sh 17/17 on its own tree and one
+  workspace run, 3,004 / 0 / 53 (15 m 59 s, load 9.8), which it needs as a tooling-only commit.
+* FFI crate `cargo test`: **105** passed.
+
+### 8. Owed, by name
+
+D129 (gap 5341 — both routes of §2); gap 5413 (the owner's); and everything Land 2's block owes, unchanged: gap 5340,
+goal 5181's `hrec` (5342), 5343, 5360-5362, 5380, 5382, the owner's 5381 and 5383, and the §5.13 TUI drive.  The
+critic's planted re-bless was not re-run end to end through a real bless here (it needs the fork oracle); the gate it
+passed is what the new test calls, over the real register and the real history.

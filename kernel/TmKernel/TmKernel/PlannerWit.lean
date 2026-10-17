@@ -13671,8 +13671,8 @@ def ydWakeLine : Log.Line := ⟨1, some ['{','"','t','"',':','"','2','0','2','6'
 def ydBreakStartLine : Log.Line := ⟨2, some ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','8','T','2','3',':','0','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','b','r','e','a','k','_','s','t','a','r','t','"',',','"','p','l','a','n','n','e','d','_','m','i','n','"',':','1','5','}']⟩
 
 /-- **Two machines on one synced log**: A's wake and `break_start` on 2026-09-08, then B's 2026-09-09 — `witLines`' wake,
-arrival, `m1`'s 07:05 `start` and 08:05 `done` — appended after them.  The binary on one machine never writes it:
-`tm wake` and `tm start` refuse or end a running break first (D81, D101). -/
+arrival, `m1`'s 07:05 `start` and 08:05 `done` — appended after them.  One machine writes the same stamps, its
+`break_start` line last, by a late `tm --now <earlier> break` (gap 5341, restated at the W-49 repair; D129 owed). -/
 def ydBreakLines : List Log.Line :=
   [ydWakeLine, ydBreakStartLine] ++ (witLines.take 4).map (fun l => ⟨l.n + 2, l.text⟩)
 
@@ -13708,6 +13708,65 @@ theorem a_break_running_since_the_day_before_lays_todays_block_across_it :
       (dayPlan theYdBreakRequest).segments.any (fun k => decide (k.val.kind = SegKind.brk) &&
         decide (k.val.start < b.val.stop) && decide (b.val.start < k.val.stop)))) = true :=
   ⟨by decide, by decide, by decide, by decide⟩
+
+
+/-! ### The two `hrun`-false worlds are requests the decoder BUILDS (the W-49 repair, README gap 5411)
+
+W-49 Land 2 said `theHostBreakRequest` and `theYdBreakRequest` are "requests the decoder builds", while what it proved
+decoder-built was their RUN alone (`breakAfterDoneRun_resumes_ok`, `ydBreakRun_resumes_ok`).  These are the whole
+requests: `mkPlanReq?` over the census request's input with each log and each runtime answers exactly that `PlanReq`
+(the shape of `witBuildsCensus`), and the planner wire's refusal reads neither (`PlanWire.planReqRefusal`). -/
+
+/-- The break-after-done log resumes to `breakAfterDoneRun`, as `censusRun_resumes`. -/
+theorem breakAfterDoneRun_resumes :
+    Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) breakAfterDoneLines = .ok breakAfterDoneRun := by
+  unfold breakAfterDoneRun
+  split
+  · rename_i run h; rw [h]
+  · rename_i e h; exact absurd breakAfterDoneRun_resumes_ok (by simp [runOk, h])
+
+/-- The two-machine log resumes to `ydBreakRun`, as `censusRun_resumes`. -/
+theorem ydBreakRun_resumes :
+    Seal.resumeRun Cal.chicago 739867 (Seal.Ckpt.empty Cal.chicago) ydBreakLines = .ok ydBreakRun := by
+  unfold ydBreakRun
+  split
+  · rename_i run h; rw [h]
+  · rename_i e h; exact absurd ydBreakRun_resumes_ok (by simp [runOk, h])
+
+/-- **The builder answers `theHostBreakRequest`** from the census input with the break-after-done log and the host's
+07:30 break — by the stage equations, as `witBuildsCensus`. -/
+theorem witBuildsHostBreak :
+    mkPlanReq? { witReqInCensus with lines := breakAfterDoneLines, state := hostBreakAt0730State }
+      = .ok theHostBreakRequest := by
+  obtain ⟨ht, hz, hd, hw, -⟩ := witInput_fields
+  unfold mkPlanReq? witReqInCensus witReqIn theHostBreakRequest theCensusRequest
+  simp only [censusPlan_loads, witInput_decodes]
+  rw [if_neg (by
+    rw [hw, hz, hd]
+    simp only [Look.DayCfg.shipped, Look.CutCfg.shipped, ne_eq]
+    exact not_not_intro the_census_witness_indexes_the_calendars_one_wall.symm)]
+  rw [hz, ht, breakAfterDoneRun_resumes]
+  simp only [Capped.ofList?_nil, mkRoutines?_of_none]
+
+/-- **The builder answers `theYdBreakRequest`** from the census input with the two-machine log and the runtime the
+binary rebuilds from it — by the stage equations, as `witBuildsCensus`. -/
+theorem witBuildsYdBreak :
+    mkPlanReq? { witReqInCensus with lines := ydBreakLines, state := ydBreakState } = .ok theYdBreakRequest := by
+  obtain ⟨ht, hz, hd, hw, -⟩ := witInput_fields
+  unfold mkPlanReq? witReqInCensus witReqIn theYdBreakRequest theCensusRequest
+  simp only [censusPlan_loads, witInput_decodes]
+  rw [if_neg (by
+    rw [hw, hz, hd]
+    simp only [Look.DayCfg.shipped, Look.CutCfg.shipped, ne_eq]
+    exact not_not_intro the_census_witness_indexes_the_calendars_one_wall.symm)]
+  rw [hz, ht, ydBreakRun_resumes]
+  simp only [Capped.ofList?_nil, mkRoutines?_of_none]
+
+set_option maxRecDepth 400000 in
+/-- **The planner wire refuses neither** (D80's two refusals read neither request). -/
+theorem the_host_and_yd_break_requests_are_not_refused :
+    PlanWire.planReqRefusal theHostBreakRequest = none ∧ PlanWire.planReqRefusal theYdBreakRequest = none :=
+  ⟨by decide, by decide⟩
 
 end PlannerWit
 end Tm

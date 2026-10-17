@@ -65,7 +65,10 @@ pub fn config() -> Config {
 
 /// The `plan-basic` files the §4.3 timeline names, plus the second `Read
 /// ch.6` task (`^t2`) the example's 08:00 row shows — what [`tree`] parses and
-/// what the kernel is handed ([`docs`]).
+/// what the kernel is handed ([`docs`]). These are §4.3's PRINTED tree (the
+/// corpus's `plan-basic`, the pre-D127 template), not what `tm init --example`
+/// writes: since the owner's D127 the shipped template's `^t3` carries one
+/// estimate, `1b`, where this `^t3` keeps `2b` beside `est:1b` (README gap 5381).
 pub fn texts() -> Vec<(&'static str, &'static str)> {
     vec![
         (
