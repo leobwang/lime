@@ -337,7 +337,9 @@ fn every_committed_frozen_line_kept_its_world_and_the_shipped_answer() {
 /// gains a line is no change clause (d) can follow.
 #[test]
 fn d64d_admits_a_template_world_and_refuses_one_that_is_not() {
-    let reg: std::collections::BTreeSet<u32> = [1].into();
+    // A synthetic register in which `P1` is a template change (its row names `tm init --example`); the
+    // real register's reading is `d64d_names_the_template_changes_own_number_over_the_real_register`.
+    let reg = frozenhist::TemplateParity::of_register("P1  taken  README.md:1  `tm init --example`'s ^t3 carries one estimate\nP2  taken  README.md:2  another divergence\n");
     let (t_old, t_new) = ("- [>] 4 2b Ex 5.3  @m1 est:1b ^t3", "- [>] 4 1b Ex 5.3  @m1 ^t3");
     let pairs = vec![(t_old.to_string(), t_new.to_string())];
     let week = |t: &str, other: &str| format!("# Tasks\n{t}\n{other}\n");
@@ -371,7 +373,7 @@ fn d64d_admits_a_template_world_and_refuses_one_that_is_not() {
     let mut steps = new.clone();
     steps["steps"][0]["args"] = json!(["stop"]);
     assert!(frozenhist::template_redraw_allows(&old, &steps, why, &reg, &pairs).is_err(), "moved steps passed");
-    // `P2` is registered, but not in this test's register: a number the register does not hold.
+    // `P2` is registered in this test's register, but its row is not the template's change.
     for bad in ["D64(d): undated P1", "2026-10-14 D64(b): P1", "2026-10-14 D64(d): no number", "2026-10-14 D64(d): P2"] {
         assert!(frozenhist::template_redraw_allows(&old, &new, bad, &reg, &pairs).is_err(), "`{bad}` licensed a re-draw");
     }
@@ -381,6 +383,58 @@ fn d64d_admits_a_template_world_and_refuses_one_that_is_not() {
     assert!(frozenhist::template_pairs(&one("a\n"), &one("a\nb\n")).is_err(), "a template that gained a line is a line-for-line change");
     let head = frozenhist::template_at("HEAD").unwrap_or_else(|e| panic!("{e}"));
     assert!(head.contains_key("week.md") && head.contains_key("day.md"), "the shipped template at HEAD: {:?}", head.keys());
+}
+
+/// **D64(d)'s number is the template change's own, over the REAL register** (the W-49 repair, README
+/// gap 5410; AGENTS §5.8, both directions). The critic's plant: an UNREGISTERED edit of the shipped
+/// template with every frozen template line re-blessed naming `P1` passed every gate, because any
+/// registered number was enough. So, over `kernel/parity.txt` as committed: a reason naming `P1` (the
+/// capacity mixture's row) is refused, and so is one naming any number whose row does not name the
+/// template; `P126` (`tm init --example`'s `^t3`, the owner's D127) is admitted. And the history
+/// half: `P126` is new since `acb8757` (the commit before the Land that registered it) and NOT new
+/// since `d1822b1` (that Land), so a later template edit cannot ride on it.
+#[test]
+fn d64d_names_the_template_changes_own_number_over_the_real_register() {
+    let tpl = frozenhist::TemplateParity::read().unwrap_or_else(|e| panic!("{e}"));
+    let reg = frozenhist::registered_parity().unwrap_or_else(|e| panic!("{e}"));
+    let why = |n: u32| format!("2026-10-14 D64(d): the owner's D127 — the shipped template's change (parity P{n})");
+    assert_eq!(frozenhist::is_d64d_reason(&why(126), &tpl), Ok(126), "P126, the template's own number, was refused");
+    let e = frozenhist::is_d64d_reason(&why(1), &tpl).expect_err("P1 licensed a template re-draw");
+    assert!(e.contains("shipped template's change"), "{e}");
+    let others: Vec<u32> = reg.iter().copied().filter(|n| !tpl.contains(*n)).collect();
+    assert!(others.len() >= 120, "the register holds {} numbers that are not the template's", others.len());
+    for n in &others {
+        assert!(frozenhist::is_d64d_reason(&why(*n), &tpl).is_err(), "P{n}, not the template's change, licensed a re-draw");
+    }
+    // A reason naming both is read by the template's number.
+    assert_eq!(frozenhist::is_d64d_reason("2026-10-14 D64(d): P1 and P126", &tpl), Ok(126));
+    // The critic's plant, kept: over a template pair, the 68 lines' re-draw reason with P1 is refused
+    // by the gate the bless and the history check both call.
+    let (t_old, t_new) = ("- [ ] 2 Read inbox ^i1", "- [ ] 2 Read the inbox ^i1");
+    let pairs = vec![(t_old.to_string(), t_new.to_string())];
+    let old = json!({"name": "w", "steps": [], "world": [["inbox.md", format!("{t_old}\n")]], "fork": {"day": 1}});
+    let mut new = old.clone();
+    new["world"][0][1] = json!(format!("{t_new}\n"));
+    new["fork"]["day"] = json!(2);
+    assert!(frozenhist::template_redraw_allows(&old, &new, &why(1), &tpl, &pairs).is_err(), "the critic's P1 plant passed");
+    assert_eq!(frozenhist::template_redraw_allows(&old, &new, &why(126), &tpl, &pairs), Ok(1));
+    assert_eq!(frozenhist::d64d_reason_new_since(&why(126), &tpl, "acb8757"), Ok(126), "P126 was not new at its Land");
+    assert!(frozenhist::d64d_reason_new_since(&why(126), &tpl, "d1822b1").is_err(), "P126 licensed a re-draw after the Land that registered it");
+    // And over the REAL history: a TUI line the Land re-drew under D127 (`acb8757` → `d1822b1`) is a
+    // re-draw the history check admits as committed, and is NOT one with its reason naming `P1`.
+    let (name, key) = frozenhist::frozen_files()
+        .unwrap_or_else(|e| panic!("{e}"))
+        .into_iter()
+        .find(|(n, _)| n == "fork-4748911-planner-tui.jsonl")
+        .expect("the TUI comparand is a frozen file");
+    let versions = frozenhist::versions(&frozenhist::fixtures_dir().join(&name), key).unwrap_or_else(|e| panic!("{e}"));
+    let at = versions.iter().position(|(sha, _)| sha.starts_with("d1822b1")).expect("the Land changed the TUI comparand");
+    let ((was, old), (now, new)) = (&versions[at - 1], &versions[at]);
+    let (k, b) = new.iter().find(|(k, v)| !v["d64d"].is_null() && old.contains_key(*k)).expect("a line the Land re-drew under D64(d)");
+    assert!(frozenhist::template_redrawn(&old[k], b, was, now), "`{k}`: the Land's own D64(d) re-draw is refused by the history check");
+    let mut planted = b.clone();
+    planted["d64d"]["why"] = json!(why(1));
+    assert!(!frozenhist::template_redrawn(&old[k], &planted, was, now), "`{k}`: the history check admitted the re-draw naming P1");
 }
 
 /// **The plain history check bites** (AGENTS §5.8): over a synthetic repository, a line whose

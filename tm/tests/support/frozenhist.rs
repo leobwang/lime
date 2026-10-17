@@ -371,7 +371,10 @@ pub fn redrawn(old: &Value, new: &Value) -> bool {
 // and it is held to three facts, every one checked here and never declared by a caller:
 //
 // 1. **the reason**: dated (`20…`), naming `D64(d)`, and naming the registered parity number the
-//    template's change is (`P<n>`, a row of `kernel/parity.txt`) — [`is_d64d_reason`];
+//    template's change is (`P<n>`, a row of `kernel/parity.txt` whose own line names `tm init
+//    --example` or `tm/templates/example` — [`TemplateParity`], [`is_d64d_reason`]; since the W-49
+//    repair, README gap 5410, any registered number was enough); and in the history check, a number
+//    NOT yet registered at the commit the line's older version stands at ([`d64d_reason_new_since`]);
 // 2. **the template moved**: the shipped template's files differ between the committed version the
 //    line was frozen over and the version it is recomputed over, LINE FOR LINE (the same files, the
 //    same number of lines) — [`template_pairs`], whose pairs are the template's own moved lines;
@@ -434,34 +437,103 @@ pub fn template_pairs(old: &BTreeMap<String, String>, new: &BTreeMap<String, Str
 }
 
 /// **A D64(d) reason, as the owner's D127 demands it**: dated (`20…`), naming `D64(d)`, and naming
-/// a parity number `kernel/parity.txt` registers (`P<n>`) — the registered behaviour change the
-/// template's change is. `Ok(n)`, the number; an `Err` says which part is missing.
-pub fn is_d64d_reason(why: &str, registered: &BTreeSet<u32>) -> Result<u32, String> {
+/// a parity number whose `kernel/parity.txt` row is THE TEMPLATE'S CHANGE ([`TemplateParity`]: the
+/// row names `tm init --example` or `tm/templates/example`) — "under a registered behaviour change"
+/// read as the template change's own number, never any registered one (the W-49 repair, README gap
+/// 5410: a reason naming `P1`, the capacity mixture's number, licensed a re-bless of all 68 frozen
+/// template lines over an unregistered template edit). `Ok(n)`, the first such number named; an
+/// `Err` says which part is missing.
+pub fn is_d64d_reason(why: &str, template: &TemplateParity) -> Result<u32, String> {
+    d64d_numbers(why, template)?
+        .first()
+        .copied()
+        .ok_or_else(|| format!("`{why:.80}` names no parity number (P<n>) whose kernel/parity.txt row is the shipped template's change (`tm init --example`, `tm/templates/example`)"))
+}
+
+/// Every parity number a D64(d) reason names whose register row is the template's change, in the
+/// order named; `Err` when the reason is not dated or names no `D64(d)`.
+pub fn d64d_numbers(why: &str, template: &TemplateParity) -> Result<Vec<u32>, String> {
     if !why.starts_with("20") || !why.contains("D64(d)") {
         return Err(format!("`{why:.80}` is not a D64(d) reason — dated (20…), naming D64(d)"));
     }
-    let named: Vec<u32> = why
+    Ok(why
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter_map(|w| w.strip_prefix('P'))
         .filter_map(|d| d.parse().ok())
-        .collect();
-    named
-        .iter()
-        .copied()
-        .find(|n| registered.contains(n))
-        .ok_or_else(|| format!("`{why:.80}` names no registered parity number (P<n>) for the template's change"))
+        .filter(|n| template.0.contains(n))
+        .collect())
+}
+
+/// **The parity numbers that ARE a change of the shipped example template** — the rows of a
+/// `kernel/parity.txt` text (not `hole`s) whose own line names `tm init --example` or
+/// `tm/templates/example`. Built only from a register's text, so no caller can hand D64(d) a plain
+/// set of every registered number (W-49 repair, gap 5410).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TemplateParity(BTreeSet<u32>);
+
+impl TemplateParity {
+    /// The template's numbers in a register's text.
+    pub fn of_register(text: &str) -> TemplateParity {
+        TemplateParity(
+            text.lines()
+                .filter(|l| l.contains("tm init --example") || l.contains("tm/templates/example"))
+                .filter_map(|l| l.split_whitespace().next())
+                .filter_map(|w| w.strip_prefix('P'))
+                .filter_map(|d| d.parse().ok())
+                .collect(),
+        )
+    }
+
+    /// The template's numbers in the working copy's `kernel/parity.txt`.
+    pub fn read() -> Result<TemplateParity, String> {
+        let text = std::fs::read_to_string(parity_path()).map_err(|e| format!("UNCHECKED: {}: {e}", parity_path().display()))?;
+        Ok(TemplateParity::of_register(&text))
+    }
+
+    /// Does the register hold `n` as a template change?
+    pub fn contains(&self, n: u32) -> bool {
+        self.0.contains(&n)
+    }
+}
+
+/// `kernel/parity.txt`.
+fn parity_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/parity.txt")
+}
+
+/// The parity numbers a register's text registers (every row that is not a `hole`).
+fn registered_in(text: &str) -> BTreeSet<u32> {
+    text.lines()
+        .filter_map(|l| l.split_whitespace().next())
+        .filter_map(|w| w.strip_prefix('P'))
+        .filter_map(|d| d.parse().ok())
+        .collect()
 }
 
 /// The parity numbers `kernel/parity.txt` registers (every row that is not a `hole`).
 pub fn registered_parity() -> Result<BTreeSet<u32>, String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/parity.txt");
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("UNCHECKED: {}: {e}", path.display()))?;
-    Ok(text
-        .lines()
-        .filter_map(|l| l.split_whitespace().next())
-        .filter_map(|w| w.strip_prefix('P'))
-        .filter_map(|d| d.parse().ok())
-        .collect())
+    let text = std::fs::read_to_string(parity_path()).map_err(|e| format!("UNCHECKED: {}: {e}", parity_path().display()))?;
+    Ok(registered_in(&text))
+}
+
+/// The parity numbers `kernel/parity.txt` registers at commit `rev` (empty when that commit holds no
+/// register); `Err` when git cannot say.
+pub fn registered_parity_at(rev: &str) -> Result<BTreeSet<u32>, String> {
+    show(&parity_path(), rev).map(|t| registered_in(&t)).ok_or_else(|| format!("UNCHECKED: kernel/parity.txt at {rev}"))
+}
+
+/// **A D64(d) reason is NEW at the re-draw** (the history half, W-49 repair, gap 5410): some number
+/// it names that is the template's change ([`d64d_numbers`]) was NOT yet registered at `was`, the
+/// commit the line's older version stands at — so a template change registered once licenses the
+/// re-draw it came with, and a later template edit cannot ride on it. `Ok(n)`, that number.
+pub fn d64d_reason_new_since(why: &str, template: &TemplateParity, was: &str) -> Result<u32, String> {
+    let before = registered_parity_at(was)?;
+    let named = d64d_numbers(why, template)?;
+    named
+        .iter()
+        .copied()
+        .find(|n| !before.contains(n))
+        .ok_or_else(|| format!("`{why:.80}` names no template parity number that was new since {} (named {named:?}, every one registered there already)", &was[..was.len().min(9)]))
 }
 
 /// An item line's state box and the rest of it: `- [x] rest` → `('x', "rest")`.
@@ -553,9 +625,9 @@ pub fn template_redraw_why(why: &str, old: &Value) -> String {
 /// section's head names; and every key of the line but its world, its answers ([`is_answer`]) and
 /// the two re-draw records (`d64b`, `d64d`) byte for byte — the steps the world was built by
 /// included, so a world built by other verbs is no template re-draw. `Ok(n)`, the lines that moved.
-pub fn template_redraw_allows(old: &Value, new: &Value, why: &str, registered: &BTreeSet<u32>, pairs: &[(String, String)]) -> Result<usize, String> {
+pub fn template_redraw_allows(old: &Value, new: &Value, why: &str, template: &TemplateParity, pairs: &[(String, String)]) -> Result<usize, String> {
     let who = old["name"].as_str().or_else(|| old["class"].as_str()).unwrap_or("<unnamed>");
-    is_d64d_reason(why, registered).map_err(|e| format!("{who}: {e}"))?;
+    is_d64d_reason(why, template).map_err(|e| format!("{who}: {e}"))?;
     if pairs.is_empty() {
         return Err(format!("{who}: the shipped template did not move, so D64(d) does not reach this line"));
     }
@@ -575,14 +647,15 @@ pub fn template_redraw_allows(old: &Value, new: &Value, why: &str, registered: &
 /// **A D64(d) re-draw between two committed versions of one line** — the plain history check's
 /// reading (`fork_rebless_history.rs`): the newer version carries a `d64d` the older does not, and
 /// [`template_redraw_allows`] holds over the shipped template's move between the two commits
-/// (`"WORKTREE"` for the working copy). A history git cannot read is no re-draw.
+/// (`"WORKTREE"` for the working copy), and the reason's template number is new since `was`
+/// ([`d64d_reason_new_since`]). A history git cannot read is no re-draw.
 pub fn template_redrawn(old: &Value, new: &Value, was: &str, now: &str) -> bool {
     if new["d64d"] == old["d64d"] {
         return false;
     }
-    let (Ok(a), Ok(b), Ok(reg)) = (template_at(was), template_at(now), registered_parity()) else { return false };
+    let (Ok(a), Ok(b), Ok(reg)) = (template_at(was), template_at(now), TemplateParity::read()) else { return false };
     let Ok(pairs) = template_pairs(&a, &b) else { return false };
-    template_redraw_allows(old, new, d64d_why(new), &reg, &pairs).is_ok()
+    template_redraw_allows(old, new, d64d_why(new), &reg, &pairs).is_ok() && d64d_reason_new_since(d64d_why(new), &reg, was).is_ok()
 }
 
 /// **The template's move a bless recomputes over**: the shipped template committed at HEAD → the
@@ -595,7 +668,7 @@ pub fn template_pairs_since_head() -> Result<Vec<(String, String)>, String> {
 /// must be a D64(d) reason ([`is_d64d_reason`]) or the bless FAILS rather than skipping it.
 pub fn template_redraw_reason() -> Option<String> {
     let why = std::env::var("TM_TEMPLATE_REDRAW").ok()?;
-    let reg = registered_parity().unwrap_or_else(|e| panic!("{e}"));
+    let reg = TemplateParity::read().unwrap_or_else(|e| panic!("{e}"));
     if let Err(e) = is_d64d_reason(&why, &reg) {
         panic!("TM_TEMPLATE_REDRAW: {e}");
     }
@@ -608,7 +681,7 @@ pub fn template_redraw_reason() -> Option<String> {
 /// earlier one, and what moved); `Err` names why it is refused. A line that already carries a
 /// `d64d` keeps it while its world stands (call [`keep_template_record`]).
 pub fn template_redraw(old: &Value, new: &mut Value, why: &str) -> Result<usize, String> {
-    let reg = registered_parity()?;
+    let reg = TemplateParity::read()?;
     let pairs = template_pairs_since_head()?;
     let n = template_redraw_allows(old, new, why, &reg, &pairs)?;
     new["d64d"] = serde_json::json!({

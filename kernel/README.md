@@ -99765,8 +99765,12 @@ hold — so D127 adds clause (d), and `tm/tests/support/frozenhist.rs` is its on
 (`frozenhist::template_redraw_allows`).  A committed frozen line may be recomputed under (d) when, all checked and
 none declared by a caller:
 
-1. its reason is dated, names `D64(d)`, and names a parity number `kernel/parity.txt` registers — the behaviour
-   change the template's change is (`frozenhist::is_d64d_reason`);
+1. its reason is dated, names `D64(d)`, and names a parity number whose own `kernel/parity.txt` row is the
+   template's change — the row names `tm init --example` or `tm/templates/example`, as P126's does
+   (`frozenhist::TemplateParity`, `frozenhist::is_d64d_reason`); and in the history check that number was NOT
+   yet registered at the commit the line's older version stands at (`frozenhist::d64d_reason_new_since`).
+   *Corrected at the W-49 repair (gap 5410): as this track landed it, ANY registered number was enough, and a
+   re-bless naming `P1` over an unregistered template edit passed every gate;*
 2. the shipped template (`tm/templates/example/`) moved LINE FOR LINE between the committed version and the one
    recomputed over — the same files, the same number of lines in each (`frozenhist::template_pairs`; a bless reads
    HEAD against the working copy, `template_pairs_since_head`; the plain history check reads the two commits);

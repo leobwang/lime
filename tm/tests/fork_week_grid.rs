@@ -313,17 +313,19 @@ fn the_grid_rebless_gate_holds_d64() {
     assert!(forkgrid::rebless_allows(&old, &cells_and_world, &[], None, why, &reg).is_err(), "a world moved under (c)");
     // The owner's D127, D64(d) (W-49 track E): a world that IS the shipped template, moved by the template's
     // own line `x` → `y` with the fork's grid asked again, is admitted with a dated D64(d) reason naming a
-    // registered number; a world that moved by any other line is not the template's, and is refused.
-    let d = "2026-10-14 D64(d): the shipped template's change (P1)";
+    // registered number whose register row is the template's change (P126, the W-49 repair, gap 5410); a
+    // world that moved by any other line is not the template's, and is refused.
+    let d = "2026-10-14 D64(d): the shipped template's change (P126)";
+    let tpl = frozenhist::TemplateParity::read().unwrap_or_else(|e| panic!("{e}"));
     let pairs = vec![("x".to_string(), "y".to_string())];
-    assert_eq!(frozenhist::template_redraw_allows(&old, &world, d, &reg, &pairs), Ok(1), "the template's own move was refused");
+    assert_eq!(frozenhist::template_redraw_allows(&old, &world, d, &tpl, &pairs), Ok(1), "the template's own move was refused");
     let mut elsewhere = world.clone();
     elsewhere["world"] = json!([["a.md", "z"]]);
-    assert!(frozenhist::template_redraw_allows(&old, &elsewhere, d, &reg, &pairs).is_err(), "a world that is not the template's passed (d)");
-    assert!(frozenhist::template_redraw_allows(&old, &world, d, &reg, &[]).is_err(), "(d) passed with the template unmoved");
+    assert!(frozenhist::template_redraw_allows(&old, &elsewhere, d, &tpl, &pairs).is_err(), "a world that is not the template's passed (d)");
+    assert!(frozenhist::template_redraw_allows(&old, &world, d, &tpl, &[]).is_err(), "(d) passed with the template unmoved");
     let mut redrawn_steps = world.clone();
     redrawn_steps["steps"] = json!([{"at": "a", "args": ["plan"], "code": 0}]);
-    assert!(frozenhist::template_redraw_allows(&old, &redrawn_steps, d, &reg, &pairs).is_err(), "(d) passed with the steps moved");
+    assert!(frozenhist::template_redraw_allows(&old, &redrawn_steps, d, &tpl, &pairs).is_err(), "(d) passed with the steps moved");
 }
 
 /// **A line cannot be shadowed** (AGENTS §5.8): a frozen grid file carrying one name twice is

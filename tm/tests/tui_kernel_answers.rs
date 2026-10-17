@@ -1052,7 +1052,7 @@ fn every_frozen_tui_world_is_the_one_its_tests_build() {
         frozenhist::keep_template_record(l, &mut again);
         let why = frozenhist::d64d_why(l);
         if !why.is_empty() {
-            if let Err(e) = frozenhist::is_d64d_reason(why, &forkclass::registered_parity()) {
+            if let Err(e) = frozenhist::is_d64d_reason(why, &frozenhist::TemplateParity::read().unwrap_or_else(|e| panic!("{e}"))) {
                 bad.push(format!("{}: {e}", tui_name(w)));
             }
         }
