@@ -100393,4 +100393,19 @@ D130 is named by `tm check` (gap 5471 records what the advice still costs on suc
 
 ### 5. Acceptance
 
-(filled in below at the step's close)
+Measured on `61a9d24`'s tree (this section is the only change after it), every command capped
+(`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on a machine shared with W-50 track K's Lean
+builds (one-minute load 9-27, `kcompactd0` busy):
+* `check.sh`: **all seventeen lines ok** — axiom audit 6,859 theorems (no Lean change), FFI 97 tests, corpus 29/37
+  and 4/5, stage goals 1, prose citations 66,972 (0 unresolved), check 9 900 rostered / 0 owed (no new definition),
+  parity P1-P128 with one declared hole (P127, track K's), twins, reach, fields, inputs, sent, written, replay.
+* `cargo test --workspace --no-fail-fast`, **three runs**: **3,004 / 7 / 53**, **3,010 / 1 / 53** and **3,004 / 7 /
+  53** (passed / failed / ignored) over **171 result lines** each (79 m 48 s, 78 m 6 s, 142 m 59 s).  **Every failure
+  is in `cli_latency.rs`** — six rows timed against 5 s / 1 s bands (`tm drop ^a1` "still running after 5s"), and on
+  the run with the lightest load only one of them.  They are this machine's load, not this block: with the block's
+  changes stashed, the same suite at the same load failed six of its seven rows on the base code too (`git stash`,
+  `cargo test -p tm --test cli_latency -- --test-threads=1`: 1 passed / 6 failed), and the history tree they time
+  runs no block, so `stop_before_close` returns before any kernel call.  Every other test passed in all three runs,
+  the seven new ones (six behaviour rows, one TUI test) among them; W-49 repair's 3,004 + 7 = 3,011 non-ignored.  No
+  `.proptest-regressions` file moved.  The latency bands are **owed a re-run on an idle machine** before the land.
+* FFI crate `cargo test`: **105** passed (8 + 90 + 7).
