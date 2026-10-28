@@ -215,6 +215,46 @@ theorem doneClosed_congr (m : Machine) (line : Nat) (t : Replay.At) (id : Log.Id
       simp only [hr, ht]
     · rfl
 
+/-- **A start's arm reads the index only at its queries and its own stamp** (C3, D99, D115, gap 5180). -/
+theorem startArm_congr (M : Machine) (line : Nat) (t : Replay.At) (d : Nat) (id : Log.Id) (pred : Log.U8)
+    (rep : Option Log.U8) (hsw : Log.Num) (sleptMin : Log.U32) (loc : List Char)
+    (h : ∀ q ∈ startQueries dy₁ M line t d id pred rep hsw sleptMin loc, dy₁ q = dy₂ q) (ht : dy₁ t.1 = dy₂ t.1) :
+    Replay.startArm dy₁ M line t d id pred rep hsw sleptMin loc =
+      Replay.startArm dy₂ M line t d id pred rep hsw sleptMin loc := by
+  unfold startQueries at h
+  unfold Replay.startArm
+  dsimp only
+  have hn := netStart_congr dy₁ dy₂ t d M (fun q hq => h q (by simp [hq]))
+  have hc := cut_congr dy₁ dy₂ (Replay.netStart dy₂ t d M).1 t
+    (fun q hq => by
+      rw [(cutReads_netStart dy₂ _ t _ M).1, (cutReads_netStart dy₂ _ t _ M).2] at hq
+      simp only [List.mem_append, List.mem_singleton] at hq
+      rcases hq with (hq | hq) | hq
+      · exact h q (by simp [hq])
+      · exact h q (by simp [hq])
+      · rw [hq]; exact ht)
+  rw [hn] at h ⊢
+  rw [hc] at h ⊢
+  rw [runNet_congr dy₁ dy₂ _ (fun q hq => h q (by simp [hq]))]
+  rw [settle_congr dy₁ dy₂ _ (fun q hq => h q (by
+    rw [settleReads_startedMachine M _ _ _ _ _
+      ((Replay.runNet_keeps dy₂ _).2.1.trans ((cut_interrupt dy₂ _ _).trans (Replay.netStart_keeps dy₂ _ _ M).2.1))
+      ((Replay.runNet_keeps dy₂ _).2.2.1.trans
+        ((Replay.cut_brk dy₂ _ _).trans (Replay.netStart_keeps dy₂ _ _ M).2.2.1))
+      ((Replay.runNet_keeps dy₂ _).2.2.2.1.trans
+        ((Replay.cut_brkOpen dy₂ _ _).trans (Replay.netStart_keeps dy₂ _ _ M).2.2.2.1))] at hq
+    simp [hq]))]
+
+/-- **A break held as `[s, e)` reads the index only at its queries** (D87, D94, D100; `Replay.brkFx`). -/
+theorem brkFx_congr (M : Machine) (s e : Replay.At) (d : Nat) (h : ∀ q ∈ brkFxReads M s e d, dy₁ q = dy₂ q) :
+    Replay.brkFx dy₁ M s e d = Replay.brkFx dy₂ M s e d := by
+  unfold brkFxReads at h
+  have h1 := settle_congr dy₁ dy₂ _ (fun q hq => h q (List.mem_append_left _ hq))
+  unfold Replay.brkFx
+  simp only [h1]
+  rw [netClosed_congr dy₁ dy₂ _ _ _ _ (fun q hq => h q (List.mem_append_right _ (by
+    rwa [Replay.settle_closed] at hq)))]
+
 /-- **An arm reads the index only at the step's queries.** -/
 theorem arm_congr (sl : Nat → Option Nat) (m : Machine) (e : Entry)
     (h : ∀ q ∈ stepQueries dy₁ m e, dy₁ q = dy₂ q) :
@@ -225,28 +265,11 @@ theorem arm_congr (sl : Nat → Option Nat) (m : Machine) (e : Entry)
   have hE : ∀ q ∈ entryInstants e, dy₁ q = dy₂ q := fun q hq => h q (List.mem_append_left _ hq)
   unfold Replay.arm
   cases hev : e.ev <;> simp only [hev] at h ⊢
-  case start =>
-    have hn := netStart_congr dy₁ dy₂ (e.t.val, e.off.val) (dy₂ e.t.val) m (fun q hq => h q (by simp [hq]))
-    have hc := cut_congr dy₁ dy₂ (Replay.netStart dy₂ (e.t.val, e.off.val) (dy₂ e.t.val) m).1 (e.t.val, e.off.val)
-      (fun q hq => by
-        rw [(cutReads_netStart dy₂ _ (e.t.val, e.off.val) _ m).1, (cutReads_netStart dy₂ _ (e.t.val, e.off.val) _ m).2]
-          at hq
-        simp only [List.mem_append, List.mem_singleton] at hq
-        rcases hq with (hq | hq) | hq
-        · exact h q (by simp [hq])
-        · exact h q (by simp [hq])
-        · exact hE q (by simp [entryInstants, hq]))
-    rw [hn] at h ⊢
-    rw [hc] at h ⊢
-    rw [runNet_congr dy₁ dy₂ _ (fun q hq => h q (by simp [hq]))]
-    rw [settle_congr dy₁ dy₂ _ (fun q hq => h q (by
-      rw [settleReads_startedMachine m _ _ _ _ _
-        ((Replay.runNet_keeps dy₂ _).2.1.trans ((cut_interrupt dy₂ _ _).trans (Replay.netStart_keeps dy₂ _ _ m).2.1))
-        ((Replay.runNet_keeps dy₂ _).2.2.1.trans
-          ((Replay.cut_brk dy₂ _ _).trans (Replay.netStart_keeps dy₂ _ _ m).2.2.1))
-        ((Replay.runNet_keeps dy₂ _).2.2.2.1.trans
-          ((Replay.cut_brkOpen dy₂ _ _).trans (Replay.netStart_keeps dy₂ _ _ m).2.2.2.1))] at hq
-      simp [hq]))]
+  case start id pred rep hsw sleptMin loc _ _ =>
+    have ht' : dy₁ (e.t.val, e.off.val).1 = dy₂ (e.t.val, e.off.val).1 := hE e.t.val (by simp [entryInstants])
+    rcases hB : Replay.endsBrk m (e.t.val, e.off.val) with _ | o <;> simp only [hB] at h ⊢
+    · rw [startArm_congr dy₁ dy₂ m _ _ _ _ _ _ _ _ _ (fun q hq => h q (List.mem_append_right _ hq)) ht']
+    · rw [startArm_congr dy₁ dy₂ _ _ _ _ _ _ _ _ _ _ (fun q hq => h q (List.mem_append_right _ hq)) ht']
   case pause id =>
     split
     · split
@@ -323,17 +346,31 @@ theorem arm_congr (sl : Nat → Option Nat) (m : Machine) (e : Entry)
         hE _ (by simp [entryInstants, gapStart?, hev, hst, hact])
       simp [this]
   case brk planned actual where_ =>
-    have h1 := settle_congr dy₁ dy₂ _ (fun q hq => h q (List.mem_append_right _ (List.mem_append_left _ hq)))
     have h2 : Replay.dayArm dy₁ sl (Replay.placed m e) (e.t.val, e.off.val) (dy₂ e.t.val)
         = Replay.dayArm dy₂ sl (Replay.placed m e) (e.t.val, e.off.val) (dy₂ e.t.val) := by
       unfold Replay.dayArm; simp only [Replay.placed_ev_of_brk m e hev]
-    unfold Replay.brkFx
-    simp only [h1, h2]
-    rw [netClosed_congr dy₁ dy₂ _ _ _ _ (fun q hq => h q (List.mem_append_right _ (List.mem_append_right _ (by
-      rwa [Replay.settle_closed] at hq))))]
+    have hb : (∀ q ∈ brkFxReads m (e.t.val, e.off.val)
+        (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy₂ e.t.val), dy₁ q = dy₂ q) →
+        Replay.brkArm dy₁ sl m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) =
+          Replay.brkArm dy₂ sl m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) := by
+      intro hq
+      unfold Replay.brkArm
+      rw [brkFx_congr dy₁ dy₂ _ _ _ _ hq, h2]
+    rcases hK : m.brkEnded with _ | s0 <;> simp only [hK] at h ⊢
+    · exact hb (fun q hq => h q (List.mem_append_right _ hq))
+    · split
+      · rfl
+      · rename_i hs
+        simp only [hs, if_false] at h
+        exact hb (fun q hq => h q (List.mem_append_right _ hq))
   case brkStart planned where_ =>
-    rw [settle_congr dy₁ dy₂ _ (fun q hq => h q (by simp [hq]))]
-    rw [runNet_congr dy₁ dy₂ _ (fun q hq => h q (by rw [runReads_settle] at hq; simp [hq]))]
+    rcases hF : Replay.firstStart (e.t.val, e.off.val) (dy₂ e.t.val) m with _ | t0 <;> simp only [hF] at h ⊢
+    · unfold Replay.brkStartArm
+      dsimp only
+      rw [settle_congr dy₁ dy₂ _ (fun q hq => h q (by simp [hq]))]
+      rw [runNet_congr dy₁ dy₂ _ (fun q hq => h q (by rw [runReads_settle] at hq; simp [hq]))]
+    · unfold Replay.endBrkFx
+      rw [brkFx_congr dy₁ dy₂ _ _ _ _ (fun q hq => h q (List.mem_append_right _ hq))]
   all_goals first | rfl | (unfold Replay.dayArm; simp only [hev])
 
 /-- **A step reads the index only at its queries.** -/
@@ -897,6 +934,47 @@ theorem doneClose_keeps (dy : Cal.Instant → Nat) (m : Machine) (t : Replay.At)
       · exact ⟨Or.inr rfl, rfl⟩
     · exact ⟨Or.inr rfl, rfl⟩
 
+/-- **A start's queries are its stamp or instants the machine it starts from holds** (C3, D99, D115, gap 5180). -/
+theorem startQueries_sub (dy : Cal.Instant → Nat) (M : Machine) (line : Nat) (t : Replay.At) (d : Nat) (id : Log.Id)
+    (pred : Log.U8) (rep : Option Log.U8) (hsw : Log.Num) (sleptMin : Log.U32) (loc : List Char) (q : Cal.Instant)
+    (hq : q ∈ startQueries dy M line t d id pred rep hsw sleptMin loc) : q = t.1 ∨ q ∈ machineInstants M := by
+  unfold startQueries at hq
+  simp only [List.mem_append] at hq
+  rcases hq with (((hq | hq) | hq) | hq) | hq
+  · obtain ⟨C, hC, p, hp, rfl⟩ := startReads_mi _ _ _ q hq
+    exact Or.inr ((mem_machineInstants M _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)))
+  · exact Or.inr (cutReads_mi M _ q hq)
+  · exact Or.inr (blockPaused_mi M q hq)
+  · exact Or.inr (netStart_mi dy _ _ M q (cut_mi dy _ _ q (runReads_mi _ q hq)))
+  · rcases startedMachine_mi M _ _ _ _ q (settleReads_mi _ q hq) with h | h
+    · exact Or.inr h
+    · exact Or.inl h
+
+/-- **The machine a start ending a running break starts from holds the old one's instants and the start's stamp**
+(D129, `Replay.endMachine`): the break is held with the ones before it, its end the start's stamp. -/
+theorem endMachine_mi (m : Machine) (o : Replay.OpenBrk) (t : Replay.At) (q : Cal.Instant)
+    (hq : q ∈ machineInstants (Replay.endMachine m o t)) : q ∈ machineInstants m ∨ q = t.1 :=
+  heldBrk_mi m o.s t o.day q hq
+
+/-- **What `firstStart` answers, the machine holds** (D129): the open block's start, or a held closed block's piece
+start. -/
+theorem firstStart_mi (s : Replay.At) (d : Nat) (m : Machine) (x : Replay.At) (h : Replay.firstStart s d m = some x) :
+    x.1 ∈ machineInstants m := by
+  rw [mem_machineInstants]
+  rcases Replay.firstStart_mem s d m x h with ⟨b, hb, rfl⟩ | ⟨C, hC, p, hp, rfl⟩
+  · exact Or.inl ⟨b, hb, Or.inl rfl⟩
+  · exact Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)
+
+/-- **A held break's queries are instants the machine holds, or its end** (D87, D94, D100). -/
+theorem brkFxReads_sub (M : Machine) (s E : Replay.At) (d : Nat) (q : Cal.Instant) (hq : q ∈ brkFxReads M s E d) :
+    q ∈ machineInstants M ∨ q = E.1 := by
+  unfold brkFxReads at hq
+  rcases List.mem_append.1 hq with hq | hq
+  · exact heldBrk_mi M s E d q (settleReads_mi _ q hq)
+  · rcases closedReads_mi _ _ _ _ q hq with ⟨C, hC, p, hp, rfl⟩ | h
+    · exact Or.inl ((mem_machineInstants M _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)))
+    · exact Or.inr h
+
 theorem stepQueries_sub (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (q : Cal.Instant)
     (hq : q ∈ stepQueries dy m e) : q ∈ entryInstants e ∨ q ∈ machineInstants m := by
   have hte : e.t.val ∈ entryInstants e := by simp [entryInstants]
@@ -905,16 +983,16 @@ theorem stepQueries_sub (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (q 
   · exact Or.inl hq
   cases hev : e.ev <;> simp only [hev] at hq
   case start =>
-    simp only [List.mem_append] at hq
-    rcases hq with (((hq | hq) | hq) | hq) | hq
-    · obtain ⟨C, hC, p, hp, rfl⟩ := startReads_mi _ _ _ q hq
-      exact Or.inr ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)))
-    · exact Or.inr (cutReads_mi m _ q hq)
-    · exact Or.inr (blockPaused_mi m q hq)
-    · exact Or.inr (netStart_mi dy _ _ m q (cut_mi dy _ _ q (runReads_mi _ q hq)))
-    · rcases startedMachine_mi m _ _ _ _ q (settleReads_mi _ q hq) with h | h
+    split at hq
+    · rename_i o _
+      rcases startQueries_sub dy _ _ _ _ _ _ _ _ _ _ q hq with h | h
+      · exact Or.inl (by rw [h]; exact hte)
+      · rcases endMachine_mi m o _ q h with h | h
+        · exact Or.inr h
+        · exact Or.inl (by rw [h]; exact hte)
+    · rcases startQueries_sub dy _ _ _ _ _ _ _ _ _ _ q hq with h | h
+      · exact Or.inl (by rw [h]; exact hte)
       · exact Or.inr h
-      · exact Or.inl (h ▸ hte)
   case pause id =>
     split at hq
     · split at hq
@@ -982,24 +1060,57 @@ theorem stepQueries_sub (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (q 
     · obtain ⟨C, hC, p, hp, rfl⟩ := runReads_starts _ q hq
       exact Or.inr (doneClosed_mi dy m e.line _ id actual.val ci C hC p hp)
   case brkStart planned where_ =>
-    rcases List.mem_append.1 hq with hq | hq
-    · have h := settleReads_mi _ q hq
-      exact Or.inr h
-    · have h := runReads_mi _ q hq
-      exact Or.inr h
+    split at hq
+    · rename_i t0 hF
+      rcases brkFxReads_sub _ _ _ _ q hq with h | h
+      · exact Or.inr h
+      · exact Or.inr (h ▸ firstStart_mi _ _ m t0 hF)
+    · rcases List.mem_append.1 hq with hq | hq
+      · have h := settleReads_mi _ q hq
+        exact Or.inr h
+      · have h := runReads_mi _ q hq
+        exact Or.inr h
   case brk planned actual where_ =>
-    rcases List.mem_append.1 hq with hq | hq
-    · rcases heldBrk_mi m _ _ _ q (settleReads_mi _ q hq) with h | h
+    have hbk : q ∈ brkFxReads m (e.t.val, e.off.val)
+        (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val) →
+        q ∈ entryInstants e ∨ q ∈ machineInstants m := fun hq => by
+      rcases brkFxReads_sub _ _ _ _ q hq with h | h
       · exact Or.inr h
       · left
         unfold entryInstants brkEndAt?
         simp [hev, h]
-    · rcases closedReads_mi _ _ _ _ q hq with ⟨C, hC, p, hp, rfl⟩ | h
-      · exact Or.inr ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)))
-      · left
-        unfold entryInstants brkEndAt?
-        simp [hev, h]
+    split at hq
+    · split at hq
+      · simp at hq
+      · exact hbk hq
+    · exact hbk hq
   all_goals simp at hq
+
+/-- **A break's machine holds the old machine's instants and the break's end** (D87, D92, D94, D99): the break is held
+with the ones before it (`Replay.pruneBrks`), whose ends are `E` and the old machine's, and the block settled over them
+adds no instant (`settle_mi`). -/
+theorem brkFx_mi (dy : Cal.Instant → Nat) (m : Machine) (t E : Replay.At) (d : Nat) (m' : Machine)
+    (hm : m' ∈ (Replay.brkFx dy m t E d).filterMap Effect.machineOf?) (q : Cal.Instant)
+    (hq : q ∈ machineInstants m') : q ∈ machineInstants m ∨ q = E.1 := by
+  unfold Replay.brkFx at hm
+  simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
+    Replay.settle_machines, (Replay.netClosed_obs dy _ _ _ _).2.2, List.nil_append, List.mem_singleton] at hm
+  subst hm
+  rcases netClosed_mi dy t E d _ q hq with h | h
+  · exact heldBrk_mi m t E d q (settle_mi dy _ q h)
+  · exact Or.inr h
+
+/-- **A start's machine holds the old one's instants and the start's stamp** (C3, D99). -/
+theorem startArm_mi (dy : Cal.Instant → Nat) (M : Machine) (line : Nat) (t : Replay.At) (d : Nat) (id : Log.Id)
+    (pred : Log.U8) (rep : Option Log.U8) (hsw : Log.Num) (sleptMin : Log.U32) (loc : List Char) (m' : Machine)
+    (hm : m' ∈ (Replay.startArm dy M line t d id pred rep hsw sleptMin loc).filterMap Effect.machineOf?)
+    (q : Cal.Instant) (hq : q ∈ machineInstants m') : q ∈ machineInstants M ∨ q = t.1 := by
+  rw [Replay.startArm_machines] at hm
+  simp only [List.mem_singleton] at hm
+  subst hm
+  rcases startedMachine_mi _ _ t d _ q (settle_mi dy _ q hq) with h | h
+  · exact Or.inl (netStart_mi dy t d M q (cut_mi dy _ t q (runNet_mi dy _ q h)))
+  · exact Or.inr h
 
 /-- **Every machine a step's arm writes holds only the old machine's instants and the step's stamp — on every event but
 a `break`.**  This was `arm_mi`'s statement over every event until the owner's D87 (README gap 4137, parity P81): a break
@@ -1015,13 +1126,13 @@ theorem arm_mi_of_not_brk (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
   cases hev : e.ev <;> simp only [hev] at hm
   case brk p a w => exact absurd hev (hb p a w)
   case start =>
-    simp only [List.filterMap_append, (Replay.cut_obs dy _ t).2.2.1, (Replay.netStart_obs dy _ _ _).2.2,
-      Replay.runNet_machines, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
-      Replay.settle_machines, List.mem_singleton] at hm
-    subst hm
-    rcases startedMachine_mi _ _ t d _ q (settle_mi dy _ q hq) with h | h
-    · exact Or.inl (netStart_mi dy t d m q (cut_mi dy _ t q (runNet_mi dy _ q h)))
-    · exact Or.inr h
+    split at hm
+    · rename_i o _
+      have hm := Replay.startEnds_mem dy m o _ t d _ _ _ _ _ _ m' hm
+      rcases startArm_mi dy _ _ t d _ _ _ _ _ _ m' hm q hq with h | h
+      · exact endMachine_mi m o t q h
+      · exact Or.inr h
+    · exact startArm_mi dy m _ t d _ _ _ _ _ _ m' hm q hq
   case pause id =>
     split at hm
     · split at hm
@@ -1101,26 +1212,19 @@ theorem arm_mi_of_not_brk (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
       rw [k2] at hk; exact (mem_machineInstants m _).2 (Or.inr (Or.inl ⟨k, hk, rfl⟩))
     · exact doneClosed_mi dy m e.line t id actual.val ci C hC pc hpc
   case brkStart pl w =>
-    simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
-      List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
-    subst hm
-    have h := settle_mi dy _ q (runNet_mi dy _ q hq)
-    exact Or.inl h
+    split at hm
+    · rename_i t0 hF
+      have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 m' hm
+      rcases brkFx_mi dy { m with brkEnded := some t } t t0 d m' hm' q hq with h | h
+      · exact Or.inl h
+      · rw [h]; exact Or.inl (firstStart_mi t d m t0 hF)
+    · unfold Replay.brkStartArm at hm
+      simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
+        List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
+      subst hm
+      have h := settle_mi dy _ q (runNet_mi dy _ q hq)
+      exact Or.inl h
   all_goals rw [(Replay.dayArm_obs dy sl e t d).1] at hm; simp at hm
-
-/-- **A break's machine holds the old machine's instants and the break's end** (D87, D92, D94, D99): the break is held
-with the ones before it (`Replay.pruneBrks`), whose ends are `E` and the old machine's, and the block settled over them
-adds no instant (`settle_mi`). -/
-theorem brkFx_mi (dy : Cal.Instant → Nat) (m : Machine) (t E : Replay.At) (d : Nat) (m' : Machine)
-    (hm : m' ∈ (Replay.brkFx dy m t E d).filterMap Effect.machineOf?) (q : Cal.Instant)
-    (hq : q ∈ machineInstants m') : q ∈ machineInstants m ∨ q = E.1 := by
-  unfold Replay.brkFx at hm
-  simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
-    Replay.settle_machines, (Replay.netClosed_obs dy _ _ _ _).2.2, List.nil_append, List.mem_singleton] at hm
-  subst hm
-  rcases netClosed_mi dy t E d _ q hq with h | h
-  · exact heldBrk_mi m t E d q (settle_mi dy _ q h)
-  · exact Or.inr h
 
 /-- **Every machine a step's arm writes holds only the old block's instants, the step's stamp, and a break's end** —
 the owner's D87 (README gap 4137, parity P81): a break inside a running block restarts its clock at the break's end
@@ -1130,16 +1234,25 @@ theorem arm_mi (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine
     (hq : q ∈ machineInstants m') : q ∈ machineInstants m ∨ q = t.1 ∨ q ∈ (brkEndAt? e t.1).toList := by
   by_cases hb : ∃ p a w, e.ev = .brk p a w
   · obtain ⟨p, a, w, hev⟩ := hb
-    have ha : Replay.arm dy sl m e t d
-        = Replay.brkFx dy m t (Replay.brkEnd t p.val (a.map (·.val))) d ++ Replay.dayArm dy sl (Replay.placed m e) t d := by
-      unfold Replay.arm; simp only [hev]
-    rw [ha, List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-    rcases brkFx_mi dy m t _ d m' hm q hq with h | h
-    · exact Or.inl h
-    · right; right
-      unfold brkEndAt?
-      simp only [hev, Option.toList_some, List.mem_singleton, h]
-      rfl
+    have hbk : m' ∈ (Replay.brkArm dy sl m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? →
+        q ∈ machineInstants m ∨ q = t.1 ∨ q ∈ (brkEndAt? e t.1).toList := fun hm => by
+      unfold Replay.brkArm at hm
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
+      rcases brkFx_mi dy m t _ d m' hm q hq with h | h
+      · exact Or.inl h
+      · right; right
+        unfold brkEndAt?
+        simp only [hev, Option.toList_some, List.mem_singleton, h]
+        rfl
+    unfold Replay.arm at hm
+    simp only [hev] at hm
+    split at hm
+    · split at hm
+      · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+        subst hm
+        exact Or.inl hq
+      · exact hbk hm
+    · exact hbk hm
   · rcases arm_mi_of_not_brk dy sl m e t d (fun p a w h => hb ⟨p, a, w, h⟩) m' hm q hq with h | h
     · exact Or.inl h
     · exact Or.inr (Or.inl h)
@@ -1241,14 +1354,20 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
     m'.brks = m.brks ∨ ∃ k, m'.brks = Replay.pruneBrks (k :: m.brks) := by
   unfold Replay.arm at hm
   cases hev : e.ev <;> simp only [hev] at hm
-  case start =>
-    simp only [List.filterMap_append, (Replay.cut_obs dy _ t).2.2.1, (Replay.netStart_obs dy _ _ _).2.2,
-      Replay.runNet_machines, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
-      Replay.settle_machines, List.mem_singleton] at hm
-    subst hm
-    left
-    rw [(Replay.settle_keeps dy _).2.2.1]
-    exact (Replay.runNet_keeps dy _).2.2.1.trans ((Replay.cut_brk dy _ t).trans (Replay.netStart_keeps dy _ _ m).2.2.1)
+  case start id pred rep hsw sleptMin loc _ _ =>
+    have hS : ∀ M, ∀ m' ∈ (Replay.startArm dy M e.line t d id pred rep hsw sleptMin loc).filterMap Effect.machineOf?,
+        m'.brks = M.brks := by
+      intro M m' hm
+      rw [Replay.startArm_machines] at hm
+      simp only [List.mem_singleton] at hm
+      subst hm
+      rw [(Replay.settle_keeps dy _).2.2.1]
+      exact (Replay.runNet_keeps dy _).2.2.1.trans ((Replay.cut_brk dy _ t).trans (Replay.netStart_keeps dy _ _ M).2.2.1)
+    split at hm
+    · rename_i o _
+      have hm := Replay.startEnds_mem dy m o _ t d _ _ _ _ _ _ m' hm
+      exact Or.inr ⟨_, (hS (Replay.endMachine m o t) m' hm).trans rfl⟩
+    · exact Or.inl (hS m m' hm)
   case pause id =>
     split at hm
     · split at hm
@@ -1312,13 +1431,27 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
     repeat' split
     all_goals rfl
   case brk p a w =>
-    rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-    exact Or.inr ⟨_, Replay.brkFx_brk dy m t _ d m' hm⟩
+    split at hm
+    · split at hm
+      · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+        subst hm
+        exact Or.inl rfl
+      · unfold Replay.brkArm at hm
+        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
+        exact Or.inr ⟨_, Replay.brkFx_brk dy m t _ d m' hm⟩
+    · unfold Replay.brkArm at hm
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
+      exact Or.inr ⟨_, Replay.brkFx_brk dy m t _ d m' hm⟩
   case brkStart pl w =>
-    simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
-      List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
-    subst hm
-    exact Or.inl ((Replay.runNet_keeps dy _).2.2.1.trans (Replay.settle_keeps dy _).2.2.1)
+    split at hm
+    · rename_i t0 _
+      have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 m' hm
+      exact Or.inr ⟨_, Replay.brkFx_brk dy { m with brkEnded := some t } t t0 d m' hm'⟩
+    · unfold Replay.brkStartArm at hm
+      simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
+        List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
+      subst hm
+      exact Or.inl ((Replay.runNet_keeps dy _).2.2.1.trans (Replay.settle_keeps dy _).2.2.1)
   all_goals rw [(Replay.dayArm_obs dy sl e t d).1] at hm; simp at hm
 
 /-- **A step keeps the bound**: the machine after it holds the old one's breaks, or what `pruneBrks` keeps. -/
@@ -1380,11 +1513,11 @@ theorem arm_mi_as_w2_stated_it_is_refuted :
   intro h
   have := h (fun _ => 739865) (fun _ => none)
     ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none, 739865,
-      [], [], 0⟩, none, none, [], none, []⟩
+      [], [], 0⟩, none, none, [], none, [], none⟩
     (Replay.bE 2 63924370200 (.brk 20 (some 20) none)) (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865
     ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924371400, 0⟩, ⟨false, 0⟩), false, none, 30, none, 739865,
       [], [⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865⟩], 0⟩,
-      none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865⟩], none, []⟩ (by decide)
+      none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865⟩], none, [], none⟩ (by decide)
     ⟨63924371400, 0⟩ (by decide)
   revert this
   decide
@@ -1397,7 +1530,7 @@ theorem stepWith_mi_as_w2_stated_it_is_refuted :
   have := h Replay.utcZone (fun _ => 739865) (fun _ => none)
     { Replay.State.init 1 with machine :=
       ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924368400, 0⟩, ⟨false, 0⟩), false, none, 0, none, 739865,
-        [], [], 0⟩, none, none, [], none, []⟩ }
+        [], [], 0⟩, none, none, [], none, [], none⟩ }
     (Replay.bE 2 63924370200 (.brk 20 (some 20) none)) ⟨63924371400, 0⟩ (by decide)
   revert this
   decide
@@ -1406,7 +1539,7 @@ theorem stepWith_mi_as_w2_stated_it_is_refuted :
 and the span `[09:30, 09:50]` held, its one instant is 09:50 — where a clock a later step starts inside that break
 begins, and where the step that closes it reads the day index (`Replay.settle`, the owner's D99). -/
 theorem a_machine_holds_its_last_breaks_end :
-    machineInstants ⟨none, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865⟩], none, []⟩
+    machineInstants ⟨none, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865⟩], none, [], none⟩
       = [⟨63924371400, 0⟩] := by
   decide
 
@@ -1415,7 +1548,7 @@ theorem a_machine_holds_its_last_breaks_end :
 09:30, and a stretch closed across the later one resumes at 09:45. -/
 theorem a_machine_holds_the_end_of_every_break_it_holds :
     machineInstants ⟨none, none, none, [⟨(⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924371100, 0⟩, ⟨false, 0⟩), 739865⟩,
-      ⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865⟩], none, []⟩
+      ⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865⟩], none, [], none⟩
       = [⟨63924371100, 0⟩, ⟨63924370200, 0⟩] := by
   decide
 

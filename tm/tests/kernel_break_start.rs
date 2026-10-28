@@ -184,8 +184,8 @@ fn tree(text: &str) -> (tempfile::TempDir, Vec<u8>) {
 }
 
 /// **A running break crosses a seal cut and survives the resume** (D105, step 3): a 200-day
-/// generated log with a `break_start` three quarters of the way in and every `break` line after it
-/// taken out, so nothing ends it — read through the door (`kernel_log::replay_scoped`, the one
+/// generated log with a `break_start` three quarters of the way in and every `break` line and (since
+/// D129) every `start` line after it taken out, so nothing ends it — read through the door (`kernel_log::replay_scoped`, the one
 /// `Ctx::replay_with` calls) at `Hot` and `All`, from genesis and then from the checkpoint the
 /// first read wrote. The checkpoint FOLDS the `break_start`'s line (its cut is past it), so the
 /// running break reaches the second read through the machine the checkpoint carries
@@ -202,7 +202,11 @@ fn a_running_break_crosses_a_seal_cut() {
     let brk = format!(r#"{{"t":"{t}","ev":"break_start","planned_min":20,"where":"walk"}}"#);
     let mut log: Vec<String> = lines[..at].to_vec();
     log.push(brk);
-    log.extend(lines[at..].iter().filter(|l| !l.contains("\"ev\":\"break\"")).cloned());
+    // Since the owner's D129 (README gap 5430, W-50 track K) a `start` logged after a running break ends it, so the
+    // tail's `start` lines go too: nothing ends this break, as the test's world says.
+    log.extend(
+        lines[at..].iter().filter(|l| !l.contains("\"ev\":\"break\"") && !l.contains("\"ev\":\"start\"")).cloned(),
+    );
     let text = loggen::text(&log);
     let (dir, bytes) = tree(&text);
     let last = log.iter().rev().find_map(|l| serde_json::from_str::<Value>(l).ok()?["t"].as_str().map(str::to_string)).expect("a dated line");

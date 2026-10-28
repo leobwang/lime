@@ -304,8 +304,16 @@ fn the_class_of_verbs_that_end_a_break_is_read_off_the_code() {
     assert_eq!(takes, ["tm/src/cli/day.rs:end_break_at"], "a second place takes a running break");
     assert_eq!(
         clears,
-        ["tm/src/cli/ctx.rs:reconcile_state", "tm/src/cli/day.rs:wake"],
-        "a running break set to nothing outside `tm wake` and the reconcile of a break the log ended"
+        // `drop_break_a_start_ended` is the reconcile's own rule (a break the log ENDED, `Ctx::log_ended`) applied by
+        // `tm break` to the break it has just begun, when a `start` the log already holds ends it in stamp order (the
+        // owner's D129, README gap 5433, W-50 track K).
+        [
+            "tm/src/cli/ctx.rs:drop_break_a_start_ended",
+            "tm/src/cli/ctx.rs:reconcile_state",
+            "tm/src/cli/day.rs:wake"
+        ],
+        "a running break set to nothing outside `tm wake`, the reconcile of a break the log ended, and `tm break`'s \
+         own drop of a break a logged start ended (D129)"
     );
     assert_eq!(calls_at, ["tm/src/cli/day.rs:end_break", "tm/src/cli/day.rs:end_break_first_at"]);
     assert_eq!(calls_now, ["tm/src/cli/day.rs:end_break_first"]);

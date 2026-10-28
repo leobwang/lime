@@ -88,6 +88,20 @@ def runReads (m : Machine) : List Cal.Instant :=
     if o.s.1 < (Replay.runTo o.s m.closed).1 then closedReads o.s (Replay.runTo o.s m.closed) o.day m.closed else []
   | none => []
 
+/-- **The instants a break held as `[s, e)` on ledger day `d` reads the index at** (D87, D94, D100; `Replay.brkFx`): the
+open block's new pieces once the break is held (`settleReads`), and each held closed block's it nets (`closedReads`). -/
+def brkFxReads (m : Machine) (s e : Replay.At) (d : Nat) : List Cal.Instant :=
+  settleReads { m with brks := Replay.pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none } ++ closedReads s e d m.closed
+
+/-- **The instants a `start` at `t` reads the index at, over the machine it starts from** (C3, D99, D115, gap 5180;
+`Replay.startArm`). -/
+def startQueries (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : Replay.At) (d : Nat) (id : Log.Id)
+    (pred : Log.U8) (rep : Option Log.U8) (hsw : Log.Num) (sleptMin : Log.U32) (loc : List Char) : List Cal.Instant :=
+  startReads t d m.closed ++ cutReads m t ++ blockPaused m ++
+    runReads (Replay.cut dy (Replay.netStart dy t d m).1 t).1 ++
+    settleReads (Replay.startedMachine m id t d
+      (rep.map (fun rp => ⟨line, t, d, pred, rp, hsw, loc, some sleptMin.val, none, some id, true⟩)))
+
 /-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), the open block's pause start
 when the step closes it (`closePause`), and — since the owner's D99 (README gap 4520a) — the start of every piece the
 step draws for the open block that was not drawn before (`settleReads`, `cutReads`): a piece drawn before is moved by
@@ -97,11 +111,11 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
   entryInstants e ++
     match e.ev with
     | .start id pred rep hsw sleptMin loc _ _ =>
-      startReads (e.t.val, e.off.val) (dy e.t.val) m.closed ++ cutReads m (e.t.val, e.off.val) ++ blockPaused m ++
-        runReads (Replay.cut dy (Replay.netStart dy (e.t.val, e.off.val) (dy e.t.val) m).1 (e.t.val, e.off.val)).1 ++
-        settleReads (Replay.startedMachine m id (e.t.val, e.off.val) (dy e.t.val)
-          (rep.map (fun rp => ⟨e.line, (e.t.val, e.off.val), dy e.t.val, pred, rp, hsw, loc, some sleptMin.val, none,
-            some id, true⟩)))
+      match Replay.endsBrk m (e.t.val, e.off.val) with
+      | some o =>
+        startQueries dy (Replay.endMachine m o (e.t.val, e.off.val)) e.line (e.t.val, e.off.val) (dy e.t.val) id pred
+          rep hsw sleptMin loc
+      | none => startQueries dy m e.line (e.t.val, e.off.val) (dy e.t.val) id pred rep hsw sleptMin loc
     | .pause id =>
       match m.block with
       | some b =>
@@ -139,13 +153,20 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       runReads { (Replay.doneClose dy m (e.t.val, e.off.val) id actual.val went).1 with
         closed := Replay.doneClosed dy m e.line (e.t.val, e.off.val) id actual.val ci }
     | .brkStart planned where_ =>
-      settleReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
-        runReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
+      match Replay.firstStart (e.t.val, e.off.val) (dy e.t.val) m with
+      | some t0 => brkFxReads { m with brkEnded := some (e.t.val, e.off.val) } (e.t.val, e.off.val) t0 (dy e.t.val)
+      | none =>
+        settleReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
+          runReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
     | .brk planned actual _ =>
-      settleReads { m with brks := Replay.pruneBrks (⟨(e.t.val, e.off.val),
-        Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)), dy e.t.val⟩ :: m.brks), brkOpen := none } ++
-      closedReads (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)))
-        (dy e.t.val) m.closed
+      match m.brkEnded with
+      | some s =>
+        if Replay.atEq s (e.t.val, e.off.val) then []
+        else brkFxReads m (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)))
+          (dy e.t.val)
+      | none =>
+        brkFxReads m (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)))
+          (dy e.t.val)
     | _ => []
 
 /-! ### What a netting reads depends on the held blocks' days and spans alone (README gap 5180)
@@ -281,6 +302,20 @@ theorem doneClosed_shp (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (line :
     · split <;> rfl
     · rfl
 
+/-- **A start's queries depend on the index only through the ledger day it is given** (C3, D115, gap 5180): the running
+break's netting is read over the held blocks' days and spans, which no index moves (`runReads_shp`). -/
+theorem startQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : Replay.At) (d : Nat)
+    (id : Log.Id) (pred : Log.U8) (rep : Option Log.U8) (hsw : Log.Num) (sleptMin : Log.U32) (loc : List Char) :
+    startQueries dy₁ m line t d id pred rep hsw sleptMin loc = startQueries dy₂ m line t d id pred rep hsw sleptMin loc := by
+  unfold startQueries
+  rw [runReads_shp (Replay.cut dy₁ _ _).1 (Replay.cut dy₂ _ _).1
+    (by rw [Replay.cut_brkOpen, Replay.cut_brkOpen, (Replay.netStart_keeps dy₁ _ _ _).2.2.2.1,
+      (Replay.netStart_keeps dy₂ _ _ _).2.2.2.1])
+    (cut_shp dy₁ dy₂ _ _ _ (by rw [(Replay.netStart_keeps dy₁ _ _ _).1, (Replay.netStart_keeps dy₂ _ _ _).1])
+      (by rw [(Replay.netStart_keeps dy₁ _ _ _).2.2.1, (Replay.netStart_keeps dy₂ _ _ _).2.2.1])
+      (by rw [(Replay.netStart_keeps dy₁ _ _ _).2.1, (Replay.netStart_keeps dy₂ _ _ _).2.1])
+      (netStart_shp dy₁ dy₂ _ _ m))]
+
 /-- **A step's queries read the index only at its own stamp** (D99): two indexes agreeing there give one list.
 *Re-proved at W-49 track L (README gap 5180)*, statement unchanged: the running break's netting is read over the held
 blocks' days and spans, which no index moves (`runReads_shp`). -/
@@ -290,13 +325,7 @@ theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e :
   rw [h]
   cases hev : e.ev <;> simp only
   case start =>
-    rw [runReads_shp (Replay.cut dy₁ _ _).1 (Replay.cut dy₂ _ _).1
-      (by rw [Replay.cut_brkOpen, Replay.cut_brkOpen, (Replay.netStart_keeps dy₁ _ _ _).2.2.2.1,
-        (Replay.netStart_keeps dy₂ _ _ _).2.2.2.1])
-      (cut_shp dy₁ dy₂ _ _ _ (by rw [(Replay.netStart_keeps dy₁ _ _ _).1, (Replay.netStart_keeps dy₂ _ _ _).1])
-        (by rw [(Replay.netStart_keeps dy₁ _ _ _).2.2.1, (Replay.netStart_keeps dy₂ _ _ _).2.2.1])
-        (by rw [(Replay.netStart_keeps dy₁ _ _ _).2.1, (Replay.netStart_keeps dy₂ _ _ _).2.1])
-        (netStart_shp dy₁ dy₂ _ _ m))]
+    split <;> rw [startQueries_congr dy₁ dy₂]
   case stop =>
     split
     · split

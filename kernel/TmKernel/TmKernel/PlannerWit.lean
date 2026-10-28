@@ -13693,13 +13693,27 @@ def theYdBreakRequest : PlanReq :=
   { theCensusRequest with run := ydBreakRun, state := ydBreakState }
 
 set_option maxRecDepth 400000 in
-/-- **A break running since the ledger day before lays today's Block across it** (README gap 5341): the replay's
-running break began at 23:00 on 2026-09-08, on that ledger day, and the host's copy agrees; `m1`'s 07:05-08:05 Block is
-credited whole on 2026-09-09 — the owner's D94 nets a break only on a block's own ledger days and later
-(`Replay.runSpan`, `Replay.spansFor`) — and the day draws the running Break row from the day's start across it. -/
+/-- **"A break running since the ledger day before lays today's Block across it", as W-49 track Q stated it, refuted by
+the owner's D129** (README gaps 5341 and 5434, W-50 track K): the log holds machine A's `break_start` at 23:00 on
+2026-09-08, never ended, then machine B's `start` of `m1` at 07:05 — and a `start` logged while a break runs ends it, so
+the replay holds no running break at all.  Its first conjunct is false; the restated theorem under the old name is what holds. -/
+theorem a_break_running_since_the_day_before_lays_todays_block_across_it_as_w49_stated_it_is_refuted :
+    ¬ (theYdBreakRequest.run.answer.openBreak.map (fun o => (o.s.1.sec, o.day))
+        = some ((Cal.instantOf Cal.chicago 739866 1380).sec, 739866)) := by
+  decide
+
+set_option maxRecDepth 400000 in
+/-- **A break running since the ledger day before lays today's Block across it — from the HOST's copy alone** (README
+gap 5341, restated at D129 as gap 5434): since the owner's D129 the replay reads no running break on this log — the
+`break_start` at 23:00 on 2026-09-08 ends at `m1`'s 07:05 start, logged while it ran — yet the host's runtime
+copy still says a break runs from 23:00 (`theYdBreakRequest.state.brk`), `m1`'s 07:05-08:05 Block is credited whole on
+2026-09-09, and the day draws the host's running Break row from the day's start across it.  So the falsifier no longer
+stands on D94's day rule (D129 removed that reading); it stands on the planner reading the host's copy, which is gap
+5340 — the request carrying a running break its own replay does not hold.  *Restated at W-50 track K* from "the
+replay's running break began at 23:00", refuted
+(`a_break_running_since_the_day_before_lays_todays_block_across_it_as_w49_stated_it_is_refuted`). -/
 theorem a_break_running_since_the_day_before_lays_todays_block_across_it :
-    theYdBreakRequest.run.answer.openBreak.map (fun o => (o.s.1.sec, o.day))
-        = some ((Cal.instantOf Cal.chicago 739866 1380).sec, 739866) ∧
+    theYdBreakRequest.run.answer.openBreak = none ∧
     (theYdBreakRequest.state.brk.bind (·.started)).map (·.sec) = some (Cal.instantOf Cal.chicago 739866 1380).sec ∧
     ((theYdBreakRequest.todayRecord.map (·.segments)).getD []).any (fun g =>
       decide ((pastKind g.kind).1 = SegKind.block ∧ g.start.1.sec = (Cal.instantOf Cal.chicago 739867 425).sec ∧

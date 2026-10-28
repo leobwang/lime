@@ -564,9 +564,10 @@ def cMachine : Codec Machine :=
           <| tCons cOptNat <| tNil)
         (fun (c : Replay.Closed) => (c.id, c.day, c.credDay, c.ci, c.min, c.drawn, c.durLine, ()))
         (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
+      <| tCons cOptAt
       <| tNil)
-    (fun m => (m.block, m.lastCut, m.interrupt, m.brks, m.brkOpen, m.closed, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1⟩) (fun _ => rfl)
+    (fun m => (m.block, m.lastCut, m.interrupt, m.brks, m.brkOpen, m.closed, m.brkEnded, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)
 
 def cHeaderRec : Codec HeaderRec :=
   cIso (cTuple <| tCons cNat <| tCons cStr <| tCons cOptStr <| tCons cBool <| tCons cVInstant <| tCons cVOffset <| tNil)
@@ -1710,7 +1711,7 @@ def sealable (z : Cal.Tz) (T₀ L : Nat) (ls r : List Log.Line) : Bool :=
 
 /-- **The empty checkpoint** (§9.2): nothing folded, cut 0, ledger day 0. -/
 def Ckpt.empty (z : Cal.Tz) : Ckpt :=
-  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, [], [], [], false, [], ⟨none, none, none, [], none, []⟩, [], [], [], [], [], none,
+  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, [], [], [], false, [], ⟨none, none, none, [], none, [], none⟩, [], [], [], [], [], none,
    none, 0, 0, none, [], [], 0⟩
 
 /-- The meta the host reads beside a checkpoint. -/

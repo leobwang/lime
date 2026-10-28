@@ -2076,6 +2076,21 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         }
     };
     ctx.reload()?;
+    // **A break a start already logged ends** (the owner's D129, README gap 5433): a break begun at an
+    // instant before a block's `start` that the log already holds — a `--now` in the past after the
+    // block, or a log merged from another machine — is ended at that start in stamp order, so it does
+    // not run; the cache this verb just wrote is put right and the user is told where it ended.
+    if out.actual_min.is_none() {
+        if let Some((from, until)) = ctx.drop_break_a_start_ended() {
+            ctx.save_state()?;
+            eprintln!(
+                "tm: the break that began at {} ended at {}, at the `start` the log already holds after it \
+                 (D129) — it is not running",
+                from.format("%H:%M"),
+                until.format("%H:%M")
+            );
+        }
+    }
     match out.actual_min {
         Some(_) => note_break_ended(&ctx, &out, ctx.now_tz)?,
         None => day_note(
