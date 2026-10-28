@@ -27,15 +27,21 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   unfold Replay.arm at hm
   cases hev : e.ev <;> simp only [hev] at hm
   case start id pred rep hsw sleptMin loc _ _ =>
-    simp only [List.filterMap_append, (Replay.cut_obs dy _ t).2.2.1, (Replay.netStart_obs dy _ _ _).2.2,
-      Replay.runNet_machines, List.nil_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil,
-      Replay.settle_machines, List.mem_singleton] at hm
-    subst hm
-    right
-    rw [Replay.settle_obs]
-    cases rep with
-    | none => left; rfl
-    | some rp => right; exact ⟨_, rfl, rfl⟩
+    have hS : ∀ M, ∀ m' ∈ (Replay.startArm dy M e.line t d id pred rep hsw sleptMin loc).filterMap Effect.machineOf?,
+        m'.block.bind (·.obs) = none ∨ ∃ o, m'.block.bind (·.obs) = some o ∧ o.day = d := by
+      intro M m' hm
+      rw [Replay.startArm_machines] at hm
+      simp only [List.mem_singleton] at hm
+      subst hm
+      rw [Replay.settle_obs]
+      cases rep with
+      | none => left; rfl
+      | some rp => right; exact ⟨_, rfl, rfl⟩
+    split at hm
+    · rename_i o _
+      have hm := Replay.startEnds_mem dy m o _ t d _ _ _ _ _ _ m' hm
+      exact Or.inr (hS _ m' hm)
+    · exact Or.inr (hS m m' hm)
   case pause id =>
     split at hm
     · split at hm
@@ -124,9 +130,22 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         · exact Or.inl rfl
       · exact Or.inl rfl
   case brk p a w =>
-    rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-    exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).2.2
+    split at hm
+    · split at hm
+      · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
+        subst hm; exact Or.inl rfl
+      · unfold Replay.brkArm at hm
+        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
+        exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).2.2
+    · unfold Replay.brkArm at hm
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
+      exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).2.2
   case brkStart pl w =>
+    split at hm
+    · rename_i t0 _
+      have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 m' hm
+      exact Or.inl (Replay.brkFx_machine dy { m with brkEnded := some t } t t0 d m' hm').2.2
+    unfold Replay.brkStartArm at hm
     -- D105: the running break is set and the block, with its pending observation, untouched — settled over the
     -- running break and the held closed blocks netted by it since README gap 5180, neither of which moves it.
     simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,

@@ -60,7 +60,7 @@ theorem map_rebind_of_all (g : Nat → Option Nat) (fx : List Effect) (h : fx.al
 theorem arm_sl (dy : Cal.Instant → Nat) (sl sl' : Nat → Option Nat) (m : Machine) (e : Entry) (t : Replay.At) (d : Nat)
     (h : ∀ pred rep hsw loc, e.ev ≠ .energy pred rep hsw loc) :
     Replay.arm dy sl m e t d = Replay.arm dy sl' m e t d := by
-  unfold Replay.arm Replay.dayArm
+  unfold Replay.arm Replay.brkArm Replay.dayArm
   cases hev : e.ev <;> simp only
   case energy pred rep hsw loc => exact absurd hev (h _ _ _ _)
   case brk p a w => simp only [Replay.placed_ev_of_brk m e hev]

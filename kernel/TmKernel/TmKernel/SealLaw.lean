@@ -1066,8 +1066,15 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
   unfold Replay.arm
   cases hev : e.ev <;> simp only
   case done id est actual went tags ci isPartial => exact absurd hev (h _ _ _ _ _ _ _)
-  case start => simp [List.filterMap_append, List.filterMap_cons, (Replay.cut_obs dy _ t).2.1, Replay.settle_duration,
-    Effect.durationOf?, (Replay.netStart_obs dy _ _ _).2.1, Replay.runNet_duration]
+  case start id pred rep hsw sleptMin loc _ _ =>
+    have hS : ∀ M, (Replay.startArm dy M e.line t d id pred rep hsw sleptMin loc).filterMap Effect.durationOf? = [] := by
+      intro M
+      unfold Replay.startArm
+      simp [List.filterMap_append, List.filterMap_cons, (Replay.cut_obs dy _ t).2.1, Replay.settle_duration,
+        Effect.durationOf?, (Replay.netStart_obs dy _ _ _).2.1, Replay.runNet_duration]
+    split
+    · rw [List.filterMap_append, (Replay.endRecs_obs _ t).2.1, hS, List.nil_append]
+    · exact hS m
   case pause id =>
     split
     · split
@@ -1095,10 +1102,20 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
     simp only [List.filterMap_cons, Effect.durationOf?]
     exact (Replay.extendFx_obs m id by_.val).2
   case brk planned actual where_ =>
-    rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).2.1, List.append_nil]
-    exact (Replay.brkFx_obs dy m t _ d).2
+    have hb : (Replay.brkArm dy sl m e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := by
+      unfold Replay.brkArm
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).2.1, List.append_nil]
+      exact (Replay.brkFx_obs dy m t _ d).2
+    split
+    · split
+      · rfl
+      · exact hb
+    · exact hb
   case brkStart planned where_ =>
-    simp [List.filterMap_append, Replay.settle_duration, Replay.runNet_duration, Effect.durationOf?]
+    split
+    · exact (Replay.endBrkFx_obs dy m _ _).2.1
+    · unfold Replay.brkStartArm
+      simp [List.filterMap_append, Replay.settle_duration, Replay.runNet_duration, Effect.durationOf?]
   all_goals exact (Replay.dayArm_obs dy sl e t d).2.1
 
 /-- **Each machine arm adds at most one observation on its own line**, energy or duration, not both. -/

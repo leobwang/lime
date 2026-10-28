@@ -1318,6 +1318,39 @@ impl Ctx {
         }
     }
 
+    /// **The break this verb just began, ended by a `start` the log already holds** (the owner's
+    /// **D129**, README gap 5433, W-50 track K): a `break_start` stamped before a block's `start`
+    /// that is already logged — `tm --now <earlier> break` after the block, or a merged log — is
+    /// ended at that start in stamp order, so the kernel's replay holds no running break and the
+    /// break's record instead. The cache this verb wrote a moment ago is then dropped, as the next
+    /// verb's reconcile would drop it ([`Ctx::log_ended`]), and the block's pause is the log's again.
+    /// Answers the break's span, or `None` when the break still runs.
+    pub(crate) fn drop_break_a_start_ended(
+        &mut self,
+    ) -> Option<(DateTime<FixedOffset>, DateTime<FixedOffset>)> {
+        if self.state.break_.is_none() || self.replay.open_break.is_some() || !self.log_ended() {
+            return None;
+        }
+        let start = self.running_break()?;
+        let minute = |t: DateTime<FixedOffset>| t.timestamp().div_euclid(60);
+        let at = minute(start.fixed_offset());
+        let span = self
+            .replay
+            .days
+            .values()
+            .flat_map(|d| d.breaks.iter())
+            .find(|b| minute(b.t) == at)
+            .map(|b| b.span())?;
+        self.state.break_ = None;
+        let fresh = derived_state(&self.replay, self.cfg.tz, self.today, false);
+        if let (Some(a), Some(f)) = (self.state.active.as_mut(), fresh.active.as_ref()) {
+            if a.id == f.id {
+                a.paused = f.paused;
+            }
+        }
+        Some(span)
+    }
+
     /// **Whether the log ENDED the running break `.tm/state.json` holds** (the W-46 audit, README gap
     /// 4903): a `break` line the replay closed, begun at the instant the cache's clock places the
     /// break at ([`Ctx::running_break`]), to the minute — the `break` line that ends a break is
@@ -1989,9 +2022,12 @@ impl Ctx {
         Ok(self.item(id)?.line().clone())
     }
 
-    /// Replace the item's line with `line`'s text (§1.3).
+    /// Replace the item's line with `line`'s text (§1.3) — through [`Ctx::writes`], so a
+    /// held context (the owner's D96) holds it: the stop §6.3's close writes before it takes
+    /// a running block's item (D130, `day::end_the_block`) rewrites the line inside the TUI's
+    /// held close, and every verb's own write, which never runs held, reaches the disk.
     pub fn write_line(&self, id: &Id, line: &ItemLine) -> Result<(), CliError> {
-        self.store.write_line(id, &line.to_string())?;
+        self.writes().write_line(id, &line.to_string())?;
         Ok(())
     }
 

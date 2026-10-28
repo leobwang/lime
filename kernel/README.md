@@ -100209,3 +100209,548 @@ D129 (gap 5341 — both routes of §2); gap 5413 (the owner's); and everything L
 goal 5181's `hrec` (5342), 5343, 5360-5362, 5380, 5382, the owner's 5381 and 5383, and the §5.13 TUI drive.  The
 critic's planted re-bless was not re-run end to end through a real bless here (it needs the fork oracle); the gate it
 passed is what the new test calls, over the real register and the real history.
+
+<!-- =====================================================================
+     Stage 6 — W-50 track K: the owner's D129 (a `start` ends a running break, in stamp order).  Worktree `w50-k`,
+     base 1d5644b.  Gaps 5430-5449 (5430-5436 used), cheats 491-510 (491-495 used), parity P127.
+     ===================================================================== -->
+
+## Stage 6 — W-50 track K: D129 — a `start` ends a running break, read in stamp order
+
+### 1. What changed, and the reading taken
+
+The owner's **D129**: a `start` logged while a break is running ends that break at the start's instant, and the
+reading is in STAMP order — a running break ends at the first `start` stamped after it, whatever order the lines were
+written in.  The log's grammar does not change; the replay's reading does (`Replay.arm`):
+
+* **A `start` stepped while a break runs** (`Replay.endsBrk`: the break `Machine.brkOpen` holds, begun at or before the
+  start) ends it: the break is held as `[s, t)` on its own ledger day (`Replay.endMachine`), its `Break` segment and its
+  record are written there (`Replay.endRecs`) — what the `break` line `tm start` logs on one machine writes (D97) — and
+  then the start's own arm runs over that machine (`Replay.startArm`, the old body, unchanged).  Nothing is settled at the
+  ending: the running break already netted every clock it lay across while it ran (README gap 5180's `runNet` and
+  `runSpan`), and the start's cut reads the held span (`cutPieces`).  The ending reads no day index, so the resume's
+  queries over it are the start's own over a machine the index never touched (`Seal.startQueries`).
+* **A `break_start` stepped after a start stamped at or after it** — `tm --now <earlier> break` after a logged block,
+  or a merged log — is a break that start ended (`Replay.firstStart`): held as `[s, t0)` with every clock it lies across
+  netted (`Replay.brkFx`, D87/D94/D100: nothing netted it while it ran, for it never ran), its segment and record written
+  (`Replay.endBrkFx`).  No break runs.
+* **The break's own `break` line**, when the machine that took it logs it after a start already ended it (stamped at
+  the break's start, D105), is that break's line and not a second break (`Machine.brkEnded`): it writes nothing but the
+  cleared marker.
+
+D129's edge cases, decided by its text (README gaps 5431, 5432):
+
+| case | reading taken |
+|---|---|
+| a `start` stamped exactly at the break's instant | ends it there: a break of no length, as `tm start` at the same minute writes one with `actual_min` 0 (`Replay.a_start_at_the_breaks_instant_ends_it_there`); the strict reading would leave the break running and net the whole block |
+| a break whose own `break` line ended it before the start | nothing changes: the line ended it in file order before the start was stepped (D105's pairing), so no break runs at the start |
+| a start for the block already running (D107's continue) | the verb logs no `start` (it ends the break with the `break` line, D97/D107); a `start` line for the open block in a merged log ends the break like any other |
+| a `start` stamped before the break began, logged after it | ends nothing — it is before the break in stamp order (`Replay.a_start_stamped_before_the_break_ends_nothing`) |
+| a late break stamped INSIDE a closed block with no start after it | D100 unchanged: it runs and nets the block (`Replay.a_late_break_inside_a_block_with_no_start_after_it_still_runs`) |
+| how far back a late `break_start` looks | the closed blocks the machine holds (`pruneClosed`: 31 ledger days, the owner's D119 bound) and the open block |
+| a held closed block's start | read at its first drawn piece (`Closed.drawn`): the machine keeps no closed block's stamp, a block begun inside a span it nets began work where the span ended, and one with no piece is no start (gap 5432) |
+
+**Parity P127 taken**: a `start` logged while a break runs ends that break at the start's instant, and a `break_start` logged after a start stamped at or after it ends at that start (D129, read in stamp order): the break is held, drawn and recorded as `[break_start, start)`, no break runs, and that break's own `break` line logged later is not a second break; fork 4748911 had no `break_start` (P100), and this binary until W-50 left such a break running — the replay netted the block from it, or, filed a ledger day earlier, the plan drew it across the block (README gaps 5341 and 5430, W-50 track K)
+
+**Behaviour row** (P127): `tm/tests/kernel_d129.rs` — route 2 (`a_late_break_written_after_a_block_ends_at_its_start`),
+route 1 (`a_late_break_from_the_day_before_ends_at_the_next_start`), the two-machine merge
+(`a_break_one_machine_left_running_ends_at_the_others_start`) and the break's own line after it
+(`a_breaks_own_line_after_the_merge_draws_no_second_break`), each through the built binary.
+
+### 2. Laws, by D5
+
+Every law over the arm's `start`, `break_start` and `break` cases is re-proved over the new shapes; three are false as
+written and are refuted by name with the restated form beside them; one witness's first conjunct fell.
+
+* **Re-proved, statements unchanged:** `Replay.arm_split_of_not_brk`, `Replay.conserves_arm`, `Replay.arm_sleptOk`,
+  `Replay.arm_obs`, `Replay.arm_ofBlock`, `Replay.arm_filterMap_rec`, `Replay.arm_noSeam`,
+  `Replay.every_leak_is_on_a_day_its_idle_record_names`; `Seal.stepQueries_congr`, `Seal.arm_congr`,
+  `Seal.stepQueries_sub`, `Seal.arm_mi_of_not_brk`, `Seal.arm_mi`, `Seal.arm_brks`, `Seal.arm_lastCut`,
+  `Seal.arm_interrupt`, `Seal.arm_brkOpen`, `Seal.arm_pending`, `Seal.arm_sl`, `Seal.arm_durations_nil`;
+  `BreakFold.arm_openAfter`, `BreakFold.stepWith_brkHeld` (the two fold invariants, so `hopen` on every resumed run
+  stands); and through them every Seal law (law 2's resume = replay, law 6's machine days, the cut and reseal laws).
+* **Restated, the old statement refuted by name:**
+  - `Replay.arm_split` — a `break` line a start already ended its break for writes one machine and no day family
+    (`Replay.arm_split_as_d116_stated_it_is_refuted`); restated with that case as a disjunct.
+  - `Replay.the_break_start_arm_opens_the_running_break` and
+    `Replay.the_break_start_arm_writes_only_the_running_break_with_nothing_open_or_drawn_after_it` gain
+    `firstStart t m = none` (`Replay.the_break_start_arm_as_w49_stated_it_is_refuted`,
+    `Replay.the_break_start_arm_with_nothing_open_or_drawn_after_it_as_w49_stated_it_is_refuted`; the second's witness
+    is a machine holding an inverted piece — the statement quantifies over every machine).
+  - `BreakFold.arm_noBrkSeg` — a start ending a running break draws its segment
+    (`BreakFold.arm_noBrkSeg_as_w49_stated_it_is_refuted`); restated with D129's two cases as hypotheses.
+  - `BreakFold.stepWith_brks_of_brk` — the break's own line after a start ended it holds nothing new
+    (`BreakFold.stepWith_brks_of_brk_as_w49_stated_it_is_refuted`); restated for a line that is not that one.
+  - `PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it` — its first conjunct (the replay holds
+    the 23:00 break) is false under D129 (`…_as_w49_stated_it_is_refuted`); restated: the replay holds none, and the plan
+    still lays the block across the HOST's copy — the falsifier now stands on gap 5340 alone (gap 5434).
+
+### 3. The host
+
+The host reads the kernel's records, so its worked minutes needed no new rule: `Replay::idle_min_since` reads a break's
+span from its record (D95), and the ended break's record `[s, t)` clipped to the block's `[started, now]` is empty; D42's
+reconcile already drops a cached running break the log ENDED (`Ctx::log_ended`: a record at the cache's start minute), and
+D129's ending writes exactly that record.  One host change: `tm break` itself, when the break it just began is ended at
+a start the log already holds (`tm --now <earlier> break` after a block), drops the cache it wrote a moment ago and says
+where the break ended (`Ctx::drop_break_a_start_ended`, `tm/src/cli/day.rs`) instead of leaving `.tm/state.json` holding
+a break the log does not run until the next verb's reconcile names the disagreement.
+
+### 4. The drives (§5.13)
+
+`cargo build -p tm` from this tree (`target/debug/tm`), `TZ=America/Chicago`, every call capped at 8 GB, trees under the
+track's scratch `w50/k/drive`.  BEFORE is the W-49 repair's transcript of the same commands on `35fa7ab` (README "Stage 6
+— W-49 repair" §2), whose kernel this step changes and nothing else on the path.
+
+```
+ROUTE 2 — the same ledger day (one machine)
+$ tm --dir R2 init --example; … 2026-09-08 06:05 wake; 07:00 arrive lounge; 07:05 start ^t1; 08:05 done (60m/60m)
+$ tm --dir R2 --now 2026-09-08T06:30:00-05:00 break 15m
+  BEFORE: break 15m
+  AFTER:  tm: the break that began at 06:30 ended at 07:05, at the `start` the log already holds after it (D129) — it is not running
+          break 15m
+$ … 09:00 plan
+  BEFORE: 06:30  ·      break 2h30m        (no ^t1 row at all)
+  AFTER:  06:30  ·      break 35m
+          07:05  5    ✓ Read ch.6 §1–2               @m3  1b  (60m)
+$ … check        BEFORE: no problems          AFTER: no problems
+$ … review day   BEFORE: … 1/6 blocks · load 0.0 …   AFTER: … 1/6 blocks · load 60.0 … · breaks planned 15m ×1 · actual 35
+$ … now          BEFORE: nothing running (beside a plan drawing a running break)   AFTER: nothing running
+
+ROUTE 1 — a ledger day earlier (one machine)
+$ … 2026-09-08 06:05 wake; 2026-09-09 06:05 wake; 07:00 arrive lounge; 07:05 start ^t1; 08:05 done (60m/60m)
+$ tm --dir R1 --now 2026-09-08T23:00:00-05:00 break 15m
+  AFTER:  tm: the break that began at 23:00 ended at 07:05, at the `start` the log already holds after it (D129) — it is not running
+$ … 2026-09-09 09:00 plan
+  BEFORE: 00:00  ·      break 9h
+          07:05  5    ✓ Read ch.6 §1–2               @m3  1b  (60m)
+  AFTER:  07:05  5    ✓ Read ch.6 §1–2               @m3  1b  (60m)
+          09:00  ·      laundry 30m
+$ … check        no problems (both)
+$ … review day   load 60.0 (both)
+$ … now          nothing running (both — before, beside a plan drawing a running break)
+
+TWO MACHINES — A's `tm break` 23:00 never ended; B (synced before) works ^t1 07:05–08:05; B's lines appended to A's log
+$ tm --dir A --now 2026-09-09T09:00:00-05:00 plan
+  BEFORE (W-49 track Q §3b, state.json removed): 00:00  ·      break 9h  /  07:05 … ✓ Read ch.6 §1–2 (60m)
+  AFTER (state.json kept): tm: .tm/state.json said a break began at 23:00 is running and .tm/log.jsonl ended it — the log decides (§10.2 is a cache of it, D42, D105)
+          07:05  5 p3 ✓ Read ch.6 §1–2               @m3  1b  (60m)
+$ … check        no problems
+$ … review day   … 1/6 blocks · load 60.0 …
+$ … now          nothing running;  A/.tm/state.json's `break`: null
+```
+
+`tm now`, `tm plan`, `tm review day` and `tm check` now agree on every world: no break runs, none is drawn across the
+block, and the block's sixty minutes are counted.
+
+**Gap 5340's measurement (item 2, not built).**  A tree whose `.tm/state.json` holds a running break its log has no
+`break_start` for (a break a binary before D105 began; P73): `init --example`, `wake` 06:05, `arrive lounge` 07:00, then
+`state.json`'s `break` set to `{"started":"08:30","planned_min":15}` by hand — the log holds 0 `break_start` lines — and
+`tm --now 08:40 plan` draws `08:30  ·  break 15m`, `tm now` draws it under "nothing running", and the cache keeps it.  The
+planner draws it from `RuntimeIn.brk`, the host's copy.  Reading the running break from `r.run.answer.openBreak` instead
+(gap 4761's clearance) would stop drawing this break — a behaviour change on every pre-D105 tree with a break running —
+so it is not taken here: README gap 5437 records it as the owner's question.
+
+
+### 5. Mutations (D40)
+
+The edit to `Replay.lean` sits before `Replay.arm` and moved the pin sites of every rostered row pinned below it:
+`mutate.py --gate` named **81 rows (242 sites)** drifted.  Each was re-run with `mutate.py --verify --write --only <def>`
+in four `git worktree`s of this tree (`w50-k-mut`, `-mut2`, `-mut3`, `-mut4`, each with its own copy of the built
+`.lake`, sharded 18/19/19/18), never re-anchored by hand: **76 re-verified, 0 failed re-verification** (two `BreakFold`
+rows first, alone).  The five changed rostered definitions (`Replay.arm`, `Replay.cut`, `Replay.startedMachine`,
+`Seal.Ckpt.empty`, `Seal.stepQueries`) were then re-verified over their new bodies, and the thirteen new or changed
+definitions audited with `mutate.py --write --only <def>`:
+
+| definition | verdict |
+|---|---|
+| `Replay.endsBrk`, `Replay.firstStep`, `Replay.firstStart`, `Replay.endRecs`, `Replay.endMachine`, `Replay.endBrkFx`, `Replay.startArm`, `Replay.brkStartArm`, `Replay.brkArm` | PINNED (each row's fifth column names its theorems: the D129 witnesses, `firstStart_mem`, `startArm_blockOnly`, `conserves_startArm`, …) |
+| `Seal.brkFxReads`, `Seal.startQueries` | PINNED (`Seal.brkFx_congr`, `Seal.brkFxReads_sub`; `Seal.startQueries_congr`, `Seal.startArm_congr`) |
+| `Replay.State.init`, `Seal.cMachine` | UNFOLDABLE (no `Inhabited State`, no `Inhabited (Codec Machine)`), as before this step |
+
+The roster's gate over the merged file, run in a worker copy: *911 new or changed since 86c4dc6, 911 rostered (323
+unfoldable, 192 witness fixtures, 53 pinned by nothing; 3 literal), 6 row(s) superseded by a re-audit, 0 owed*.
+
+**A process note, recorded rather than hidden.**  One `python3 mutate.py --gate` was run in the track's own worktree
+while its kernel build ran; with owed rows the gate MUTATES, and it rebuilt `Replay.lean` with `endsBrk := default` in
+the shared `.lake` before it was interrupted (SIGINT; every file restored, the sidecar and lock removed, the bytes checked
+against a worker's copy).  It deleted the module's olean, which the next build re-made.  Run `mutate.py` only in a copy.
+
+### 6. Acceptance
+
+Every command capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`; 16 GB for each mutation
+worker, 8 GB with `timeout` for the new `decide`s, probed by compiling `Replay.lean` alone under that cap first), from
+the worktree `w50-k` over the tree this commit holds (base `1d5644b`).  The machine was shared with track C throughout.
+
+* **`check.sh`** (`scratchpad/w50/k/check2.log`) — **seventeen lines, every one ok, exit 0** (1m02s on the built tree): the build; totality;
+  the axiom audit **6,910** theorems (51 appended by this block); `Negative.lean` rejected (cheats 491-495 each refused by
+  `decide`); FFI **97** tests; the corpus 29/37 files and 4/5 whole plans; stage goals **1**
+  (`Goals.plan_places_no_block_over_a_break`); prose citations 67,167 (63,311 resolved, 3,856 allowed, 0 allow entries
+  unused); new definitions mutated **911 rostered, 0 owed**; parity **P1-P127** (P127 issued; P36's `cite` anchor in
+  `Replay.lean` re-resolved to its line, which the insertion moved); no two names for one definition, 0 unanswered; reach
+  1,645 reachable, 1,097 exempt (the `Replay.lean` and `SealResume.lean` census reasons re-counted: 132 of 272 and 37 of
+  54 reached); the four field and key checks 0 unanswered; the kernel replays 97 modules.  The first pass
+  (`check1.log`) was red on check 8 alone (a backticked olean file name in this block) and check 12's two census counts,
+  both repaired
+* **`cargo test --workspace --no-fail-fast`, four runs.**  Run 1 (`ws1.log`, before the bound of gap 5438 and the two
+  test repairs below): 2,998 passed / 10 failed / 53 ignored over 171 result lines — the class test
+  `cli_break_ended_journal.rs`' `the_class_of_verbs_that_end_a_break_is_read_off_the_code` (the new clearer, §3: its list
+  extended with the reason), `cli_late_marks.rs`' `a_late_mark_past_the_bound_is_named_by_tm_check` (gap 5438, fixed in
+  the kernel), `kernel_break_start.rs`' `a_running_break_crosses_a_seal_cut` (its world's tail held `start` lines, which
+  now end its break: they go too, said in the test), and seven `cli_latency.rs` rows (`tm drop ^a1 was still running
+  after 5s` and the like, run beside four mutation workers and a 75-minute `PlannerWit` build — gaps 4901 and 5306's
+  class: a measurement, no band moved).  Runs 2-4 on the final tree: **3,008 passed / 0 failed / 53 ignored over 171
+  result lines** (`ws2.log`, 15m42s), **3,008 / 0 / 53 over 171** (`ws3.log`, 21m14s), **3,008 / 0 / 53 over 171** (`ws4.log`, 15m52s).  No
+  `.proptest-regressions` file moved in any run.
+* **The FFI crate, `cargo test` in `kernel/tm-kernel-ffi`**: **105 passed / 0 failed** (90 + 8 + 7).
+* **The drives**: §4.
+
+### 7. Gaps 5430-5439, and 5341 closed
+
+**Gap 5341 — closed** by D129 as built here: a break running since the ledger day before ends at the first start after
+it, so no running break is drawn across a block today's record credits whole (both one-machine routes and the
+two-machine world, §4).  The falsifier it named is restated (§2, gap 5434).
+
+**Gap 5430 — D129 built; what it changed.**  1. *What.*  `Replay.arm`'s `start` arm ends a running break begun at or
+before it (`endsBrk`, `endRecs`, `endMachine`); its `break_start` arm ends a break a held start stamped at or after it
+ends (`firstStart`, `endBrkFx`); its `break` arm reads the break's own line after that as nothing new (`brkEnded`).
+2. *Why.*  The owner's D129.  3. *Cost.*  Four laws restated and refuted by name, one witness restated (§2); the
+machine and its checkpoint gain a field (`Machine.brkEnded`, the codec `Seal.cMachine`), so the kernel id moves and every
+replay cache rebuilds once (D113, accepted).  4. *Clears it.*  Built.
+
+**Gap 5431 — D129's edge cases, read from its text.**  1. *What.*  A start stamped at the break's own instant ends it
+(a break of no length); a start stamped before the break ends nothing; a break whose own line ended it before a start is
+untouched; a `start` for the block already running ends the break like any other start line (the verb, D107, logs
+none).  2. *Why.*  §1's table: the equal-stamp reading is what `tm start` at the same minute writes on one machine (D97),
+and the strict one nets the whole block.  3. *Cost.*  None known.  4. *Clears it.*  The owner may revise any row.
+
+**Gap 5432 — a held closed block's start is read at its first drawn piece.**  1. *What.*  `firstStart` reads the open
+block's `started` and, for each held closed block, its first drawn piece's start; a closed block begun inside a span it
+nets reads as starting where the span ended, and a closed block with no piece drawn is no start at all.  2. *Why.*
+`Replay.Closed` keeps no stamp; carrying one (a `Closed.started` field) puts a new instant in `Seal.machineInstants` and
+re-opens every reseal bound over it (63 sites in `SealStep.lean`) — tried and backed out this step.  3. *Cost.*  A late
+break before such a block ends at its first worked instant, not its stamp: the break's drawn segment can overlap the
+span the block began inside; a block netted away entirely does not end a late break.  4. *Clears it.*  `Closed.started`
+with the `machineInstants` bound, if the owner wants the stamp.
+
+**Gap 5433 — `tm break` after the block it ends at.**  1. *What.*  `tm --now <earlier> break` written after a block's
+`start` now says the break ended at that start and leaves no running break in `.tm/state.json`
+(`Ctx::drop_break_a_start_ended`); its day-file journal line still reads `break 15m` (`day_note`), and its `--json`
+answer still says `"action": "started"`.  2. *Why.*  The journal line and the JSON are the verb's record of what the user
+typed; D129 rules on the log's reading.  3. *Cost.*  The day file's journal says a break began that the replay reads as
+already ended.  4. *Clears it.*  A note line beside it, if wanted.
+
+**Gap 5434 — the `hrun` falsifier of the day-before world now stands on the host's copy alone.**  1. *What.*
+`PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it` is restated: the replay holds no running
+break (D129), while `theYdBreakRequest.state.brk` still says one runs from 23:00 and the plan lays the block across it.
+2. *Why.*  D129 removed the replay's reading; the request still carries the host's copy (gap 5340).  3. *Cost.*  `hrun`
+stays a hypothesis of the last goal.  4. *Clears it.*  Gap 5340.
+
+**Gap 5435 — a break's own line that ends it EARLIER than the start that ended it is not applied.**  1. *What.*  After a
+start ended a break at `t` (`brkEnded`), the break's own `break` line is read as nothing new, even when it says the break
+ended before `t`; and only the last such break is remembered, so the own line of an earlier one, arriving after a second
+ending, is read as a break of its own.  2. *Why.*  Shortening an ended break would un-draw its segment and take back its
+record, and the day accumulators have no operation that removes a record (`DayOp` has `unsegment`, no `unbrk`); a list
+of ended breaks is a second checkpoint field.  3. *Cost.*  On a merged log where machine A ends its break before B's
+start but logs the line after B's, the break is drawn to B's start rather than to A's end.  4. *Clears it.*  A `DayOp`
+that takes a record back, and the shortened span netted back.
+
+**Gap 5436 — a later-written start stamped between a break's start and the start that ended it does not move the end.**
+1. *What.*  Once a break is ended at `t`, a `start` written later and stamped in `[s, t)` cuts nothing of the break.
+2. *Why.*  The same missing take-back operation as gap 5435.  3. *Cost.*  The break runs to `t` across that start's
+block (its clock is netted by the held break on the block's ledger days, D94).  4. *Clears it.*  As gap 5435.
+
+**Gap 5437 — item 2 (gap 5340's clearance) is the owner's to rule.**  1. *What.*  The planner still reads the running
+break from the request's `RuntimeIn.brk`, the host's copy; the request still carries it.  2. *Why.*  Measured (§4): on a
+tree whose break a pre-D105 binary began, the copy is the only record, and reading `r.run.answer.openBreak` alone stops
+drawing a break `tm plan` draws today — a behaviour change no track takes alone.  3. *Cost.*  Gap 5340 stands; `hrun`
+stays a hypothesis.  4. *Clears it.*  The owner: drop the copy (the pre-D105 break vanishes from the plan), have the host
+log a `break_start` for a cache-only break on its next verb (a write the user did not type), or keep the copy and
+refuse a request whose copy disagrees with its replay by name.
+
+**Gap 5438 — a late `break_start` past D119's bound is not ended by a start.**  1. *What.*  `firstStart` answers `none`
+for a break whose ledger day is more than 31 behind the newest closed block the machine holds (`pastBound`), so such a
+break runs, as every late mark past the bound is left unread.  2. *Why.*  The brief's own reading of D129 ("the replay's
+31-day bound on late marks (D119) applies to how far back a late break looks"), and found by the workspace run:
+`cli_late_marks.rs`' `a_late_mark_past_the_bound_is_named_by_tm_check` logs a break stamped forty days behind a block
+logged after it; without the bound the replay ended it at that block's start, forty days on, and the test's own `tm break`
+then began a second break instead of ending the first (`Replay.a_late_break_past_the_bound_is_not_ended_by_a_start`).
+3. *Cost.*  A `break_start` past the bound is not itself named by `tm check` (`lateWarnList` names a `break`, a `start`
+and a `resume` past it); its `break` line, when logged, is.  4. *Clears it.*  `lateWarnList` naming a `break_start`.
+
+**Gap 5439 — a late break cannot be ended by a later `tm --now` before the start that ended it.**  1. *What.*  `tm --now
+06:30 break` after a block begun 07:05, then `tm --now 06:45 break`: the first is ended at 07:05 (D129), so the second
+finds no break running and begins another, also ended at 07:05 — two breaks drawn over 06:45-07:05.  2. *Why.*  The host
+asks whether a break runs at the END of the log; in stamp order the 06:30 break was still running at 06:45, and ending it
+there needs gap 5435's take-back.  3. *Cost.*  A late break typed as a start-and-end pair on one machine is drawn too long
+and twice; the user is told at the first command where it ended (gap 5433).  4. *Clears it.*  The host asking at the
+command's own instant, and gap 5435.
+
+### 8. Owed, by name
+
+Gap 5340 (the owner's question, gap 5437, measured in §4), and with it `hrun`; gaps 5342 and 5343 (`hrec`, the sealed
+checkpoint) — not attempted: item 2 stopped at its measurement, which the brief makes the precondition for them; gaps
+5432, 5435, 5436, 5438 and 5439 (§7); the one goal, `Goals.plan_places_no_block_over_a_break`, still outstanding
+(burn-down 1).  Not done: a TUI drive.
+
+<!-- =====================================================================
+     Stage 6 — W-50 track C: the owner's D130.  One track, on `w50-c` from
+     `1d5644b`.  Gaps 5470-5489 are this block's (5470-5475 taken); cheats
+     531-550 reserved, none taken (no Lean changes); parity P128 taken
+     (P127 declared a hole for W-50 track K until the land renumbers).
+     ===================================================================== -->
+
+## Stage 6 — W-50 track C: the automatic close stops a block still running on an item it is about to take (D130)
+
+### 1. What changed, and where
+
+Before a close drops, files or carries an item, a block still running on that item is ENDED, and only then does
+the close act on the item (the owner's D130, gap 5413).  All of it is host code; the kernel is unchanged.
+
+* **Which item a close takes is the kernel's.**  `closing::run` — the one body the automatic close, the explicit
+  `tm close <grain>` and the TUI's held close past midnight all run — first asks the kernel the same close WITHOUT
+  writing (`kernel_bridge::answer` over the documents as the context reads them, held or not) and looks the running
+  block's item up in that answer's `report.closes`, or in the month close's `--drop` list.  Nothing re-derives a close
+  rule in Rust (§5.3).  The dry call is made only while a block runs; when the kernel refuses it, nothing is stopped
+  and the real call refuses by name as before.
+* **When the block ends** (`closing::stop_instant`): a block whose `start` falls (local date, in the plan's zone) on
+  the closed period's last calendar day — a week's Sunday, a month's last day, a day close's own day, read off the
+  report entry's `from` file — ends at that period's last instant, 23:59:59 local (`periodEnd`); every other block
+  ends at its LAST LOGGED ACTIVITY (`closing::last_activity`), capped at that last instant (`lastActivity`).  The last
+  logged activity is the stamp of the block's own `start` or of the latest timer mark logged for it since: a `pause`
+  or `unpause` of it, an `interrupt` or `resume`, a `break_start`, or a `break`'s end (its stamp plus its minutes).
+  So a paused or interrupted block stops at the instant it stopped, with the minutes it already holds.  Every instant
+  is a log instant (D75), never `HH:MM` on today's date.
+* **Logged as `tm stop` logs it.**  `day::end_the_block` is now the ONE body `tm stop` runs and D130's stop runs:
+  the worked minutes as of the end (`worked_min_at`, D79's clipping), the remainder through the kernel's `est` op
+  first (D62, the one-estimate rule D56/D62), any running break ended there (D97), the box back to `[ ]`, the `stop`
+  stamped at the end, the cache cleared, the journal lines (rebased under the undo stack when housekeeping writes
+  them, as D61's are).  D61's wall marks up to that instant are written first, as `tm stop --at` writes them.  The
+  stop is written into the item's line while its period is still open; then the close takes the line, so no closed
+  file is edited after its close.
+* **Said in one line** (D65's rule): `stopped ^t3 at 2026-09-07 10:20, its last logged activity, before the close
+  of 2026-W37 took it · 0m worked · 60m left` — on stderr, or on the TUI's status line while it holds the screen
+  (`kernel_bridge::notice`); `tm close --json` carries it as `report.stopped` (`id`, `at`, `rule`, `period`,
+  `worked_min`, `remaining_min`).
+* **Held in the TUI** (D91, D96): every write of the stop goes through the doors a held context answers into —
+  `Ctx::write_line` now writes through `Ctx::writes` (it wrote the store directly, the one write of `tm stop`'s body
+  that would have reached the disk under a hold), the kernel's `est` op through `kernel_bridge::apply`, the log line
+  through `Ctx::append_line`, the state through `Ctx::save_state`.
+* **`tm check` names the state a log written before D130 can still hold** (`lifecycle::taken_block_problems`, code
+  `log-taken-block`, D18's warning family): the replay's open block, and after its `start` row a close that took its
+  item — read off what that close LOGGED (its consecutive batch of `demote`/`move`/`drop` lines then `close` lines
+  naming the item), or, for a child the week close dropped into its parent (which logs nothing), the item settled
+  (`[~]`/`[x]`) with a close logged after the block began and no `drop` or `done` of it by the user since.
+
+**Parity P128 taken**: before a close drops, files or carries an item, a block still running on that item is stopped — at its last logged activity (its `start`, or the latest `pause`/`unpause`/`interrupt`/`resume`/`break_start` or `break` end logged since), never past the closed period's last instant, or at that last instant for a block started on the period's last day — logged as `tm stop` logs it with `tm stop`'s remainder written first, and said in one line (`report.stopped` in `tm close --json`); `tm check` names a running block whose item a close already took (`log-taken-block`); fork 4748911 closed the item under the running block, so `tm now` counted the days since as work and a later `tm stop` rewrote the closed line (the owner's D130, W-50 track C, README gap 5413)
+
+The behaviour rows are `tm/tests/cli_close_running_block.rs` (six tests: gap 5413 reversed,
+`gap_5413_reversed_the_close_stops_the_block_at_its_last_logged_activity_p128`; the Sunday-23:30 block; the
+paused and the resumed block; the explicit `tm close week` and its `report.stopped`; a block on a backlog item
+left running; `tm check` on a log as a binary before D130 left it) and the TUI test
+`d130_the_tui_past_midnight_holds_the_stop_its_close_writes_before_taking_a_running_item` (`tm/src/tui/mod.rs`):
+the TUI opened Sunday 23:50 over `^t3` started 23:30 and moved to Monday 00:30 writes nothing, holds the `stop` at
+`2026-09-13T23:59:59-05:00` ahead of the close's lines, holds W37 byte for byte as `tm plan`'s close writes it,
+says the stop on its status line, and sends `tm plan`'s request key for key but for the reseal day — one day, hash
+and all.
+
+**Five existing tests moved with the behaviour, each named here (none re-blessed a frozen comparand).**  Each left a
+block running on a day-file or week-file item across a close and asserted something else about it — a stall, a
+rebuilt cache — so D130 now stops the block at the first verb after the close and the test's own bite ("nothing is
+running, so this would prove nothing") fired.  Each keeps its subject on an item no close takes, the backlog's
+`^a1`: `cli_check_log.rs`' `a_stalled_ledger_day_is_named_and_a_healthy_one_is_not` and
+`an_interruption_never_resumed_is_named_beside_its_block` (a new `with_a_stalling_log`, beside `with_a_log`, which
+keeps `^t4` for the tests that run no close), and `cli_switch_acceptance.rs`' `deleting_the_runtime_state_changes_nothing`
+and `deleting_the_runtime_state_while_a_break_runs_changes_nothing` (D42's acceptance, `^p1` → `^a1`, the owner's
+original `^p1` named in a comment).  `cli_break_ended_journal.rs`' `the_class_of_verbs_that_end_a_break_is_read_off_the_code`
+reads the class off the code, and `tm stop`'s ending is now `day::end_the_block`, so its member list reads
+`end_the_block` where it read `stop`; the class is still six, and every member still writes the journal line.
+
+### 2. The readings taken (the brief's questions)
+
+* **A paused block** (a `pause`, an interruption): its last logged activity is the pause or interrupt instant, and
+  the stop there logs exactly the minutes it already holds (driven: paused at 11:00 after a 10:20 start, `40m
+  worked · 20m left`; resumed 11:30 and left, stopped at 11:30, `40m`).
+* **The explicit `tm close <grain>`**: the same rule — one close, one rule (a campaign call; nothing in D130 or the
+  code separates them, since both run `closing::run`).  `tm undo` of that close undoes its stop with it (the
+  recorder covers the stop's writes and log line), and the next verb's automatic close stops the block again.
+* **A block on an item the close does not take** (a backlog item, a recurring item, a wall, an item in a live
+  period): untouched — no `stop`, the block runs on, `tm check` names no taken block.
+* **The clock**: every instant is from the log (D75/D79), and the stop's `t` is that instant.
+* **"Started on the closed period's last day"**: the `start`'s local date in `config.toml`'s zone against the
+  last calendar day of the period the report says the item was taken from.
+
+### 3. Driven (§5.13), `TZ=America/Chicago`, §4.3's tree
+
+Before (`35fa7ab`'s binary, which is `1d5644b`'s code — the base differs only in documentation):
+
+```
+$ tm --now 2026-09-07T10:20:00-05:00 start ^t3      → ▶ ^t3 Exercises 5.3–5.5 · 10:20 · pred 4
+$ tm --now 2026-09-14T10:00:00-05:00 now
+▶ ^t3 Exercises 5.3–5.5 · started 10:20 · 10060m of 60m
+W37 t3: 16:- [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:30:00-05:00 stop --at 10:20
+stopped ^t3 after 10080m · 5m left · ended 10:20
+W37 t3: 16:- [ ] 4 5m Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:31:00-05:00 check            → no problems
+```
+
+After (this block's binary):
+
+```
+$ tm --now 2026-09-14T10:00:00-05:00 now
+tm: stopped ^t3 at 2026-09-07 10:20, its last logged activity, before the close of 2026-W37 took it · 0m worked · 60m left
+nothing running
+W37 t3: 16:- [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:30:00-05:00 stop --at 10:20   → tm: nothing is running   [exit 1]
+W37 t3: 16:- [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:31:00-05:00 check            → no problems
+  log: {"t":"2026-09-07T10:20:00-05:00","ev":"stop","id":"t3","remaining_min":60}, then the close's lines
+  day/2026-09-07.md ## Log: 10:20 stop ^t3 0m · 60m left
+
+$ tm --now 2026-09-13T23:30:00-05:00 start ^t3; tm --now 2026-09-14T00:30:00-05:00 now
+tm: stopped ^t3 at 2026-09-13 23:59, the end of 2026-W37, before the close of 2026-W37 took it · 29m worked · 31m left
+W37 t3: 16:- [~] 4 31m Exercises 5.3–5.5            @m1 ^t3
+  log: {"t":"2026-09-13T23:59:59-05:00","ev":"stop","id":"t3","remaining_min":31}
+
+$ (the base binary up to its 09-14 `now`, then this binary) tm --now 2026-09-14T10:05:00-05:00 check
+.tm/log.jsonl:4: warning[log-taken-block]: a block on ^t3 has been running since 2026-09-07 10:20 while a close
+logged after it (the day close of 2026-09-13, the week close of 2026-W37) took its item — the close settled it, so
+the block counts the time since as work; a close since D130 stops such a block first. End it with `tm stop --at
+HH:MM` at the time you stopped working on it (the stop writes its remainder back to the item's line where it
+stands, and reopens it)
+0 errors, 1 warning
+```
+
+The TUI half was not driven through a pty; it is the test through `closing::close_in_memory` named in §1.
+
+### 4. Gaps (5470-5475 taken)
+
+**Gap 5470 — marks logged after the closed period's end.**  1. *What.*  When the log holds timer marks of the
+running block stamped after the closed period's last instant — a close that was refused for days while the user
+paused and resumed, or a synced log — D130's cap stops the block at the period's end, stamped before marks the file
+already holds.  2. *Why.*  D130 says never later than the closed period's last instant, and the brief's reading
+keeps it.  3. *Cost.*  The `stop` is a line logged out of time order inside a stretch the later marks describe; the
+host's worked minutes clip at the stop (D79's reading), and the replay reads the lines in file order, so the two can
+read that block two ways.  No verb of a healthy tree reaches it: a verb's housekeeping runs the close before it logs
+any mark.  4. *Clears it.*  An owner reading (stop at the latest mark instead, or refuse to stop and name it).
+
+**Gap 5471 — `tm stop` on a block whose item a close before D130 took still reopens the settled line.**  1. *What.*
+`tm check` names such a block (§1), and its advice is `tm stop --at`, which writes its remainder into the item's line
+where it stands and puts the box back to `[ ]` — inside the closed file, gap 5413's second half, on an old log.
+2. *Why.*  D130 decides what a close does; what `tm stop` does to a settled line is not in its text.  3. *Cost.*  A
+user who follows the warning reopens the dropped line in a closed week (the warning says so).  4. *Clears it.*  An
+owner question: should a stop leave a settled (`[~]`, `[x]`) line untouched and log the `stop` alone?
+
+**Gap 5472 — a break running at the close.**  1. *What.*  A running break's `break_start` is the block's last
+logged activity, so the block stops at the break's start and `tm stop`'s body ends the break there too, its `break`
+line saying 0 minutes.  2. *Why.*  The stop is `tm stop --at <that instant>`, and that verb ends a running break at
+its end (D97); D130 does not speak of breaks.  3. *Cost.*  A break left running across a period boundary is logged
+as 0 minutes long; the block's minutes are right either way (a break is netted).  4. *Clears it.*  The owner, if a
+break's own length across a close matters.
+
+**Gap 5473 — the "30 minutes" of the Sunday-23:30 case is 29.**  1. *What.*  Ended at 23:59:59, a block begun at
+23:30 has worked 29 minutes 59 seconds, and `tm stop`'s minutes are whole and floored: it logs 29 and writes `31m`
+back.  2. *Why.*  D130's refinement names 23:59:59 ("credited to 23:59:59"); the brief's "is 30 minutes" is a
+rounding the code does not do.  3. *Cost.*  None beyond the minute.  4. *Clears it.*  The owner, if the period's end
+should be read as the next midnight (the stop's line would then fall in the live period).
+
+**Gap 5474 — the `tm check` reading of "a close took it" is from the log's own lines.**  1. *What.*  A filed, moved
+or carried item is named by the close's batch of lines; a child the week close dropped into its parent logs nothing,
+so it is read as "settled, a close logged after the block began, and no `drop`/`done` of it by the user since".
+2. *Why.*  §5.3: the close rule is the kernel's, and re-asking the kernel about a close already written would need
+the tree as it stood before.  3. *Cost.*  A `[~]` item the user dropped by hand-editing the line (no `drop` logged)
+while its block ran, with any close after, is named as if a close settled it.  4. *Clears it.*  Nothing owed unless
+it misfires.
+
+**Gap 5475 — no kernel law states D130.**  1. *What.*  The stop-before-close is host code over the kernel's own
+close answer and `tm stop`'s writer; no Lean statement says "a close's report never names an item a running block
+points at".  2. *Why.*  The kernel's close is unchanged and reads no open block (`Close.lean` reads the plan), so no
+close or replay law was touched (D5 had nothing to re-prove), and a law about the host's ordering of two kernel
+calls is a property of the host.  3. *Cost.*  The guarantee is held by the six behaviour rows and the TUI test, not
+by a theorem.  4. *Clears it.*  A future step that moves the stop into the kernel's close request (the open block is
+on the wire since D24's seam) could state it.
+
+**Gap 5413 is closed**: the close stops the block before it takes the item (§1, §3), and a log written before
+D130 is named by `tm check` (gap 5471 records what the advice still costs on such a log).
+
+### 5. Acceptance
+
+Measured on `61a9d24`'s tree (this section is the only change after it), every command capped
+(`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on a machine shared with W-50 track K's Lean
+builds (one-minute load 9-27, `kcompactd0` busy):
+* `check.sh`: **all seventeen lines ok** — axiom audit 6,859 theorems (no Lean change), FFI 97 tests, corpus 29/37
+  and 4/5, stage goals 1, prose citations 66,972 (0 unresolved), check 9 900 rostered / 0 owed (no new definition),
+  parity P1-P128 with one declared hole (P127, track K's), twins, reach, fields, inputs, sent, written, replay.
+* `cargo test --workspace --no-fail-fast`, **three runs**: **3,004 / 7 / 53**, **3,010 / 1 / 53** and **3,004 / 7 /
+  53** (passed / failed / ignored) over **171 result lines** each (79 m 48 s, 78 m 6 s, 142 m 59 s).  **Every failure
+  is in `cli_latency.rs`** — six rows timed against 5 s / 1 s bands (`tm drop ^a1` "still running after 5s"), and on
+  the run with the lightest load only one of them.  They are this machine's load, not this block: with the block's
+  changes stashed, the same suite at the same load failed six of its seven rows on the base code too (`git stash`,
+  `cargo test -p tm --test cli_latency -- --test-threads=1`: 1 passed / 6 failed), and the history tree they time
+  runs no block, so `stop_before_close` returns before any kernel call.  Every other test passed in all three runs,
+  the seven new ones (six behaviour rows, one TUI test) among them; W-49 repair's 3,004 + 7 = 3,011 non-ignored.  No
+  `.proptest-regressions` file moved.  The latency bands are **owed a re-run on an idle machine** before the land.
+* FFI crate `cargo test`: **105** passed (8 + 90 + 7).
+
+<!-- =====================================================================
+     APPENDED 2026-10-28: stage 6 (the planner), run **W-50**, **Land** —
+     tracks K and C as one measured commit (AGENTS §6.5 item 8).  Gaps
+     5480-5489 are this step's (none taken).  No cheat, no parity number
+     issued: track K kept `P127`, track C's declared hole at `P127` goes.
+     ===================================================================== -->
+
+## Stage 6 — W-50 Land
+
+### 1. What landed
+
+One octopus commit whose tree is the one measured below, with `1d5644b` and the two track tips as parents:
+
+* **track K** `8765843`: the owner's D129 — a `start` logged while a break runs ends that break at the start's instant,
+  read in stamp order, in the replay and the checkpoint (`Machine.brkEnded`; the checkpoint codec moves, so the kernel
+  id moves and every cache rebuilds, D113), and `tm break` says so when the log already holds the ending `start`
+  (parity **P127**; gap 5341 closed; gaps 5430-5439 open, 5437 the owner's);
+* **track C** `61a9d24`, `31431f0`: the owner's D130 as refined on 2026-10-27 — the automatic close stops a block still
+  running on an item it takes, at the block's last logged activity or, for a block started on the closed period's last
+  day, at that period's last instant; logged and written as `tm stop` writes it, said in one line, held in the TUI's
+  in-memory close, and `tm check` names a block a pre-D130 close took (`log-taken-block`) (parity **P128**; gap 5413
+  closed; gaps 5470-5475 open, 5470 and 5471 the owner's).
+
+### 2. What the merge had to compose
+
+* `kernel/README.md` and `kernel/parity.txt` conflicted only where the tracks appended at the same end.  The README
+  keeps K's block, then C's.  In `parity.txt` K's `P127` row stands and C's `hole P127` line goes, since K took the
+  number; C's `P128` row was re-anchored to its issuance line's new place after the README merge (`parity.py` named
+  the stale anchor before the fix).  `parity.py`: 128 registered (P1-P128), next free P129.
+* `tm/src/cli/ctx.rs`, `tm/src/cli/day.rs` and `tm/tests/cli_break_ended_journal.rs` — which both tracks edited, K to
+  add `drop_break_a_start_ended` and the `take_break` notice, C to route `write_line` through `writes()` and to add
+  `end_the_block` — merged with no conflict, and were read as independent edits.
+* Track C changed no Lean, so the merged Lean tree is track K's byte for byte: check 9 (911 rostered, 0 owed) and
+  check 12 (1,645 reachable, 1,097 exempt) measured as K recorded them.
+
+### 3. Acceptance, capped
+
+All capped (§2.1, §5.10a), on the merged tree before this section was written (the only later edit is this block,
+re-checked by `citations.py` and `parity.py`):
+
+* `check.sh`: all **seventeen** lines ok, rc 0, 42 s.  Axiom audit **6,910**; FFI target 97; corpus 29/37 files and
+  4/5 whole plans; stage goals **1**; check 9 **911** rostered, 0 owed; parity P1-P128; check 12 **1,645** reachable /
+  1,097 exempt; replay **97** modules — all 97 *remembered*, i.e. passed for real by track K's run on this same Lean
+  tree and not replayed again here.
+* `cargo test --workspace --no-fail-fast`, **three runs**: **3,015 passed / 0 failed / 53 ignored over 172 result
+  lines** on the third (24 m, one-minute load 5.6 at its start).  The first two failed only in `cli_latency`'s timing
+  bands, 7 tests and 1, at one-minute loads of 4.3 and 7.7 at their starts; the five-minute load stood at 25 by the
+  end of the third, all of it another job on the machine (its leanchecker, rust_verify and z3 processes).  Every other binary
+  passed on all three.  No `.proptest-regressions` file moved.
+* `cli_latency` alone, after the load fell: **7 passed / 0 failed / 1 ignored**, twice (37.0 s and 37.1 s;
+  one-minute load 2.9 and 3.2).
+* FFI crate `cargo test`: **105** passed.
+* The history-reading tests (`fork_rebless_history`, `fork_frozen_refile`) on the octopus itself, so they walk the line the
+  branch will have: **5 + 14 passed / 0 failed**.
+
+### 4. Owed
+
+Owner: gap 5437 (the planner still reads the host's `RuntimeIn.brk`; three options in track K's block), gaps 5470
+(marks stamped after the closed period's end) and 5471 (`tm stop` on a block a pre-D130 close took), and whether an
+explicit `tm close` should stop a running block as the automatic close now does (track C's campaign call).  Work:
+gaps 5432-5436, 5438, 5439 and 5472-5475; `tm drop` of a running item leaving its block running; goal 5181's `hrec`
+(gap 5342) and gap 5343; gaps 5360-5362, 5380, 5382; and the §5.13 drive of the TUI, D129 and D130 included.

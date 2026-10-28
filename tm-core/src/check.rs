@@ -198,7 +198,7 @@ pub const LOG_STALL_DAYS: i64 = 7;
 /// produce them, and `CODES` is the list `check` itself can emit. Both are
 /// warnings, so neither moves [`exit_code`] — which is D18's own requirement:
 /// `tm check` must keep working, and keep its exit code, on a damaged log.
-pub const LOG_CODES: &[&str] = &[LOG_LINE, LOG_FUTURE, LOG_STALL, LOG_BREAK_PLACE, LOG_LATE_MARK, LOG_STALE_EST];
+pub const LOG_CODES: &[&str] = &[LOG_LINE, LOG_FUTURE, LOG_STALL, LOG_BREAK_PLACE, LOG_LATE_MARK, LOG_STALE_EST, LOG_TAKEN_BLOCK];
 
 /// **A `break` line whose place is not its `break_start`'s** — the owner's
 /// D116 (README gap 5035): the break is read at the place its `break_start`
@@ -221,6 +221,15 @@ pub const LOG_LATE_MARK: &str = "log-late-mark";
 /// verb that logs such a line corrects the estimate itself; this names the line
 /// when none did. A warning (D18's family).
 pub const LOG_STALE_EST: &str = "log-stale-est";
+
+/// **A running block whose item a close has already taken** — the owner's D130
+/// (README gap 5413, parity P128): a close since D130 stops such a block before
+/// it drops, files or carries the item, so the state is one a log written before
+/// D130, a sync or a hand edit holds — the block still open in the log while the
+/// close that took its item is logged after its `start`. A warning (D18's
+/// family): the log is well formed; the block's minutes keep counting the time
+/// since as work until it is ended.
+pub const LOG_TAKEN_BLOCK: &str = "log-taken-block";
 
 /// **The kernel refused to load the tree** (the owner's D32, README gap 476).
 ///

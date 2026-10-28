@@ -1414,6 +1414,73 @@ mod tests {
         assert_eq!(tui_resp["ok"]["plan"], plan_resp["ok"]["plan"], "one day from the two requests, hash and all");
     }
 
+    /// **D130 in the TUI: a block started on the closed week's last day is STOPPED, in memory, before
+    /// the held close takes its item** (the owner's D130, W-50 track C, README gap 5413, parity P128).
+    /// §4.3's tree, woken Sunday 2026-09-13 06:05, arrived 07:00, `^t3` (a task of W37) started at 23:30
+    /// and left running, the TUI opened at 23:50; the clock moves it to Monday 00:30 (the loop's own
+    /// step, [`advance_clock`]), and Monday's first housekeeping week-closes W37, which drops `^t3`:
+    ///
+    /// * nothing is written under the plan directory (D81, D91, D96: the stop is held with the close);
+    /// * the held log OPENS with the `stop` of `^t3`, stamped at W37's last instant (Sunday 23:59:59,
+    ///   D130's refinement for a block started on the period's last day), before the close's lines;
+    /// * the held week file carries `^t3` dropped with the remainder the stop wrote; the App reads no
+    ///   running block;
+    /// * the stop is SAID on the status line (D65's rule, `kernel_bridge::notice`);
+    /// * R3's builder over what the TUI holds and over `tm plan`'s own load at 00:30 agree key for
+    ///   key but for the reseal day, and the kernel plans ONE day from the two.
+    #[test]
+    fn d130_the_tui_past_midnight_holds_the_stop_its_close_writes_before_taking_a_running_item() {
+        let _env = kernel_env();
+        let (tmp, g) = fixture();
+        for (when, args) in [
+            ("2026-09-13T06:05:00-05:00", &["wake", "06:05", "--slept", "8h10m"][..]),
+            ("2026-09-13T07:00:00-05:00", &["arrive", "lounge"][..]),
+            ("2026-09-13T23:30:00-05:00", &["start", "^t3", "--energy", "3"][..]),
+        ] {
+            let argv: Vec<String> = args.iter().map(|a| (*a).to_string()).collect();
+            let said = verb(&at_str(&g, when), &argv).expect("a verb of the world");
+            assert!(said.ends_with(": ok"), "`tm {}`: {said}", args.join(" "));
+        }
+        let (mut read, mut app) = load(&at_str(&g, "2026-09-13T23:50:00-05:00")).expect("the TUI opens at 23:50");
+        let plan = g.dir.clone().expect("the plan directory");
+        assert_eq!(app.state.active.as_ref().map(|a| a.id.as_str()), Some("t3"), "running at 23:50");
+        let _ = crate::cli::kernel_bridge::take_notices();
+        let before = tree_bytes(&plan);
+        let monday = DateTime::parse_from_rfc3339("2026-09-14T00:30:00-05:00").expect("now").with_timezone(&app.cfg.tz);
+        crate::cli::kernel_bridge::capture_kernel_stderr(true);
+        let changed = advance_clock(&mut app, &mut read, monday);
+        crate::cli::kernel_bridge::capture_kernel_stderr(false);
+        assert!(changed.expect("the date change"));
+        assert!(tree_bytes(&plan) == before, "the date change wrote nothing under the plan directory");
+
+        let held = read.held.as_ref().expect("the automatic close is held");
+        let lines: Vec<serde_json::Value> = held.log.lines().map(|l| serde_json::from_str(l).expect("a log line")).collect();
+        assert_eq!(lines[0]["ev"], "stop", "the stop comes first: {}", held.log);
+        assert_eq!(lines[0]["id"], "t3");
+        assert_eq!(lines[0]["t"], "2026-09-13T23:59:59-05:00", "W37's last instant");
+        assert!(lines.iter().any(|e| e["ev"] == "close" && e["key"] == "2026-W37"), "{}", held.log);
+        let week = held.docs.get("week/2026-W37.md").expect("the close rewrote the week");
+        let t3 = week.lines().find(|l| l.ends_with("^t3")).expect("^t3 in W37");
+        assert!(t3.starts_with("- [~]") && t3.contains(" 31m "), "dropped, with the stop's remainder: {t3}");
+        assert!(read.state.active.is_none() && app.state.active.is_none(), "no running block in memory");
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("stopped ^t3 at 2026-09-13 23:59"), "said on the status line: {said}");
+
+        let tui_text = crate::cli::kernel_capacity::planner_request(&read, false).expect("the TUI's request");
+        let tui: serde_json::Value = serde_json::from_str(&tui_text).expect("JSON");
+        let (plan_text, copy) = tm_plans_request(&tmp, &plan, monday, "tm-plan");
+        let written = std::fs::read_to_string(copy.join("week/2026-W37.md")).expect("the week tm plan's close wrote");
+        assert_eq!(&written, week, "the TUI holds the week file `tm plan` writes, byte for byte");
+        let tm_plan: serde_json::Value = serde_json::from_str(&plan_text).expect("JSON");
+        let mut differ = Vec::new();
+        json_diff(&tui, &tm_plan, "", &mut differ);
+        assert_eq!(differ, ["log.ckpt.resealDay"], "key for key, but for the checkpoint `tm plan`'s read resealed");
+        let (tui_resp, _) = crate::cli::kernel_bridge::call_text(&tui_text).expect("the kernel plans the TUI's request");
+        let (plan_resp, _) = crate::cli::kernel_bridge::call_text(&plan_text).expect("the kernel plans tm plan's request");
+        assert!(tui_resp["ok"]["plan"].is_object(), "a day: {}", tui_resp["ok"]);
+        assert_eq!(tui_resp["ok"]["plan"], plan_resp["ok"]["plan"], "one day from the two requests, hash and all");
+    }
+
     /// **D91 across two midnights: the TUI holds ONE close, from the files as read** — never a
     /// second stacked on the first. Left open Monday 23:50 to Wednesday 00:30, it closes Monday in
     /// memory at Tuesday's date change and, at Wednesday's, lets that go and asks the kernel again

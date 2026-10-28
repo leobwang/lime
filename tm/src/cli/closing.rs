@@ -44,7 +44,8 @@
 //! and logged nothing), and its own remaining floors the parent's record by
 //! §6.4's `max` (`copyFolding`, `copyMergingFolding`).
 
-use chrono::NaiveDate;
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
+use chrono_tz::Tz;
 use serde::Serialize;
 
 use tm_core::log::Event;
@@ -278,7 +279,55 @@ pub struct ReportOut {
     /// The ids `tm close month --drop` dropped (the host's `drop` commands,
     /// which the kernel ran ahead of the close in the same request).
     pub dropped: Vec<String>,
+    /// **The running block the close stopped before it took its item** — the
+    /// owner's **D130** (README gap 5413, parity **P128**); absent when no block
+    /// was running on an item the close took.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stopped: Option<StoppedOut>,
 }
+
+/// **The stop §6.3's close wrote before it took a running block's item** — the
+/// owner's **D130**: what [`stop_before_close`] logged, as `tm close --json`'s
+/// `report.stopped` carries it and as its one line says it ([`StoppedOut::line`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct StoppedOut {
+    /// The item, bare.
+    pub id: String,
+    /// The instant the block was ended at, RFC 3339 in the plan's zone.
+    pub at: String,
+    /// Which reading of D130 gave it: `lastActivity` (the latest instant the
+    /// log says the user was at the block, never past the closed period's end)
+    /// or `periodEnd` (a block started on the closed period's last day, ended
+    /// at that period's last instant).
+    pub rule: &'static str,
+    /// The closed period whose close took the item (`2026-W37`).
+    pub period: String,
+    /// Minutes worked, as `tm stop` logs them.
+    pub worked_min: u32,
+    /// The remaining estimate written back, as `tm stop` writes it.
+    pub remaining_min: u32,
+}
+
+impl StoppedOut {
+    /// `stopped ^t3 at 2026-09-07 10:20, its last logged activity, before the close of 2026-W37
+    /// took it · 0m worked · 60m left` — the one line D130 says (D65's rule for a write the user
+    /// did not type).
+    pub fn line(&self, shown: &str) -> String {
+        let why = match self.rule {
+            RULE_PERIOD_END => format!("the end of {}", self.period),
+            _ => "its last logged activity".to_string(),
+        };
+        format!(
+            "stopped ^{} at {shown}, {why}, before the close of {} took it · {}m worked · {}m left",
+            self.id, self.period, self.worked_min, self.remaining_min
+        )
+    }
+}
+
+/// [`StoppedOut::rule`] for a block stopped at its last logged activity.
+pub const RULE_LAST_ACTIVITY: &str = "lastActivity";
+/// [`StoppedOut::rule`] for a block started on the closed period's last day.
+pub const RULE_PERIOD_END: &str = "periodEnd";
 
 /// The human line's counts, each read off the report.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -374,8 +423,12 @@ fn period_key(path: &str) -> String {
 /// one — which never reaches the line, because [`auto_close`] swallows the
 /// refusal and prints its own sentence with those words in it.
 pub fn run(ctx: &mut Ctx, which: Which, verb: &str, drops: &[Id]) -> Result<ReportOut, CliError> {
+    // The owner's D130: a block still running on an item this close takes is
+    // stopped FIRST, so the close acts on a stopped item.
+    let stopped = stop_before_close(ctx, which, drops)?;
     let applied = kernel_bridge::apply(ctx, verb, &commands(which, drops))?;
-    let left = leaves(which, drops, &applied, &ctx.state.closed, ctx.today);
+    let mut left = leaves(which, drops, &applied, &ctx.state.closed, ctx.today);
+    left.report.stopped = stopped;
     for event in left.events {
         ctx.append_event(event)?;
     }
@@ -418,6 +471,7 @@ fn leaves(which: Which, drops: &[Id], applied: &kernel_bridge::Applied, closed: 
     let mut report = ReportOut {
         closes: Vec::new(),
         dropped: drops.iter().map(|d| d.to_string()).collect(),
+        stopped: None,
     };
     let mut events: Vec<Event> = drops.iter().map(|id| Event::Drop { id: id.to_string() }).collect();
     for e in &applied.closes {
@@ -477,6 +531,162 @@ fn leaves(which: Which, drops: &[Id], applied: &kernel_bridge::Applied, closed: 
         closed.swept = true;
     }
     Left { report, events, closed }
+}
+
+/// **The owner's D130** (README gap 5413, parity **P128**): before a close drops, files or carries
+/// an item, a block still running on that item is ENDED — logged as the `stop` `tm stop` logs,
+/// with the estimate written as `tm stop` writes it, through the one body `tm stop` runs
+/// ([`super::day::end_the_block`]) — and only then does the close act on the item.
+///
+/// **Which item the close takes is the kernel's** (§5.3): the close is asked once WITHOUT writing
+/// ([`kernel_bridge::answer`] over the documents as this context reads them, held or not), and
+/// the running block's item is looked up in that report's `closes` — or in the month close's
+/// `--drop` list, which the same request settles. Nothing here re-derives a close rule. The dry
+/// call is made only while a block runs; a refusal there writes nothing and stops nothing, and
+/// the real close is refused by name as before.
+///
+/// **When the block ends** ([`stop_instant`]): at its last logged activity, never later than
+/// the closed period's last instant; a block STARTED on the closed period's last day (local, in
+/// the plan's zone) at that period's last instant instead. D61's wall marks up to that instant
+/// are written first, as `tm stop --at` writes them, so a meeting inside the credited stretch is
+/// netted out.
+///
+/// **Said** in one line ([`StoppedOut::line`], [`kernel_bridge::notice`]): on stderr beside the
+/// verb's output, or on the TUI's status line while it holds the screen.
+fn stop_before_close(ctx: &mut Ctx, which: Which, drops: &[Id]) -> Result<Option<StoppedOut>, CliError> {
+    let Some(active) = ctx.state.active.clone() else {
+        return Ok(None);
+    };
+    let Some(block) = ctx.replay.open_block.clone().filter(|b| b.id == active.id.as_str()) else {
+        // No `start` the log holds for the cache's block (unreachable after D42's reconcile):
+        // there is no instant to end it at, and `tm stop` refuses the same block by name.
+        return Ok(None);
+    };
+    let Some(period) = taken_by(ctx, which, drops, &active.id)? else {
+        return Ok(None);
+    };
+    let (end, rule) = stop_instant(ctx, &block, period.1);
+    if super::day::stop_the_timer_at_walls(ctx, end)? {
+        ctx.reload()?;
+    }
+    // The cache's running block as the wall marks leave it (paused, when a meeting holds it then).
+    let Some(active) = ctx.state.active.clone() else {
+        return Ok(None);
+    };
+    let holding = ctx.holding();
+    let out = super::day::end_the_block(ctx, &active, Some(end), "close", !holding)?;
+    let stopped = StoppedOut {
+        id: active.id.to_string(),
+        at: end.to_rfc3339(),
+        rule,
+        period: period.0,
+        worked_min: out.worked_min,
+        remaining_min: out.remaining_min,
+    };
+    let shown = end.format("%Y-%m-%d %H:%M").to_string();
+    kernel_bridge::notice(stopped.line(&shown));
+    Ok(Some(stopped))
+}
+
+/// **Whether the close `which` (with `drops`) takes `id`**, read off the kernel's own answer to
+/// it, written nowhere — and, if it does, the closed period it takes the item from: its key and
+/// its last calendar day. `None` when it does not, or when the kernel refuses the close (the real
+/// call refuses it again, by name, writing nothing).
+fn taken_by(ctx: &Ctx, which: Which, drops: &[Id], id: &Id) -> Result<Option<(String, NaiveDate)>, CliError> {
+    let reading = ctx.reading()?;
+    let mut docs: Vec<(String, String)> = Vec::new();
+    for rel in reading.store().list_files()? {
+        let text = reading.store().read_text(&rel)?;
+        docs.push((rel, text));
+    }
+    drop(reading);
+    let applied = match kernel_bridge::answer(ctx, "close", &commands(which, drops), docs) {
+        Ok(applied) => applied,
+        Err(CliError::Kernel(issue)) if !issue.is_fault() => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    if drops.iter().any(|d| d == id) {
+        // `tm close month --drop`: the month close settles it.
+        let m = last_month(ctx.today);
+        return Ok(Some((m.to_string(), m.last_day())));
+    }
+    Ok(applied.closes.iter().find(|e| e.id == id.as_str()).map(|e| {
+        let from = applied.path_of(e.from);
+        match Horizon::from_path(from) {
+            Some(Horizon::Day(d)) => (d.format("%Y-%m-%d").to_string(), d),
+            Some(Horizon::Week(w)) => (w.to_string(), w.sunday()),
+            Some(Horizon::Month(m)) => (m.to_string(), m.last_day()),
+            _ => {
+                // A close takes lines from period files only; read the grain's last ended period.
+                let key = last_ended_key(e.grain, ctx.today);
+                let last = match e.grain {
+                    Grain::Day => last_day(ctx.today),
+                    Grain::Week => last_week(ctx.today).sunday(),
+                    Grain::Month => last_month(ctx.today).last_day(),
+                };
+                (key, last)
+            }
+        }
+    }))
+}
+
+/// **The instant D130 ends the running block `block` at, before a close of a period whose last
+/// calendar day is `last`** — and which reading gave it ([`RULE_LAST_ACTIVITY`],
+/// [`RULE_PERIOD_END`]):
+///
+/// * a block whose `start` falls on `last` (its local date in the plan's zone) ends at the
+///   period's last instant, `last` 23:59:59 local — the owner's 2026-10-27 refinement, so a block
+///   run across an ordinary boundary is not credited 0 minutes;
+/// * every other block ends at its LAST LOGGED ACTIVITY ([`last_activity`]), and never later than
+///   that last instant.
+pub(crate) fn stop_instant(ctx: &Ctx, block: &tm_core::log::OpenBlock, last: NaiveDate) -> (DateTime<Tz>, &'static str) {
+    let tz = ctx.cfg.tz;
+    let period_end = tm_core::capacity::local_dt(tz, last.succ_opt().unwrap_or(last), NaiveTime::MIN)
+        - chrono::Duration::seconds(1);
+    let started = block.started.with_timezone(&tz);
+    if started.date_naive() == last {
+        return (period_end.max(started), RULE_PERIOD_END);
+    }
+    let latest = last_activity(&ctx.replay, block).with_timezone(&tz);
+    (latest.min(period_end).max(started), RULE_LAST_ACTIVITY)
+}
+
+/// **The latest instant the log says the user was at the open block** (D130): the stamp of its
+/// own `start`, or of the latest timer mark logged for it since — a `pause` or `unpause` of it, an
+/// `interrupt` or `resume` (a paused or interrupted block's minutes are already net, so its last
+/// activity is the instant it stopped), a `break_start`, or a `break`'s END (its line is stamped
+/// at its start; its end is that stamp plus its minutes, from the replay's day records when the
+/// scope holds them, else its start, which credits the same minutes because a break is netted
+/// out of the block either way). Each tag is asked of [`Event`] rather than spelled twice (§5.3).
+pub(crate) fn last_activity(replay: &tm_core::log::Replay, block: &tm_core::log::OpenBlock) -> DateTime<FixedOffset> {
+    let tag = |e: Event| e.name().to_string();
+    let own = [tag(Event::Pause { id: String::new() }), tag(Event::Unpause { id: String::new() })];
+    let any = [
+        tag(Event::Interrupt { id: None }),
+        tag(Event::Resume { lost_min: 0, dropped: Vec::new() }),
+        tag(Event::BreakStart { planned_min: 0, r#where: None }),
+    ];
+    let brk = tag(Event::Break { planned_min: 0, actual_min: None, r#where: None });
+    let rows = replay.view();
+    let from = replay.start_row(Some(block.id.as_str()), block.started).unwrap_or(rows.len());
+    let mut latest = block.started;
+    for r in rows.iter().skip(from + 1).filter(|r| !r.cancelled && r.t >= block.started) {
+        let t = if any.contains(&r.tag) || (own.contains(&r.tag) && r.id.as_deref() == Some(block.id.as_str())) {
+            r.t
+        } else if r.tag == brk {
+            let mins = replay
+                .days
+                .values()
+                .flat_map(|d| d.breaks.iter())
+                .find(|b| b.t == r.t)
+                .map_or(0, |b| b.actual_or_planned());
+            r.t + chrono::Duration::minutes(i64::from(mins))
+        } else {
+            continue;
+        };
+        latest = latest.max(t);
+    }
+    latest
 }
 
 /// What [`close_in_memory`] did.
@@ -815,6 +1025,7 @@ mod tests {
                 line("m3", CloseDid::CopyFolding, Some("W37")),
             ],
             dropped: vec!["O3".into()],
+            stopped: None,
         };
         // A child dropped into its parent is `dropped`, never `moved`; its
         // parent's folding copy is `demoted`.

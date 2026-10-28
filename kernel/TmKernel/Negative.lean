@@ -3055,7 +3055,7 @@ theorem aBreakStartIsAnUnknownEvent :
    still write (`Seal.machineDays`), and a reseal may not pass it.  `decide`
    computes `[739865]` and refuses `[]`. -/
 theorem aRunningBreakHoldsNoLedgerDay :
-    Seal.machineDays ⟨none, none, none, [], some ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), 20, none, 739865⟩, []⟩ = [] := by
+    Seal.machineDays ⟨none, none, none, [], some ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), 20, none, 739865⟩, [], none⟩ = [] := by
   decide
 
 /- ===========================================================================
@@ -3492,5 +3492,56 @@ def aRuntimeCarriesYesterday (s : Planner.RuntimeIn) := s.yesterday
    W-49 track Y, so the name is unknown. -/
 def theYesterdayRefusalStands : PlanWire.PlannerRefusal :=
   PlanWire.PlannerRefusal.badYesterdayList
+
+/- ===== APPENDED W-50 TRACK K (README "Stage 6 — W-50 track K", gaps 5430-5433; parity P127): cheats
+   491-495.  The owner's D129: a `start` ends a running break at its instant, read in STAMP order; each cheat
+   states the reading D129 replaced, and `decide` computes the one it took. ===== -/
+
+/- CHEAT 491 — two machines merged: a `break_start` at 08:00 (never ended), then
+   `start a` 08:30 and `done a` 09:30; the break claimed still running.  The
+   start ended it (`Replay.endsBrk`): `decide` computes `none`. -/
+theorem aStartLeavesTheBreakRunning :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (.brkStart 20 none),
+      Replay.bE 2 63924366600 (Replay.bStart ['a']), Replay.bE 3 63924370200 (Replay.bDone ['a'] 60 false)]).openBreak.isSome
+      = true := by
+  decide
+
+/- CHEAT 492 — route 2 (one machine): `start a` 08:30, `done a` 09:30, then a
+   `break_start` written after it and stamped 08:00; the block claimed netted to
+   nothing, as it was until D129.  The first start at or after 08:00 ends the
+   break (`Replay.firstStart`): `decide` computes sixty. -/
+theorem aLateBreakNetsTheBlockAfterIt :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924370200 (Replay.bDone ['a'] 60 false),
+      Replay.bE 3 63924364800 (.brkStart 20 none)]).items.get ['a']).map (·.minutes) = some 0 := by
+  decide
+
+/- CHEAT 493 — route 1: the late `break_start` stamped 23:00 the day before,
+   claimed still running after the next morning's block.  It ended at 08:30:
+   `decide` computes `false`. -/
+theorem aBreakFromTheDayBeforeStillRuns :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924370200 (Replay.bDone ['a'] 60 false),
+      Replay.bE 3 63924332400 (.brkStart 15 none)]).openBreak.isSome = true := by
+  decide
+
+/- CHEAT 494 — the break's own `break` line, logged after a start ended it,
+   claimed to be a second break: two records on the day.  The line is the
+   break's own (`Replay.Machine.brkEnded`): `decide` computes one. -/
+theorem aBreaksOwnLineIsASecondBreak :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (.brkStart 20 none),
+      Replay.bE 2 63924366600 (Replay.bStart ['a']), Replay.bE 3 63924370200 (Replay.bDone ['a'] 60 false),
+      Replay.bE 4 63924364800 (.brk 20 (some 90) none)]).days.get 739865).map (·.breaks.length) = some 2 := by
+  decide
+
+/- CHEAT 495 — a `start` stamped at the break's own instant claimed to end
+   nothing (the break left running, the block netted): the reading W-50 track K
+   took is that it ends the break there (README gap 5431).  `decide` computes
+   sixty. -/
+theorem aStartAtTheBreaksInstantEndsNothing :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (.brkStart 20 none),
+      Replay.bE 2 63924366600 (Replay.bStart ['a']),
+      Replay.bE 3 63924370200 (Replay.bDone ['a'] 60 false)]).items.get ['a']).map (·.minutes) = some 0 := by
+  decide
 
 end Tm

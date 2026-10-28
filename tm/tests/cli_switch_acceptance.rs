@@ -459,7 +459,10 @@ fn deleting_the_runtime_state_changes_nothing() {
     // has to carry those two across days too. Setting up at LATER would never exercise it.
     tm.ok_at(INSIDE, &["wake", "06:05"]);
     tm.ok_at(INSIDE, &["arrive", "lounge"]);
-    tm.ok_at(INSIDE, &["start", "^p1"]);
+    // The block is on the BACKLOG's `^a1`, not the day file's `^p1` the owner drove: since the owner's D130 (W-50
+    // track C, README gap 5413) the day close LATER runs stops a block on an item it takes, and it takes 09-07's
+    // `^p1`, so a block on `^p1` would no longer be running at LATER; a backlog item is in no period a close takes.
+    tm.ok_at(INSIDE, &["start", "^a1"]);
 
     let before = answers(&tm, LATER, JSON_SPELLINGS);
 
@@ -468,7 +471,7 @@ fn deleting_the_runtime_state_changes_nothing() {
         serde_json::from_str(&before_bytes).expect(".tm/state.json is not JSON");
     // The bite: without these three in the file, every line below is vacuously true.
     assert_eq!(
-        before_state["active"]["id"], "p1",
+        before_state["active"]["id"], "a1",
         "nothing is running, so deleting the runtime state would prove nothing: {before_bytes}"
     );
     assert_eq!(before_state["wake"], "06:05", "the wake is not in the cache: {before_bytes}");
@@ -526,7 +529,7 @@ fn deleting_the_runtime_state_changes_nothing() {
     // running" while `tm plan` drew the same block with `▶`.
     let done = tm.run_at(LATER, &["--json", "done"]);
     assert_eq!(done.code, 0, "`tm done` still cannot see the running block: {}{}", done.stdout, done.stderr);
-    assert_eq!(done.json()["id"], "p1", "`tm done` closed something else: {}", done.stdout);
+    assert_eq!(done.json()["id"], "a1", "`tm done` closed something else: {}", done.stdout);
 
     eprintln!(
         "runtime-state deletion: {} `--json` spellings identical, every §10.2 field came back out \
@@ -820,7 +823,10 @@ fn deleting_the_runtime_state_while_a_break_runs_changes_nothing() {
     let tm = plan_with_log("energy-14d");
     tm.ok_at(INSIDE, &["wake", "06:05"]);
     tm.ok_at(INSIDE, &["arrive", "lounge"]);
-    tm.ok_at(INSIDE, &["start", "^p1"]);
+    // The block is on the BACKLOG's `^a1`, not the day file's `^p1` the owner drove: since the owner's D130 (W-50
+    // track C, README gap 5413) the day close LATER runs stops a block on an item it takes, and it takes 09-07's
+    // `^p1`, so a block on `^p1` would no longer be running at LATER; a backlog item is in no period a close takes.
+    tm.ok_at(INSIDE, &["start", "^a1"]);
     tm.ok_at(LATER, &["break", "20m", "--where", "walk"]);
     let started: Vec<String> = log_lines(&tm).into_iter().filter(|l| l.contains("\"ev\":\"break_start\"")).collect();
     assert_eq!(started.len(), 1, "`tm break` logged no `break_start` (D105): {started:?}");

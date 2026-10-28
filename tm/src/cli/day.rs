@@ -1902,15 +1902,50 @@ pub fn stop(g: &Globals, args: &super::StopArgs) -> Result<i32, CliError> {
         }
         None => None,
     };
-    let end = stated.unwrap_or(ctx.now_tz);
     super::kernel_bridge::gate(&ctx, "stop")?;
     let rec = Recorder::start(&ctx, "stop")?;
+    let out = end_the_block(&mut ctx, &active, stated, "stop", false)?;
+    rec.finish(&ctx, format!("stop {}", out.id.token()))?;
+    emit(
+        ctx.json,
+        || {
+            said_after_break(out.break_ended.as_ref(), format!(
+                "stopped {} after {}m · {}m left{}",
+                out.id.token(),
+                out.worked_min,
+                out.remaining_min,
+                out.ended.as_ref().map(|e| format!(" · ended {e}")).unwrap_or_default()
+            ))
+        },
+        &out,
+    )?;
+    Ok(0)
+}
+
+/// **Ending the running block — the ONE body** `tm stop` runs and, since the owner's **D130**
+/// (README gap 5413, parity **P128**), the stop §6.3's close writes before it takes a running
+/// block's item ([`super::closing`]): the worked minutes as of the end (`stated`, D79's instant,
+/// or now), the remainder written by the kernel's `est` op first (D62), the running break ended
+/// at that end (D97), the box back to `[ ]`, the `stop` logged at the end (D75's clock), the
+/// cache cleared, and the day file's journal lines. `verb` is what a refusal calls the command;
+/// `housekeeping` says no undo recorder is running (the close a verb's load runs), so the
+/// journal lines are rebased under the undo stack as D61's housekeeping lines are
+/// ([`super::dayfile::note_underneath`]). Every write goes through the doors a held context
+/// answers into (the owner's D96), so a TUI past midnight holds this stop with its close.
+pub(crate) fn end_the_block(
+    ctx: &mut Ctx,
+    active: &ActiveBlock,
+    stated: Option<DateTime<chrono_tz::Tz>>,
+    verb: &str,
+    housekeeping: bool,
+) -> Result<StopOut, CliError> {
+    let end = stated.unwrap_or(ctx.now_tz);
     let id = active.id.clone();
     // D75 (parity P65): the worked minutes count from the log's own `start` —
     // and, with D79's `--at`, up to the end it states.
     let worked = match stated {
-        Some(e) => worked_min_at(&ctx, e.fixed_offset()),
-        None => worked_min(&ctx),
+        Some(e) => worked_min_at(ctx, e.fixed_offset()),
+        None => worked_min(ctx),
     }
     .ok_or_else(|| no_logged_start(&id))?;
     let remaining = ctx
@@ -1926,14 +1961,14 @@ pub fn stop(g: &Globals, args: &super::StopArgs) -> Result<i32, CliError> {
     // A tabbed line is written as any line since the owner's D83 (README gap 32
     // closed): D66's branch for a refused estimate went with the refusal (gap 4165).
     let written = match ctx.tree.get(&id).filter(|i| !is_stateless(i)) {
-        Some(_) => Some(write_estimate(&ctx, "stop", &id, u64::from(remaining))?),
+        Some(_) => Some(write_estimate(ctx, verb, &id, u64::from(remaining))?),
         None => None,
     };
     // §11's break integrity: a break still running when the block stops is
     // over too, and its `break` event has to reach the log — at the stop's
     // instant, which D79's `--at` states — through the one body every verb that
     // ends a break runs, with its journal line below (the owner's D97, P95).
-    let ended_break = end_break_first_at(&mut ctx, end)?;
+    let ended_break = end_break_first_at(ctx, end)?;
     if let Some(mut line) = written {
         line.set_state(State::Todo)?;
         ctx.write_line(&id, &line)?;
@@ -1942,7 +1977,7 @@ pub fn stop(g: &Globals, args: &super::StopArgs) -> Result<i32, CliError> {
     ctx.state.active = None;
     ctx.save_state()?;
     log_the_end(
-        &ctx,
+        ctx,
         stated,
         Event::Stop {
             id: id.to_string(),
@@ -1951,32 +1986,20 @@ pub fn stop(g: &Globals, args: &super::StopArgs) -> Result<i32, CliError> {
     )?;
     ctx.reload()?;
     if let Some(b) = &ended_break {
-        note_break_ended(&ctx, b, end)?;
+        note_break_ended(ctx, b, end)?;
     }
-    note_the_end(&ctx, stated, format!("stop {} {worked}m · {remaining}m left", id.token()))?;
-    rec.finish(&ctx, format!("stop {}", id.token()))?;
-
-    let out = StopOut {
+    let text = format!("stop {} {worked}m · {remaining}m left", id.token());
+    match (housekeeping, stated) {
+        (true, Some(e)) => super::dayfile::note_underneath(ctx, e.date_naive(), e.time(), &text, None)?,
+        _ => note_the_end(ctx, stated, text)?,
+    }
+    Ok(StopOut {
         id: id.clone(),
         worked_min: worked,
         remaining_min: remaining,
-        ended: stated.map(|e| when(&ctx, e)),
+        ended: stated.map(|e| when(ctx, e)),
         break_ended: ended_break,
-    };
-    emit(
-        ctx.json,
-        || {
-            said_after_break(out.break_ended.as_ref(), format!(
-                "stopped {} after {}m · {}m left{}",
-                out.id.token(),
-                out.worked_min,
-                out.remaining_min,
-                out.ended.as_ref().map(|e| format!(" · ended {e}")).unwrap_or_default()
-            ))
-        },
-        &out,
-    )?;
-    Ok(0)
+    })
 }
 
 /// `tm break --json`.
@@ -2076,6 +2099,21 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         }
     };
     ctx.reload()?;
+    // **A break a start already logged ends** (the owner's D129, README gap 5433): a break begun at an
+    // instant before a block's `start` that the log already holds — a `--now` in the past after the
+    // block, or a log merged from another machine — is ended at that start in stamp order, so it does
+    // not run; the cache this verb just wrote is put right and the user is told where it ended.
+    if out.actual_min.is_none() {
+        if let Some((from, until)) = ctx.drop_break_a_start_ended() {
+            ctx.save_state()?;
+            eprintln!(
+                "tm: the break that began at {} ended at {}, at the `start` the log already holds after it \
+                 (D129) — it is not running",
+                from.format("%H:%M"),
+                until.format("%H:%M")
+            );
+        }
+    }
     match out.actual_min {
         Some(_) => note_break_ended(&ctx, &out, ctx.now_tz)?,
         None => day_note(
