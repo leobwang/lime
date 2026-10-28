@@ -100209,3 +100209,188 @@ D129 (gap 5341 — both routes of §2); gap 5413 (the owner's); and everything L
 goal 5181's `hrec` (5342), 5343, 5360-5362, 5380, 5382, the owner's 5381 and 5383, and the §5.13 TUI drive.  The
 critic's planted re-bless was not re-run end to end through a real bless here (it needs the fork oracle); the gate it
 passed is what the new test calls, over the real register and the real history.
+
+<!-- =====================================================================
+     Stage 6 — W-50 track C: the owner's D130.  One track, on `w50-c` from
+     `1d5644b`.  Gaps 5470-5489 are this block's (5470-5475 taken); cheats
+     531-550 reserved, none taken (no Lean changes); parity P128 taken
+     (P127 declared a hole for W-50 track K until the land renumbers).
+     ===================================================================== -->
+
+## Stage 6 — W-50 track C: the automatic close stops a block still running on an item it is about to take (D130)
+
+### 1. What changed, and where
+
+Before a close drops, files or carries an item, a block still running on that item is ENDED, and only then does
+the close act on the item (the owner's D130, gap 5413).  All of it is host code; the kernel is unchanged.
+
+* **Which item a close takes is the kernel's.**  `closing::run` — the one body the automatic close, the explicit
+  `tm close <grain>` and the TUI's held close past midnight all run — first asks the kernel the same close WITHOUT
+  writing (`kernel_bridge::answer` over the documents as the context reads them, held or not) and looks the running
+  block's item up in that answer's `report.closes`, or in the month close's `--drop` list.  Nothing re-derives a close
+  rule in Rust (§5.3).  The dry call is made only while a block runs; when the kernel refuses it, nothing is stopped
+  and the real call refuses by name as before.
+* **When the block ends** (`closing::stop_instant`): a block whose `start` falls (local date, in the plan's zone) on
+  the closed period's last calendar day — a week's Sunday, a month's last day, a day close's own day, read off the
+  report entry's `from` file — ends at that period's last instant, 23:59:59 local (`periodEnd`); every other block
+  ends at its LAST LOGGED ACTIVITY (`closing::last_activity`), capped at that last instant (`lastActivity`).  The last
+  logged activity is the stamp of the block's own `start` or of the latest timer mark logged for it since: a `pause`
+  or `unpause` of it, an `interrupt` or `resume`, a `break_start`, or a `break`'s end (its stamp plus its minutes).
+  So a paused or interrupted block stops at the instant it stopped, with the minutes it already holds.  Every instant
+  is a log instant (D75), never `HH:MM` on today's date.
+* **Logged as `tm stop` logs it.**  `day::end_the_block` is now the ONE body `tm stop` runs and D130's stop runs:
+  the worked minutes as of the end (`worked_min_at`, D79's clipping), the remainder through the kernel's `est` op
+  first (D62, the one-estimate rule D56/D62), any running break ended there (D97), the box back to `[ ]`, the `stop`
+  stamped at the end, the cache cleared, the journal lines (rebased under the undo stack when housekeeping writes
+  them, as D61's are).  D61's wall marks up to that instant are written first, as `tm stop --at` writes them.  The
+  stop is written into the item's line while its period is still open; then the close takes the line, so no closed
+  file is edited after its close.
+* **Said in one line** (D65's rule): `stopped ^t3 at 2026-09-07 10:20, its last logged activity, before the close
+  of 2026-W37 took it · 0m worked · 60m left` — on stderr, or on the TUI's status line while it holds the screen
+  (`kernel_bridge::notice`); `tm close --json` carries it as `report.stopped` (`id`, `at`, `rule`, `period`,
+  `worked_min`, `remaining_min`).
+* **Held in the TUI** (D91, D96): every write of the stop goes through the doors a held context answers into —
+  `Ctx::write_line` now writes through `Ctx::writes` (it wrote the store directly, the one write of `tm stop`'s body
+  that would have reached the disk under a hold), the kernel's `est` op through `kernel_bridge::apply`, the log line
+  through `Ctx::append_line`, the state through `Ctx::save_state`.
+* **`tm check` names the state a log written before D130 can still hold** (`lifecycle::taken_block_problems`, code
+  `log-taken-block`, D18's warning family): the replay's open block, and after its `start` row a close that took its
+  item — read off what that close LOGGED (its consecutive batch of `demote`/`move`/`drop` lines then `close` lines
+  naming the item), or, for a child the week close dropped into its parent (which logs nothing), the item settled
+  (`[~]`/`[x]`) with a close logged after the block began and no `drop` or `done` of it by the user since.
+
+**Parity P128 taken**: before a close drops, files or carries an item, a block still running on that item is stopped — at its last logged activity (its `start`, or the latest `pause`/`unpause`/`interrupt`/`resume`/`break_start` or `break` end logged since), never past the closed period's last instant, or at that last instant for a block started on the period's last day — logged as `tm stop` logs it with `tm stop`'s remainder written first, and said in one line (`report.stopped` in `tm close --json`); `tm check` names a running block whose item a close already took (`log-taken-block`); fork 4748911 closed the item under the running block, so `tm now` counted the days since as work and a later `tm stop` rewrote the closed line (the owner's D130, W-50 track C, README gap 5413)
+
+The behaviour rows are `tm/tests/cli_close_running_block.rs` (six tests: gap 5413 reversed,
+`gap_5413_reversed_the_close_stops_the_block_at_its_last_logged_activity_p128`; the Sunday-23:30 block; the
+paused and the resumed block; the explicit `tm close week` and its `report.stopped`; a block on a backlog item
+left running; `tm check` on a log as a binary before D130 left it) and the TUI test
+`d130_the_tui_past_midnight_holds_the_stop_its_close_writes_before_taking_a_running_item` (`tm/src/tui/mod.rs`):
+the TUI opened Sunday 23:50 over `^t3` started 23:30 and moved to Monday 00:30 writes nothing, holds the `stop` at
+`2026-09-13T23:59:59-05:00` ahead of the close's lines, holds W37 byte for byte as `tm plan`'s close writes it,
+says the stop on its status line, and sends `tm plan`'s request key for key but for the reseal day — one day, hash
+and all.
+
+**Five existing tests moved with the behaviour, each named here (none re-blessed a frozen comparand).**  Each left a
+block running on a day-file or week-file item across a close and asserted something else about it — a stall, a
+rebuilt cache — so D130 now stops the block at the first verb after the close and the test's own bite ("nothing is
+running, so this would prove nothing") fired.  Each keeps its subject on an item no close takes, the backlog's
+`^a1`: `cli_check_log.rs`' `a_stalled_ledger_day_is_named_and_a_healthy_one_is_not` and
+`an_interruption_never_resumed_is_named_beside_its_block` (a new `with_a_stalling_log`, beside `with_a_log`, which
+keeps `^t4` for the tests that run no close), and `cli_switch_acceptance.rs`' `deleting_the_runtime_state_changes_nothing`
+and `deleting_the_runtime_state_while_a_break_runs_changes_nothing` (D42's acceptance, `^p1` → `^a1`, the owner's
+original `^p1` named in a comment).  `cli_break_ended_journal.rs`' `the_class_of_verbs_that_end_a_break_is_read_off_the_code`
+reads the class off the code, and `tm stop`'s ending is now `day::end_the_block`, so its member list reads
+`end_the_block` where it read `stop`; the class is still six, and every member still writes the journal line.
+
+### 2. The readings taken (the brief's questions)
+
+* **A paused block** (a `pause`, an interruption): its last logged activity is the pause or interrupt instant, and
+  the stop there logs exactly the minutes it already holds (driven: paused at 11:00 after a 10:20 start, `40m
+  worked · 20m left`; resumed 11:30 and left, stopped at 11:30, `40m`).
+* **The explicit `tm close <grain>`**: the same rule — one close, one rule (a campaign call; nothing in D130 or the
+  code separates them, since both run `closing::run`).  `tm undo` of that close undoes its stop with it (the
+  recorder covers the stop's writes and log line), and the next verb's automatic close stops the block again.
+* **A block on an item the close does not take** (a backlog item, a recurring item, a wall, an item in a live
+  period): untouched — no `stop`, the block runs on, `tm check` names no taken block.
+* **The clock**: every instant is from the log (D75/D79), and the stop's `t` is that instant.
+* **"Started on the closed period's last day"**: the `start`'s local date in `config.toml`'s zone against the
+  last calendar day of the period the report says the item was taken from.
+
+### 3. Driven (§5.13), `TZ=America/Chicago`, §4.3's tree
+
+Before (`35fa7ab`'s binary, which is `1d5644b`'s code — the base differs only in documentation):
+
+```
+$ tm --now 2026-09-07T10:20:00-05:00 start ^t3      → ▶ ^t3 Exercises 5.3–5.5 · 10:20 · pred 4
+$ tm --now 2026-09-14T10:00:00-05:00 now
+▶ ^t3 Exercises 5.3–5.5 · started 10:20 · 10060m of 60m
+W37 t3: 16:- [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:30:00-05:00 stop --at 10:20
+stopped ^t3 after 10080m · 5m left · ended 10:20
+W37 t3: 16:- [ ] 4 5m Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:31:00-05:00 check            → no problems
+```
+
+After (this block's binary):
+
+```
+$ tm --now 2026-09-14T10:00:00-05:00 now
+tm: stopped ^t3 at 2026-09-07 10:20, its last logged activity, before the close of 2026-W37 took it · 0m worked · 60m left
+nothing running
+W37 t3: 16:- [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:30:00-05:00 stop --at 10:20   → tm: nothing is running   [exit 1]
+W37 t3: 16:- [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+$ tm --now 2026-09-14T10:31:00-05:00 check            → no problems
+  log: {"t":"2026-09-07T10:20:00-05:00","ev":"stop","id":"t3","remaining_min":60}, then the close's lines
+  day/2026-09-07.md ## Log: 10:20 stop ^t3 0m · 60m left
+
+$ tm --now 2026-09-13T23:30:00-05:00 start ^t3; tm --now 2026-09-14T00:30:00-05:00 now
+tm: stopped ^t3 at 2026-09-13 23:59, the end of 2026-W37, before the close of 2026-W37 took it · 29m worked · 31m left
+W37 t3: 16:- [~] 4 31m Exercises 5.3–5.5            @m1 ^t3
+  log: {"t":"2026-09-13T23:59:59-05:00","ev":"stop","id":"t3","remaining_min":31}
+
+$ (the base binary up to its 09-14 `now`, then this binary) tm --now 2026-09-14T10:05:00-05:00 check
+.tm/log.jsonl:4: warning[log-taken-block]: a block on ^t3 has been running since 2026-09-07 10:20 while a close
+logged after it (the day close of 2026-09-13, the week close of 2026-W37) took its item — the close settled it, so
+the block counts the time since as work; a close since D130 stops such a block first. End it with `tm stop --at
+HH:MM` at the time you stopped working on it (the stop writes its remainder back to the item's line where it
+stands, and reopens it)
+0 errors, 1 warning
+```
+
+The TUI half was not driven through a pty; it is the test through `closing::close_in_memory` named in §1.
+
+### 4. Gaps (5470-5475 taken)
+
+**Gap 5470 — marks logged after the closed period's end.**  1. *What.*  When the log holds timer marks of the
+running block stamped after the closed period's last instant — a close that was refused for days while the user
+paused and resumed, or a synced log — D130's cap stops the block at the period's end, stamped before marks the file
+already holds.  2. *Why.*  D130 says never later than the closed period's last instant, and the brief's reading
+keeps it.  3. *Cost.*  The `stop` is a line logged out of time order inside a stretch the later marks describe; the
+host's worked minutes clip at the stop (D79's reading), and the replay reads the lines in file order, so the two can
+read that block two ways.  No verb of a healthy tree reaches it: a verb's housekeeping runs the close before it logs
+any mark.  4. *Clears it.*  An owner reading (stop at the latest mark instead, or refuse to stop and name it).
+
+**Gap 5471 — `tm stop` on a block whose item a close before D130 took still reopens the settled line.**  1. *What.*
+`tm check` names such a block (§1), and its advice is `tm stop --at`, which writes its remainder into the item's line
+where it stands and puts the box back to `[ ]` — inside the closed file, gap 5413's second half, on an old log.
+2. *Why.*  D130 decides what a close does; what `tm stop` does to a settled line is not in its text.  3. *Cost.*  A
+user who follows the warning reopens the dropped line in a closed week (the warning says so).  4. *Clears it.*  An
+owner question: should a stop leave a settled (`[~]`, `[x]`) line untouched and log the `stop` alone?
+
+**Gap 5472 — a break running at the close.**  1. *What.*  A running break's `break_start` is the block's last
+logged activity, so the block stops at the break's start and `tm stop`'s body ends the break there too, its `break`
+line saying 0 minutes.  2. *Why.*  The stop is `tm stop --at <that instant>`, and that verb ends a running break at
+its end (D97); D130 does not speak of breaks.  3. *Cost.*  A break left running across a period boundary is logged
+as 0 minutes long; the block's minutes are right either way (a break is netted).  4. *Clears it.*  The owner, if a
+break's own length across a close matters.
+
+**Gap 5473 — the "30 minutes" of the Sunday-23:30 case is 29.**  1. *What.*  Ended at 23:59:59, a block begun at
+23:30 has worked 29 minutes 59 seconds, and `tm stop`'s minutes are whole and floored: it logs 29 and writes `31m`
+back.  2. *Why.*  D130's refinement names 23:59:59 ("credited to 23:59:59"); the brief's "is 30 minutes" is a
+rounding the code does not do.  3. *Cost.*  None beyond the minute.  4. *Clears it.*  The owner, if the period's end
+should be read as the next midnight (the stop's line would then fall in the live period).
+
+**Gap 5474 — the `tm check` reading of "a close took it" is from the log's own lines.**  1. *What.*  A filed, moved
+or carried item is named by the close's batch of lines; a child the week close dropped into its parent logs nothing,
+so it is read as "settled, a close logged after the block began, and no `drop`/`done` of it by the user since".
+2. *Why.*  §5.3: the close rule is the kernel's, and re-asking the kernel about a close already written would need
+the tree as it stood before.  3. *Cost.*  A `[~]` item the user dropped by hand-editing the line (no `drop` logged)
+while its block ran, with any close after, is named as if a close settled it.  4. *Clears it.*  Nothing owed unless
+it misfires.
+
+**Gap 5475 — no kernel law states D130.**  1. *What.*  The stop-before-close is host code over the kernel's own
+close answer and `tm stop`'s writer; no Lean statement says "a close's report never names an item a running block
+points at".  2. *Why.*  The kernel's close is unchanged and reads no open block (`Close.lean` reads the plan), so no
+close or replay law was touched (D5 had nothing to re-prove), and a law about the host's ordering of two kernel
+calls is a property of the host.  3. *Cost.*  The guarantee is held by the six behaviour rows and the TUI test, not
+by a theorem.  4. *Clears it.*  A future step that moves the stop into the kernel's close request (the open block is
+on the wire since D24's seam) could state it.
+
+**Gap 5413 is closed**: the close stops the block before it takes the item (§1, §3), and a log written before
+D130 is named by `tm check` (gap 5471 records what the advice still costs on such a log).
+
+### 5. Acceptance
+
+(filled in below at the step's close)

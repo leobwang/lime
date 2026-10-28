@@ -1100,7 +1100,103 @@ fn log_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
     }
     out.extend(stall_problems(ctx));
     out.extend(stale_estimates(ctx));
+    out.extend(taken_block_problems(ctx));
     out
+}
+
+/// **A running block whose item a close has already taken** — the owner's **D130** (README gap
+/// 5413, parity P128), its `tm check` half (D18's warning family, [`validate::LOG_TAKEN_BLOCK`]).
+/// A close since D130 stops a block running on an item it takes before it takes it, so what this
+/// names is a log written before D130, or one a sync or a hand edit left: the replay's open block,
+/// and after its own `start` row a close that took its item. Which item a close took is read off
+/// what that close LOGGED — never re-derived (§5.3): its batch of lines (the `demote`, `move` and
+/// `drop` lines a close writes, then its `close` lines, consecutive) names the item, or — a child
+/// the week close dropped into its parent, which logs nothing (goal B3) — the item is settled
+/// (`[~]` or `[x]`) and a close is logged after the block began. Named at the block's `start`.
+fn taken_block_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
+    let Some(b) = ctx.replay.open_block.as_ref() else {
+        return Vec::new();
+    };
+    let rows = ctx.replay.view();
+    let Some(from) = ctx.replay.start_row(Some(b.id.as_str()), b.started) else {
+        return Vec::new();
+    };
+    let tag = |e: tm_core::log::Event| e.name().to_string();
+    let close = tag(tm_core::log::Event::Close { period: String::new(), key: String::new() });
+    let filed = [
+        tag(tm_core::log::Event::Demote { id: String::new(), from: String::new(), to: String::new(), est_min: 0 }),
+        tag(tm_core::log::Event::Move { id: String::new(), from: String::new(), to: String::new() }),
+        tag(tm_core::log::Event::Drop { id: String::new() }),
+    ];
+    // Settled by a close and not by the user: a `tm drop` or `tm done` of the item since the
+    // block began logs its own line, and then it is not a close that took it.
+    let own = [
+        tag(tm_core::log::Event::Drop { id: String::new() }),
+        tag(tm_core::log::Event::Done { id: String::new(), est_min: 0, actual_min: 0, went: None, tags: Vec::new(), ci: 0, partial: false }),
+    ];
+    let by_user = rows
+        .iter()
+        .skip(from + 1)
+        .any(|r| !r.cancelled && own.contains(&r.tag) && r.id.as_deref() == Some(b.id.as_str()));
+    let settled = !by_user
+        && ctx
+            .tree
+            .get(&Ctx::key(&b.id))
+            .is_some_and(|i| matches!(i.state, tm_core::model::State::Dropped | tm_core::model::State::Done));
+    // (the close's key, whether its batch named the item) for every batch holding a `close` line.
+    let mut found: Option<String> = None;
+    let mut named = false;
+    let mut batch_key: Option<String> = None;
+    for r in rows.iter().skip(from + 1).filter(|r| !r.cancelled) {
+        if r.tag == close {
+            // Which close, from the replay's own close records (the `close` line's instant).
+            let names: Vec<String> = ctx
+                .replay
+                .closes
+                .iter()
+                .filter(|c| c.t == r.t)
+                .map(|c| format!("the {} close of {}", c.period, c.key))
+                .collect();
+            batch_key = Some(if names.is_empty() {
+                format!("a close at {}", r.display())
+            } else {
+                names.join(", ")
+            });
+            if named || settled {
+                found = batch_key.clone();
+                break;
+            }
+        } else if filed.contains(&r.tag) {
+            if batch_key.is_some() {
+                // a new batch begins after a close's lines
+                batch_key = None;
+                named = false;
+            }
+            named |= r.id.as_deref() == Some(b.id.as_str());
+        } else {
+            batch_key = None;
+            named = false;
+        }
+    }
+    let Some(key) = found else {
+        return Vec::new();
+    };
+    let what = if settled { "the close settled it" } else { "the close filed it elsewhere" };
+    vec![validate::CheckProblem::warning(
+        validate::LOG_TAKEN_BLOCK,
+        LOG_PATH,
+        rows[from].line as usize,
+        None,
+        format!(
+            "a block on ^{} has been running since {} while a close logged after it ({}) took its item \
+             — {what}, so the block counts the time since as work; a close since D130 stops such a block \
+             first. End it with `tm stop --at HH:MM` at the time you stopped working on it (the stop \
+             writes its remainder back to the item's line where it stands, and reopens it)",
+            b.id,
+            b.started.with_timezone(&ctx.cfg.tz).format("%Y-%m-%d %H:%M"),
+            key,
+        ),
+    )]
 }
 
 /// **The owner's D126, the half no verb writes** (W-49 track L, parity P125): an open item whose last logged line is

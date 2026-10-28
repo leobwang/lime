@@ -311,10 +311,12 @@ fn the_class_of_verbs_that_end_a_break_is_read_off_the_code() {
     assert_eq!(calls_now, ["tm/src/cli/day.rs:end_break_first"]);
     assert!(silent.is_empty(), "a verb that ends a running break and writes no journal line: {silent:?}");
     // The six members, by name — read off the code above, and printed so a reader sees the class.
+    // `tm stop`'s ending is `end_the_block` since the owner's D130 (W-50 track C, README gap 5413):
+    // the one body `tm stop` runs and the stop §6.3's close writes before it takes a running item.
     let verbs: Vec<&str> = enders
         .iter()
         .map(|e| e.rsplit(':').next().unwrap_or_default())
         .filter(|n| *n != "end_break_first")
         .collect();
-    assert_eq!(verbs, ["done", "interrupt", "resume", "start", "stop", "take_break"], "{enders:?}");
+    assert_eq!(verbs, ["done", "end_the_block", "interrupt", "resume", "start", "take_break"], "{enders:?}");
 }

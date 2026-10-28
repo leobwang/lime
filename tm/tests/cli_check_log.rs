@@ -108,6 +108,17 @@ fn with_a_log() -> Tm {
     tm
 }
 
+/// [`with_a_log`] with the block on the BACKLOG's `^a1` — a block that can still stall across later days.
+/// Since the owner's D130 (W-50 track C, README gap 5413) a block on a week file's item, `^t4`, is stopped by
+/// the first close that takes the item (W37's, at 2026-09-14), so it holds the ledger day no longer than its
+/// week; a backlog item is in no period a close takes, and its block stays open until the user ends it.
+fn with_a_stalling_log() -> Tm {
+    let tm = Tm::new();
+    tm.ok(&["wake", "06:05", "--slept", "8h10m"]);
+    tm.ok(&["start", "^a1", "--energy", "4"]);
+    tm
+}
+
 /// **The plan-file half of the same repair** — W-16 repair, **gap 579**.
 ///
 /// D18 / gap 145 gave `.tm/log.jsonl` a per-line tolerant read, so one damaged
@@ -503,8 +514,8 @@ fn a_stalled_ledger_day_is_named_and_a_healthy_one_is_not() {
     // reseals more than once and the ledger day has every chance to move on.
     const BETWEEN: &[&str] = &["2026-09-12", "2026-09-21", "2026-09-30"];
 
-    // (1) The stall: `with_a_log` starts a block on ^t4 and nothing closes it.
-    let tm = with_a_log();
+    // (1) The stall: `with_a_stalling_log` starts a block on ^a1 and nothing closes it.
+    let tm = with_a_stalling_log();
     for day in BETWEEN {
         tm.ok_at(&format!("{day}T09:00:00-05:00"), &["now"]);
     }
@@ -513,7 +524,7 @@ fn a_stalled_ledger_day_is_named_and_a_healthy_one_is_not() {
     let out = tm.run_at(LATE, &["check"]);
     assert_eq!(out.code, 0, "a stall is a warning, not an error: {}{}", out.stdout, out.stderr);
     assert!(out.stdout.contains("log-stall"), "the stall is not named: {}", out.stdout);
-    assert!(out.stdout.contains("^t4"), "the stall does not name the block: {}", out.stdout);
+    assert!(out.stdout.contains("^a1"), "the stall does not name the block: {}", out.stdout);
     // The consequence §9.4 names, not just the cause.
     assert!(out.stdout.contains("ledger day"), "the stall does not name what it holds: {}", out.stdout);
     let found = problems_at(&tm, LATE);
@@ -527,7 +538,7 @@ fn a_stalled_ledger_day_is_named_and_a_healthy_one_is_not() {
     // (2) The control: the same tree, the same days, the block **closed**. Its
     // ledger day still trails `now` by far more than the seven-day bound, so a
     // lag test would name it. Nothing is wrong with it and nothing is said.
-    let tm = with_a_log();
+    let tm = with_a_stalling_log();
     tm.ok_at("2026-09-07T10:05:00-05:00", &["done", "--went", "1"]);
     for day in BETWEEN {
         tm.ok_at(&format!("{day}T09:00:00-05:00"), &["now"]);
@@ -585,7 +596,7 @@ fn a_block_open_exactly_seven_days_is_not_yet_a_stall() {
 #[test]
 fn an_interruption_never_resumed_is_named_beside_its_block() {
     const LATE: &str = "2026-10-10T09:00:00-05:00";
-    let tm = with_a_log();
+    let tm = with_a_stalling_log();
     tm.ok_at("2026-09-07T09:30:00-05:00", &["interrupt"]);
     for day in ["2026-09-12", "2026-09-21", "2026-09-30"] {
         tm.ok_at(&format!("{day}T09:00:00-05:00"), &["now"]);
@@ -607,7 +618,7 @@ fn an_interruption_never_resumed_is_named_beside_its_block() {
     }
     // Each names the verb that actually clears it — the point of naming them
     // separately rather than as one "something is open".
-    assert!(out.stdout.contains("an interruption of ^t4"), "{}", out.stdout);
+    assert!(out.stdout.contains("an interruption of ^a1"), "{}", out.stdout);
     assert!(out.stdout.contains("`tm resume`"), "{}", out.stdout);
     assert!(out.stdout.contains("`tm done`"), "{}", out.stdout);
 }

@@ -1989,9 +1989,12 @@ impl Ctx {
         Ok(self.item(id)?.line().clone())
     }
 
-    /// Replace the item's line with `line`'s text (§1.3).
+    /// Replace the item's line with `line`'s text (§1.3) — through [`Ctx::writes`], so a
+    /// held context (the owner's D96) holds it: the stop §6.3's close writes before it takes
+    /// a running block's item (D130, `day::end_the_block`) rewrites the line inside the TUI's
+    /// held close, and every verb's own write, which never runs held, reaches the disk.
     pub fn write_line(&self, id: &Id, line: &ItemLine) -> Result<(), CliError> {
-        self.store.write_line(id, &line.to_string())?;
+        self.writes().write_line(id, &line.to_string())?;
         Ok(())
     }
 
