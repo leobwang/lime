@@ -100954,3 +100954,21 @@ and resumes were folded.  4. *Clears it.*  Track C's code, or the kernel's facts
 (`Replay.Machine` already holds `pausedAt`/`since`).
 
 Gaps closed: **5470**, **5471**, **5500-5503**; gap 5432 narrowed (5508); gaps **5504-5509** open (5506, 5507 records).
+
+### 7. Acceptance (all capped; on `fe73e0e`'s tree, this block aside)
+
+* `./check.sh`: **17/17 ok** (axiom audit 6,914 theorems; FFI 97; corpus 29/37 and 4/5; stage goals 1; check 9: 912
+  rostered — rows replaced for `cut`, `doneClosed`, `firstStep`, `firstStart`, `cMachine` (unfoldable, as before) and
+  appended for `startBefore`, every constant PINNED; check 12: 1,647 reachable, `instLt`'s exemption deleted, now
+  reached through `startBefore`, `EXEMPT 1096`).
+* `cargo test --workspace --no-fail-fast`, three runs: **3,021 / 1 / 53**, **3,022 / 0 / 53**, **3,021 / 1 / 53**
+  (passed / failed / ignored), 173 result lines each.  Both failures are `cli_latency`'s
+  `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second` (`tm drop ^z15` still running after 1 s).
+  Re-run alone at a one-minute load of 4.31 (it did not fall below 3 in 150 s): the same failure (later verb 167 ms);
+  the same test on `ac0775c`'s tree (the W-50 land worktree's build), started at load 2.76: the same failure (later
+  verb 192 ms) — the band, under this machine's load, and not this change.  No `.proptest-regressions` file moved.
+* FFI crate `cargo test`: **105** passed (5 result lines).
+* One process fault of this track's, said out loud: one `python3 mutate.py --gate` ran UNCAPPED for about two minutes
+  (it began mutating, which `--gate` does once no row is stale) before it was stopped; it restored the file it had
+  folded (`mutate.py: restored … from a killed run`), and every later run was capped at 16 G.  And one `lake build` of
+  this worktree overlapped the tail of a `check.sh` run (its check 14), whose result was then discarded and re-run.
