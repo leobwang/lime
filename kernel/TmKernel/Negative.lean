@@ -3544,4 +3544,77 @@ theorem aStartAtTheBreaksInstantEndsNothing :
       Replay.bE 3 63924370200 (Replay.bDone ['a'] 60 false)]).items.get ['a']).map (·.minutes) = some 0 := by
   decide
 
+/- ===== APPENDED W-50 REPAIR TRACK R (README "Stage 6 — W-50 repair, track R", gaps 5500-5502): cheats
+   511-514.  D129's stamp-order edges: each cheat states the reading the repair replaced, and `decide` computes the
+   one it took. ===== -/
+
+/- CHEAT 511 — `start a` 08:30, then a `break_start` stamped 08:30 logged after
+   it; the tie claimed to end the break at once (no break running), as
+   `firstStep`'s `≤` read it until the W-50 repair.  A tie ends a break only at a
+   start later in the file (README gap 5500): `decide` computes `true`. -/
+theorem aTieLoggedBeforeTheBreakEndsIt :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924366600 (.brkStart 15 none)]).openBreak.isSome = false := by
+  decide
+
+/- CHEAT 512 — a block begun 08:30 and paused until 10:00, done 10:30, then a
+   late `break_start` 09:00 and its ten-minute `break` line; the block's first
+   drawn piece (10:00) claimed to be a start that ends the break, recording it
+   sixty minutes long.  Only a logged `start` stamped after the break ends it
+   (README gap 5501): `decide` computes ten. -/
+theorem aDrawnPieceEndsTheBreak :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924366600 (.pause ['a']), Replay.bE 3 63924372000 (.unpause ['a']),
+      Replay.bE 4 63924373800 (Replay.bDone ['a'] 30 false), Replay.bE 5 63924368400 (.brkStart 10 none),
+      Replay.bE 6 63924368400 (.brk 10 (some 10) none)]).days.get 739865).map
+      (fun a => a.breaks.map (·.actualMin)) = some [some 60] := by
+  decide
+
+/- CHEAT 513 — two closed blocks, `a` 08:30 and `b` 10:00, logged `a` first,
+   then a late `break_start` 08:00; claimed to end at the LATEST start (10:00,
+   two hours).  The earliest start ends it (README gap 5502): `decide` computes
+   thirty. -/
+theorem theLatestStartEndsALateBreak :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 30 false), Replay.bE 3 63924372000 (Replay.bStart ['b']),
+      Replay.bE 4 63924373800 (Replay.bDone ['b'] 30 false),
+      Replay.bE 5 63924364800 (.brkStart 20 none)]).days.get 739865).map
+      (fun a => a.breaks.map (·.actualMin)) = some [some 120] := by
+  decide
+
+/- CHEAT 514 — the same two blocks logged `b` first: claimed to end at the
+   first held block in file order (`b`, 10:00).  The earliest in STAMP order
+   ends it (README gap 5502): `decide` computes thirty. -/
+theorem theFirstLoggedStartEndsALateBreak :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924372000 (Replay.bStart ['b']),
+      Replay.bE 2 63924373800 (Replay.bDone ['b'] 30 false), Replay.bE 3 63924366600 (Replay.bStart ['a']),
+      Replay.bE 4 63924368400 (Replay.bDone ['a'] 30 false),
+      Replay.bE 5 63924364800 (.brkStart 20 none)]).days.get 739865).map
+      (fun a => a.breaks.map (·.actualMin)) = some [some 120] := by
+  decide
+
+-- ===========================================================================
+-- APPENDED 2026-10-28 (stage 6, W-50 repair, track B — the owner's D133, README gaps 5520-5539, parity P130).
+-- The running break leaves the planner wire: the planner reads it off the request's own replay
+-- (`Planner.PlanReq.runningBreak`).  Cheats 551-552.  CHEAT 245 above names Planner.mkBreak?, which this track
+-- deleted with the wire's `state.break` (README gap 5524), so it now fails as an unknown identifier — a wrong reason,
+-- recorded rather than edited (§6.2); CHEAT 551 is its successor over the replay's reading.
+-- ===========================================================================
+
+/- CHEAT 551 — CHEAT 245's claim over the replay (D133): a request whose replay holds a
+   `break_start` a second after `now` (a clock behind the log) is claimed to plan a running break.
+   `PlanReq.runningBreak` reads such a break as none, as `interruptRows` reads an interruption
+   begun after `now` (D78); `decide` computes it. -/
+theorem aBreakTheReplayBeganAfterNowRuns :
+    ({ PlannerWit.theBusyRequest with
+        run := PlannerWit.withBreak PlannerWit.theBusyRequest.run (PlannerWit.theBusyRequest.now.sec + 1) 10 none } :
+      Planner.PlanReq).runningBreak.isSome = true := by
+  decide
+
+/- CHEAT 552 — the host's runtime claimed to carry a running break again: a `RuntimeIn` built with
+   a break beside the running block.  Since D133 the record has no such field (its constructor
+   takes three), so the planner cannot be handed a second spelling of the replay's fact. -/
+theorem theRuntimeCarriesABreak :
+    (Planner.RuntimeIn.mk none (some ⟨none, 10, none⟩) none none).active = none := rfl
+
 end Tm

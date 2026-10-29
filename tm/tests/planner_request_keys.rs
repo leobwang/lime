@@ -906,11 +906,9 @@ fn a_break_begun_before_midnight_is_sent_from_its_start_and_planned() {
     assert!(r.state.break_.as_ref().is_some_and(|b| b.started.is_some()), "a break runs: {:?}", r.state.break_);
     let (req, planner) = r3_request(&w, &r);
     let started = DateTime::parse_from_rfc3339("2026-09-07T23:50:00-05:00").expect("instant").with_timezone(&tz);
-    assert_eq!(
-        planner["state"]["break"]["started"],
-        serde_json::json!(planwire::kernel_sec(started)),
-        "the latest 23:50 at or before now, yesterday's (P73)"
-    );
+    // **Since the owner's D133 (README gap 5524) the request sends no running break**: the kernel reads it off the
+    // log's own `break_start` (D105), at its instant, yesterday's 23:50 — the reading P73 gave the cache's clock.
+    assert!(planner["state"].get("break").is_none(), "the running break is on the wire: {}", planner["state"]);
     let raw = tm_kernel_ffi::call(&req).expect("the kernel call returns");
     let resp: Value = serde_json::from_str(&raw).expect("the response is JSON");
     assert_eq!(planwire::planner_refusal(&resp), None, "planned: {}", &raw[..raw.len().min(300)]);

@@ -113,9 +113,9 @@ when today has no record. -/
 theorem sinceBreak_is_the_starts_after_the_last_break (r : PlanReq) :
     r.sinceBreak = (((r.todayRecord.map (·.starts)).getD []).filter (fun s =>
       match (if (((r.todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) ++
-              (r.state.brk.bind (·.started)).toList.map (·.sec)).isEmpty then none
+              (r.runningBreak.bind (·.started)).toList.map (·.sec)).isEmpty then none
             else some ((((r.todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) ++
-              (r.state.brk.bind (·.started)).toList.map (·.sec)).foldl max 0)) with
+              (r.runningBreak.bind (·.started)).toList.map (·.sec)).foldl max 0)) with
       | none => true
       | some t => decide (t < s.t.1.sec))).length := by
   unfold PlanReq.sinceBreak
@@ -130,23 +130,23 @@ same starts: the cut's break counter is the same in both, **whatever the break's
 ends**.  Until W-40 the two disagreed exactly when the break was shorter than `break_min` or ended under a
 wall (the running one was a rest, `Look.restfulEnd`); `PlannerWit`'s W-40 block computes such a day. -/
 theorem the_running_break_and_its_logged_twin_count_alike (r r' : PlanReq) (t : Nat)
-    (hrun : (r.state.brk.bind (·.started)).map (·.sec) = some t)
-    (hrun' : r'.state.brk.bind (·.started) = none)
+    (hrun : (r.runningBreak.bind (·.started)).map (·.sec) = some t)
+    (hrun' : r'.runningBreak.bind (·.started) = none)
     (hstarts : (r'.todayRecord.map (·.starts)).getD [] = (r.todayRecord.map (·.starts)).getD [])
     (hlogged : ((r'.todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
       ((r.todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) ++ [t]) :
     r'.sinceBreak = r.sinceBreak := by
-  have hr : (r.state.brk.bind (·.started)).toList.map (·.sec) = [t] := by
-    cases h : r.state.brk.bind (·.started) with
+  have hr : (r.runningBreak.bind (·.started)).toList.map (·.sec) = [t] := by
+    cases h : r.runningBreak.bind (·.started) with
     | none => rw [h] at hrun; exact absurd hrun (by simp)
     | some x => rw [h] at hrun; simp only [Option.map_some, Option.some.injEq] at hrun; simp [hrun]
-  have hr' : (r'.state.brk.bind (·.started)).toList.map (·.sec) = [] := by rw [hrun']; rfl
+  have hr' : (r'.runningBreak.bind (·.started)).toList.map (·.sec) = [] := by rw [hrun']; rfl
   rw [sinceBreak_is_the_starts_after_the_last_break r', sinceBreak_is_the_starts_after_the_last_break r,
     hr, hr', hlogged, hstarts, List.append_nil]
 
 /-- **An overrun running break blocks nothing from `now`**: its row ends at `now`. -/
 theorem an_overrun_break_ends_at_now (r : PlanReq) (b : BreakState) (t : Cal.Instant)
-    (hbrk : r.state.brk = some b) (hst : b.started = some t)
+    (hbrk : r.runningBreak = some b) (hst : b.started = some t)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec) :
     ∀ w ∈ (breakRows r).map (fun s => (s.start, s.stop)), w.2 ≤ r.now.sec := by
   intro w hw
@@ -229,23 +229,24 @@ reservation (`PlannerWit.a_twin_without_the_meetings_pause_loses_the_hold`).  As
 hypotheses, it is refuted (`PlannerWit.the_cut_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted`). -/
 theorem the_cut_does_not_change_when_an_overrun_break_is_logged (r : PlanReq) (run' : Seal.Run)
     (b : BreakState) (t : Cal.Instant)
-    (hbrk : r.state.brk = some b) (hst : b.started = some t)
+    (hbrk : r.runningBreak = some b) (hst : b.started = some t)
+    (hlog : run'.answer.openBreak = none)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec)
     (hpaused : ∀ a, r.state.active = some a → a.paused = true)
     (hheld : r.held = false)
-    (hheld' : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).held = false)
+    (hheld' : ({ r with run := run' } : PlanReq).held = false)
     (hstarts : (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
       (r.todayRecord.map (·.starts)).getD [])
     (hlogged : ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
       ((r.todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) ++ [t.sec])
     (harr : ({ r with run := run' } : PlanReq).todayRecord.bind (·.arrival) =
       r.todayRecord.bind (·.arrival)) :
-    ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).todayCut = r.todayCut := by
-  generalize hr' : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq) = r'
+    ({ r with run := run' } : PlanReq).todayCut = r.todayCut := by
+  generalize hr' : ({ r with run := run' } : PlanReq) = r'
   have hrec : r'.todayRecord = ({ r with run := run' } : PlanReq).todayRecord := by subst hr'; rfl
   have hlook : r'.look = r.look := by subst hr'; rfl
   have hL := an_overrun_break_ends_at_now r b t hbrk hst hover
-  have hbr' : breakRows r' = [] := by subst hr'; rfl
+  have hbr' : breakRows r' = [] := by subst hr'; simp [breakRows, PlanReq.runningBreak, hlog]
   have hres : r.activeRun = none := nothing_is_reserved_while_the_block_is_paused r hpaused hheld
   have hres' : r'.activeRun = none :=
     nothing_is_reserved_while_the_block_is_paused r' (by subst hr'; exact hpaused) (by subst hr'; exact hheld')
@@ -274,7 +275,7 @@ theorem the_cut_does_not_change_when_an_overrun_break_is_logged (r : PlanReq) (r
     refine the_running_break_and_its_logged_twin_count_alike r r' t.sec ?_ ?_ (by rw [hrec]; exact hstarts)
       (by rw [hrec]; exact hlogged)
     · rw [hbrk]; simp [hst]
-    · rw [← hr']; rfl
+    · rw [← hr']; simp [PlanReq.runningBreak, hlog]
   have hrests : r'.restsToday = r.restsToday := by
     unfold PlanReq.restsToday PlanReq.placedRoutines; rw [hfold]
   have hnight : r'.night = r.night := by subst hr'; rfl
@@ -662,11 +663,12 @@ has the same cut, the same placed routines and the same blocked spans but the br
 `now`), no reservation either side, and the same budget — where no wall holds the block on either side (W-49 track W,
 README gap 5217; the cut's law says why). -/
 theorem the_logged_twins_inputs (r : PlanReq) (run' : Seal.Run) (b : BreakState) (t : Cal.Instant)
-    (hbrk : r.state.brk = some b) (hst : b.started = some t)
+    (hbrk : r.runningBreak = some b) (hst : b.started = some t)
+    (hlog : run'.answer.openBreak = none)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec)
     (hpaused : ∀ a, r.state.active = some a → a.paused = true)
     (hheld : r.held = false)
-    (hheld' : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).held = false)
+    (hheld' : ({ r with run := run' } : PlanReq).held = false)
     (hstarts : (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
       (r.todayRecord.map (·.starts)).getD [])
     (hlogged : ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
@@ -674,7 +676,7 @@ theorem the_logged_twins_inputs (r : PlanReq) (run' : Seal.Run) (b : BreakState)
     (harr : ({ r with run := run' } : PlanReq).todayRecord.bind (·.arrival) =
       r.todayRecord.bind (·.arrival))
     (hbd : ({ r with run := run' } : PlanReq).blocksDone = r.blocksDone) :
-    let r' : PlanReq := { r with state := { r.state with brk := none }, run := run' }
+    let r' : PlanReq := { r with run := run' }
     r'.todayCut = r.todayCut ∧ r'.activeRun = none ∧ r.activeRun = none ∧
     r.placementFold = (r'.placementFold.1, r'.placementFold.2 ++ (breakRows r).map (fun s => (s.start, s.stop))) ∧
     (∀ w ∈ (breakRows r).map (fun s => (s.start, s.stop)), w.2 ≤ r.now.sec) ∧
@@ -682,11 +684,11 @@ theorem the_logged_twins_inputs (r : PlanReq) (run' : Seal.Run) (b : BreakState)
   intro r'
   have hres : r.activeRun = none := nothing_is_reserved_while_the_block_is_paused r hpaused hheld
   have hres' : r'.activeRun = none := nothing_is_reserved_while_the_block_is_paused r' hpaused hheld'
-  refine ⟨the_cut_does_not_change_when_an_overrun_break_is_logged r run' b t hbrk hst hover
+  refine ⟨the_cut_does_not_change_when_an_overrun_break_is_logged r run' b t hbrk hst hlog hover
     hpaused hheld hheld' hstarts hlogged harr, hres', hres, ?_,
     an_overrun_break_ends_at_now r b t hbrk hst hover, ?_⟩
   · have hL := an_overrun_break_ends_at_now r b t hbrk hst hover
-    have hbr' : breakRows r' = [] := rfl
+    have hbr' : breakRows r' = [] := by simp [r', breakRows, PlanReq.runningBreak, hlog]
     have hwalls : wallsToday r' = wallsToday r := rfl
     have hint : interruptRows r' = interruptRows r := rfl
     have hbb : r.blockedBeforeRoutines =
@@ -802,7 +804,7 @@ theorem replayedRows_from_now (r : PlanReq) :
 
 /-- **Nor does an overrun running break's row** — it runs from where the break began to `now`. -/
 theorem breakRows_from_now (r : PlanReq) (b : BreakState) (t : Cal.Instant)
-    (hbrk : r.state.brk = some b) (hst : b.started = some t)
+    (hbrk : r.runningBreak = some b) (hst : b.started = some t)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec) :
     (breakRows r).filter (fun t => decide (r.now.sec ≤ clampSec t.start)) = [] := by
   rw [List.filter_eq_nil_iff]
@@ -877,23 +879,24 @@ theorem the_day_from_now_of_the_twins_inputs (r r' : PlanReq) (L : List (Nat × 
 /-- **Step 1's rows from `now` are the same for the overrun break and its logged twin** — the log's past and the
 running break end by `now` on both sides, and the walls and the interruption are the state's own. -/
 theorem stepOneOrder_from_now_of_the_logged_twin (r : PlanReq) (run' : Seal.Run) (b : BreakState) (t : Cal.Instant)
-    (hbrk : r.state.brk = some b) (hst : b.started = some t)
+    (hbrk : r.runningBreak = some b) (hst : b.started = some t)
+    (hlog : run'.answer.openBreak = none)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec) :
-    (stepOneOrder ({ r with state := { r.state with brk := none }, run := run' } : PlanReq)).filter
+    (stepOneOrder ({ r with run := run' } : PlanReq)).filter
         (fun t => decide (r.now.sec ≤ clampSec t.start)) =
       (stepOneOrder r).filter (fun t => decide (r.now.sec ≤ clampSec t.start)) := by
-  have hrep' : (replayedRows ({ r with state := { r.state with brk := none }, run := run' } : PlanReq)).filter
+  have hrep' : (replayedRows ({ r with run := run' } : PlanReq)).filter
       (fun t => decide (r.now.sec ≤ clampSec t.start)) = [] :=
-    replayedRows_from_now ({ r with state := { r.state with brk := none }, run := run' } : PlanReq)
+    replayedRows_from_now ({ r with run := run' } : PlanReq)
   have hrep := replayedRows_from_now r
   have hbr := breakRows_from_now r b t hbrk hst hover
-  have hbr' : breakRows ({ r with state := { r.state with brk := none }, run := run' } : PlanReq) = [] := rfl
-  have hint : interruptRows ({ r with state := { r.state with brk := none }, run := run' } : PlanReq) =
+  have hbr' : breakRows ({ r with run := run' } : PlanReq) = [] := by simp [breakRows, PlanReq.runningBreak, hlog]
+  have hint : interruptRows ({ r with run := run' } : PlanReq) =
       interruptRows r := rfl
-  have hwalls : wallsToday ({ r with state := { r.state with brk := none }, run := run' } : PlanReq) =
+  have hwalls : wallsToday ({ r with run := run' } : PlanReq) =
       wallsToday r := rfl
-  have htr : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).isTravelDay = r.isTravelDay := rfl
-  have htoday : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).today = r.today := rfl
+  have htr : ({ r with run := run' } : PlanReq).isTravelDay = r.isTravelDay := rfl
+  have htoday : ({ r with run := run' } : PlanReq).today = r.today := rfl
   unfold stepOneOrder stepOneSegs
   rw [hint]
   split <;> simp only [List.filter_append, hrep', hrep, hbr, hbr', hwalls, htr, htoday, List.filter_nil,
@@ -918,11 +921,12 @@ law is; as D77 stated it, it is refuted
 (`PlannerWit.the_day_from_now_does_not_change_when_an_overrun_break_is_logged_as_d77_wrote_it_is_refuted`). -/
 theorem the_day_from_now_does_not_change_when_an_overrun_break_is_logged (r : PlanReq) (run' : Seal.Run)
     (b : BreakState) (t : Cal.Instant)
-    (hbrk : r.state.brk = some b) (hst : b.started = some t)
+    (hbrk : r.runningBreak = some b) (hst : b.started = some t)
+    (hlog : run'.answer.openBreak = none)
     (hover : t.sec + 60 * b.plannedMin ≤ r.now.sec)
     (hpaused : ∀ a, r.state.active = some a → a.paused = true)
     (hheld : r.held = false)
-    (hheld' : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).held = false)
+    (hheld' : ({ r with run := run' } : PlanReq).held = false)
     (hstarts : (({ r with run := run' } : PlanReq).todayRecord.map (·.starts)).getD [] =
       (r.todayRecord.map (·.starts)).getD [])
     (hlogged : ((({ r with run := run' } : PlanReq).todayRecord.map (·.breaks)).getD []).map (·.t.1.sec) =
@@ -930,22 +934,22 @@ theorem the_day_from_now_does_not_change_when_an_overrun_break_is_logged (r : Pl
     (harr : ({ r with run := run' } : PlanReq).todayRecord.bind (·.arrival) =
       r.todayRecord.bind (·.arrival))
     (hbd : ({ r with run := run' } : PlanReq).blocksDone = r.blocksDone) :
-    ((dayPlan ({ r with state := { r.state with brk := none }, run := run' } : PlanReq)).segments.filter
+    ((dayPlan ({ r with run := run' } : PlanReq)).segments.filter
         (fun s => decide (r.now.sec ≤ s.val.start))) =
       ((dayPlan r).segments.filter (fun s => decide (r.now.sec ≤ s.val.start))) := by
   obtain ⟨hcut, hres', hres, hpf, hL, hbud⟩ :=
-    the_logged_twins_inputs r run' b t hbrk hst hover hpaused hheld hheld' hstarts hlogged harr hbd
-  have heve : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).eveningRows =
+    the_logged_twins_inputs r run' b t hbrk hst hlog hover hpaused hheld hheld' hstarts hlogged harr hbd
+  have heve : ({ r with run := run' } : PlanReq).eveningRows =
       r.eveningRows := by
-    have hsl : PlanReq.isSleepInstance ({ r with state := { r.state with brk := none }, run := run' } : PlanReq) =
+    have hsl : PlanReq.isSleepInstance ({ r with run := run' } : PlanReq) =
         PlanReq.isSleepInstance r := rfl
-    have hri : ({ r with state := { r.state with brk := none }, run := run' } : PlanReq).routineInstances =
+    have hri : ({ r with run := run' } : PlanReq).routineInstances =
         r.routineInstances := rfl
     unfold PlanReq.eveningRows PlanReq.sleepSeg PlanReq.sleepInstance
     rw [hri, splitSleep_congr hsl]
     rfl
   exact the_day_from_now_of_the_twins_inputs r _ _ rfl hcut hres' hres hpf hL hbud rfl rfl rfl rfl rfl
-    (stepOneOrder_from_now_of_the_logged_twin r run' b t hbrk hst hover) rfl heve rfl rfl rfl
+    (stepOneOrder_from_now_of_the_logged_twin r run' b t hbrk hst hlog hover) rfl heve rfl rfl rfl
 
 end PlanStable
 end Tm

@@ -398,7 +398,7 @@ fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 /// the cache's reading (`BreakState::started_at`) in `tm/src` and `tm-core/src` is the logged
 /// reading's own fallback (`BreakState::started_at_logged`), and the logged reading is called by
 /// the readers there are — `Ctx::running_break` (every CLI verb) and `App::running_break` (the
-/// TUI's timer and break-overrun prompt), one body since the W-47 repair (`RuntimeState::running_break_at`, README gap 5025), `planwire::state_json` (the planner request) and, since
+/// TUI's timer and break-overrun prompt), one body since the W-47 repair (`RuntimeState::running_break_at`, README gap 5025), `planwire::state_json` (the planner request, until the owner's D133 took the running break off it) and, since
 /// the W-46 repair, `planwire::running_worked_min` (the running block's worked minutes the binary's
 /// request and every harness's send — one function both call, README gap 4875; until it the
 /// harnesses placed the break by the cache's clock).
@@ -429,11 +429,12 @@ fn a_running_breaks_start_has_one_reading() {
     );
     logged.sort();
     // Since the W-47 repair (README gap 5025) the CLI's and the TUI's reader are one body,
-    // `RuntimeState::running_break_at` in `store.rs`, which each calls: three call sites of the logged
-    // reading, and the two readers named by their call of the one body.
+    // `RuntimeState::running_break_at` in `store.rs`, which each calls; and since the owner's D133 (W-50
+    // repair track B, README gap 5524) the planner request sends no running break (`planwire::state_json`
+    // reads none): two call sites of the logged reading, `running_worked_min` and the one body.
     assert_eq!(
         logged,
-        vec!["tm-core/src/planwire.rs", "tm-core/src/planwire.rs", "tm-core/src/store.rs"],
+        vec!["tm-core/src/planwire.rs", "tm-core/src/store.rs"],
         "the readers of a running break's start are not the ones there are"
     );
     let mut callers = Vec::new();

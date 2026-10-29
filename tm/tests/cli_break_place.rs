@@ -130,12 +130,20 @@ fn every_place_of_the_table_is_one_the_planner_reads() {
         let mut state: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).expect("state")).expect("JSON");
         state["break"]["where"] = serde_json::Value::from("hammock");
         std::fs::write(&path, serde_json::to_string(&state).expect("JSON")).expect("the hand edit");
-        tm.run_at(at, &["check"])
+        (tm.run_at(at, &["check"]), tm)
     };
-    let out = hand_edited(false);
-    assert_eq!(out.code, 2, "{}{}", out.stdout, out.stderr);
-    assert!(out.stdout.contains("error[planner-refusal]: kernel refusal: badBreak place"), "{}", out.stdout);
-    let out = hand_edited(true);
+    // **Since the owner's D133 (README gap 5524) the planner reads the running break off its replay alone**: a
+    // break the cache alone holds — hand-edited to a word outside the table — reaches no planner request, so
+    // `tm check` (a read verb, which logs nothing) plans the day, where it named `badBreak place` at exit 2 until
+    // then; and the next housekeeping verb logs that break without the word it cannot read (gap 5528).
+    let (out, tm) = hand_edited(false);
+    assert_eq!((out.code, out.stdout.trim()), (0, "no problems"), "the cache's copy reaches no planner: {}{}", out.stdout, out.stderr);
+    let logged = tm.ok_at(at, &["now"]);
+    assert!(logged.stderr.contains("D133") && logged.stderr.contains("\"hammock\" is no word of the table"), "{}", logged.stderr);
+    let starts: Vec<serde_json::Value> = tm.log().into_iter().filter(|e| e["ev"] == "break_start").collect();
+    assert_eq!(starts.len(), 1, "{starts:?}");
+    assert!(starts[0].get("where").is_none(), "{starts:?}");
+    let (out, _) = hand_edited(true);
     assert_eq!((out.code, out.stdout.trim()), (0, "no problems"), "the log's word decides: {}{}", out.stdout, out.stderr);
 }
 

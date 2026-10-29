@@ -282,7 +282,7 @@ theorem the_extension_moves_only_the_running_estimate_and_the_overrides (r : Pla
     (r.extending i m).plan = r.plan ∧ (r.extending i m).run = r.run ∧
       (r.extending i m).look = r.look ∧ (r.extending i m).cands = r.cands ∧
       (r.extending i m).prio = r.prio ∧ (r.extending i m).routines = r.routines ∧
-      (r.extending i m).state.brk = r.state.brk ∧
+      (r.extending i m).runningBreak = r.runningBreak ∧
       (r.extending i m).state.interrupt = r.state.interrupt ∧
       (r.extending i m).state.activeId = r.state.activeId := by
   refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩

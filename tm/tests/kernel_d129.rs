@@ -177,3 +177,42 @@ fn copy(from: &std::path::Path, to: &std::path::Path) {
         }
     }
 }
+
+/// **The equal-stamp tie, the other way round** (README gap 5500, the W-50 critic's finding 2): `start
+/// ^t1` 10:20, then `tm break` at the same instant — the start is EARLIER in the file, so it ends
+/// nothing: the break runs over the block, and `tm break` does not say it ended. Until the W-50 repair
+/// the kernel's `≤` ended it at once and the verb said "ended at 10:20 … (D129) — it is not running".
+#[test]
+fn a_break_tying_a_start_logged_before_it_runs() {
+    let tm = Tm::empty();
+    assert_eq!(tm.run(&["init", "--example"]).code, 0);
+    tm.ok_at("2026-09-08T06:05:00-05:00", &["wake"]);
+    tm.ok_at("2026-09-08T10:20:00-05:00", &["start", "^t1"]);
+    let out = tm.ok_at("2026-09-08T10:20:00-05:00", &["break", "15m"]);
+    assert!(!out.stderr.contains("D129"), "the tie ended the break: {}", out.stderr);
+    assert!(!tm.state()["break"].is_null(), "no break runs: {}", tm.state());
+    let now = tm.ok_at("2026-09-08T10:25:00-05:00", &["now"]);
+    assert!(now.stdout.contains("break"), "`tm now` reads no running break: {}", now.stdout);
+}
+
+/// **A drawn piece is not a `start`** (README gap 5501, the W-50 critic's finding 3): `^t4` started 12:55
+/// inside the 12:50–13:50 meeting (D110 pauses it until 13:50) and done 14:30, then `tm break` at 13:00
+/// — after the block's `start`, so no start ends it: it runs, and the verb says nothing of D129. Until
+/// the W-50 repair it was "ended at 13:50, at the `start` the log already holds after it" (the only
+/// start is 12:55), drawn `13:00 · break 50m`, and `tm review day` read 50 minutes of break.
+#[test]
+fn a_late_break_inside_a_block_is_not_ended_by_its_first_drawn_piece() {
+    let tm = Tm::empty();
+    assert_eq!(tm.run(&["init", "--example"]).code, 0);
+    tm.ok_at("2026-09-07T06:05:00-05:00", &["wake"]);
+    tm.ok_at("2026-09-07T07:00:00-05:00", &["arrive", "lounge"]);
+    tm.ok_at("2026-09-07T12:55:00-05:00", &["start", "^t4"]);
+    tm.ok_at("2026-09-07T14:30:00-05:00", &["done"]);
+    let out = tm.ok_at("2026-09-07T13:00:00-05:00", &["break", "10m"]);
+    assert!(!out.stderr.contains("D129"), "a drawn piece ended the break: {}", out.stderr);
+    assert!(!tm.state()["break"].is_null(), "no break runs: {}", tm.state());
+    // Its own `break` line, ten minutes on, ends it there: ten minutes of break, not fifty.
+    tm.ok_at("2026-09-07T13:10:00-05:00", &["break"]);
+    let review = tm.json_at("2026-09-07T15:00:00-05:00", &["review", "day"]);
+    assert_eq!(review["review"]["breaks"]["actual_min"], 10, "{review}");
+}

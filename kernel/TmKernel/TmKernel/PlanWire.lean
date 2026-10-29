@@ -40,10 +40,9 @@ a third name for a bound is the defect this kernel is named after.
 |---|---|---|---|
 | every id (`active.id`, `interrupt.id`, a routine's `id` and `inst`) | `CapWire.maxCandId` | `EmitWire.idWithin` | `readActive_refuses_a_long_id`, `readInterrupt_refuses_a_long_id`, `readRoutine_refuses_a_long_id` |
 | `active.estMin` | `Look.maxPlanMinutes` (the fork's `u32`, D81 gap 3902), through the wf predicate | `Planner.mkActive?` | `readActive_refuses_an_estimate_past_the_width` |
-| `active.started`, `brk.started`, `interrupt.started`, a routine's `winLo`/`winHi` | `Cal.Instant.wf` | `Cal.mkInstant?`, through `EmitWire.secWithin` | `instantWithin_refuses_past_the_calendar`, `readRoutine_refuses_a_window_past_the_calendar` |
+| `active.started`, `interrupt.started`, a routine's `winLo`/`winHi` | `Cal.Instant.wf` | `Cal.mkInstant?`, through `EmitWire.secWithin` | `instantWithin_refuses_past_the_calendar`, `readRoutine_refuses_a_window_past_the_calendar` |
 | `active.started`, `interrupt.started` after `now` | NONE since W-41: D78 plans both as fork 4748911 does, from `now` | — | `readActive_accepts_a_start_after_now`, `readInterrupt_accepts_a_start_after_now` |
-| `brk.plannedMin` | `Look.maxPlanMinutes` (D81 gap 3902), through the wf predicate | `Planner.mkBreak?` | `readBreak_refuses_a_break_past_the_width` |
-| `brk.started ≤ now` | `Planner.BreakState.wf` (D81: the host never sends one after `now`) | `Planner.mkBreak?` | `readBreak_refuses_a_start_after_now` |
+| `break` (the running break) | NONE since W-50 repair track B: no longer on the wire (the owner's D133, README gap 5524) — the planner reads it off its own replay, `Planner.PlanReq.runningBreak` | — | `readState_leaves_the_break_unread` |
 | `active.workedMin` | `Look.maxPlanMinutes` (W-41, the width again) | `Planner.workedOf?` | `readOptWorked_refuses_a_reading_past_the_width` |
 | the day's evening (D80 (a), P71) | `LogStamp.yearEnd` | `Planner.PlanReq.eveningInsideTheCalendar`, in `planReqRefusal` | `planReqRefusal_names_an_evening_past_the_calendar` |
 | a candidate's wire `ci` (D80 (b), P72) | the plan's `ci` for the item | `Planner.PlanReq.ciDisagreement`, in `planReqRefusal` | `planReqRefusal_names_a_candidate_whose_ci_disagrees` |
@@ -57,9 +56,10 @@ is the guard and `CapWire.maxRemaining` is `Look.maxPlanMinutes` — one functio
 
 ## §10.3's family, and the two names that are deliberately NOT declared
 
-Design §10.3 reserves `planRefusal.*` for `badState`, badWindow, badBudget, `badActive`, `badBreak`, `badInterrupt`,
-badHash, badOverride and tooManyCands — five spelled without backticks because nothing declares them (badHash and
-badOverride were `PlannerRefusal` constructors until the W-47 repair took their keys off the wire, D112).
+Design §10.3 reserves `planRefusal.*` for `badState`, badWindow, badBudget, `badActive`, badBreak, `badInterrupt`,
+badHash, badOverride and tooManyCands — six spelled without backticks because nothing declares them (badHash and
+badOverride were `PlannerRefusal` constructors until the W-47 repair took their keys off the wire, D112, and badBreak
+until W-50 repair track B took the running break off it, D133).
 
 **The type is `PlannerRefusal` and deliberately NOT PlanRefusal.**  Four ledger sentences and `Planner.dayPlan`'s own
 header cite PlanRefusal as a type that **does not exist**, because `dayPlan` is total (D28) and has no error type —
@@ -104,20 +104,20 @@ open Planner (RuntimeIn RoutineIn PlanOverrides ActiveBlock BreakState BreakPlac
 
 /-- A key of the `planner` section, or of one of its records. -/
 inductive PlanKey
-  | state | active | brk | interrupt
+  | state | active | interrupt
   | routines | batchMaxMin
   | id | inst | started | estMin | paused | plannedMin | place
   | winLo | winHi | durMin | mandatory
   | overtime | blocks | grown | remaining | workedMin
-  /-- **The record's own well-formedness**, when `Planner.mkActive?` or `mkBreak?` answers `none` (and the
-  interruption's, until D78 took its constructor away at W-41).  Those answer `Option` and not a named error, so the
+  /-- **The record's own well-formedness**, when `Planner.mkActive?` answers `none` (and the break's, until D133 took
+  it off the wire at W-50 repair track B, and the interruption's, until D78 took its constructor away at W-41).  Those answer `Option` and not a named error, so the
   wire can say *which record* the planner could not hold and not *which clause* of its `wf` failed — README gap
   **1665**, and the reason this key is not one of the field names above. -/
   | wf
 deriving DecidableEq, Repr
 
 def PlanKey.name : PlanKey → String
-  | .state => "state" | .active => "active" | .brk => "break"
+  | .state => "state" | .active => "active"
   | .interrupt => "interrupt"
   | .routines => "routines" | .batchMaxMin => "batchMaxMin"
   | .id => "id" | .inst => "inst" | .started => "started" | .estMin => "estMin"
@@ -137,8 +137,8 @@ inductive PlannerRefusal
   | badState (k : PlanKey)
   /-- A key of `state.active`. -/
   | badActive (k : PlanKey)
-  /-- A key of `state.break`. -/
-  | badBreak (k : PlanKey)
+  -- (W-50 repair track B: the running break's arm stood here; README gap 5527.)
+  --
   /-- A key of `state.interrupt`. -/
   | badInterrupt (k : PlanKey)
   /-- A key of the routine record at this position. -/
@@ -200,7 +200,7 @@ def PlannerRefusal.text : PlannerRefusal → String
   | .shape => "shape"
   | .badState k => s!"badState {k.name}"
   | .badActive k => s!"badActive {k.name}"
-  | .badBreak k => s!"badBreak {k.name}"
+  -- (W-50 repair track B: the running break's arm stood here; README gap 5527.)
   | .badInterrupt k => s!"badInterrupt {k.name}"
   | .badRoutine i k => s!"badRoutine {i} {k.name}"
   | .badBatchMaxMin => "badBatchMaxMin"
@@ -277,37 +277,37 @@ def readOptActive (v : JVal) : Except PlannerRefusal (Option ActiveBlock) :=
   | .ok none => .ok none
   | .ok (some w) => (readActive w).map some
 
-/-- **The planner's reader of a place reads the ONE table** (the owner's D111, README gap 4904): `Log.placeWords` decides
-what a place is, as it does for a logged `break_start`, and the planner's constructor is the one whose word it is — held to
-the table both ways (`placeOf_reads_exactly_the_table`, `placeOf_reads_the_word`).  Until W-47 this spelled the four words a
-second time and the log's grammar read any word, so a hand-edited `"where": "moon"` stopped `tm plan`; `Planner.BreakPlace`'s
-constructors are a third spelling of the table (README gap 4950).  An unknown word is refused by name (AGENTS §5.7). -/
-def placeOf? (s : List Char) : Option BreakPlace :=
-  if Log.isPlace s then [BreakPlace.walk, .seat, .bed, .phone].find? (fun p => p.word == s)
-  else none
+/- `placeOf?` is defined in `Planner.lean`, under this name, since W-50 repair track B (the owner's D133, README gap
+5524): the running break is read off the planner's own replay, whose `break_start` carries the place's word.  The
+readers of `state.break` — readBreak and readOptBreak — went with the key: no request carries a running break. -/
+-- (W-50 repair track B: lines held where the running break's reader stood, so check 9's pin sites below stand; README gap 5527.)
 
-/-- `state.break`, through `Planner.mkBreak?`. -/
-def readBreak (now : Cal.Instant) (v : JVal) : Except PlannerRefusal BreakState := do
-  let secO ← EmitWire.optNatAtP v "started" (PlannerRefusal.badBreak PlanKey.started)
-  let started ← match secO with
-    | none => pure none
-    | some n => (instantWithin (PlannerRefusal.badBreak PlanKey.started) n).map some
-  let plannedMin ← EmitWire.natAtP v "plannedMin" (PlannerRefusal.badBreak PlanKey.plannedMin)
-  let placeS ← EmitWire.optStrAtP v "place" (PlannerRefusal.badBreak PlanKey.place)
-  let place ← match placeS with
-    | none => pure none
-    | some w => match placeOf? w with
-      | some p => pure (some p)
-      | none => throw (PlannerRefusal.badBreak PlanKey.place)
-  match Planner.mkBreak? now ⟨started, plannedMin, place⟩ with
-  | some b => pure b.val
-  | none => throw (PlannerRefusal.badBreak PlanKey.wf)
 
-def readOptBreak (now : Cal.Instant) (v : JVal) : Except PlannerRefusal (Option BreakState) :=
-  match EmitWire.optAtP v "break" (PlannerRefusal.badState PlanKey.brk) with
-  | .error e => .error e
-  | .ok none => .ok none
-  | .ok (some w) => (readBreak now w).map some
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /-- `state.interrupt`.  §9's open interruption is an ad-hoc wall from `t_i` to `now` and both of its fields are
 optional.  **No constructor since W-41**: Planner.mkInterrupt? bounded the start by `now` and nothing else, and D78
@@ -338,11 +338,11 @@ def readOptWorked (sec : JVal) : Except PlannerRefusal (Option (Fin (Look.maxPla
 /-- **§9's four rows.**  Every one is optional and every absence is the field's own empty.  A `yesterday` key is
 left unread since W-49 track Y (README gap 5161): ranking reads each candidate's own `Look.Cand.yesterday`, and the
 binary has sent none since W-34's repair. -/
-def readState (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal RuntimeIn := do
+def readState (sec : JVal) : Except PlannerRefusal RuntimeIn := do
   let active ← readOptActive sec
-  let brk ← readOptBreak now sec
+  -- (W-50 repair track B: the running break's arm stood here; README gap 5527.)
   let interrupt ← readOptInterrupt sec
-  pure ⟨active, brk, interrupt, ← readOptWorked sec⟩
+  pure ⟨active, interrupt, ← readOptWorked sec⟩
 /-! ## `routines` — §8.2 step 2's window instances, host-collected until F2 (K3) -/
 
 /-- One `RoutineIn`.  The cap and the per-instance rule are `Planner.mkRoutines?`' and are not
@@ -410,10 +410,10 @@ structure PlannerIn where
 /-- The section: `state`, `routines`, `overrides`.  All three are optional and each absence is
 the value's own empty — a host that plans with nothing running, no window instance due and no
 what-if sends `{}`. -/
-def readPlannerSection (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal PlannerIn := do
+def readPlannerSection (sec : JVal) : Except PlannerRefusal PlannerIn := do
   let st ← match ← EmitWire.optAtP sec "state" (PlannerRefusal.badState PlanKey.state) with
     | none => pure RuntimeIn.empty
-    | some w => readState now w
+    | some w => readState w
   let rs ← match ← EmitWire.optAtP sec "routines" (PlannerRefusal.badRoutine 0 PlanKey.routines) with
     | none => pure []
     | some (.arr xs) => readRoutines xs
@@ -427,9 +427,9 @@ def readPlannerSection (now : Cal.Instant) (sec : JVal) : Except PlannerRefusal 
 /-- **The section's keys spell themselves**, so a key renamed here moves a refusal's text and
 the test that reads it fails, rather than the wire quietly changing. -/
 theorem planKey_names_are_the_wire_keys :
-    (PlanKey.state.name, PlanKey.active.name, PlanKey.brk.name, PlanKey.interrupt.name,
+    (PlanKey.state.name, PlanKey.active.name, PlanKey.interrupt.name,
      PlanKey.routines.name, PlanKey.batchMaxMin.name)
-      = ("state", "active", "break", "interrupt", "routines", "batchMaxMin") := rfl
+      = ("state", "active", "interrupt", "routines", "batchMaxMin") := rfl
 
 /-- And the record keys. -/
 theorem planKey_record_names_are_the_wire_keys :
@@ -443,11 +443,11 @@ theorem planKey_record_names_are_the_wire_keys :
 when the request is refused. -/
 theorem the_refusals_spell_themselves :
     (PlannerRefusal.shape.text, (PlannerRefusal.badState PlanKey.active).text,
-     (PlannerRefusal.badActive PlanKey.id).text, (PlannerRefusal.badBreak PlanKey.place).text,
+     (PlannerRefusal.badActive PlanKey.id).text,
      (PlannerRefusal.badInterrupt PlanKey.wf).text,
      (PlannerRefusal.badRoutine 2 PlanKey.winLo).text,
      PlannerRefusal.badBatchMaxMin.text, PlannerRefusal.capacityAbsent.text)
-      = ("shape", "badState active", "badActive id", "badBreak place",
+      = ("shape", "badState active", "badActive id",
          "badInterrupt wf",
          "badRoutine 2 winLo",
          "badBatchMaxMin", "capacityAbsent") := rfl
@@ -527,19 +527,19 @@ theorem readActive_accepts_a_running_block :
       ("started".toList, .num 900), ("estMin".toList, .num 60)])
       = .ok ⟨"m2".toList, ⟨900, 0⟩, 60, false⟩ := by rfl
 
-/-- **A `break` past the host's width is refused**, through `Planner.mkBreak?` (D81 gap 3902) — and the day's 1,441,
-which readBreak_refuses_a_break_longer_than_a_day refused until W-41, is read (that theorem, refuted). -/
-theorem readBreak_refuses_a_break_past_the_width :
-    readBreak ⟨1000, 0⟩ (.obj [("plannedMin".toList, .num 4294967296)])
-      = .error (PlannerRefusal.badBreak PlanKey.wf) ∧
-    readBreak ⟨1000, 0⟩ (.obj [("plannedMin".toList, .num 1441)]) = .ok ⟨none, 1441, none⟩ := by
-  constructor <;> rfl
+-- (W-50 repair track B: lines held where the running break's reader stood, so check 9's pin sites below stand; README gap 5527.)
 
-/-- **An unknown `place` word is refused by name**, never defaulted to a seat. -/
-theorem readBreak_refuses_an_unknown_place :
-    readBreak ⟨1000, 0⟩ (.obj [("plannedMin".toList, .num 10),
-      ("place".toList, .str "hammock".toList)])
-      = .error (PlannerRefusal.badBreak PlanKey.place) := by rfl
+
+
+
+
+
+
+
+
+
+
+
 
 /-- And the four words read, so `placeOf?` is a reader and not a refusal.
 
@@ -557,18 +557,18 @@ theorem the_four_break_places_read :
       = (some BreakPlace.walk, some BreakPlace.seat, some BreakPlace.bed,
          some BreakPlace.phone) := by decide
 
-/-- **A break that started after `now` is refused**, through `Planner.mkBreak?` (the other clause of its `wf`, under
-`PlanKey.wf`).  D81 keeps it: the host reads a running break's start as the latest instant at or before `now`. -/
-theorem readBreak_refuses_a_start_after_now :
-    readBreak ⟨1000, 0⟩ (.obj [("started".toList, .num 1001),
-      ("plannedMin".toList, .num 10)])
-      = .error (PlannerRefusal.badBreak PlanKey.wf) := by rfl
+/- readBreak_refuses_a_break_past_the_width, readBreak_refuses_an_unknown_place, readBreak_refuses_a_start_after_now
+and readBreak_accepts_a_running_break went with readBreak at W-50 repair track B (the owner's D133, README gap 5524):
+no request carries a running break.  The place's table is still held both ways (`placeOf_reads_exactly_the_table`,
+`placeOf_reads_the_word`), and the four words above. -/
 
-/-- A real break reads. -/
-theorem readBreak_accepts_a_running_break :
-    readBreak ⟨1000, 0⟩ (.obj [("started".toList, .num 900),
-      ("plannedMin".toList, .num 10), ("place".toList, .str "walk".toList)])
-      = .ok ⟨some ⟨900, 0⟩, 10, some BreakPlace.walk⟩ := by rfl
+
+/-- **A running break on the wire is left unread** (the owner's D133, README gap 5524): a `state.break` — even one whose
+place is no word of the table, which readBreak refused by name — reads as the empty state, as its absence does.  The
+binary sends none since D133; the planner reads the running break off its own replay (`Planner.PlanReq.runningBreak`). -/
+theorem readState_leaves_the_break_unread :
+    readState (.obj [("break".toList, .obj [("started".toList, .num 900),
+      ("plannedMin".toList, .num 10), ("place".toList, .str "hammock".toList)])]) = .ok RuntimeIn.empty := rfl
 
 /-- **An interruption that started after `now` is READ since W-41** (D78): readInterrupt_refuses_a_start_after_now is
 refuted — the reader has no `now` to refuse it against, and §8.2 step 1 draws it as the fork does: not at all. -/
@@ -593,24 +593,25 @@ theorem readInterrupt_accepts_an_open_interruption :
 
 /-- **The empty `state` object is `RuntimeIn.empty`** — every field's own absence, and not a
 defaulted value picked by the reader (AGENTS §5.6). -/
-theorem readState_of_an_empty_object (now : Cal.Instant) :
-    readState now (.obj []) = .ok RuntimeIn.empty := rfl
+theorem readState_of_an_empty_object :
+    readState (.obj []) = .ok RuntimeIn.empty := rfl
 
 /-- **A `yesterday` key is left unread** (W-49 track Y, README gap 5161), whatever it carries: a value that is not
 even a list — which the deleted decoder refused, by the name badState yesterday — reads as the empty state, as the
 key's absence does.  The binary has sent none since W-34's repair; ranking reads each candidate's `Look.Cand.yesterday`. -/
-theorem readState_leaves_yesterday_unread (now : Cal.Instant) :
-    readState now (.obj [("yesterday".toList, .str "x".toList)]) = .ok RuntimeIn.empty := rfl
+theorem readState_leaves_yesterday_unread :
+    readState (.obj [("yesterday".toList, .str "x".toList)]) = .ok RuntimeIn.empty := rfl
 
 /-- **A day with everything running reads.**  This theorem exists because `mutate.py` said it
 had to: `readState_of_an_empty_object` above is satisfied by a reader that answers `none`
 whatever it is given, and the three optional readers all came back **SURVIVED** at `:= default`
 until a request with `active`, `break`, `interrupt`, `lastHash` and `yesterday` all present was
-written down.  Since the owner's D112 (W-47 repair) `lastHash` is no field of `RuntimeIn`, and since W-49 track Y
-(README gap 5161) neither is `yesterday`: the request below still carries both, and the reader leaves them unread —
-even a stored `p` of 8, which the deleted decoder refused.  An absence proves an optional reader nothing (AGENTS §9.2). -/
+written down.  Since the owner's D112 (W-47 repair) `lastHash` is no field of `RuntimeIn`, since W-49 track Y
+(README gap 5161) neither is `yesterday`, and since the owner's D133 (W-50 repair track B, gap 5524) neither is
+`break`: the request below still carries all three, and the reader leaves them unread — even a stored `p` of 8, which
+the deleted decoder refused.  An absence proves an optional reader nothing (AGENTS §9.2). -/
 theorem readState_accepts_a_running_day :
-    (readState ⟨1000, 0⟩ (.obj
+    (readState (.obj
       [("active".toList, .obj [("id".toList, .str "m2".toList),
           ("started".toList, .num 900), ("estMin".toList, .num 60)]),
        ("break".toList, .obj [("started".toList, .num 940),
@@ -620,9 +621,8 @@ theorem readState_accepts_a_running_day :
        ("lastHash".toList, .str "00000000000000ff".toList),
        ("yesterday".toList, .arr [.obj [("id".toList, .str "m1".toList),
           ("p".toList, .num 8)]])])).map (fun st =>
-        (st.active, st.brk, st.interrupt))
+        (st.active, st.interrupt))
       = .ok (some ⟨"m2".toList, ⟨900, 0⟩, 60, false⟩,
-             some ⟨some ⟨940, 0⟩, 10, some BreakPlace.walk⟩,
              some ⟨some ⟨950, 0⟩, some "m1".toList⟩) := by rfl
 
 /-! ### `routines`' rejection theorems (R10) -/
@@ -692,8 +692,8 @@ theorem readRoutines_accepts_two_instances :
 
 /-- **A request that still carries `overrides` plans no what-if** — the key is unread, so the section reads as the
 same section without it (the owner's D112; README gap 5021).  `PlanReq.overrides` is the kernel's own what-if's. -/
-theorem readPlannerSection_leaves_overrides_unread (now : Cal.Instant) :
-    readPlannerSection now (.obj [("overrides".toList, .obj
+theorem readPlannerSection_leaves_overrides_unread :
+    readPlannerSection (.obj [("overrides".toList, .obj
       [("drop".toList, .arr [.str "m2".toList])])])
       = .ok ⟨RuntimeIn.empty, [], none⟩ := rfl
 
@@ -734,13 +734,13 @@ theorem readBatchMaxMin_is_the_forks_u32_width :
 
 /-- **The empty section is the empty planner input** — nothing running, no instance due, no
 what-if — so every refusal above is a refusal of something a host actually sent. -/
-theorem readPlannerSection_of_an_empty_object (now : Cal.Instant) :
-    readPlannerSection now (.obj [])
+theorem readPlannerSection_of_an_empty_object :
+    readPlannerSection (.obj [])
       = .ok ⟨RuntimeIn.empty, [], none⟩ := rfl
 
 /-- **A `routines` key that is not an array is refused by name**, never read as none. -/
-theorem readPlannerSection_refuses_a_routines_that_is_not_an_array (now : Cal.Instant) :
-    readPlannerSection now (.obj [("routines".toList, .num 3)])
+theorem readPlannerSection_refuses_a_routines_that_is_not_an_array :
+    readPlannerSection (.obj [("routines".toList, .num 3)])
       = .error (PlannerRefusal.badRoutine 0 PlanKey.routines) := rfl
 
 /-! ## The entry — R9's one export, one section further along
@@ -1060,7 +1060,7 @@ def runPlanner (j : JVal) : Except JVal JVal :=
     | .error e => .error e
     | .ok (_, none) => .error (plannerRefusalJson PlannerRefusal.capacityAbsent)
     | .ok (r, some parts) =>
-      match readPlannerSection parts.cap.look.today0.now sec with
+      match readPlannerSection sec with
       | .error x => .error (plannerRefusalJson ((eveningFirst parts).getD x))
       | .ok q =>
         match readBatchMaxMin parts.sec with
@@ -1131,7 +1131,7 @@ refusal. -/
 theorem runPlanner_answers_the_day (j sec r : JVal) (b : Nat) (parts : CapParts)
     (q : PlannerIn) (req : Planner.PlanReq) (ot : Option (Id × Nat × Option Planner.WfGrown))
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hs : readPlannerSection sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
     (ho : readOvertime sec = .ok ot) (hn : EmitWire.answersRows r = false) :
     runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req)
@@ -1145,7 +1145,7 @@ false of a request carrying one (`overtimeJson_answers_the_what_if` is the one p
 theorem runPlanner_answers_the_day_without_an_overtime (j sec r : JVal) (b : Nat)
     (parts : CapParts) (q : PlannerIn) (req : Planner.PlanReq)
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hs : readPlannerSection sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
     (ho : readOvertime sec = .ok none) (hn : EmitWire.answersRows r = false) :
     runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req)
@@ -1159,7 +1159,7 @@ with its `rows` value read through `EmitWire.the_planned_days_rows_are_rowsOf`: 
 theorem runPlanner_answers_the_days_rows (j sec r : JVal) (b : Nat) (parts : CapParts)
     (q : PlannerIn) (req : Planner.PlanReq) (ot : Option (Id × Nat × Option Planner.WfGrown))
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hs : readPlannerSection sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
     (ho : readOvertime sec = .ok ot) (hn : EmitWire.answersRows r = false) :
     ∃ tail, runPlanner j = .ok (withPlanner r (planJson (Planner.dayPlan req)
@@ -1175,7 +1175,7 @@ every other refusal has had its say. -/
 theorem runPlanner_refuses_a_plan_section_beside_it (j sec r : JVal) (b : Nat) (parts : CapParts)
     (q : PlannerIn) (req : Planner.PlanReq) (ot : Option (Id × Nat × Option Planner.WfGrown))
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hs : readPlannerSection sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
     (ho : readOvertime sec = .ok ot) (hn : EmitWire.answersRows r = true) :
     runPlanner j = .error (plannerRefusalJson PlannerRefusal.planWithPlanner) := by
@@ -1188,7 +1188,7 @@ theorem planWithPlanner_spells_itself : PlannerRefusal.planWithPlanner.text = "p
 theorem runPlanner_refuses_an_overtime_the_decoder_refuses (j sec r : JVal) (b : Nat)
     (parts : CapParts) (q : PlannerIn) (req : Planner.PlanReq) (x : PlannerRefusal)
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hs : readPlannerSection sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .ok req)
     (ho : readOvertime sec = .error x) :
     runPlanner j = .error (plannerRefusalJson x) := by
@@ -1210,7 +1210,7 @@ that makes every bound in this module reachable from the FFI. -/
 theorem runPlanner_refuses_a_section_the_decoder_refuses (j sec r : JVal) (parts : CapParts)
     (x : PlannerRefusal)
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .error x) (hg : eveningFirst parts = none) :
+    (hs : readPlannerSection sec = .error x) (hg : eveningFirst parts = none) :
     runPlanner j = .error (plannerRefusalJson x) := by
   simp only [runPlanner, hp, hr, hs, hg, Option.getD]
 
@@ -1227,7 +1227,7 @@ caller, which is what makes its bound more than a definition. -/
 theorem runPlanner_refuses_a_batch_max_min_the_decoder_refuses (j sec r : JVal)
     (parts : CapParts) (q : PlannerIn) (x : PlannerRefusal)
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hs : readPlannerSection sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .error x) :
     runPlanner j = .error (plannerRefusalJson x) := by
   simp only [runPlanner, hp, hr, hs, hb]
@@ -1238,7 +1238,7 @@ window instance `mkRoutine?` rejects. -/
 theorem runPlanner_refuses_a_request_the_assembler_refuses (j sec r : JVal) (b : Nat)
     (parts : CapParts) (q : PlannerIn) (x : PlannerRefusal)
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .ok q)
+    (hs : readPlannerSection sec = .ok q)
     (hb : readBatchMaxMin parts.sec = .ok b) (hq : planReqOf parts b q = .error x) :
     runPlanner j = .error (plannerRefusalJson x) := by
   simp only [runPlanner, hp, hr, hs, hb, hq]
@@ -1876,13 +1876,13 @@ readers refuse is refused by their names first. -/
 /-- **The key is read as itself — past a day too, since W-41; absent it reads `none`; past the host's width it is
 refused** by the active record's name, never clamped (R10). -/
 theorem readState_reads_the_hosts_worked_minutes :
-    (readState ⟨1000, 0⟩ (.obj [("active".toList, .obj [("id".toList, .str "m2".toList),
+    (readState (.obj [("active".toList, .obj [("id".toList, .str "m2".toList),
         ("started".toList, .num 900), ("estMin".toList, .num 60),
         ("workedMin".toList, .num 1441)])])).map (fun st => st.worked.map Fin.val) = .ok (some 1441) ∧
-    (readState ⟨1000, 0⟩ (.obj [("active".toList, .obj [("id".toList, .str "m2".toList),
+    (readState (.obj [("active".toList, .obj [("id".toList, .str "m2".toList),
         ("started".toList, .num 900), ("estMin".toList, .num 60)])])).map
         (fun st => st.worked.map Fin.val) = .ok none ∧
-    (readState ⟨1000, 0⟩ (.obj [("active".toList, .obj [("id".toList, .str "m2".toList),
+    (readState (.obj [("active".toList, .obj [("id".toList, .str "m2".toList),
         ("started".toList, .num 900), ("estMin".toList, .num 60),
         ("workedMin".toList, .num 4294967296)])])).map (fun st => st.worked.map Fin.val)
       = .error (PlannerRefusal.badActive PlanKey.workedMin) :=
@@ -2512,8 +2512,8 @@ theorem readRoutine_closes_inside_the_calendar {i : Nat} {v : JVal} {x : Routine
     exact hlt
 
 /-- **Every routine the section's reader accepts closes inside the calendar.** -/
-theorem readPlannerSection_routines_close_inside_the_calendar {now : Cal.Instant} {sec : JVal} {q : PlannerIn}
-    (h : readPlannerSection now sec = .ok q) : ∀ x ∈ q.routines, x.winHi < LogStamp.yearEnd := by
+theorem readPlannerSection_routines_close_inside_the_calendar {sec : JVal} {q : PlannerIn}
+    (h : readPlannerSection sec = .ok q) : ∀ x ∈ q.routines, x.winHi < LogStamp.yearEnd := by
   unfold readPlannerSection at h
   obtain ⟨_, -, h⟩ := capBind_ok_elim h
   dsimp only at h
@@ -2584,8 +2584,8 @@ theorem mkRoutines?_unknown_item {p : PlanCore} {xs : List RoutineIn} {i : Id}
 reader bounds every `winHi` by `EmitWire.secWithin` — `Cal.mkInstant?`'s bound, the very bound `Planner.mkRoutine?`
 refuses past — so an instance closing outside the calendar is refused by the reader, `badRoutine <i> winHi`, before
 the assembler sees it.  For EVERY request, not only the binary's. -/
-theorem planReqOf_never_refuses_past_the_horizon {now : Cal.Instant} {sec : JVal} {q : PlannerIn}
-    (hq : readPlannerSection now sec = .ok q) (parts : CapParts) (bm : Nat) (i : Id) :
+theorem planReqOf_never_refuses_past_the_horizon {sec : JVal} {q : PlannerIn}
+    (hq : readPlannerSection sec = .ok q) (parts : CapParts) (bm : Nat) (i : Id) :
     planReqOf parts bm q ≠ .error (.routineRefused (.pastTheHorizon i)) := by
   intro h
   have hwin := readPlannerSection_routines_close_inside_the_calendar hq
@@ -2736,7 +2736,7 @@ theorem an_evening_eveningFirst_refuses_is_never_planned (parts : CapParts) (y :
 theorem runPlanner_names_an_evening_past_the_calendar_over_a_section_refusal (j sec r : JVal) (parts : CapParts)
     (x y : PlannerRefusal)
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .error x) (hg : eveningFirst parts = some y) :
+    (hs : readPlannerSection sec = .error x) (hg : eveningFirst parts = some y) :
     runPlanner j = .error (plannerRefusalJson PlannerRefusal.eveningPastTheCalendar) := by
   rw [eveningFirst_names_only_the_evening parts y hg] at hg
   simp only [runPlanner, hp, hr, hs, hg, Option.getD]
@@ -2752,7 +2752,7 @@ this is the pair the narrowing owes: the new law, the case it leaves out, and th
 theorem runPlanner_refuses_a_section_the_decoder_refuses_as_written_fails_where_the_order_fires (j sec r : JVal)
     (parts : CapParts) (x y : PlannerRefusal)
     (hp : jget j "planner" = .ok (some sec)) (hr : EmitWire.runRowsP j = .ok (r, some parts))
-    (hs : readPlannerSection parts.cap.look.today0.now sec = .error x) (hg : eveningFirst parts = some y)
+    (hs : readPlannerSection sec = .error x) (hg : eveningFirst parts = some y)
     (hx : x.text ≠ PlannerRefusal.eveningPastTheCalendar.text) :
     runPlanner j ≠ .error (plannerRefusalJson x) := by
   rw [runPlanner_names_an_evening_past_the_calendar_over_a_section_refusal j sec r parts x y hp hr hs hg]
@@ -2841,14 +2841,7 @@ theorem respondPlanner_is_respondRows_without_a_planner_section_is_refuted :
   rw [h1] at h2
   exact Bool.noConfusion h2
 
-/-- **The optional reader hands the break on, decided** (W-49 track Y, check 9's second pass): re-verifying the row this
-step's deletions drifted found `readOptBreak` ALONE at `default` — `readState_accepts_a_running_day`'s `rfl` was the one
-proof that told it from the constant — so a reader that answered a constant is refused by `decide` here, as
-`readOptInterrupt_reads_the_interruption` refuses one for the interruption. -/
-theorem readOptBreak_reads_the_break :
-    (match readOptBreak ⟨1000, 0⟩ (.obj [("break".toList, .obj [("started".toList, .num 940),
-        ("plannedMin".toList, .num 10), ("place".toList, .str "walk".toList)])]) with
-      | .ok (some x) => decide (x = ⟨some ⟨940, 0⟩, 10, some BreakPlace.walk⟩) | _ => false) = true := by decide
+/- readOptBreak_reads_the_break went with readOptBreak at W-50 repair track B (the owner's D133, README gap 5524). -/
 
 end PlanWire
 end Tm

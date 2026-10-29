@@ -421,24 +421,22 @@ fn an_active_estimate_past_the_day_is_planned_and_past_the_width_refused() {
     assert_eq!(planner_err(&resp).as_deref(), Some("badActive wf"), "{resp}");
 }
 
-/// **A break past the day is READ since W-41** (D81, gap 3902: `tm break 25h`
-/// stores 1,500 minutes), and one past the host's width is refused.
+/// **A running break on the wire is left UNREAD since the owner's D133** (W-50 repair track B, README gap 5524):
+/// the planner reads the running break off the request's own replay (`Planner.PlanReq.runningBreak`), so a
+/// `state.break` — one past the host's width, one begun after `now`, or one at a place the table does not know,
+/// which the decoder refused `badBreak wf`, `badBreak wf` and `badBreak place` until then (D81, gap 3902; D111) —
+/// is no refusal of the section at all.
 #[test]
-fn a_break_past_the_day_is_planned_and_past_the_width_refused() {
-    let resp = call(&request(state(json!({"break": {"plannedMin": 1441}}))));
-    assert_eq!(planner_err(&resp), None, "{resp}");
-    let resp = call(&request(state(json!({"break": {"plannedMin": 4_294_967_296_u64}}))));
-    assert_eq!(planner_err(&resp).as_deref(), Some("badBreak wf"), "{resp}");
-}
-
-/// **A running break's start after `now` stays refused** (`badBreak wf`): D81
-/// reads a running break's start as the latest instant at or before `now` with
-/// its stored clock, so no request the binary builds carries one, and D78 does
-/// not reach it.
-#[test]
-fn a_running_break_that_started_after_now_is_refused() {
-    let resp = call(&request(state(json!({"break": {"started": NOW + 10, "plannedMin": 20}}))));
-    assert_eq!(planner_err(&resp).as_deref(), Some("badBreak wf"), "{resp}");
+fn a_break_on_the_wire_is_left_unread_whatever_it_carries() {
+    for brk in [
+        json!({"plannedMin": 1441}),
+        json!({"plannedMin": 4_294_967_296_u64}),
+        json!({"started": NOW + 10, "plannedMin": 20}),
+        json!({"plannedMin": 10, "place": "hammock"}),
+    ] {
+        let resp = call(&request(state(json!({ "break": brk.clone() }))));
+        assert_eq!(planner_err(&resp), None, "{brk}: {resp}");
+    }
 }
 
 /// **The host's worked minutes past a day are READ since W-41** (D81, gap 3902's
@@ -457,18 +455,6 @@ fn the_worked_minutes_past_a_day_are_read_and_past_the_width_refused() {
     assert_eq!(planner_err(&resp).as_deref(), Some("badActive workedMin"), "{resp}");
 }
 
-/// **An unknown `place` word**, never defaulted to a seat (AGENTS §5.7).
-#[test]
-fn an_unknown_break_place_is_refused_by_name() {
-    let resp = call(&request(state(
-        json!({"break": {"plannedMin": 10, "place": "hammock"}}),
-    )));
-    assert_eq!(
-        planner_err(&resp).as_deref(),
-        Some("badBreak place"),
-        "{resp}"
-    );
-}
 
 /// **`lastHash` and `overrides` are no longer read** (the owner's D112, W-47 repair, README gap
 /// 5021): a request that still carries either — even one the old decoder refused, a short hash and a

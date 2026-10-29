@@ -1113,6 +1113,35 @@ fn log_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
 /// `drop` lines a close writes, then its `close` lines, consecutive) names the item, or — a child
 /// the week close dropped into its parent, which logs nothing (goal B3) — the item is settled
 /// (`[~]` or `[x]`) and a close is logged after the block began. Named at the block's `start`.
+/// **The grain of the file a close's batch row took its item from** (README gap 5503): `day`,
+/// `week` or `month`, read off the row's own `from` — a `demote`'s period key (`2026-W37`), a
+/// `move`'s path (`week/2026-W37.md`) — and `month` for a `drop`, which a close's batch holds only
+/// for the month close's `--drop`. `?` when the line does not say.
+fn row_grain(ctx: &Ctx, r: &ViewRow) -> &'static str {
+    let drop = tm_core::log::Event::Drop { id: String::new() }.name().to_string();
+    if r.tag == drop {
+        return "month";
+    }
+    let from = Ctx::entries_at(&ctx.store, &ctx.cfg, ctx.today, &[r.line])
+        .ok()
+        .and_then(|m| m.get(&r.line).and_then(|(raw, _)| serde_json::from_str::<serde_json::Value>(raw.get()).ok()))
+        .and_then(|v| v.get("from").and_then(|f| f.as_str()).map(str::to_string));
+    let Some(from) = from else { return "?" };
+    let horizon = Horizon::from_path(&from).or_else(|| {
+        IsoWeek::parse(&from)
+            .ok()
+            .map(Horizon::Week)
+            .or_else(|| parse_date(&from).ok().map(Horizon::Day))
+            .or_else(|| YearMonth::parse(&from).ok().map(Horizon::Month))
+    });
+    match horizon {
+        Some(Horizon::Day(_)) => "day",
+        Some(Horizon::Week(_)) => "week",
+        Some(Horizon::Month(_)) => "month",
+        _ => "?",
+    }
+}
+
 fn taken_block_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
     let Some(b) = ctx.replay.open_block.as_ref() else {
         return Vec::new();
@@ -1138,46 +1167,71 @@ fn taken_block_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
         .iter()
         .skip(from + 1)
         .any(|r| !r.cancelled && own.contains(&r.tag) && r.id.as_deref() == Some(b.id.as_str()));
-    let settled = !by_user
+    // The item a close dropped into its parent (`dropIntoParent`, the week close's alone,
+    // `closePolicy_drops_children_only_at_week`) is left `[~]` and logs nothing (gap 5474).
+    let dropped = !by_user
         && ctx
             .tree
             .get(&Ctx::key(&b.id))
-            .is_some_and(|i| matches!(i.state, tm_core::model::State::Dropped | tm_core::model::State::Done));
-    // (the close's key, whether its batch named the item) for every batch holding a `close` line.
+            .is_some_and(|i| matches!(i.state, tm_core::model::State::Dropped));
+    // **A close's batch is the rows that share its own instant** (README gap 5503, W-50 repair
+    // track R): every line one close logs — its `drop`s, `demote`s, `move`s and `close` rows — is
+    // stamped at the verb's one `now` (`closing::run`, [`Ctx::append_event`]), so a user's own
+    // `move` logged at another instant just before the next close is not that close's. And a close
+    // is named only when its batch takes the item: the close whose grain is the grain of the file
+    // the item's batch row left (a `demote`'s or `move`'s `from`; a `drop` in a batch is the month
+    // close's `--drop`), or — for a child the week close dropped into its parent, which logs
+    // nothing — the week close at that instant, when the item is `[~]`.
+    let tail: Vec<&ViewRow> = rows.iter().skip(from + 1).filter(|r| !r.cancelled).collect();
     let mut found: Option<String> = None;
-    let mut named = false;
-    let mut batch_key: Option<String> = None;
-    for r in rows.iter().skip(from + 1).filter(|r| !r.cancelled) {
-        if r.tag == close {
-            // Which close, from the replay's own close records (the `close` line's instant).
-            let names: Vec<String> = ctx
-                .replay
-                .closes
+    let mut i = 0;
+    while i < tail.len() && found.is_none() {
+        let t = tail[i].t;
+        let mut j = i;
+        while j < tail.len() && tail[j].t == t && (tail[j].tag == close || filed.contains(&tail[j].tag)) {
+            j += 1;
+        }
+        if j == i {
+            i += 1;
+            continue;
+        }
+        let group = &tail[i..j];
+        i = j;
+        if !group.iter().any(|r| r.tag == close) {
+            continue;
+        }
+        let closes: Vec<&tm_core::log::CloseRecord> = ctx.replay.closes.iter().filter(|c| c.t == t).collect();
+        let mut grains: Vec<&'static str> = Vec::new();
+        for r in group.iter().filter(|r| filed.contains(&r.tag) && r.id.as_deref() == Some(b.id.as_str())) {
+            grains.push(row_grain(ctx, r));
+        }
+        let took: Vec<String> = if !grains.is_empty() {
+            closes
                 .iter()
-                .filter(|c| c.t == r.t)
+                .filter(|c| grains.iter().any(|g| *g == "?" || *g == c.period))
                 .map(|c| format!("the {} close of {}", c.period, c.key))
-                .collect();
-            batch_key = Some(if names.is_empty() {
-                format!("a close at {}", r.display())
-            } else {
-                names.join(", ")
-            });
-            if named || settled {
-                found = batch_key.clone();
-                break;
-            }
-        } else if filed.contains(&r.tag) {
-            if batch_key.is_some() {
-                // a new batch begins after a close's lines
-                batch_key = None;
-                named = false;
-            }
-            named |= r.id.as_deref() == Some(b.id.as_str());
+                .collect()
+        } else if dropped {
+            closes
+                .iter()
+                .filter(|c| c.period == "week")
+                .map(|c| format!("the {} close of {}", c.period, c.key))
+                .collect()
         } else {
-            batch_key = None;
-            named = false;
+            Vec::new()
+        };
+        if !took.is_empty() {
+            found = Some(took.join(", "));
+        } else if !grains.is_empty() && closes.is_empty() {
+            found = Some(format!("a close at {}", group[0].display()));
         }
     }
+    let settled = dropped
+        || (!by_user
+            && ctx
+                .tree
+                .get(&Ctx::key(&b.id))
+                .is_some_and(|i| matches!(i.state, tm_core::model::State::Done)));
     let Some(key) = found else {
         return Vec::new();
     };
@@ -1190,8 +1244,8 @@ fn taken_block_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
         format!(
             "a block on ^{} has been running since {} while a close logged after it ({}) took its item \
              — {what}, so the block counts the time since as work; a close since D130 stops such a block \
-             first. End it with `tm stop --at HH:MM` at the time you stopped working on it (the stop \
-             writes its remainder back to the item's line where it stands, and reopens it)",
+             first. End it with `tm stop --at HH:MM` at the time you stopped working on it (the stop is \
+             logged; a settled line is left as it stands, D132)",
             b.id,
             b.started.with_timezone(&ctx.cfg.tz).format("%Y-%m-%d %H:%M"),
             key,

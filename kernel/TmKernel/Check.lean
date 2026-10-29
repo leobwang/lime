@@ -4718,8 +4718,6 @@ open Tm
 #print axioms Tm.Planner.mkBudget?_refuses_an_impossible_budget
 #print axioms Tm.Planner.mkBudget?_accepts
 #print axioms Tm.Planner.mkActive?_accepts
-#print axioms Tm.Planner.mkBreak?_refuses_a_start_after_now
-#print axioms Tm.Planner.mkBreak?_accepts
 #print axioms Tm.Planner.RuntimeIn.activeId_empty
 #print axioms Tm.Planner.PlanOverrides.isEmpty_empty
 #print axioms Tm.Planner.assignedOf_empty
@@ -6454,10 +6452,7 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlanWire.readActive_refuses_a_long_id
 #print axioms Tm.PlanWire.readActive_refuses_a_start_past_the_calendar
 #print axioms Tm.PlanWire.readActive_accepts_a_running_block
-#print axioms Tm.PlanWire.readBreak_refuses_an_unknown_place
 #print axioms Tm.PlanWire.the_four_break_places_read
-#print axioms Tm.PlanWire.readBreak_refuses_a_start_after_now
-#print axioms Tm.PlanWire.readBreak_accepts_a_running_break
 #print axioms Tm.PlanWire.readInterrupt_refuses_a_long_id
 #print axioms Tm.PlanWire.readInterrupt_accepts_an_open_interruption
 #print axioms Tm.PlanWire.readState_of_an_empty_object
@@ -7934,8 +7929,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 -- =====================================================================
 #print axioms Tm.Planner.mkActive?_refuses_an_estimate_past_the_width
 #print axioms Tm.Planner.mkActive?_reads_an_estimate_past_the_day
-#print axioms Tm.Planner.mkBreak?_refuses_a_break_past_the_width
-#print axioms Tm.Planner.mkBreak?_reads_a_break_past_the_day
 #print axioms Tm.Planner.mkActive?_refuses_a_start_after_now_is_refuted
 #print axioms Tm.Planner.a_worked_reading_past_the_width_is_refused
 #print axioms Tm.Planner.the_worked_minutes_bound_is_run_at_the_width
@@ -7956,7 +7949,6 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.PlanWire.readActive_accepts_a_start_after_now
 #print axioms Tm.PlanWire.readActive_refuses_an_estimate_past_the_width
 #print axioms Tm.PlanWire.readActive_reads_an_estimate_past_the_day
-#print axioms Tm.PlanWire.readBreak_refuses_a_break_past_the_width
 #print axioms Tm.PlanWire.readInterrupt_accepts_a_start_after_now
 #print axioms Tm.PlanWire.readOptWorked_refuses_a_reading_past_the_width
 #print axioms Tm.PlanWire.planReqRefusal_names_an_evening_past_the_calendar
@@ -8926,7 +8918,6 @@ seal laws re-proved over the instants they read. -/
 -- left the decoder with `Planner.RuntimeIn`'s field; six laws went with their subjects (named in the
 -- block) and one is new.
 #print axioms Tm.PlanWire.readState_leaves_yesterday_unread
-#print axioms Tm.PlanWire.readOptBreak_reads_the_break
 
 -- ===========================================================================
 -- APPENDED 2026-10-14 by stage 6 W-49 track Q (README "Stage 6 — W-49 track Q", gap 5181): the
@@ -8990,12 +8981,10 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.BreakFold.uncreditFx_noBrkSeg
 #print axioms Tm.PlanCheck.hopen_on_a_resumed_run
 #print axioms Tm.PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run
-#print axioms Tm.PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it
 #print axioms Tm.PlannerWit.openAfterBreakRun_resumes
 #print axioms Tm.PlannerWit.planReqOf_keeps_the_hosts_runtime
 #print axioms Tm.PlannerWit.the_break_law_holds_whole_at_the_open_after_break_request_by_the_fold
 #print axioms Tm.PlannerWit.the_fold_discharges_the_open_block_clause_at_the_open_after_break_request
-#print axioms Tm.PlannerWit.the_hosts_running_break_lays_a_block_across_it
 #print axioms Tm.PlannerWit.ydBreakRun_resumes_ok
 
 -- APPENDED 2026-10-17 by stage 6 W-49 repair (README "Stage 6 — W-49 repair", gap 5411): the two
@@ -9060,3 +9049,21 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.BreakFold.stepWith_brks_of_brk_as_w49_stated_it_is_refuted
 #print axioms Tm.PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it_as_w49_stated_it_is_refuted
 #print axioms Tm.Replay.a_late_break_past_the_bound_is_not_ended_by_a_start
+
+-- APPENDED W-50 REPAIR TRACK R (README "Stage 6 — W-50 repair, track R", gaps 5500-5502): D129's stamp-order edges.
+#print axioms Tm.Replay.a_start_tying_the_break_logged_before_it_ends_nothing
+#print axioms Tm.Replay.a_drawn_piece_is_not_a_start
+#print axioms Tm.Replay.the_earliest_start_ends_a_late_break
+#print axioms Tm.Replay.the_earliest_start_ends_a_late_break_logged_in_either_order
+
+-- ===========================================================================
+-- APPENDED 2026-10-28 (stage 6, W-50 repair, track B — the owner's D133, README gaps 5520-5539, parity P130).
+-- The running break leaves the planner wire: `Planner.PlanReq.runningBreak` reads it off the request's own replay.
+-- Removed above with their definitions (README gap 5524): Planner's four mkBreak? laws, PlanWire's four readBreak
+-- laws and readOptBreak_reads_the_break; PlannerWit's two host-copy witnesses, each refuted below under its old name.
+-- ===========================================================================
+#print axioms Tm.PlanWire.readState_leaves_the_break_unread
+#print axioms Tm.PlannerWit.the_running_break_is_the_replays
+#print axioms Tm.PlannerWit.the_hosts_running_break_lays_a_block_across_it_is_refuted
+#print axioms Tm.PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it_is_refuted
+#print axioms Tm.PlannerWit.hrun_holds_on_the_host_and_yd_break_logs

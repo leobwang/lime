@@ -1194,9 +1194,14 @@ fn clock_sec(tz: Tz, date: NaiveDate, t: NaiveTime) -> i64 {
     kernel_sec(local_dt(tz, date, t))
 }
 
-/// **§9's three running records** as the section's `state` object
-/// (`PlanWire.readState`): `active`, `break` and `interrupt`, each present only
-/// when the state holds it. `lastHash` and `yesterday` are not written (module
+/// **§9's running records** as the section's `state` object
+/// (`PlanWire.readState`): `active` and `interrupt`, each present only when the
+/// state holds it. **The running break is not written since the owner's D133**
+/// (README gaps 5340 and 5524, W-50 repair track B, parity P130): the kernel's
+/// planner reads it off the request's own replay (`Planner.PlanReq.runningBreak`,
+/// the `break_start` no `break` line has ended), and a break `.tm/state.json`
+/// alone holds is logged by the verb before it plans (`Ctx::log_a_cached_break`),
+/// so there is no second spelling to send. `lastHash` and `yesterday` are not written (module
 /// docs: the kernel decodes neither).
 ///
 /// **A start the log holds is read from the log** (the W-40 repair, README gaps
@@ -1207,30 +1212,19 @@ fn clock_sec(tz: Tz, date: NaiveDate, t: NaiveTime) -> i64 {
 /// ([`crate::log::Replay::open_interruption`]). `.tm/state.json`'s `started` is a
 /// bare `HH:MM`, a cache of those instants (D42), and fork `Planner::active_run`
 /// put it on the plan's date — so after local midnight a block begun before it
-/// was sent as starting TONIGHT, after `now`. And since the owner's **D105**
-/// (parity P100) the BREAK's is the instant of its `break_start` line too
-/// ([`crate::log::Replay::open_break`]), read by
-/// [`crate::store::BreakState::started_at_logged`], the one reading every host
-/// site of a running break's start shares. Until D105 the log held no line for a
-/// running break (README gap 3820), so the break alone kept the cache's clock:
-/// since W-41's land step (README gap 4001, closing it beside track T's P73)
-/// placed by [`crate::store::BreakState::started_at`] — the latest instant at or
-/// before `now` whose local clock is the cache's, which is still the reading for
-/// a break the log holds no `break_start` for (one a binary before D105 began) —
-/// where until then it was the cache's clock on the plan's date, tonight's after
-/// midnight, which the kernel refused (`badBreak wf`). A record the log does not
-/// hold keeps the cache's clock on the plan's date (unreachable after D42's
-/// reconcile).
+/// was sent as starting TONIGHT, after `now`. (The BREAK's was the instant of its
+/// `break_start` line from the owner's D105 until D133 took it off the wire.) A
+/// record the log does not hold keeps the cache's clock on the plan's date
+/// (unreachable after D42's reconcile).
 ///
 /// **No start is moved** (README gap 3952). From W-40 track E until the repair a
 /// start after `now` was sent AS `now` — a reading no owner decision names (P68
 /// as issued) — and composed with the cache's clock it planned a block begun
 /// before midnight as begun at `now`: a refusal by name had become a plausible
 /// wrong answer (gap 3943). A start still after `now` is sent as it is read —
-/// `now` is read here only to place a running break, never to move a start — and
-/// since W-41 the kernel plans a block or an interruption begun after `now` from
+/// and since W-41 the kernel plans a block or an interruption begun after `now` from
 /// `now`, as the fork does (the owner's D78; P68 as restated at W-41 track K).
-pub fn state_json(state: &RuntimeState, logged: &LoggedStarts, date: NaiveDate, now: DateTime<Tz>, tz: Tz) -> Value {
+pub fn state_json(state: &RuntimeState, logged: &LoggedStarts, date: NaiveDate, tz: Tz) -> Value {
     let cache = |t: NaiveTime| clock_sec(tz, date, t);
     let instant = |t: DateTime<chrono::FixedOffset>| kernel_sec(t.with_timezone(&tz));
     let mut o = Map::new();
@@ -1244,15 +1238,6 @@ pub fn state_json(state: &RuntimeState, logged: &LoggedStarts, date: NaiveDate, 
             "active".to_string(),
             json!({"id": a.id.as_str(), "started": started,
                    "estMin": a.est_min, "paused": a.paused}),
-        );
-    }
-    if let Some(b) = &state.break_ {
-        // The ONE reading of a running break's start (the owner's D105, parity
-        // P100): the logged `break_start`'s instant, else the cache's clock.
-        o.insert(
-            "break".to_string(),
-            json!({"started": b.started_at_logged(logged.brk.as_ref(), tz, now).map(kernel_sec),
-                   "plannedMin": b.planned_min, "place": b.place}),
         );
     }
     if let Some(i) = &state.interrupt {
@@ -1279,18 +1264,14 @@ pub struct LoggedStarts {
     pub block: Option<(String, DateTime<chrono::FixedOffset>)>,
     /// [`crate::log::Replay::open_interruption`]'s `start`.
     pub interrupt: Option<DateTime<chrono::FixedOffset>>,
-    /// [`crate::log::Replay::open_break`]: the running break's logged start, its
-    /// planned minutes, place and day.
-    pub brk: Option<crate::log::OpenBreak>,
 }
 
 impl LoggedStarts {
-    /// The three instants, read off the replay.
+    /// The two instants, read off the replay.
     pub fn of(replay: &crate::log::Replay) -> LoggedStarts {
         LoggedStarts {
             block: replay.open_block.as_ref().map(|b| (b.id.clone(), b.started)),
             interrupt: replay.open_interruption().and_then(|i| i.start),
-            brk: replay.open_break.clone(),
         }
     }
 }
@@ -1510,7 +1491,7 @@ pub fn planner_json(
     overtime: Option<Value>,
 ) -> Value {
     let date = plan_date(state, now);
-    let mut o = json!({"state": state_json(state, &LoggedStarts::of(replay), date, now, tz), "routines": routines_json(routines)});
+    let mut o = json!({"state": state_json(state, &LoggedStarts::of(replay), date, tz), "routines": routines_json(routines)});
     if let Some(ot) = overtime {
         o["overtime"] = ot;
     }
@@ -2714,13 +2695,13 @@ mod tests {
             last_plan_hash: Some("0123456789abcdef".to_string()),
             ..RuntimeState::default()
         };
-        let v = state_json(&state, &LoggedStarts::default(), date, at(12, 0), tz());
+        let v = state_json(&state, &LoggedStarts::default(), date, tz());
         assert_eq!(v["active"], json!({"id": "m1", "started": kernel_sec(at(9, 5)), "estMin": 60, "paused": false}));
-        assert_eq!(v["break"], json!({"started": kernel_sec(at(10, 0)), "plannedMin": 20, "place": "walk"}));
         assert_eq!(v["interrupt"], json!({"started": null, "id": "m1"}));
-        // Read by no definition of the day (kernel/inputs-exempt.txt): not sent.
-        assert!(v.get("lastHash").is_none() && v.get("yesterday").is_none(), "{v}");
-        assert_eq!(state_json(&RuntimeState::default(), &LoggedStarts::default(), date, at(12, 0), tz()), json!({}));
+        // Read by no definition of the day (kernel/inputs-exempt.txt): not sent; and the running break, which the
+        // kernel reads off the request's replay since the owner's D133 (README gap 5524), is not sent either.
+        assert!(v.get("lastHash").is_none() && v.get("yesterday").is_none() && v.get("break").is_none(), "{v}");
+        assert_eq!(state_json(&RuntimeState::default(), &LoggedStarts::default(), date, tz()), json!({}));
         // The planned date is `state.date`, else `now`'s.
         assert_eq!(plan_date(&state, at(23, 0) + Duration::days(3)), date);
         assert_eq!(plan_date(&RuntimeState::default(), at(23, 0)), date);
@@ -2730,11 +2711,9 @@ mod tests {
     /// repair, README gaps 3943 and 3952, parity P69): a block begun at 23:00 and
     /// planned after midnight, with `.tm/state.json`'s date rolled, is sent at
     /// YESTERDAY's 23:00 — the instant of its own `start` line — not tonight's,
-    /// and so is the interruption's; the break, which the log holds no line for,
-    /// is placed by `BreakState::started_at`, the latest 23:50 at or before `now`
-    /// — yesterday's (W-41's land step, README gap 4001; until then the cache's
-    /// clock on the plan's date, tonight's); and a start after `now` is sent as it
-    /// is read. Until the repair the block's was the cache's clock on the plan's
+    /// and so is the interruption's; the running break is not sent at all since
+    /// the owner's D133 (README gap 5524: the kernel reads it off its replay); and
+    /// a start after `now` is sent as it is read. Until the repair the block's was the cache's clock on the plan's
     /// date, moved to `now`.
     #[test]
     fn a_running_record_starts_where_the_log_says_and_is_never_moved() {
@@ -2752,39 +2731,18 @@ mod tests {
         let logged = LoggedStarts {
             block: Some(("t4".to_string(), yesterday(23, 0).fixed_offset())),
             interrupt: Some(yesterday(23, 40).fixed_offset()),
-            brk: None,
         };
-        let now = at(0, 40);
-        let v = state_json(&state, &logged, date, now, tz());
+        let v = state_json(&state, &logged, date, tz());
         assert_eq!(v["active"]["started"], json!(kernel_sec(yesterday(23, 0))), "the log's start");
         assert_eq!(v["interrupt"]["started"], json!(kernel_sec(yesterday(23, 40))), "the log's start");
-        assert_eq!(v["break"]["started"], json!(kernel_sec(yesterday(23, 50))), "the latest 23:50 at or before now: no log line");
-        // Before midnight the same clock is today's (the latest 23:50 at or before 23:55).
-        let v = state_json(&state, &logged, date, at(23, 55), tz());
-        assert_eq!(v["break"]["started"], json!(kernel_sec(at(23, 50))), "this evening's 23:50");
+        // **No running break is written** (the owner's D133, README gap 5524): the kernel reads it off the
+        // request's own replay, so a cached break is no key of the section.
+        assert!(v.get("break").is_none(), "the running break is on the wire: {v}");
         // A log open block for ANOTHER item is not this one's start.
-        let other = LoggedStarts { block: Some(("m1".to_string(), yesterday(23, 0).fixed_offset())), interrupt: None, brk: None };
-        let v = state_json(&state, &other, date, now, tz());
+        let other = LoggedStarts { block: Some(("m1".to_string(), yesterday(23, 0).fixed_offset())), interrupt: None };
+        let v = state_json(&state, &other, date, tz());
         assert_eq!(v["active"]["started"], json!(kernel_sec(at(23, 0))), "the cache's clock");
         assert_eq!(v["interrupt"]["started"], json!(kernel_sec(at(23, 40))), "the cache's clock");
-        // **A break the log holds a `break_start` for is the log's, to the second** (the owner's
-        // D105, parity P100): the cache says 23:50 and the line 23:50:37 — the line's instant is
-        // the one reading `tm stop` and the TUI's timer net from, so the planner is sent it too.
-        let logged_break = LoggedStarts {
-            brk: Some(crate::log::OpenBreak {
-                started: (yesterday(23, 50) + Duration::seconds(37)).fixed_offset(),
-                planned_min: 20,
-                r#where: None,
-                day: date - Duration::days(1),
-            }),
-            ..logged.clone()
-        };
-        let v = state_json(&state, &logged_break, date, now, tz());
-        assert_eq!(
-            v["break"]["started"],
-            json!(kernel_sec(yesterday(23, 50) + Duration::seconds(37))),
-            "the logged `break_start`, not the cache's minute"
-        );
         // Nothing is moved: `state_json` takes no `now`, so a start after it is
         // sent as read and the kernel refuses it by name (`kernel_plan_codec.rs`).
     }

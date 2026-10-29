@@ -93,7 +93,6 @@ const CLASS: &[(&str, Option<&str>, Why, &str)] = &[
     ("shape", None, Why::ThrownNowhere, "no definition throws it (README gap 4791: a dead constructor)"),
     ("badState", Some("state"), Why::Shape, "planwire::planner_json writes `state` as an object"),
     ("badState", Some("active"), Why::Shape, "planwire::state_json writes `active` as an object of a `Map`"),
-    ("badState", Some("brk"), Why::Shape, "planwire::state_json writes `break` as an object of a `Map`"),
     ("badState", Some("interrupt"), Why::Shape, "planwire::state_json writes `interrupt` as an object of a `Map`"),
     ("badActive", Some("id"), Why::Shadowed, "a running item's id is a candidate's, bounded by `CapWire.maxCandId` first; past it only by hand (gap 4792)"),
     ("badActive", Some("started"), Why::HandEdited, "an instant outside the calendar: the kernel's `emit` refuses a start stamped past it (`badAt`, driven), so only a hand-edited log or `.tm/state.json` (gap 4793)"),
@@ -101,10 +100,6 @@ const CLASS: &[(&str, Option<&str>, Why, &str)] = &[
     ("badActive", Some("paused"), Why::HostType, "`ActiveBlock::paused: bool`"),
     ("badActive", Some("wf"), Why::HostType, "`ActiveBlock.wf` is `estMin ≤ Look.maxPlanMinutes`, the `u32`'s width"),
     ("badActive", Some("workedMin"), Why::HostType, "`planwire::add_worked_min(_, u32)`, `Planner.workedOf?` at the `u32`'s width"),
-    ("badBreak", Some("started"), Why::HostType, "`BreakState::started_at` is an instant at or before `now`"),
-    ("badBreak", Some("plannedMin"), Why::HostType, "`BreakState::planned_min: u32`"),
-    ("badBreak", Some("place"), Why::HandEdited, "`.tm/state.json`'s `where` is a String; `tm break` writes BreakPlace's four words (gap 4794)"),
-    ("badBreak", Some("wf"), Why::HostType, "`BreakState.wf`: started at or before `now`, planned within the `u32`'s width"),
     ("badInterrupt", Some("started"), Why::HandEdited, "an instant outside the calendar: the kernel's `emit` refuses an interruption stamped past it (`badAt`, driven), so only a hand edit (gap 4793)"),
     ("badInterrupt", Some("id"), Why::Shadowed, "the interrupted item's id, a candidate's; past `maxCandId` only by hand (gap 4792)"),
     ("badRoutine", Some("routines"), Why::Shape, "planwire::routines_json writes an array"),
@@ -257,15 +252,18 @@ fn every_planner_refusal_is_classified() {
     let errs = constructors(&planner, "RoutineErr");
     // 20 until the W-47 repair, whose D112 exits deleted `badHash`, `badOverride` and `tooManyOverrides` with the
     // keys they refused (README gap 5021), and 18 until W-49 track Y, whose exit deleted the two refusals of
-    // `state.yesterday` with its decoder (README gap 5161): the floor is the enum's size, re-measured, not a margin.
-    assert!(ctors.len() >= 16 && ctors.contains(&"shape".to_string()) && ctors.contains(&"ciDisagrees".to_string()), "{ctors:?}");
+    // `state.yesterday` with its decoder (README gap 5161), and 16 until W-50 repair track B, whose D133 took the
+    // running break off the wire with `badBreak` (README gap 5524): the floor is the enum's size, re-measured.
+    assert!(ctors.len() >= 15 && ctors.contains(&"shape".to_string()) && ctors.contains(&"ciDisagrees".to_string()), "{ctors:?}");
     assert_eq!(errs.len(), 6, "{errs:?}");
     let thrown = thrown(&plan_wire, &ctors);
     // `> 40` until the W-47 repair: its D112 exits took `badState lastHash`, `badHash`, `badOverride` (three keys) and
     // `tooManyOverrides` out of the thrown set (README gap 5021) — the floor re-measured at its subject, 40 — and
     // `>= 40` until W-49 track Y, whose exit took badState yesterday, badYesterday and badYesterdayList out of it
-    // with the decoder that threw them (README gap 5161): re-measured at its subject, 38.
-    assert!(thrown.len() >= 38, "the scan reached {} pairs", thrown.len());
+    // with the decoder that threw them (README gap 5161): re-measured at its subject, 38; and `>= 38` until W-50
+    // repair track B, whose D133 took badState break and badBreak's four keys out of it with the reader that threw
+    // them (README gap 5524): re-measured at its subject, 33.
+    assert!(thrown.len() >= 33, "the scan reached {} pairs", thrown.len());
     let mut problems = Vec::new();
     for c in &ctors {
         if !CLASS.iter().any(|(n, _, _, _)| n == c) {
@@ -333,10 +331,11 @@ fn key_paths(v: &Value, at: &str, out: &mut BTreeSet<String>) {
     }
 }
 
-/// The key paths the class lets the encoder write: none of `lastHash`, `yesterday` or `overrides`.
+/// The key paths the class lets the encoder write: none of `lastHash`, `yesterday`, `overrides` or, since the owner's
+/// D133 (README gap 5524), `break`.
 const ADMITTED: &[&str] = &[
     "state", "state.active", "state.active.id", "state.active.started", "state.active.estMin", "state.active.paused",
-    "state.active.workedMin", "state.break", "state.break.started", "state.break.plannedMin", "state.break.place",
+    "state.active.workedMin",
     "state.interrupt", "state.interrupt.started", "state.interrupt.id", "routines", "routines[].id",
     "routines[].inst", "routines[].winLo", "routines[].winHi", "routines[].durMin", "routines[].mandatory",
     "overtime", "overtime.id", "overtime.blocks", "overtime.grown", "overtime.grown.remaining",
@@ -403,7 +402,7 @@ proptest! {
         let extra: Vec<&String> = paths.iter().filter(|p| !ADMITTED.contains(&p.as_str())).collect();
         prop_assert!(extra.is_empty(), "the encoder wrote a key the class does not admit: {:?}", extra);
         prop_assert!(planner["state"].is_object());
-        for k in ["active", "break", "interrupt"] {
+        for k in ["active", "interrupt"] {
             prop_assert!(planner["state"].get(k).is_none_or(Value::is_object), "{}", k);
         }
         prop_assert!(planner["routines"].is_array());

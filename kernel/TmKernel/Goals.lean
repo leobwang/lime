@@ -1295,13 +1295,19 @@ every step and every resume from a state holding them — every run from the emp
 `PlanCheck.hopen_on_a_resumed_run` gives `hopen` from them within two named bounds (the open block's ledger day not
 after the plan's, the plan's day within 31 of the newest held break: README gap 4914); so
 `PlanCheck.plan_places_no_block_over_a_break_on_a_resumed_run` proves this statement on a resumed run from `hrec`,
-`hrun` and the bounds.  `hrun` is false on two requests whose run the decoder builds, each standing on a reading, so
-neither is a refutation: the host's running break disagreeing with the replay's, which the decoder hands through
-(`PlannerWit.the_hosts_running_break_lays_a_block_across_it`, `PlannerWit.planReqOf_keeps_the_hosts_runtime`; README
-gaps 4761 and 5340), and a break running since the ledger day before a Block today's record credits, host and replay
-agreeing (`PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it`; the owner's D94 day rule against
-the running-break row, gap 5341).  `hrec` over the runs `Seal.resumeRun` builds — the drawn-pieces accounting — is not
-done. -/
+`hrun` and the bounds.  `hrun` was false on two requests whose run the decoder builds, each standing on a reading, so
+neither was a refutation: the host's running break disagreeing with the replay's, which the decoder handed through
+(README gaps 4761 and 5340), and a break running since the ledger day before a Block today's record credits (gap 5341).
+**Both are gone** (W-50 repair track B, README gaps 5524 and 5525): the owner's D129 ends a running break at a `start`
+logged after it, and the owner's D133 took the host's copy off the planner wire, so the planner reads the running break
+off the request's own replay alone (`Planner.PlanReq.runningBreak`) — each old witness is refuted under its old name
+(`PlannerWit.the_hosts_running_break_lays_a_block_across_it_is_refuted`,
+`PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it_is_refuted`) and `hrun` holds on both
+worlds (`PlannerWit.hrun_holds_on_the_host_and_yd_break_logs`).  What is owed is now a statement about the replay
+alone: `hrun` over the runs `Seal.resumeRun` builds — at the end of the log, every Block segment of today's record ends
+by the start of the break the machine holds open (`Replay.Machine.brkOpen`) — a fold invariant of `BreakFold.lean`'s
+kind, carried through `Replay.endsBrk`/`firstStart` (D129) and `runNet` (gap 5180), with gap 4914's bounds; and `hrec`
+over those runs — the drawn-pieces accounting — is not done either. -/
 theorem plan_places_no_block_over_a_break (r : PlanReq) (b k : WfSeg)
     (hb : b ∈ (dayPlan r).segments) (hk : k ∈ (dayPlan r).segments)
     (hbk : b.val.kind = SegKind.block) (hkk : k.val.kind = SegKind.brk) :

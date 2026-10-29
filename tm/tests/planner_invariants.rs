@@ -1017,12 +1017,10 @@ fn the_break_checker_fails_on_a_perturbed_answer() {
     let mut w = build(&case);
     let tz = w.cfg.tz;
     let span = (local_dt(tz, date(), NaiveTime::MIN), local_dt(tz, date() + Duration::days(1), NaiveTime::MIN));
-    let t = w.now - Duration::minutes(5);
-    w.state.break_ = Some(tm_core::store::BreakState {
-        started: Some(t.time()),
-        planned_min: 20,
-        place: Some("walk".to_string()),
-    });
+    // The break is LOGGED, as `tm break` logs it (D105): since the owner's D133 (README gap 5524) the planner reads
+    // the running break off the request's replay, so a break `.tm/state.json` alone held would reach no row.
+    let t = w.run_a_break(&case, Some((5, 20, "walk"))).expect("a break five minutes before now");
+    assert_eq!(t, w.now - Duration::minutes(5));
     let day = Kernel.day(&w, &w.state, w.now).expect("the kernel plans the break day");
     let check = |d: &DayPlan| forkclass::p45_rule(d, t, 20, Some("walk"), w.now, span);
     let (lo, hi, open) = check(&day).expect("the kernel's own day passes");

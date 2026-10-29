@@ -83,7 +83,7 @@ and G3's, over the `dayPlan` P5 will have built.
 Bounded here, each with its constructor **and** its rejection theorem:
 `BatchIds` (`mkBatch?`), `Seg` (`mkSeg?`), `Capped` and its `IdList` instance
 (`Capped.ofList?`, `Capped.cons?`), `Budget` (`mkBudget?`),
-`ActiveBlock` (`mkActive?`) and `BreakState` (`mkBreak?`) — `InterruptState` has none since W-41 (D78).
+`ActiveBlock` (`mkActive?`) — `InterruptState` has none since W-41 (D78), `BreakState` none since D133 (W-50 repair B).
 `PlanHash` (mkHash?) and `PlanOverrides` (mkOverrides?) had decoders until the W-47 repair, when the owner's D112 took
 `lastHash` and `overrides` off the wire (README gap 5021), and yesterday's priorities (mkYesterday?) until W-49 track Y,
 when the field went with its decoder (README gap 5161).
@@ -590,6 +590,26 @@ deriving DecidableEq, Repr
 def BreakPlace.word : BreakPlace → List Char
   | .walk => "walk".toList | .seat => "seat".toList | .bed => "bed".toList | .phone => "phone".toList
 
+end Planner
+
+namespace PlanWire
+
+/-- **The planner's reader of a place reads the ONE table** (the owner's D111, README gap 4904): `Log.placeWords` decides
+what a place is, as it does for a logged `break_start`, and the planner's constructor is the one whose word it is — held to
+the table both ways (`PlanWire.placeOf_reads_exactly_the_table`, `PlanWire.placeOf_reads_the_word`).  Until W-47 this
+spelled the four words a second time and the log's grammar read any word, so a hand-edited `"where": "moon"` stopped `tm
+plan`; `Planner.BreakPlace`'s constructors are a third spelling of the table (README gap 4950).  **Defined here, under
+its `PlanWire` name, since W-50 repair track B** (the owner's D133, README gap 5524): the running break is read off this
+call's own replay (`Planner.PlanReq.runningBreak`), whose `break_start` carries the word, and no longer off the planner wire,
+where `PlanWire.lean` read it — so the module that reads it is this one, and `PlanWire` imports it. -/
+def placeOf? (s : List Char) : Option Planner.BreakPlace :=
+  if Log.isPlace s then [Planner.BreakPlace.walk, .seat, .bed, .phone].find? (fun p => p.word == s)
+  else none
+
+end PlanWire
+
+namespace Planner
+
 /-- **Fork `store::BreakState`** — the running break. -/
 structure BreakState where
   started    : Option Cal.Instant
@@ -597,44 +617,12 @@ structure BreakState where
   place      : Option BreakPlace
 deriving DecidableEq, Repr
 
-/-- A break started at or before `now`, planned within the host's width (`Look.maxPlanMinutes`, D81 gap 3902). -/
-def BreakState.wf (now : Cal.Instant) (b : BreakState) : Bool :=
-  b.started.all (fun t => decide (t.sec ≤ now.sec)) && decide (b.plannedMin ≤ Look.maxPlanMinutes)
-
-abbrev WfBreak (now : Cal.Instant) := { b : BreakState // BreakState.wf now b = true }
-
-def mkBreak? (now : Cal.Instant) (b : BreakState) : Option (WfBreak now) :=
-  if h : BreakState.wf now b = true then some ⟨b, h⟩ else none
-
-/-- The design's name for this row is `refuses_a_negative_break`, which **cannot be stated**:
-the fork's field is a `u32` and this one is a `Nat`, so there is no negative break to refuse
-and a theorem of that name would be a precondition nothing can satisfy (AGENTS §5.2, §9.2's
-disguised-gap list).  The real bound is the host's width, the fork's `u32` (D81, gap 3902). -/
-theorem mkBreak?_refuses_a_break_past_the_width (now : Cal.Instant) (b : BreakState)
-    (h : Look.maxPlanMinutes < b.plannedMin) : mkBreak? now b = none := by
-  unfold mkBreak? BreakState.wf
-  rw [dif_neg (by simp; omega)]
-
-/-- **D81 (gap 3902): a break planned past the day is read** — `tm break 25h` stores 1,500 minutes and the fork plans
-it.  mkBreak?_refuses_a_break_longer_than_a_day said the day refused it until W-41; this refutes it. -/
-theorem mkBreak?_reads_a_break_past_the_day :
-    (mkBreak? ⟨0, 0⟩ ⟨none, Look.maxDayMin + 60, none⟩).map Subtype.val = some ⟨none, 1500, none⟩ := by decide
-
-/-- **A running break's start after `now` stays REFUSED by name** (`badBreak wf`), and D78 does not reach it: the log
-holds no line for a running break, so the host reads its start off `.tm/state.json`'s `HH:MM` as the LATEST instant at
-or before `now` with that clock (D81, README gap 3820) and no request the binary builds carries one after `now`.  One
-that arrives is a host that did not read it so, and the refusal says so rather than plan a break that has not begun. -/
-theorem mkBreak?_refuses_a_start_after_now (now : Cal.Instant) (b : BreakState)
-    (t : Cal.Instant) (hs : b.started = some t) (h : now.sec < t.sec) :
-    mkBreak? now b = none := by
-  unfold mkBreak? BreakState.wf
-  rw [dif_neg (by rw [hs]; simp; omega)]
-
-theorem mkBreak?_accepts (now : Cal.Instant) (b : BreakState)
-    (h : BreakState.wf now b = true) : (mkBreak? now b).map Subtype.val = some b := by
-  unfold mkBreak?
-  rw [dif_pos h]
-  rfl
+/- BreakState.wf, WfBreak and mkBreak? — the decoder of the planner wire's `state.break` — went with the field at W-50
+repair track B (the owner's D133, README gap 5524): the running break is the replay's (`PlanReq.runningBreak`), so no
+request carries one to bound.  Their laws went with them: mkBreak?_refuses_a_break_past_the_width,
+mkBreak?_reads_a_break_past_the_day, mkBreak?_refuses_a_start_after_now and mkBreak?_accepts.  What the second
+refusal guarded — a break that has not begun — `PlanReq.runningBreak` reads as no running break, as `interruptRows`
+reads an interruption whose start is after `now` (D78). -/
 
 /-- **Fork `store::InterruptState`** — the running interruption, which §8.2 choice 1 places as an ad-hoc wall from
 `t_i` to `now` and which does **not** extend the window.  **No smart constructor since W-41**: its `wf` bounded the
@@ -659,11 +647,10 @@ through `PlanReq.look` (see this section's opening comment).  Yesterday's priori
 `Look.Cand.yesterday` — a second wire spelling of one fact, deleted with its decoder mkYesterday? and its laws. -/
 structure RuntimeIn where
   active    : Option ActiveBlock
-  brk       : Option BreakState
   interrupt : Option InterruptState
   worked    : Option (Fin (Look.maxPlanMinutes + 1))  -- the host's worked minutes (W-36, gap 2920; W-41's width)
 /-- Nothing running, nothing planned yet. -/
-def RuntimeIn.empty : RuntimeIn := ⟨none, none, none, none⟩
+def RuntimeIn.empty : RuntimeIn := ⟨none, none, none⟩
 
 /-- The item the running block holds, if any — the exception five of §8.3's laws are restated
 around (design §6.3, D29). -/
@@ -845,6 +832,19 @@ def PlanReq.allowHome (r : PlanReq) : Bool := r.look.today0.allowHome
 the planner's logged arrival all come from here, never from a second read of the log (D9). -/
 def PlanReq.todayRecord (r : PlanReq) : Option Replay.DayAcc :=
   (r.run.answer.days.find? (fun d => decide (d.day = r.today))).bind (·.record)
+
+/-- **§9's running break, read off this call's own replay** — the owner's **D133** (README gaps 5340, 5437 and 5524,
+W-50 repair track B, parity **P130**): the `break_start` no `break` line has ended (`Seal.Answer.openBreak`, D105), at
+its whole second, with its planned minutes and its place.  Until D133 the host sent the running break as a second
+spelling of that fact on the planner wire (`state.break`, decoded into a `RuntimeIn` field), placed by
+`.tm/state.json` when the log held no `break_start` — one a binary before D105 began — and the decoder handed it
+through whatever the replay said (`PlannerWit.the_hosts_running_break_lays_a_block_across_it_is_refuted`, gap 5340).  The host
+now logs such a break before it plans (D133), so the replay is the one reader.  A logged start after `now` (a clock
+behind the log) is no running break, as an interruption's is no wall (`interruptRows`, D78); the wire refused it by
+name (`badBreak wf`). -/
+def PlanReq.runningBreak (r : PlanReq) : Option BreakState :=
+  (r.run.answer.openBreak.filter (fun o => decide (o.s.1.sec ≤ r.now.sec))).map
+    (fun o => ⟨some ⟨o.s.1.sec, 0⟩, o.planned, o.where_.bind PlanWire.placeOf?⟩)
 /-- **The day's first logged `arrive`**, off `todayRecord` — fork `Planner::new`'s fall-back to the replay's day record
 when the state stores no arrival, read by `PlanReq.window` through `Look.Today.planArrivalSec` (README gap 3390). -/
 def PlanReq.loggedArrival (r : PlanReq) : Option Cal.Instant := (r.todayRecord.bind (·.arrival)).map (·.1)
@@ -1426,7 +1426,7 @@ theorem interruptRows_are_not_walls (r : PlanReq) (s : Seg) (h : s ∈ interrupt
 /-- **§9's running break** (W-35, owner D57 (1), parity **P45**): a Break row from where it started
 to its planned end, or to `now`, open, once overrun.  Its laws and its reason close the module. -/
 def breakRows (r : PlanReq) : List Seg :=
-  match r.state.brk.bind (fun b => b.started.map (b, ·)) with
+  match r.runningBreak.bind (fun b => b.started.map (b, ·)) with
   | none => []
   | some (b, t) =>
     let e := max (min (t.sec + 60 * b.plannedMin) r.dayEnd) r.now.sec
@@ -2212,7 +2212,7 @@ def PlanReq.activeStop (r : PlanReq) (a : ActiveBlock) (t ivStop : Nat) : Nat :=
 
 /-- **The wall that holds the running block paused** (README gap 5217; D110, D117, D114): `WallTimer.holdOf` over this call's own replay and the plan's walls, asked of the replay's open block begun by `now` with no interruption running (which ends when the user says), and past the wall only while D114's break is within its planned length (an overrun break ends when the user says, P45). -/
 def PlanReq.wallHold (r : PlanReq) : Option ((Nat × Nat) × List Id) := match r.state.active, r.run.answer.openBlock with
-  | some a, some ob => if ob.id = a.id ∧ a.started.sec ≤ r.now.sec ∧ interruptRows r = [] then (WallTimer.holdOf r.run.answer (WallTimer.spansOf r.look.walls r.today) r.today r.now (r.state.brk.bind (·.started))).filter (fun x => decide (r.now.sec < x.1.2) || r.state.brk.any (fun b => b.started.any (fun t => decide (r.now.sec < t.sec + 60 * b.plannedMin)))) else none
+  | some a, some ob => if ob.id = a.id ∧ a.started.sec ≤ r.now.sec ∧ interruptRows r = [] then (WallTimer.holdOf r.run.answer (WallTimer.spansOf r.look.walls r.today) r.today r.now (r.runningBreak.bind (·.started))).filter (fun x => decide (r.now.sec < x.1.2) || r.runningBreak.any (fun b => b.started.any (fun t => decide (r.now.sec < t.sec + 60 * b.plannedMin)))) else none
   | _, _ => none
 /-- **A wall holds the running block** (`wallHold`): its remainder is reserved from the release, not refused. -/
 def PlanReq.held (r : PlanReq) : Bool := r.wallHold.isSome
@@ -2817,7 +2817,7 @@ def PlanReq.sinceBreak (r : PlanReq) : Nat :=
   match r.todayRecord with
   | none => 0
   | some d =>
-    let starts := d.breaks.map (·.t.1.sec) ++ (r.state.brk.bind (·.started)).toList.map (·.sec)
+    let starts := d.breaks.map (·.t.1.sec) ++ (r.runningBreak.bind (·.started)).toList.map (·.sec)
     let lastBreak : Option Nat := if starts.isEmpty then none else some (starts.foldl max 0)
     (d.starts.filter (fun s =>
       match lastBreak with | none => true | some t => decide (t < s.t.1.sec))).length
