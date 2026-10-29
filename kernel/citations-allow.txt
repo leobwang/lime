@@ -1773,3 +1773,8 @@ with_minute
 1 readOptBreak_reads_the_break
 1 theHostBreakRequest
 1 ydBreakState
+# And two Rust tests of `tm/tests/kernel_planner_wire.rs` that asserted the wire's break refusals, folded into
+# `a_break_on_the_wire_is_left_unread_whatever_it_carries` (README gap 5524); each counted citation is a README block
+# that named the test as it stood.
+1 a_break_past_the_day_is_planned_and_past_the_width_refused
+2 a_running_break_that_started_after_now_is_refused

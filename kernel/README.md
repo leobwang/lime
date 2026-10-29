@@ -100855,7 +100855,9 @@ place is unread, where it was refused `badBreak place`).
 * **Deleted with their definitions** (gap 5524): mkBreak?_refuses_a_break_past_the_width, mkBreak?_reads_a_break_past_the_day,
   mkBreak?_refuses_a_start_after_now, mkBreak?_accepts, readBreak_refuses_a_break_past_the_width,
   readBreak_refuses_an_unknown_place, readBreak_refuses_a_start_after_now, readBreak_accepts_a_running_break,
-  readOptBreak_reads_the_break; `witBuildsHostBreak` and `witBuildsYdBreak` restated over a runtime with no break.
+  readOptBreak_reads_the_break; `witBuildsHostBreak` and `witBuildsYdBreak` restated over a runtime with no break.  Two
+  Rust tests that asserted the wire's break refusals, a_break_past_the_day_is_planned_and_past_the_width_refused and
+  a_running_break_that_started_after_now_is_refused, are folded into `a_break_on_the_wire_is_left_unread_whatever_it_carries`.
 * **Cheats** 551 (CHEAT 245's claim over the replay: a `break_start` a second after `now` is claimed to run) and 552 (a
   `RuntimeIn` built with a break field).
 
@@ -100925,8 +100927,106 @@ header may name one.  4. *Clears it.*  An owner ruling if the two readings shoul
 
 ### 6. Acceptance, capped
 
-ACCEPTANCE_PLACEHOLDER
+All capped (§2.1, §5.10a), on this block's tree (the last edits after the runs are this section and the citation
+allow-list's two Rust test names, re-checked by `citations.py` and `parity.py` and by the final `check.sh` below).
+
+* `check.sh`: all **seventeen** lines ok, rc 0.  Axiom audit **6,904**; FFI target 97; corpus 29/37 files and 4/5 whole
+  plans; stage goals **1** (`Goals.plan_places_no_block_over_a_break`, gap 5525); check 9 **905** new or changed since
+  `86c4dc6`, 905 rostered, **0 owed**; parity P1-P130 with one declared hole (P129); check 12 **1,642** reachable / 1,097
+  exempt (the `Planner.lean` and `PlanWire.lean` census lines re-derived: 167 of 289 and 38 of 41).
+* `cargo test --workspace --no-fail-fast`, **three runs**: **3,021 passed / 0 failed / 53 ignored over 173 result lines**
+  on the first and second (one-minute load 3.4 and 8.8 at their starts); the third **3,020 / 1 / 53**, its one failure
+  `cli_latency`'s stalled-day row (`day 2026-09-21 of a stall took 1.002s`, bound 1 s; load 5.1).  `cli_latency` alone:
+  6 passed / 1 failed / 1 ignored at load 2.8 (the same row, 1.002 s), then **7 / 0 / 1** at load 2.8 (worst stalled day
+  977 ms).  No code this block adds runs on that row (no break is cached, so `Ctx::log_a_cached_break` and
+  `Ctx::ended_cached_break` return at their first line), and the W-50 land recorded the same band failing on the base code
+  under load.  No `.proptest-regressions` file moved.
+* FFI crate `cargo test`: **105** passed.
+* The first workspace run on the D133 tree, before its tests were brought along, failed nine tests, each asserting the
+  wire's running break or its refusals (`cli_break_place`, `kernel_break_start`, `kernel_planner_refusals`,
+  `kernel_planner_wire` ×3, `planner_invariants`, `planner_request_keys`, `tm-core`'s planwire unit test); each is updated
+  in this block's commit with the reason beside it.
+* Mutations: the six rows whose pins drifted in `Planner.lean`/`PlannerWit.lean` re-verified (`mutate.py --verify --write`);
+  two of them, `ydBreakLines` and `ydBreakStartLine`, SURVIVED at first — the refuted world's new theorem no longer read the
+  log — and are pinned again by the refutation's two record conjuncts (A's break on 09-08's record, `m1`'s Block on today's).
 
 ### 7. The drive (§5.13)
 
-DRIVE_PLACEHOLDER
+`cargo build -p tm` from this tree (`target/debug/tm`) against the W-50 land's binary (`ac0775c`, the same Rust and Lean as `614c8b9`), `TZ=America/Chicago`, every call capped at 8 GB, trees under the scratchpad (`mk.sh` builds the orchestrator's merged tree; `c1-before` is a fresh `tm init --example` woken 09-08 with a hand-set cache-only break; `after-now` holds `tm break 15m` logged at 10:00).  Each section's first lines; the CLI half only — the TUI was not driven.
+
+    BEFORE
+    ### base — 1. the merged tree (A's break 09-08 23:00 cached; B's ^t1 07:05-08:05 on 09-09), two days on
+    $ tm --now 2026-09-11T09:00:00-05:00 plan
+    2026-09-11 · window 09:00–17:00 · budget 6 blocks
+    00:00  ·      break 9h
+    09:00  ·      laundry 30m
+    09:30  4 p0 ⚠ CS 234 pset 2                @O3  6b     due today
+    (the same tree, .tm/state.json removed)
+    $ tm --now 2026-09-11T09:00:00-05:00 plan
+    2026-09-11 · window 09:00–17:00 · budget 6 blocks
+    09:00  ·      laundry 30m
+    09:30  4 p0 ⚠ CS 234 pset 2                @O3  6b     due today
+    10:30  4 p0 ⚠ CS 234 pset 2                @O3  6b     due today
+    $ tm --now 2026-09-11T09:30:00-05:00 start ^t4
+    break ended · 630m of 15m · ▶ ^t4 Claude Code drafts tests · 09:30 · pred 5
+      log tail:
+    {"t":"2026-09-10T23:00:00-05:00","ev":"break","planned_min":15,"actual_min":630}
+    {"t":"2026-09-11T09:30:00-05:00","ev":"start","id":"t4","pred":5,"hsw":2.5,"slept_min":0,"loc":"lounge","block
+    ### base — 2. a running break .tm/state.json alone holds (10:00, 15m, walk; no break_start)
+    $ tm --now 2026-09-08T10:05:00-05:00 plan
+    2026-09-08 · window 10:05–18:05 · budget 6 blocks
+    10:00  ·      break 15m                                walk
+    10:15  ·      laundry 30m
+    10:45  2 p5   Pick winter courses          @O3  2b
+    11:30  ·      lunch 30m
+      break_start lines: 0
+    (.tm/state.json removed)
+    $ tm --now 2026-09-08T10:06:00-05:00 plan
+    tm: .tm/state.json was missing; rebuilt from .tm/log.jsonl (§10.2 is a cache of the log — D42)
+    2026-09-08 · window 10:06–18:06 · budget 6 blocks
+    10:06  ·      laundry 30m
+    10:36  2 p5   Pick winter courses          @O3  2b
+    11:30  ·      lunch 30m
+    ### base — 3. a break logged at 10:00, planned at 09:55
+    $ tm --now 2026-09-08T09:55:00-05:00 plan
+    tm: kernel refusal: badBreak wf — a value of the planner request is refused — see PlanWire.lean's `PlannerRefusal`
+
+    AFTER
+    ### new — 1. the merged tree (A's break 09-08 23:00 cached; B's ^t1 07:05-08:05 on 09-09), two days on
+    $ tm --now 2026-09-11T09:00:00-05:00 plan
+    tm: .tm/state.json said a break began at 23:00 is running and .tm/log.jsonl ended it — the log decides (§10.2 is a cache of it, D42, D105)
+    2026-09-11 · window 09:00–17:00 · budget 6 blocks
+    09:00  ·      laundry 30m
+    09:30  4 p0 ⚠ CS 234 pset 2                @O3  6b     due today
+    (the same tree, .tm/state.json removed)
+    $ tm --now 2026-09-11T09:00:00-05:00 plan
+    2026-09-11 · window 09:00–17:00 · budget 6 blocks
+    09:00  ·      laundry 30m
+    09:30  4 p0 ⚠ CS 234 pset 2                @O3  6b     due today
+    10:30  4 p0 ⚠ CS 234 pset 2                @O3  6b     due today
+    $ tm --now 2026-09-11T09:30:00-05:00 start ^t4
+    tm: .tm/state.json said a break began at 23:00 is running and .tm/log.jsonl ended it — the log decides (§10.2 is a cache of it, D42, D105)
+    ▶ ^t4 Claude Code drafts tests · 09:30 · pred 5
+      log tail:
+    {"t":"2026-09-08T23:00:00-05:00","ev":"break_start","planned_min":15}
+    {"t":"2026-09-11T09:30:00-05:00","ev":"start","id":"t4","pred":5,"hsw":2.5,"slept_min":0,"loc":"lounge","block
+    ### new — 2. a running break .tm/state.json alone holds (10:00, 15m, walk; no break_start)
+    $ tm --now 2026-09-08T10:05:00-05:00 plan
+    tm: logged the break .tm/state.json holds running since 2026-09-08 10:00 (15m, walk) — it was begun before tm logged a break's start, so .tm/log.jsonl now holds it (D133)
+    2026-09-08 · window 10:05–18:05 · budget 6 blocks
+    10:00  ·      break 15m                                walk
+    10:15  ·      laundry 30m
+    10:45  2 p5   Pick winter courses          @O3  2b
+      break_start lines: 1
+    (.tm/state.json removed)
+    $ tm --now 2026-09-08T10:06:00-05:00 plan
+    tm: .tm/state.json was missing; rebuilt from .tm/log.jsonl (§10.2 is a cache of the log — D42)
+    tm: RESTORED from the log: `break` — began 10:00, 15m planned, walk — from the `break_start` `tm break` logged (D105).
+    2026-09-08 · window 10:06–18:06 · budget 6 blocks
+    10:00  ·      break 15m                                walk
+    10:15  ·      laundry 30m
+    ### new — 3. a break logged at 10:00, planned at 09:55
+    $ tm --now 2026-09-08T09:55:00-05:00 plan
+    2026-09-08 · window 09:55–17:55 · budget 6 blocks
+    09:55  ·      laundry 30m
+    10:25  2 p5   Pick winter courses          @O3  2b
