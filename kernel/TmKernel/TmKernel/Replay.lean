@@ -2578,8 +2578,7 @@ track K, parity P105): its id, its ledger day (`Block.day` — a break filed on 
 reads an open block's), the day its credit was filed (`credDay`) with that credit's ci (`none` for a cut's, the `done`'s
 for a `done`'s) and the minutes of it still standing (`min`), the pieces drawn for it, and the line of the duration
 observation its `done` pushed, if it pushed one — so a `break` logged after it closed and stamped inside it is netted
-from it (`netClosed`): its pieces re-drawn around the break, its credit and its duration observation taken down by what
-the break took.  Fork `Machine` held no closed block: a block's minutes and drawing were final when it closed. -/
+from it (`netClosed`): its pieces re-drawn around the break, its credit and its duration observation taken down by what the break took.  Fork `Machine` held no closed block: a block's minutes and drawing were final when it closed.  **`started`** (README gap 5501, W-50 repair track R) is its `start`'s stamp, kept so that D129's stamp-order reading asks whether a late `break_start` was stamped BEFORE the block's `start` — only then does that start end it (`firstStart`); a break stamped after the start, inside the block, is D100's late break inside it, netted, and not one its first drawn piece ends.  Read by `firstStart`'s comparison alone, never by the day index, so it is no machine instant (`Seal.machineInstants`). -/
 structure Closed where
   id : Id
   day : Nat
@@ -2588,6 +2587,7 @@ structure Closed where
   min : Nat
   drawn : List Piece
   durLine : Option Nat
+  started : At
 deriving DecidableEq, Repr
 
 /-- **The break running at the end of the log** (the owner's **D105**, README "Stage 6 — W-46 track K", parity
@@ -3984,7 +3984,7 @@ def cut (dy : Cal.Instant → Nat) (m : Machine) (t : At) : Machine × List Effe
     ({ block := none, lastCut := some ⟨b.id, t, dy t.1, minutesOf (cutPieces b m t)⟩, interrupt := m.interrupt,
        brks := m.brks, brkOpen := m.brkOpen,
        closed := pruneClosed (⟨b.id, b.day, dy t.1, none, minutesOf (cutPieces b m t),
-         (redraw dy b.id b.drawn (cutPieces b m t)).1, none⟩ :: m.closed), brkEnded := m.brkEnded },
+         (redraw dy b.id b.drawn (cutPieces b m t)).1, none, b.started⟩ :: m.closed), brkEnded := m.brkEnded },
       (redraw dy b.id b.drawn (cutPieces b m t)).2 ++ (closePause dy m t).2 ++
         creditFx dy b.id t (minutesOf (cutPieces b m t)) none ++ obsFx b.obs)
   | none => (m, [])
@@ -4024,7 +4024,7 @@ def doneClosed (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : At) (i
   | some b =>
     if b.id = id then
       pruneClosed (⟨id, b.day, dy t.1, some ci, actual, (redraw dy b.id b.drawn (cutPieces b m t)).1,
-        if 0 < actual then some line else none⟩ :: m.closed)
+        if 0 < actual then some line else none, b.started⟩ :: m.closed)
     else m.closed
   | none =>
     match m.lastCut, m.closed with
@@ -4237,7 +4237,7 @@ theorem brkFx_with_no_block_open_as_d99_stated_it_is_refuted :
       brkFx dy m t e d = [.machine { m with brks := pruneBrks (⟨t, e, d⟩ :: m.brks), brkOpen := none }] := by
   intro h
   let M : Machine := ⟨none, some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865, 60⟩, none, [], none,
-    [⟨['a'], 739865, 739865, none, 60, [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩], none⟩], none⟩
+    [⟨['a'], 739865, 739865, none, 60, [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩], none, (⟨63924364800, 0⟩, ⟨false, 0⟩)⟩], none⟩
   have hl : (brkFx (fun _ => 739865) M (⟨63924366600, 0⟩, ⟨false, 0⟩) (⟨63924367800, 0⟩, ⟨false, 0⟩)
       739865).length = 7 := by decide
   rw [h (fun _ => 739865) M (⟨63924366600, 0⟩, ⟨false, 0⟩) (⟨63924367800, 0⟩, ⟨false, 0⟩) 739865 rfl] at hl
@@ -4338,33 +4338,33 @@ def endsBrk (m : Machine) (t : At) : Option OpenBrk :=
   | some o => if o.s.1 ≤ t.1 then some o else none
   | none => none
 
-/-- The earlier of an instant held and one met, of those at or after `s` (`firstStart`'s step). -/
+/-- **Whether a start met comes before the one held** (README gap 5502, W-50 repair track R): whether `firstStep` takes the start it meets over the one it holds — the EARLIEST, by `instLt` (one definition of "strictly later by instant", §5.3), and any start when it holds none — named at this site, so check 9 can fold it to `fun _ => true` (the LATEST start met wins, which the two-block witness logged `b` first refutes) and to `fun _ => false` (no start is ever taken); the reading "the first held block in file order wins" is cheat 514's. -/
+def startBefore (x : At) : Option At → Bool := fun | some a => instLt x a | none => true
+/-- The earlier of an instant held and one met, of those strictly after `s` (`firstStart`'s step).  STRICTLY (README gap 5500, W-50 repair track R): every start the machine holds was logged before the `break_start` being stepped, so a start whose stamp TIES the break's is earlier in the file, and D129 ends a break only at a start later in stamp order or, at a tie, later in the file — `endsBrk`'s `≤`, for a start logged after a running break, is that other half. -/
 def firstStep (s : At) (acc : Option At) (x : At) : Option At :=
-  if s.1 ≤ x.1 then
-    match acc with
-    | some a => if x.1 < a.1 then some x else acc
-    | none => some x
+  if s.1 < x.1 then
+    -- the earliest start met so far (`startBefore`, README gap 5502): a start
+    -- met replaces the one held only when it came before it
+    if startBefore x acc then some x else acc
   else acc
 
-/-- **The first start the machine holds at or after `s`** (the owner's **D129**, read in STAMP order): the open block's
-start and each held closed block's first drawn piece (where its clock first ran: no closed block's stamp is kept, and a
-block with no piece is no start, README gap 5432), the earliest at or after `s`, the first of equal ones — for a break of
-ledger day `d` within the owner's D119 bound (`pastBound`: 31 ledger days behind the newest held block), and `none` for
-one past it, which nothing nets and `tm check` names (README gap 5438).  A `break_start` logged after such a block and
-stamped before it is a break that start ended (`arm`'s `break_start` arm).  `none` when the machine holds none. -/
+/-- **The first start the machine holds stamped after `s`** (the owner's **D129**, read in STAMP order): the open block's start, and each held closed block whose `start` was stamped after `s` (`Closed.started`, README gap 5501) read at its first drawn piece (where its clock first ran, a machine instant: a block with no piece is no start, README gap 5432) —
+the earliest, the first of equal ones — for a break of ledger day `d` within the owner's D119 bound (`pastBound`: 31 ledger days behind the newest held block), and `none` for one past it, which nothing nets and `tm check` names (README gap 5438).  A closed block whose `start` came at or before `s` ends nothing: a break stamped inside it is D100's late break inside a block, netted (`brkStartArm`'s `runNet`), and not one its drawn piece ends (README gap 5501, the W-50 critic's finding 3).
+A tie with a held start ends nothing either (`firstStep`, README gap 5500).  A `break_start` logged after such a block and stamped before its start is a break that start ended (`arm`'s `break_start` arm).  `none` when the machine holds none. -/
 def firstStart (s : At) (d : Nat) (m : Machine) : Option At :=
-  if (pastBound d m.closed).isSome then none else (m.closed.filterMap (fun C => C.drawn.head?.map (·.s))).foldl
+  if (pastBound d m.closed).isSome then none else
+    (m.closed.filterMap (fun C => if s.1 < C.started.1 then C.drawn.head?.map (·.s) else none)).foldl
     (firstStep s) ((m.block.map (·.started)).bind (fun x => firstStep s none x))
 
 /-- `firstStep` answers what it held or the instant it met. -/
 theorem firstStep_mem (s : At) (acc : Option At) (y x : At) (h : firstStep s acc y = some x) : acc = some x ∨ x = y := by
   unfold firstStep at h
+  -- the stamp test, then `startBefore`'s
+  -- (README gap 5502: the comparison is named)
   split at h
   · split at h
-    · split at h
-      · exact Or.inr (Option.some.inj h).symm
-      · exact Or.inl h
     · exact Or.inr (Option.some.inj h).symm
+    · exact Or.inl h
   · exact Or.inl h
 
 /-- A fold of `firstStep` answers what it started from or an instant of the list. -/
@@ -4395,12 +4395,12 @@ theorem firstStart_mem (s : At) (d : Nat) (m : Machine) (x : At) (h : firstStart
       · exact ⟨b, rfl, h2.symm⟩
   · right
     obtain ⟨C, hC, hx⟩ := List.mem_filterMap.1 h1
-    cases hd : C.drawn with
-    | nil => rw [hd] at hx; cases hx
-    | cons p ps =>
-      rw [hd] at hx
-      simp only [List.head?_cons, Option.map_some, Option.some.injEq] at hx
-      exact ⟨C, hC, p, by rw [hd]; exact List.mem_cons_self .., hx⟩
+    by_cases hs : s.1 < C.started.1
+    · rw [if_pos hs] at hx; cases hd : C.drawn with
+      | nil => rw [hd] at hx; cases hx
+      | cons p ps => rw [hd] at hx; simp only [List.head?_cons, Option.map_some, Option.some.injEq] at hx
+                     exact ⟨C, hC, p, by rw [hd]; exact List.mem_cons_self .., hx⟩
+    · rw [if_neg hs] at hx; cases hx
 
 /-- **The segment and record a break ended at `t` writes** (the owner's **D129**): what the `break` line `tm start` logs on
 one machine writes on the break's own ledger day (D97, D105: stamped at the break's start, its minutes the elapsed ones,
@@ -7111,7 +7111,7 @@ theorem conserves_cut_of (dy : Cal.Instant → Nat) (st : State) (m : Machine) (
       rw [applyEffects_append, applyEffects_append, hs0e, ← hs2e, ← hs1e]; rfl
     show Balanced (applyEffects st (fx0 ++ creditFx dy b.id t w none ++ obsFx b.obs)) ∧
       (∀ d i, (((pruneClosed (⟨b.id, b.day, dy t.1, none, w, (redraw dy b.id b.drawn (cutPieces b m t)).1,
-        none⟩ :: m.closed)).filter (fun C => decide (C.ci = none ∧ C.credDay = d ∧ C.id = i))).map (·.min)).sum ≤ unk (applyEffects st (fx0 ++ creditFx dy b.id t w none ++ obsFx b.obs)) d i) ∧
+        none, b.started⟩ :: m.closed)).filter (fun C => decide (C.ci = none ∧ C.credDay = d ∧ C.id = i))).map (·.min)).sum ≤ unk (applyEffects st (fx0 ++ creditFx dy b.id t w none ++ obsFx b.obs)) d i) ∧
       (∀ d i, unk st d i ≤ unk (applyEffects st (fx0 ++ creditFx dy b.id t w none ++ obsFx b.obs)) d i)
     rw [heq]
     refine ⟨b4, fun d i => ?_, fun d i => Nat.le_trans (m1 d i) (Nat.le_trans (m2 d i)
@@ -12306,7 +12306,7 @@ theorem the_break_start_arm_as_d105_stated_it_is_refuted :
   intro h
   let M : Machine := ⟨none, none, none, [], none,
     [⟨['a'], 739865, 739865, none, 60, [⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924372000, 0⟩, ⟨false, 0⟩), 739865⟩],
-      none⟩], none⟩
+      none, (⟨63924368400, 0⟩, ⟨false, 0⟩)⟩], none⟩
   have hl : (arm (fun _ => 739865) (fun _ => none) M (bE 1 63924370200 (.brkStart 20 none))
       (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865).length ≠ 1 := by decide
   exact hl (by rw [h _ _ M _ _ _ 20 none rfl]; rfl)
@@ -12799,7 +12799,7 @@ theorem the_unsafe_effects_are_the_machine_an_uncredit_and_a_net :
 nothing but a proof): `a`'s cut on the 7th, sixty minutes at no ci, stands for sixty on the 7th, and for nothing for `b`
 or on another day; a `done`'s (its ci set) stands for nothing — its minutes are on a ci, not the unknown ones. -/
 theorem the_held_credit_counts_a_cut_and_not_a_done :
-    let l : List Closed := [⟨['a'], 739865, 739865, none, 60, [], none⟩, ⟨['a'], 739865, 739865, some ⟨3, by decide⟩, 40, [], none⟩]
+    let l : List Closed := [⟨['a'], 739865, 739865, none, 60, [], none, (⟨63924364800, 0⟩, ⟨false, 0⟩)⟩, ⟨['a'], 739865, 739865, some ⟨3, by decide⟩, 40, [], none, (⟨63924364800, 0⟩, ⟨false, 0⟩)⟩]
     ((l.filter (fun C => decide (C.ci = none ∧ C.credDay = 739865 ∧ C.id = ['a']))).map (·.min)).sum = 60 ∧
     ((l.filter (fun C => decide (C.ci = none ∧ C.credDay = 739865 ∧ C.id = ['b']))).map (·.min)).sum = 0 ∧
     ((l.filter (fun C => decide (C.ci = none ∧ C.credDay = 739866 ∧ C.id = ['a']))).map (·.min)).sum = 0 := by
@@ -13125,7 +13125,7 @@ theorem the_break_start_arm_as_w49_stated_it_is_refuted :
   intro h
   let M : Machine := ⟨none, none, none, [], none,
     [⟨['a'], 739865, 739865, none, 60, [⟨(⟨63924372000, 0⟩, ⟨false, 0⟩), (⟨63924375600, 0⟩, ⟨false, 0⟩), 739865⟩],
-      none⟩], none⟩
+      none, (⟨63924372000, 0⟩, ⟨false, 0⟩)⟩], none⟩
   have := congrArg List.length (h (fun _ => 739865) (fun _ => none) M (bE 1 63924370200 (.brkStart 20 none))
     (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865 20 none rfl)
   revert this
@@ -13143,7 +13143,7 @@ theorem the_break_start_arm_with_nothing_open_or_drawn_after_it_as_w49_stated_it
   intro h
   let M : Machine := ⟨none, none, none, [], none,
     [⟨['a'], 739865, 739865, none, 0,
-      [⟨(⟨63924372000, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩], none⟩], none⟩
+      [⟨(⟨63924372000, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩], none, (⟨63924372000, 0⟩, ⟨false, 0⟩)⟩], none⟩
   have := congrArg List.length (h (fun _ => 739865) (fun _ => none) M (bE 1 63924370200 (.brkStart 20 none))
     (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865 20 none rfl rfl (by decide))
   revert this
@@ -13180,6 +13180,64 @@ theorem a_late_break_past_the_bound_is_not_ended_by_a_start :
       bE 3 63927820800 (bStart ['b']), bE 4 63927824400 (.stop ['b'] 0),
       bE 5 63924366600 (.brkStart 20 none)]).openBreak.isSome = true := by
   decide
+
+/-! ## D129's stamp-order edges (stage 6, W-50 repair track R; README gaps 5500-5502)
+
+Three edges W-50 track K's witnesses left unpinned, each found by the W-50 audit or critic.  Instants as before: 08:00 on
+2026-09-07 is second 63924364800 (day 739865); probed in a scratch build under `MemoryMax=8G timeout 120` (§5.10a). -/
+
+section D129Edges
+
+/-- **A start that TIES the break's stamp and was logged BEFORE it ends nothing** (README gap 5500, the W-50 critic's
+finding 2): `start a` 08:30, then a `break_start` stamped 08:30 — the start is earlier in the file, and D129 ends a
+break at a start later in stamp order or, at a tie, later in the file, so the break runs over the open block.  Until the
+W-50 repair `firstStep`'s `≤` ended it at once (`tm break` said it "ended at 10:20, at the `start` the log already holds
+after it"). -/
+theorem a_start_tying_the_break_logged_before_it_ends_nothing :
+    (replay utcZone [bE 1 63924366600 (bStart ['a']), bE 2 63924366600 (.brkStart 15 none)]).openBreak.isSome = true := by
+  decide
+
+/-- **A drawn piece is not a `start`** (README gap 5501, the W-50 critic's finding 3): `start a` 08:30, paused at once
+until 10:00 (D110's shape: begun inside a meeting), `done a` 10:30, then a late `break_start` stamped 09:00.  The block's
+`start` (08:30) came before the break, so no start ends it: it runs (and nets the held block from 09:00 on, gap 5180's
+reading of a running break); its own ten-minute `break` line, when it comes, ends it there and is recorded as ten minutes,
+not swallowed.  Until the W-50 repair the block's first drawn piece (10:00) was read as a start: the break was "ended" at
+10:00, recorded sixty minutes long, and its own line read as that break's (`Machine.brkEnded`).  What the break's line
+does not give back to `a` is README gap 5302's (gap 5504). -/
+theorem a_drawn_piece_is_not_a_start :
+    let L := [bE 1 63924366600 (bStart ['a']), bE 2 63924366600 (.pause ['a']),
+      bE 3 63924372000 (.unpause ['a']), bE 4 63924373800 (bDone ['a'] 30 false),
+      bE 5 63924368400 (.brkStart 10 none)]
+    (replay utcZone L).openBreak.isSome = true ∧
+    (replay utcZone (L ++ [bE 6 63924368400 (.brk 10 (some 10) none)])).openBreak = none ∧
+    ((replay utcZone (L ++ [bE 6 63924368400 (.brk 10 (some 10) none)])).days.get 739865).map
+      (fun a => a.breaks.map (·.actualMin)) = some [some 10] := by
+  decide
+
+/-- **The EARLIEST start after a late break ends it, whatever order the blocks were logged in** (README gap 5502, the
+W-50 audit's finding 2): two closed blocks, `a` 08:30–09:00 and `b` 10:00–10:30, logged `a` first, then a `break_start`
+stamped 08:00 — it ends at `a`'s 08:30, thirty minutes, and both keep their thirty.  A `firstStep` keeping the latest
+start would end it at 10:00 and net `a` away. -/
+theorem the_earliest_start_ends_a_late_break :
+    let f := replay utcZone [bE 1 63924366600 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 30 false),
+      bE 3 63924372000 (bStart ['b']), bE 4 63924373800 (bDone ['b'] 30 false),
+      bE 5 63924364800 (.brkStart 20 none)]
+    f.openBreak = none ∧ (f.days.get 739865).map (fun a => a.breaks.map (·.actualMin)) = some [some 30] ∧
+    (f.items.get ['a']).map (·.minutes) = some 30 ∧ (f.items.get ['b']).map (·.minutes) = some 30 := by
+  decide
+
+/-- **…and logged `b` first** (README gap 5502): the same two blocks, `b` 10:00–10:30 logged before `a` 08:30–09:00 (a
+late block, D115), then the `break_start` stamped 08:00 — it still ends at 08:30, the earliest start, not at the first
+held block in file order. -/
+theorem the_earliest_start_ends_a_late_break_logged_in_either_order :
+    let f := replay utcZone [bE 1 63924372000 (bStart ['b']), bE 2 63924373800 (bDone ['b'] 30 false),
+      bE 3 63924366600 (bStart ['a']), bE 4 63924368400 (bDone ['a'] 30 false),
+      bE 5 63924364800 (.brkStart 20 none)]
+    f.openBreak = none ∧ (f.days.get 739865).map (fun a => a.breaks.map (·.actualMin)) = some [some 30] ∧
+    (f.items.get ['a']).map (·.minutes) = some 30 ∧ (f.items.get ['b']).map (·.minutes) = some 30 := by
+  decide
+
+end D129Edges
 
 end Replay
 end Tm

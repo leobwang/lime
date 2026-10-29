@@ -315,6 +315,7 @@ impl StoppedOut {
     pub fn line(&self, shown: &str) -> String {
         let why = match self.rule {
             RULE_PERIOD_END => format!("the end of {}", self.period),
+            RULE_LATER_MARK => format!("its latest mark, logged after the end of {}", self.period),
             _ => "its last logged activity".to_string(),
         };
         format!(
@@ -328,6 +329,9 @@ impl StoppedOut {
 pub const RULE_LAST_ACTIVITY: &str = "lastActivity";
 /// [`StoppedOut::rule`] for a block started on the closed period's last day.
 pub const RULE_PERIOD_END: &str = "periodEnd";
+/// [`StoppedOut::rule`] for a block whose log already holds marks stamped after the closed
+/// period's end: stopped at the latest of them (the owner's **D134**, README gap 5470).
+pub const RULE_LATER_MARK: &str = "laterMark";
 
 /// The human line's counts, each read off the report.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -638,16 +642,25 @@ fn taken_by(ctx: &Ctx, which: Which, drops: &[Id], id: &Id) -> Result<Option<(St
 ///   period's last instant, `last` 23:59:59 local — the owner's 2026-10-27 refinement, so a block
 ///   run across an ordinary boundary is not credited 0 minutes;
 /// * every other block ends at its LAST LOGGED ACTIVITY ([`last_activity`]), and never later than
-///   that last instant.
+///   that last instant;
+/// * **but when the log already holds a mark of the block stamped AFTER that last instant** — a
+///   close refused for days while the user paused and resumed, or a synced log — the block ends at
+///   the LATEST such mark ([`RULE_LATER_MARK`]), whichever of the two rules above would have
+///   applied: the owner's **D134** (README gap 5470), so the `stop` is never stamped before marks
+///   the file already holds, and the host and the replay read the block one way. With no such mark
+///   the cap stands.
 pub(crate) fn stop_instant(ctx: &Ctx, block: &tm_core::log::OpenBlock, last: NaiveDate) -> (DateTime<Tz>, &'static str) {
     let tz = ctx.cfg.tz;
     let period_end = tm_core::capacity::local_dt(tz, last.succ_opt().unwrap_or(last), NaiveTime::MIN)
         - chrono::Duration::seconds(1);
     let started = block.started.with_timezone(&tz);
+    let latest = last_activity(&ctx.replay, block).with_timezone(&tz);
+    if latest > period_end {
+        return (latest, RULE_LATER_MARK);
+    }
     if started.date_naive() == last {
         return (period_end.max(started), RULE_PERIOD_END);
     }
-    let latest = last_activity(&ctx.replay, block).with_timezone(&tz);
     (latest.min(period_end).max(started), RULE_LAST_ACTIVITY)
 }
 

@@ -1877,6 +1877,11 @@ pub struct StopOut {
     /// break was running.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub break_ended: Option<BreakOut>,
+    /// **The item's line was settled and left as it stands** (the owner's **D132**, README gap 5471,
+    /// parity **P129**): no remainder was written and no box reopened; `remaining_min` is the
+    /// remainder the stop would have written. Absent otherwise.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub settled: bool,
 }
 
 /// `tm stop [--at HH:MM]`.
@@ -1910,16 +1915,27 @@ pub fn stop(g: &Globals, args: &super::StopArgs) -> Result<i32, CliError> {
         ctx.json,
         || {
             said_after_break(out.break_ended.as_ref(), format!(
-                "stopped {} after {}m · {}m left{}",
+                "stopped {} after {}m · {}{}",
                 out.id.token(),
                 out.worked_min,
-                out.remaining_min,
+                if out.settled {
+                    // D132: nothing was written to the line.
+                    "its line is settled and left as it stands (D132)".to_string()
+                } else {
+                    format!("{}m left", out.remaining_min)
+                },
                 out.ended.as_ref().map(|e| format!(" · ended {e}")).unwrap_or_default()
             ))
         },
         &out,
     )?;
     Ok(0)
+}
+
+/// **Whether `item`'s line is SETTLED** — dropped (`[~]`) or done (`[x]`): the lines the owner's D132
+/// has `tm stop` leave as they stand.
+fn is_settled(item: &tm_core::model::Item) -> bool {
+    matches!(item.state, State::Dropped | State::Done)
 }
 
 /// **Ending the running block — the ONE body** `tm stop` runs and, since the owner's **D130**
@@ -1960,7 +1976,12 @@ pub(crate) fn end_the_block(
     // box moves on the line the kernel returned (`write_estimate`).
     // A tabbed line is written as any line since the owner's D83 (README gap 32
     // closed): D66's branch for a refused estimate went with the refusal (gap 4165).
-    let written = match ctx.tree.get(&id).filter(|i| !is_stateless(i)) {
+    // **D132** (README gap 5471, parity P129): a block whose item is SETTLED — `[~]` or `[x]`, as
+    // a close before D130 could leave it — logs its `stop` and leaves the line as it stands: no
+    // remainder written, no box reopened, so following `tm check`'s `log-taken-block` advice never
+    // edits a closed file. A settled line is written by nothing here.
+    let settled = ctx.tree.get(&id).is_some_and(is_settled);
+    let written = match ctx.tree.get(&id).filter(|i| !is_stateless(i) && !is_settled(i)) {
         Some(_) => Some(write_estimate(ctx, verb, &id, u64::from(remaining))?),
         None => None,
     };
@@ -1999,6 +2020,7 @@ pub(crate) fn end_the_block(
         remaining_min: remaining,
         ended: stated.map(|e| when(ctx, e)),
         break_ended: ended_break,
+        settled,
     })
 }
 

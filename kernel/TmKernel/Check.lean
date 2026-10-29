@@ -9060,3 +9060,9 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.BreakFold.stepWith_brks_of_brk_as_w49_stated_it_is_refuted
 #print axioms Tm.PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it_as_w49_stated_it_is_refuted
 #print axioms Tm.Replay.a_late_break_past_the_bound_is_not_ended_by_a_start
+
+-- APPENDED W-50 REPAIR TRACK R (README "Stage 6 — W-50 repair, track R", gaps 5500-5502): D129's stamp-order edges.
+#print axioms Tm.Replay.a_start_tying_the_break_logged_before_it_ends_nothing
+#print axioms Tm.Replay.a_drawn_piece_is_not_a_start
+#print axioms Tm.Replay.the_earliest_start_ends_a_late_break
+#print axioms Tm.Replay.the_earliest_start_ends_a_late_break_logged_in_either_order

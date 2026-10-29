@@ -3544,4 +3544,53 @@ theorem aStartAtTheBreaksInstantEndsNothing :
       Replay.bE 3 63924370200 (Replay.bDone ['a'] 60 false)]).items.get ['a']).map (·.minutes) = some 0 := by
   decide
 
+/- ===== APPENDED W-50 REPAIR TRACK R (README "Stage 6 — W-50 repair, track R", gaps 5500-5502): cheats
+   511-514.  D129's stamp-order edges: each cheat states the reading the repair replaced, and `decide` computes the
+   one it took. ===== -/
+
+/- CHEAT 511 — `start a` 08:30, then a `break_start` stamped 08:30 logged after
+   it; the tie claimed to end the break at once (no break running), as
+   `firstStep`'s `≤` read it until the W-50 repair.  A tie ends a break only at a
+   start later in the file (README gap 5500): `decide` computes `true`. -/
+theorem aTieLoggedBeforeTheBreakEndsIt :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924366600 (.brkStart 15 none)]).openBreak.isSome = false := by
+  decide
+
+/- CHEAT 512 — a block begun 08:30 and paused until 10:00, done 10:30, then a
+   late `break_start` 09:00 and its ten-minute `break` line; the block's first
+   drawn piece (10:00) claimed to be a start that ends the break, recording it
+   sixty minutes long.  Only a logged `start` stamped after the break ends it
+   (README gap 5501): `decide` computes ten. -/
+theorem aDrawnPieceEndsTheBreak :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924366600 (.pause ['a']), Replay.bE 3 63924372000 (.unpause ['a']),
+      Replay.bE 4 63924373800 (Replay.bDone ['a'] 30 false), Replay.bE 5 63924368400 (.brkStart 10 none),
+      Replay.bE 6 63924368400 (.brk 10 (some 10) none)]).days.get 739865).map
+      (fun a => a.breaks.map (·.actualMin)) = some [some 60] := by
+  decide
+
+/- CHEAT 513 — two closed blocks, `a` 08:30 and `b` 10:00, logged `a` first,
+   then a late `break_start` 08:00; claimed to end at the LATEST start (10:00,
+   two hours).  The earliest start ends it (README gap 5502): `decide` computes
+   thirty. -/
+theorem theLatestStartEndsALateBreak :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924366600 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 30 false), Replay.bE 3 63924372000 (Replay.bStart ['b']),
+      Replay.bE 4 63924373800 (Replay.bDone ['b'] 30 false),
+      Replay.bE 5 63924364800 (.brkStart 20 none)]).days.get 739865).map
+      (fun a => a.breaks.map (·.actualMin)) = some [some 120] := by
+  decide
+
+/- CHEAT 514 — the same two blocks logged `b` first: claimed to end at the
+   first held block in file order (`b`, 10:00).  The earliest in STAMP order
+   ends it (README gap 5502): `decide` computes thirty. -/
+theorem theFirstLoggedStartEndsALateBreak :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924372000 (Replay.bStart ['b']),
+      Replay.bE 2 63924373800 (Replay.bDone ['b'] 30 false), Replay.bE 3 63924366600 (Replay.bStart ['a']),
+      Replay.bE 4 63924368400 (Replay.bDone ['a'] 30 false),
+      Replay.bE 5 63924364800 (.brkStart 20 none)]).days.get 739865).map
+      (fun a => a.breaks.map (·.actualMin)) = some [some 120] := by
+  decide
+
 end Tm
