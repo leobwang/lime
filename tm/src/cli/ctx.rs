@@ -1002,6 +1002,9 @@ impl Ctx {
     /// it needs none: the kernel decides it (README gap 3139) over the tree it
     /// loads, and a tree the kernel refuses gets no mark and no journal line.
     pub(crate) fn after_the_close(&mut self, refused: bool, walls: bool) -> Result<(), CliError> {
+        if self.log_a_cached_break(refused)? {
+            self.reload()?;
+        }
         self.timed_out = self.resolve_timeouts(refused)?;
         if !self.timed_out.is_empty() {
             self.reload()?;
@@ -1011,6 +1014,60 @@ impl Ctx {
             self.reload()?;
         }
         Ok(())
+    }
+
+    /// **A running break `.tm/state.json` alone holds is LOGGED** — the owner's **D133** (README gaps 5437
+    /// and 5340, W-50 repair track B, parity **P130**). A break a binary before the owner's D105 began
+    /// logged no `break_start`, so the log held nothing of it while it ran: it lived in the cache alone,
+    /// was lost with the file (README gap 4760), and the planner could read it only through a second
+    /// wire spelling, `RuntimeIn.brk`, beside the replay's own running break (gap 5340). The first
+    /// housekeeping verb that meets one writes its `break_start` at the instant the cache places it
+    /// ([`Ctx::running_break`], D81's reading), with the cache's planned minutes and place, and says so
+    /// in one line (D65's rule for a line the user did not type) — from then on the break is the log's,
+    /// and the cache is its cache (D42).
+    ///
+    /// Only a break the log holds NO record of: one the log is running is the log's already, and one it
+    /// ended ([`Ctx::ended_cached_break`], gap 5520) the reconcile has dropped. On a tree the kernel
+    /// refuses nothing is written (D35), and the next verb tries again. Answers whether a line was
+    /// appended.
+    fn log_a_cached_break(&mut self, refused: bool) -> Result<bool, CliError> {
+        let Some(here) = self.state.break_.clone() else {
+            return Ok(false);
+        };
+        if self.replay.open_break.is_some() || self.ended_cached_break().is_some() {
+            return Ok(false);
+        }
+        let Some(at) = self.running_break() else {
+            return Ok(false);
+        };
+        if refused || kernel_bridge::tree_refusal(self)?.is_some() {
+            return Ok(false);
+        }
+        // The place is read through the kernel's one table (the owner's D111): a word the cache holds that the
+        // table does not know (a hand edit) would make the line malformed, so the break is logged without it and
+        // the line says so (README gap 5528).
+        let table = kernel_log::places().map_err(|e| CliError::Kernel(kernel_bridge::fault_issue(&e, "")))?;
+        let (place, dropped) = match here.place.clone() {
+            Some(w) if table.iter().any(|t| *t == w) => (Some(w), None),
+            Some(w) => (None, Some(w)),
+            None => (None, None),
+        };
+        self.append_entry(&LogEntry::new(
+            at.fixed_offset(),
+            Event::BreakStart {
+                planned_min: here.planned_min,
+                r#where: place.clone(),
+            },
+        ))?;
+        kernel_bridge::notice(format!(
+            "logged the break .tm/state.json holds running since {} ({}m{}) — it was begun before tm logged \
+             a break's start, so .tm/log.jsonl now holds it (D133){}",
+            at.format("%Y-%m-%d %H:%M"),
+            here.planned_min,
+            place.as_ref().map(|p| format!(", {p}")).unwrap_or_default(),
+            dropped.map(|w| format!("; its place {w:?} is no word of the table and was not logged")).unwrap_or_default()
+        ));
+        Ok(true)
     }
 
     /// **Reconcile `.tm/state.json` with the log it is a cache of** — the

@@ -89,10 +89,10 @@ fn a_break_a_start_ended_two_days_ago_does_not_survive_in_the_cache() {
 #[test]
 fn starting_a_block_two_days_later_logs_no_break_nobody_took() {
     let tm = merged();
-    let breaks_before = tm.events().iter().filter(|e| *e == "break").count();
+    let breaks_before = tm.events().iter().filter(|e| *e == "break" || *e == "break_start").count();
     let out = tm.ok_at("2026-09-11T09:30:00-05:00", &["start", "^t4"]);
     assert!(!out.stdout.contains("break ended"), "the start ended a break nobody took: {}", out.stdout);
-    let breaks_after = tm.events().iter().filter(|e| *e == "break").count();
+    let breaks_after = tm.events().iter().filter(|e| *e == "break" || *e == "break_start").count();
     assert_eq!(breaks_before, breaks_after, "a `break` line was logged: {:?}", tm.log().last());
     assert!(tm.state()["break"].is_null(), "{}", tm.state());
 }
@@ -172,4 +172,75 @@ fn an_old_cache_rolled_for_weeks_is_put_right_from_the_whole_log() {
     assert!(tm.state()["break"].is_null(), "the cache still holds the break: {}", tm.state());
     assert!(tm.log().iter().all(|e| e["ev"] != "break" && e["ev"] != "break_start" || e["t"] == "2026-09-10T23:00:00-05:00"),
         "a break line was logged: {:?}", tm.log().iter().filter(|e| e["ev"] == "break").collect::<Vec<_>>());
+}
+
+/// A fresh example tree woken on 09-08, its cache holding a running break no `break_start` was logged
+/// for — one a binary before the owner's D105 began (`started`, 15m, at `walk`).
+fn cache_only(started: &str) -> Tm {
+    let tm = Tm::empty();
+    assert_eq!(tm.run(&["init", "--example"]).code, 0);
+    tm.ok_at("2026-09-08T06:05:00-05:00", &["wake"]);
+    let mut state = tm.state();
+    state["break"] = serde_json::json!({"started": started, "planned_min": 15, "where": "walk"});
+    fs::write(tm.plan.join(".tm/state.json"), serde_json::to_string_pretty(&state).expect("json")).expect("state");
+    assert!(tm.log().iter().all(|e| e["ev"] != "break_start"), "the log holds a break_start already");
+    tm
+}
+
+/// **D133: the next verb logs a break the cache alone holds** — its `break_start` at the instant the
+/// cache places it, with the cache's minutes and place, said in one line; and the break is then the
+/// log's, so deleting `.tm/state.json` draws the same day (D42).
+#[test]
+fn d133_a_break_the_cache_alone_holds_is_logged_by_the_next_verb() {
+    let tm = cache_only("10:00");
+    let out = tm.ok_at("2026-09-08T10:05:00-05:00", &["plan"]);
+    assert!(out.stderr.contains("D133") && out.stderr.contains("10:00"), "the verb did not say it logged the break: {}", out.stderr);
+    let logged: Vec<Value> = tm.log().into_iter().filter(|e| e["ev"] == "break_start").collect();
+    assert_eq!(logged.len(), 1, "{logged:?}");
+    assert_eq!(logged[0]["t"], "2026-09-08T10:00:00-05:00", "{logged:?}");
+    assert_eq!(logged[0]["planned_min"], 15, "{logged:?}");
+    assert_eq!(logged[0]["where"], "walk", "{logged:?}");
+    let with = breaks(&tm.json_at("2026-09-08T10:06:00-05:00", &["plan"]));
+    assert!(with.iter().any(|(s, e)| s == "10:00" && e == "10:15"), "the running break is not drawn: {with:?}");
+    let _ = fs::remove_file(tm.plan.join(".tm/state.json"));
+    let without = breaks(&tm.json_at("2026-09-08T10:06:00-05:00", &["plan"]));
+    assert_eq!(with, without, "deleting the cache moved the day");
+    assert_eq!(tm.log().iter().filter(|e| e["ev"] == "break_start").count(), 1, "logged twice");
+}
+
+/// **A read verb logs nothing** (`tm log` writes no line); the next housekeeping verb does.
+#[test]
+fn d133_a_read_verb_does_not_log_the_cached_break() {
+    let tm = cache_only("10:00");
+    let out = tm.run_at("2026-09-08T10:05:00-05:00", &["log"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(tm.log().iter().all(|e| e["ev"] != "break_start"), "a read verb logged the break");
+}
+
+/// **A break the cache holds from before midnight** is logged on the evening it began (D81's reading
+/// of the cache's clock, which `tm break`'s own ending reads too).
+#[test]
+fn d133_a_cached_break_from_before_midnight_is_logged_on_its_evening() {
+    let tm = cache_only("23:50");
+    tm.ok_at("2026-09-09T00:10:00-05:00", &["now"]);
+    let logged: Vec<Value> = tm.log().into_iter().filter(|e| e["ev"] == "break_start").collect();
+    assert_eq!(logged.len(), 1, "{logged:?}");
+    assert_eq!(logged[0]["t"], "2026-09-08T23:50:00-05:00", "{logged:?}");
+}
+
+/// **A running break the log began after `now` is no running break to the planner** (the owner's D133, P130): the
+/// planner reads the running break off its replay, and a `break_start` stamped after `now` (a clock behind the log)
+/// draws nothing — as an interruption begun after `now` draws no wall (D78). Until D133 the host sent that start on the
+/// wire and the kernel refused the request by name (`badBreak wf`), so `tm plan` printed a kernel refusal.
+#[test]
+fn d133_a_break_logged_after_now_is_not_running_to_the_planner() {
+    let tm = Tm::empty();
+    assert_eq!(tm.run(&["init", "--example"]).code, 0);
+    tm.ok_at("2026-09-08T06:05:00-05:00", &["wake"]);
+    tm.ok_at("2026-09-08T10:00:00-05:00", &["break", "15m"]);
+    let out = tm.run_at("2026-09-08T09:55:00-05:00", &["plan"]);
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert!(!out.stderr.contains("badBreak"), "the planner refused the request: {}", out.stderr);
+    let plan = tm.json_at("2026-09-08T09:55:00-05:00", &["plan"]);
+    assert!(breaks(&plan).iter().all(|(s, _)| s != "10:00"), "a break that has not begun is drawn: {:?}", breaks(&plan));
 }

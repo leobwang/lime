@@ -6462,9 +6462,9 @@ theorem a_past_row_lies_inside_its_segment {r : PlanReq} {t : Seg} (h : t ∈ pa
 
 /-- The running break's row starts where the break started, or at the day's start. -/
 theorem the_running_break_row_starts_where_it_started {r : PlanReq} {u : Seg} (h : u ∈ breakRows r) :
-    ∃ bs tb, r.state.brk = some bs ∧ bs.started = some tb ∧ u.start = max tb.sec r.dayStart := by
+    ∃ bs tb, r.runningBreak = some bs ∧ bs.started = some tb ∧ u.start = max tb.sec r.dayStart := by
   unfold breakRows at h
-  cases hb0 : r.state.brk with
+  cases hb0 : r.runningBreak with
   | none => rw [hb0] at h; cases h
   | some x =>
     cases hx : x.started with
@@ -6495,7 +6495,7 @@ theorem plan_places_no_block_over_a_break_on_an_apart_replay (r : PlanReq)
     (hopen : ∀ b ∈ r.run.answer.openBlock.toList, ∀ s ∈ b.since.toList,
       ∀ k ∈ (r.todayRecord.map (·.segments)).getD [], (pastKind k.kind).1 = SegKind.brk →
         k.start.1.sec < k.stop.1.sec → k.stop.1.sec ≤ s.1.sec)
-    (hrun : ∀ bs ∈ r.state.brk.toList, ∀ t ∈ bs.started.toList,
+    (hrun : ∀ bs ∈ r.runningBreak.toList, ∀ t ∈ bs.started.toList,
       ∀ g ∈ (r.todayRecord.map (·.segments)).getD [], (pastKind g.kind).1 = SegKind.block →
         g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec)
     (b k : WfSeg) (hb : b ∈ (dayPlan r).segments) (hk : k ∈ (dayPlan r).segments)
@@ -6634,7 +6634,7 @@ theorem plan_places_no_block_over_a_break_on_a_resumed_run (r : PlanReq) (z : Ca
       (pastKind g.kind).1 = Planner.SegKind.block → (pastKind k.kind).1 = Planner.SegKind.brk →
         g.start.1.sec < g.stop.1.sec → k.start.1.sec < k.stop.1.sec →
           g.stop.1.sec ≤ k.start.1.sec ∨ k.stop.1.sec ≤ g.start.1.sec)
-    (hrun : ∀ bs ∈ r.state.brk.toList, ∀ t ∈ bs.started.toList,
+    (hrun : ∀ bs ∈ r.runningBreak.toList, ∀ t ∈ bs.started.toList,
       ∀ g ∈ (r.todayRecord.map (fun (a : Replay.DayAcc) => a.segments)).getD [], (pastKind g.kind).1 = Planner.SegKind.block →
         g.start.1.sec < g.stop.1.sec → g.stop.1.sec ≤ t.sec)
     (bw kw : WfSeg) (hb : bw ∈ (dayPlan r).segments) (hk : kw ∈ (dayPlan r).segments)

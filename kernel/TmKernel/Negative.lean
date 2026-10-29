@@ -3544,4 +3544,28 @@ theorem aStartAtTheBreaksInstantEndsNothing :
       Replay.bE 3 63924370200 (Replay.bDone ['a'] 60 false)]).items.get ['a']).map (·.minutes) = some 0 := by
   decide
 
+-- ===========================================================================
+-- APPENDED 2026-10-28 (stage 6, W-50 repair, track B — the owner's D133, README gaps 5520-5539, parity P130).
+-- The running break leaves the planner wire: the planner reads it off the request's own replay
+-- (`Planner.PlanReq.runningBreak`).  Cheats 551-552.  CHEAT 245 above names Planner.mkBreak?, which this track
+-- deleted with the wire's `state.break` (README gap 5524), so it now fails as an unknown identifier — a wrong reason,
+-- recorded rather than edited (§6.2); CHEAT 551 is its successor over the replay's reading.
+-- ===========================================================================
+
+/- CHEAT 551 — CHEAT 245's claim over the replay (D133): a request whose replay holds a
+   `break_start` a second after `now` (a clock behind the log) is claimed to plan a running break.
+   `PlanReq.runningBreak` reads such a break as none, as `interruptRows` reads an interruption
+   begun after `now` (D78); `decide` computes it. -/
+theorem aBreakTheReplayBeganAfterNowRuns :
+    ({ PlannerWit.theBusyRequest with
+        run := PlannerWit.withBreak PlannerWit.theBusyRequest.run (PlannerWit.theBusyRequest.now.sec + 1) 10 none } :
+      Planner.PlanReq).runningBreak.isSome = true := by
+  decide
+
+/- CHEAT 552 — the host's runtime claimed to carry a running break again: a `RuntimeIn` built with
+   a break beside the running block.  Since D133 the record has no such field (its constructor
+   takes three), so the planner cannot be handed a second spelling of the replay's fact. -/
+theorem theRuntimeCarriesABreak :
+    (Planner.RuntimeIn.mk none (some ⟨none, 10, none⟩) none none).active = none := rfl
+
 end Tm

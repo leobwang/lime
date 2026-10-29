@@ -222,7 +222,7 @@ fn the_what_if_crosses_and_comes_back_as_a_diff() {
 fn what_the_kernel_cannot_plan_is_refused_by_the_kernel_by_name() {
     let c = Case::new("plan-basic", Some(BASIC_LOG), Some(basic_state()), 7, 0);
     // A start after `now` is sent as read (the W-40 repair, README gap 3952: the codec
-    // moves no start; `state_json` reads `now` only to place a running break, gap 4001),
+    // moves no start, gap 4001),
     // and since W-41 the kernel PLANS it
     // from `now`, as the fork does (the owner's D78, README gap 2874's input 1) — it was
     // refused `badActive wf` from the W-40 repair until then.
@@ -233,17 +233,21 @@ fn what_the_kernel_cannot_plan_is_refused_by_the_kernel_by_name() {
         est_min: 60,
         paused: false,
     });
-    let enc = planwire::state_json(&state, &planwire::LoggedStarts::default(), date("2026-09-07"), at("2026-09-07", 7, 0), c.fx.cfg.tz);
+    let enc = planwire::state_json(&state, &planwire::LoggedStarts::default(), date("2026-09-07"), c.fx.cfg.tz);
     assert_eq!(enc["active"]["started"], json!(planwire::kernel_sec(at("2026-09-07", 7, 5))), "sent as read");
     let resp = c.raw(|p| p["state"] = enc.clone());
     assert_eq!(planwire::planner_refusal(&resp), None, "planned from `now` (D78): {resp}");
 
-    // An unknown break place is the kernel's to refuse, and it does.
+    // **A running break is not on the wire since the owner's D133** (README gap 5524): the encoder writes
+    // no `break` key, and one sent by hand — even with a place the table does not know, which the kernel
+    // refused `badBreak place` until then — is left unread: the planner reads the running break off the
+    // request's own replay.
     let mut state = basic_state();
     state.break_ = Some(BreakState { started: None, planned_min: 20, place: Some("couch".to_string()) });
-    let enc = planwire::state_json(&state, &planwire::LoggedStarts::default(), date("2026-09-07"), at("2026-09-07", 7, 0), c.fx.cfg.tz);
-    let resp = c.raw(|p| p["state"] = enc.clone());
-    assert_eq!(planwire::planner_refusal(&resp), Some("badBreak place"), "{resp}");
+    let enc = planwire::state_json(&state, &planwire::LoggedStarts::default(), date("2026-09-07"), c.fx.cfg.tz);
+    assert!(enc.get("break").is_none(), "the running break is on the wire: {enc}");
+    let resp = c.raw(|p| p["state"] = json!({"break": {"plannedMin": 20, "place": "couch"}}));
+    assert_eq!(planwire::planner_refusal(&resp), None, "{resp}");
 
     // `Planner.maxCands` is 1,024: the encoder sends 1,025 instances as the
     // host collected them, and `Planner.mkRoutines?` refuses the list by name
@@ -269,7 +273,7 @@ fn what_the_kernel_cannot_plan_is_refused_by_the_kernel_by_name() {
             est_min: 60,
             paused: false,
         });
-        let enc = planwire::state_json(&state, &planwire::LoggedStarts::default(), date("2026-09-07"), at("2026-09-07", 7, 0), c.fx.cfg.tz);
+        let enc = planwire::state_json(&state, &planwire::LoggedStarts::default(), date("2026-09-07"), c.fx.cfg.tz);
         let resp = c.raw(|p| p["state"] = enc.clone());
         let got = planwire::planner_refusal(&resp);
         if refused {

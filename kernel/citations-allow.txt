@@ -483,7 +483,7 @@ can_fail
 9 parseStamp_renderStamp
 6 plan_tail_drop_as_stage_6_wrote_it_is_refuted
 4 prose_is_never_an_item
-2 refuses_a_negative_break
+1 refuses_a_negative_break
 4 remaining_falls_back_to_the_leading_estimate
 4 remaining_is_the_est_key_when_set
 5 remaining_sums_the_children
@@ -1747,3 +1747,29 @@ with_minute
 1 mkYesterday?_refuses_a_priority_past_seven
 1 mkYesterday?_refuses_too_many
 1 readYesterdayPair
+
+# W-50 REPAIR TRACK B (the owner's D133, README gaps 5524-5525): the running break leaves the planner wire.  The decoder
+# `Planner.mkBreak?` (with `BreakState.wf`, `WfBreak` and its four laws), the readers `PlanWire.readBreak` and
+# `PlanWire.readOptBreak` (and their five laws), the runtime fixtures PlannerWit kept beside real runs, and the two
+# host-copy witnesses (each refuted under its old name with `_is_refuted`) are deleted.  Every citation counted here names
+# one as it stood, in the append-only README blocks that built or audited it, or in CHEAT 245's banner (AGENTS 6.2: never
+# edited); every sentence since writes the dead name unbackticked.
+1 PlanWire.readBreak_refuses_a_break_past_the_width
+1 PlanWire.readOptBreak_reads_the_break
+2 Planner.mkBreak?
+1 Planner.mkBreak?_reads_a_break_past_the_day
+1 Planner.mkBreak?_refuses_a_break_past_the_width
+1 Planner.mkBreak?_refuses_a_start_after_now
+3 PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it
+2 PlannerWit.closeUnderBreakState
+1 PlannerWit.hostBreakAt0730State
+1 PlannerWit.theHostBreakRequest
+2 PlannerWit.the_hosts_running_break_lays_a_block_across_it
+1 a_break_running_since_the_day_before_lays_todays_block_across_it
+5 mkBreak?
+1 mkBreak?_accepts
+1 mkBreak?_refuses_a_start_after_now
+3 readOptBreak
+1 readOptBreak_reads_the_break
+1 theHostBreakRequest
+1 ydBreakState
