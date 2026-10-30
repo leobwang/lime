@@ -332,7 +332,8 @@ fn the_log_decides_the_running_break_both_ways_while_the_cache_exists() {
     fs::write(log_of(&tm), format!("{text}{later}\n")).expect("append");
     let at = "2026-09-07T10:05:00-05:00";
     let out = tm.run_at(at, &["now"]);
-    assert!(out.stderr.contains("says one began at 10:00 (15m) — the log decides"), "{}", out.stderr);
+    // The place is named on both sides since W-51 repair track H (README gap 5561): "no place" here.
+    assert!(out.stderr.contains("says one began at 10:00 (15m, no place) — the log decides"), "{}", out.stderr);
     assert!(out.stdout.contains("break 15m"), "{}", out.stdout);
     assert_eq!(day(&tm, at), deleted(&tm, at), "with the cache, the day the rebuild plans");
 

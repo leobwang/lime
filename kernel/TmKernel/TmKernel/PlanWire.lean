@@ -1760,9 +1760,9 @@ theorem noteJson_writes_so_far (m : Nat) :
     noteJson (.soFar m) =
       .obj [("note".toList, .str "soFar".toList), ("workedMin".toList, .num m)] := rfl
 
-/-- **The running break's word is the one the request carried** (W-35, D57 (1), parity P45):
-`Planner.BreakPlace.word` is `placeOf?`'s inverse on all four places, so the note on the
-running break's row (`Planner.breakRows`) spells the `place` the host sent, byte for byte. -/
+/-- **The running break's word is the one its `break_start` logged** (W-35, D57 (1), P45; D111, D133):
+`Planner.BreakPlace.word` is `placeOf?`'s inverse on all four places, so the note on the running
+break's row (`Planner.breakRows`) spells the logged `break_start`'s place, byte for byte. -/
 theorem placeOf_reads_the_word (p : BreakPlace) : placeOf? p.word = some p := by
   cases p <;> decide
 

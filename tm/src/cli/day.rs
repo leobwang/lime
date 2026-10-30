@@ -220,8 +220,20 @@ fn end_break(ctx: &mut Ctx) -> Result<Option<u32>, CliError> {
 /// **Every verb that ends a break ends it here** (D97's class: `tm break`,
 /// `tm start`, `tm stop`, `tm done`, `tm interrupt`, `tm resume`), so the line
 /// that ends the running break has one writer.
+///
+/// **A break that BEGAN after `end` is not ended by it** (W-51 repair track H, the W-50 repair
+/// critic's first finding): only an end stated before `now` can precede the break's start — a `tm
+/// stop --at`, or the stop §6.3's close writes at a block's last logged activity (the owner's D130)
+/// — and a break the cache alone holds (begun by a binary before D105) is placed by D81 at the
+/// latest instant at or before `now` with its clock, which can fall days after that stop. Ending it
+/// there wrote a `break` line stamped AFTER the stop that ended it, with `actual_min: 0`, and the
+/// break was never logged as D133 says. The break runs on, and the verb's housekeeping logs it
+/// (D133) or the next verb that ends it at an instant after its start ends it.
 fn end_break_at(ctx: &mut Ctx, end: DateTime<chrono_tz::Tz>) -> Result<Option<u32>, CliError> {
     let start_dt = ctx.running_break().unwrap_or(end);
+    if start_dt > end {
+        return Ok(None);
+    }
     let Some(br) = ctx.state.break_.take() else {
         return Ok(None);
     };
@@ -1573,6 +1585,11 @@ pub struct DoneOut {
     /// break was running.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub break_ended: Option<BreakOut>,
+    /// **The item's line was settled and left as it stands** (the owner's **D135**, README gap 5505,
+    /// parity **P131**: D132's rule for `tm done` and `--partial`): no box set, no remainder written,
+    /// no line reopened; `state` is the settled glyph's word. Absent otherwise.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub settled: bool,
 }
 
 /// `tm done [--partial] [--at HH:MM] [^id]`.
@@ -1654,12 +1671,19 @@ pub fn done(g: &Globals, args: &super::DoneArgs) -> Result<i32, CliError> {
         (a.est_min, worked.ok_or_else(|| no_logged_start(&a.id))?)
     };
     let stateless = item.as_ref().is_some_and(is_stateless);
+    // **D135** (README gap 5505, parity **P131**): D132's rule reaches `tm done` and `tm done
+    // --partial` — a block whose item is SETTLED (`[~]`, `[x]`) logs its event and leaves the line
+    // exactly as it stands: no box set, no remainder written, no line reopened, inside a closed
+    // period or not. Fork 4748911 (and this verb until the W-51 repair) set `[x]` on a dropped line,
+    // and `--partial` reopened it as `[ ] 5m`. A retro `tm done ^id` ends no block and is the user
+    // asking for the box, so it is outside D135 and sets it as before.
+    let settled = !retro && item.as_ref().is_some_and(is_settled);
     // **D62**: a partial's remainder is written by the kernel's `est` op FIRST —
     // before the break is ended or the box is moved — so a refusal (a value
     // past the host's width) leaves nothing written at all.
     let mut remaining_min = None;
     let mut written = None;
-    if args.partial && item.is_some() && !stateless {
+    if args.partial && item.is_some() && !stateless && !settled {
         let left = ctx
             .tree
             .remaining(&id)
@@ -1673,7 +1697,7 @@ pub fn done(g: &Globals, args: &super::DoneArgs) -> Result<i32, CliError> {
     // break runs, and says so in the journal below (the owner's D97, parity P95).
     let ended_break = end_break_first_at(&mut ctx, end)?;
 
-    if let Some(item) = item.as_ref().filter(|_| !stateless) {
+    if let Some(item) = item.as_ref().filter(|_| !stateless && !settled) {
         let mut line = match written {
             Some(line) => line,
             None => ctx.line(&id)?,
@@ -1727,11 +1751,13 @@ pub fn done(g: &Globals, args: &super::DoneArgs) -> Result<i32, CliError> {
         &ctx,
         stated,
         format!(
-            "done {} {}m/{}m{}",
+            "done {} {}m/{}m{}{}",
             id.token(),
             actual_min,
             est_min,
-            args.went.map(|w| format!(" went={w}")).unwrap_or_default()
+            args.went.map(|w| format!(" went={w}")).unwrap_or_default(),
+            // D136 (parity P132): the journal says the line is settled and names no minutes left.
+            if settled { SETTLED_NOTE } else { "" }
         ),
     )?;
     rec.finish(&ctx, format!("done {}", id.token()))?;
@@ -1751,6 +1777,7 @@ pub fn done(g: &Globals, args: &super::DoneArgs) -> Result<i32, CliError> {
         remaining_min,
         ended: stated.map(|e| when(&ctx, e)),
         break_ended: ended_break,
+        settled,
     };
     emit(
         ctx.json,
@@ -1765,6 +1792,12 @@ pub fn done(g: &Globals, args: &super::DoneArgs) -> Result<i32, CliError> {
                     .map(|r| format!(" · {r}m left"))
                     .unwrap_or_default(),
                 out.ended.as_ref().map(|e| format!(" · ended {e}")).unwrap_or_default()
+                    + if out.settled {
+                        // D135: nothing was written to the line.
+                        " · its line is settled and left as it stands (D135)"
+                    } else {
+                        ""
+                    }
             ))
         },
         &out,
@@ -1932,6 +1965,10 @@ pub fn stop(g: &Globals, args: &super::StopArgs) -> Result<i32, CliError> {
     Ok(0)
 }
 
+/// **The journal's words for a block ended on a settled line** — the owner's **D136** (README gap
+/// 5540, parity **P132**): the line holds no remainder (D132, D135), so the journal names none.
+const SETTLED_NOTE: &str = " · line settled, left as it stands";
+
 /// **Whether `item`'s line is SETTLED** — dropped (`[~]`) or done (`[x]`): the lines the owner's D132
 /// has `tm stop` leave as they stand.
 fn is_settled(item: &tm_core::model::Item) -> bool {
@@ -2009,7 +2046,16 @@ pub(crate) fn end_the_block(
     if let Some(b) = &ended_break {
         note_break_ended(ctx, b, end)?;
     }
-    let text = format!("stop {} {worked}m · {remaining}m left", id.token());
+    // **D136** (README gap 5540, parity **P132**): a settled line's stop journals no remainder — the
+    // line holds none (D132) — and says the line is settled. The log's `stop` still carries
+    // `remaining_min`: the field is required by the log's grammar (`Log.Kind.schema`'s `.u32`) and
+    // by fork 4748911's serde alike, so leaving it out would make the line malformed to both
+    // readers (D136's own fallback; README gap 5560).
+    let text = if settled {
+        format!("stop {} {worked}m{SETTLED_NOTE}", id.token())
+    } else {
+        format!("stop {} {worked}m · {remaining}m left", id.token())
+    };
     match (housekeeping, stated) {
         (true, Some(e)) => super::dayfile::note_underneath(ctx, e.date_naive(), e.time(), &text, None)?,
         _ => note_the_end(ctx, stated, text)?,

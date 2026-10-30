@@ -654,7 +654,8 @@ pub(crate) fn stop_instant(ctx: &Ctx, block: &tm_core::log::OpenBlock, last: Nai
     let period_end = tm_core::capacity::local_dt(tz, last.succ_opt().unwrap_or(last), NaiveTime::MIN)
         - chrono::Duration::seconds(1);
     let started = block.started.with_timezone(&tz);
-    let latest = last_activity(&ctx.replay, block).with_timezone(&tz);
+    // Over rows that hold the block's own `start` (README gap 5509): a reseal may have folded it.
+    let latest = last_activity(&ctx.block_rows(block), block).with_timezone(&tz);
     if latest > period_end {
         return (latest, RULE_LATER_MARK);
     }

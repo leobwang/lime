@@ -1481,6 +1481,70 @@ mod tests {
         assert_eq!(tui_resp["ok"]["plan"], plan_resp["ok"]["plan"], "one day from the two requests, hash and all");
     }
 
+    /// **D133 against D130, HELD** (W-51 repair track H, the W-50 repair critic's first finding): a TUI open
+    /// past Sunday midnight with `^t3` running since Saturday 10:20 and a cache-only break `10:40` (one a binary
+    /// before D105 began — set in the context the TUI read). At Monday 00:30 the held close stops the block at
+    /// its last logged activity (Saturday 10:40, the unpause of a calendar wall, D61) and does NOT end the break, whose D81 instant is
+    /// Sunday 10:40, after that stop; the held housekeeping then logs the break's `break_start` at that instant
+    /// (D133) — into the hold, writing nothing (D96). No `break` line is held, and none before the stop.
+    #[test]
+    fn d133_the_tui_past_midnight_holds_the_close_stop_and_logs_the_cached_break_after_it() {
+        let _env = kernel_env();
+        let (_tmp, g) = fixture();
+        for (when, args) in [
+            ("2026-09-12T06:05:00-05:00", &["wake", "06:05", "--slept", "8h10m"][..]),
+            ("2026-09-12T07:00:00-05:00", &["arrive", "lounge"][..]),
+            ("2026-09-12T10:20:00-05:00", &["start", "^t3", "--energy", "3"][..]),
+        ] {
+            let argv: Vec<String> = args.iter().map(|a| (*a).to_string()).collect();
+            let said = verb(&at_str(&g, when), &argv).expect("a verb of the world");
+            assert!(said.ends_with(": ok"), "`tm {}`: {said}", args.join(" "));
+        }
+        let (mut read, mut app) = load(&at_str(&g, "2026-09-13T23:50:00-05:00")).expect("the TUI opens at 23:50");
+        let plan = g.dir.clone().expect("the plan directory");
+        read.state.break_ = Some(tm_core::store::BreakState {
+            started: chrono::NaiveTime::from_hms_opt(10, 40, 0),
+            planned_min: 15,
+            place: Some("walk".to_string()),
+        });
+        let _ = crate::cli::kernel_bridge::take_notices();
+        let before = tree_bytes(&plan);
+        let monday = DateTime::parse_from_rfc3339("2026-09-14T00:30:00-05:00").expect("now").with_timezone(&app.cfg.tz);
+        crate::cli::kernel_bridge::capture_kernel_stderr(true);
+        let changed = advance_clock(&mut app, &mut read, monday);
+        crate::cli::kernel_bridge::capture_kernel_stderr(false);
+        assert!(changed.expect("the date change"));
+        let after = tree_bytes(&plan);
+        let moved: Vec<&String> = after.keys().chain(before.keys()).filter(|k| after.get(*k) != before.get(*k)).collect();
+        // The checkpoint's meta on both sides, so a write is named by what it changed.
+        let ckpt = |m: &std::collections::BTreeMap<String, Vec<u8>>| {
+            let bytes = m.get(".tm/cache/replay/ckpt.json").map(Vec::as_slice).unwrap_or(b"null");
+            let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
+            format!("{} lines {} gen {}", v["meta"], v["logLines"], v["gen"])
+        };
+        assert!(
+            moved.is_empty(),
+            "the date change wrote nothing under the plan directory: {moved:?}\nbefore {}\nafter  {}",
+            ckpt(&before),
+            ckpt(&after)
+        );
+        let held = read.held.as_ref().expect("the automatic close is held");
+        let lines: Vec<serde_json::Value> = held.log.lines().map(|l| serde_json::from_str(l).expect("a log line")).collect();
+        assert_eq!(lines[0]["ev"], "stop", "the stop comes first: {}", held.log);
+        // Its last logged activity: the unpause D61 logged when Saturday's calendar wall ended, 10:40 — before
+        // the break's D81 instant, so the stop ends no break.
+        assert_eq!(lines[0]["t"], "2026-09-12T10:40:00-05:00", "its last logged activity");
+        assert!(lines.iter().all(|e| e["ev"] != "break"), "a break line is held: {}", held.log);
+        let started: Vec<&serde_json::Value> = lines.iter().filter(|e| e["ev"] == "break_start").collect();
+        assert_eq!(started.len(), 1, "{}", held.log);
+        assert_eq!(started[0]["t"], "2026-09-13T10:40:00-05:00", "{}", held.log);
+        let stop = lines.iter().position(|e| e["ev"] == "stop").expect("stop");
+        let brk = lines.iter().position(|e| e["ev"] == "break_start").expect("break_start");
+        assert!(stop < brk, "the break is logged after the close: {}", held.log);
+        let said = app.message.clone().unwrap_or_default();
+        assert!(said.contains("(D133)"), "said on the status line: {said}");
+    }
+
     /// **D91 across two midnights: the TUI holds ONE close, from the files as read** — never a
     /// second stacked on the first. Left open Monday 23:50 to Wednesday 00:30, it closes Monday in
     /// memory at Tuesday's date change and, at Wednesday's, lets that go and asks the kernel again
