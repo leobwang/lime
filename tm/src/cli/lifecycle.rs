@@ -1146,8 +1146,11 @@ fn taken_block_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
     let Some(b) = ctx.replay.open_block.as_ref() else {
         return Vec::new();
     };
-    let rows = ctx.replay.view();
-    let Some(from) = ctx.replay.start_row(Some(b.id.as_str()), b.started) else {
+    // Over rows that hold the block's own `start` (README gap 5509, W-51 repair track H): a reseal folds
+    // it out of the served `Hot` view, and until the repair the warning held for one `tm check` only.
+    let replay = ctx.block_rows(b);
+    let rows = replay.view();
+    let Some(from) = replay.start_row(Some(b.id.as_str()), b.started) else {
         return Vec::new();
     };
     let tag = |e: tm_core::log::Event| e.name().to_string();
@@ -1200,7 +1203,7 @@ fn taken_block_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
         if !group.iter().any(|r| r.tag == close) {
             continue;
         }
-        let closes: Vec<&tm_core::log::CloseRecord> = ctx.replay.closes.iter().filter(|c| c.t == t).collect();
+        let closes: Vec<&tm_core::log::CloseRecord> = replay.closes.iter().filter(|c| c.t == t).collect();
         let mut grains: Vec<&'static str> = Vec::new();
         for r in group.iter().filter(|r| filed.contains(&r.tag) && r.id.as_deref() == Some(b.id.as_str())) {
             grains.push(row_grain(ctx, r));

@@ -306,14 +306,17 @@ fn the_class_of_verbs_that_end_a_break_is_read_off_the_code() {
         clears,
         // `drop_break_a_start_ended` is the reconcile's own rule (a break the log ENDED, `Ctx::log_ended`) applied by
         // `tm break` to the break it has just begun, when a `start` the log already holds ends it in stamp order (the
-        // owner's D129, README gap 5433, W-50 track K).
+        // owner's D129, README gap 5433, W-50 track K). `log_a_cached_break` clears a break only the cache holds whose
+        // D81 instant falls before the day's logged wake — no break runs across a wake — and logs nothing for it (the
+        // owner's D138, W-51 repair track H, parity P133): a break that was never the log's, so no `break` line is owed.
         [
             "tm/src/cli/ctx.rs:drop_break_a_start_ended",
+            "tm/src/cli/ctx.rs:log_a_cached_break",
             "tm/src/cli/ctx.rs:reconcile_state",
             "tm/src/cli/day.rs:wake"
         ],
-        "a running break set to nothing outside `tm wake`, the reconcile of a break the log ended, and `tm break`'s \
-         own drop of a break a logged start ended (D129)"
+        "a running break set to nothing outside `tm wake`, the reconcile of a break the log ended, `tm break`'s own drop \
+         of a break a logged start ended (D129), and D138's drop of a cache-only break placed before the logged wake"
     );
     assert_eq!(calls_at, ["tm/src/cli/day.rs:end_break", "tm/src/cli/day.rs:end_break_first_at"]);
     assert_eq!(calls_now, ["tm/src/cli/day.rs:end_break_first"]);

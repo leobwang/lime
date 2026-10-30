@@ -33,10 +33,16 @@
 //! The `planner` section is `PlanWire.readPlannerSection` plus
 //! `PlanWire.readOvertime`. Of its keys this encoder writes:
 //!
-//! * `state.active`, `state.break`, `state.interrupt` — §9's running records,
-//!   each start resolved on the planned date in the configured zone exactly as
-//!   fork `Planner::active_run` resolves `active.started`
-//!   (`capacity::local_dt(tz, date, t)`).
+//! * `state.active`, `state.interrupt` — §9's running records, each start
+//!   resolved on the planned date in the configured zone exactly as fork
+//!   `Planner::active_run` resolves `active.started`
+//!   (`capacity::local_dt(tz, date, t)`). **Not `state.break`** since the
+//!   owner's D133 (README gaps 5524, 5437 and 5340, parity P130): the planner
+//!   reads the running break off its own replay (the `break_start` the log
+//!   holds, D105), `RuntimeIn.brk` left the wire, and a break `.tm/state.json`
+//!   alone holds is logged by the next housekeeping verb before any day is
+//!   planned from it (W-51 repair track H corrected this line, which still
+//!   listed the key).
 //! * `routines` — §8.2 step 2's window instances, [`routine_instances`].
 //! * `overtime` — §9.1's what-if, [`overtime_json`], carrying D58's grown
 //!   facts.
@@ -53,9 +59,10 @@
 //! builds a drop what-if — the TUI's one what-if is §9.1's extension — so it has
 //! no encoder until a caller wants one.)
 //!
-//! **No bound is minted here.** An id past `CapWire.maxCandId`, a list past
-//! `Planner.maxCands`, or a break place `PlanWire.placeOf?` does not know is
-//! sent as the host holds it and refused BY THE KERNEL, by name
+//! **No bound is minted here.** An id past `CapWire.maxCandId` or a list past
+//! `Planner.maxCands` is sent as the host holds it and refused BY THE KERNEL, by
+//! name (a break place is no longer sent at all: the log's grammar reads a
+//! `break_start`'s place through the kernel's one table, the owner's D111)
 //! (`{"err":{"planner":"badActive id"}}` and its family, read back by
 //! [`planner_refusal`]); a second statement of those numbers here would be the
 //! defect AGENTS §5.3 names. Minutes cross as `u32`, which is the fork's width

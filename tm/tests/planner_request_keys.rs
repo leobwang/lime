@@ -913,4 +913,26 @@ fn a_break_begun_before_midnight_is_sent_from_its_start_and_planned() {
     let resp: Value = serde_json::from_str(&raw).expect("the response is JSON");
     assert_eq!(planwire::planner_refusal(&resp), None, "planned: {}", &raw[..raw.len().min(300)]);
     assert_eq!(resp["ok"]["plan"]["day"].as_str(), Some("2026-09-08"), "the day after");
+    // **The planned day draws the break from yesterday's 23:50** (W-51 repair track H: `started` was left unused by
+    // the W-50 repair's track B, a compiler warning in every workspace run): the kernel's replay reads the logged
+    // `break_start` at its instant, so the running break's 30 minutes end at 00:20 — `started` plus its planned
+    // minutes — and its segment is the part inside the planned day, from local midnight (P45). Tonight's 23:50, the
+    // reading the swap's encoder once sent, is after `now` and would draw no break at all (gap 5529).
+    let cands = priority::collect_candidates(&r.tree, &r.replay, &r.cfg, &r.model, r.now.date_naive(), r.now);
+    let order = planwire::send_order(&cands);
+    let ans = planwire::read_capacity_answer(&resp, &order, true).expect("the grants read back");
+    let ctx = planwire::DayCtx { tz, cands: &cands, prios: &ans.prios };
+    let day = planwire::read_plan(&resp["ok"]["plan"], &ctx).expect("the day reads back");
+    let brk = day
+        .day
+        .segments
+        .iter()
+        .find(|s| matches!(s.kind, tm_core::dayplan::SegKind::Break))
+        .expect("the running break is drawn");
+    let midnight = DateTime::parse_from_rfc3339("2026-09-08T00:00:00-05:00").expect("instant").with_timezone(&tz);
+    assert_eq!(
+        (brk.start, brk.end),
+        (midnight, started + chrono::Duration::minutes(30)),
+        "the running break is drawn from its logged start, clipped to the planned day: {brk:?}"
+    );
 }

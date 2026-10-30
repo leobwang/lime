@@ -823,7 +823,20 @@ pub struct Ctx {
     /// directory through [`Ctx::reading`] and the log through [`Ctx::log_now`], so with one held it
     /// asks the kernel what `tm plan` asks after its own close.
     pub held: Option<Held>,
+    /// **[`Ctx::ended_cached_break`]'s whole-log answer, and what it was asked about** — the cached
+    /// break and `now` (W-51 repair track H, correcting README gap 5523): the question's last reading
+    /// costs a whole-log replay, and a verb asked it from the reconcile and again from
+    /// [`Ctx::log_a_cached_break`] (after the close had appended its lines), so a tree with a
+    /// cache-only break paid two `All` replays per verb — on a refused tree, every verb, forever. It
+    /// is asked once per verb now. The lines a verb appends between the two askings cannot hold a
+    /// record of the cached break: the one writer of a break's ending line (`day::end_break_at`)
+    /// takes the cached break as it writes, which changes the key.
+    break_lookup: std::cell::RefCell<Option<BreakLookup>>,
 }
+
+/// What [`Ctx::break_lookup`] remembers: the cached break and `now` it was asked about, and the
+/// whole-log answer.
+type BreakLookup = (BreakState, DateTime<FixedOffset>, Option<BreakRecord>);
 
 impl Ctx {
     /// Load the plan directory named by `g`. `housekeeping` runs §6.3's
@@ -966,6 +979,7 @@ impl Ctx {
             model,
             timed_out: Vec::new(),
             held: None,
+            break_lookup: std::cell::RefCell::new(None),
         };
         // **D42**, before the automatic close and before any verb reads
         // `cx.state`: the cache is reconciled with the log it is a cache of.
@@ -1030,22 +1044,54 @@ impl Ctx {
     /// ended ([`Ctx::ended_cached_break`], gap 5520) the reconcile has dropped. On a tree the kernel
     /// refuses nothing is written (D35), and the next verb tries again. Answers whether a line was
     /// appended.
+    ///
+    /// **The guards are asked cheapest first** (W-51 repair track H, correcting README gap 5523): a
+    /// refused close settles it before [`Ctx::ended_cached_break`] is asked, and that answer is the one
+    /// the reconcile already computed ([`Ctx::break_lookup`]) — so a verb pays at most ONE whole-log
+    /// replay for a cache-only break, where it paid two, refused tree or not.
+    ///
+    /// **A break placed before the day's logged wake is dropped, not logged** — the owner's **D138**
+    /// (parity **P133**): D81 places a cache-only break at the latest instant at or before `now`
+    /// with its clock, and when that instant falls before the latest wake the log holds (at or
+    /// before `now`), the break cannot have run across the wake — `tm wake` refuses while a break
+    /// runs (D81's call on gap 3824) — so it is no fact the log can hold. The verb clears it from
+    /// the cache, writes the cache past the same refusal guard, and says why in one line (D65's rule
+    /// for a write the user did not type).
     fn log_a_cached_break(&mut self, refused: bool) -> Result<bool, CliError> {
         let Some(here) = self.state.break_.clone() else {
             return Ok(false);
         };
-        if self.replay.open_break.is_some() || self.ended_cached_break().is_some() {
+        if refused || self.replay.open_break.is_some() || self.ended_cached_break().is_some() {
             return Ok(false);
         }
         let Some(at) = self.running_break() else {
             return Ok(false);
         };
-        if refused || kernel_bridge::tree_refusal(self)?.is_some() {
+        if kernel_bridge::tree_refusal(self)?.is_some() {
+            return Ok(false);
+        }
+        if let Some(woke) = self.latest_logged_wake().filter(|w| at.fixed_offset() < *w) {
+            self.state.break_ = None;
+            // The block's pause is then the log's alone, as a rebuild with no break derives it.
+            let fresh = derived_state(&self.replay, self.cfg.tz, self.today, false);
+            if let (Some(a), Some(f)) = (self.state.active.as_mut(), fresh.active.as_ref()) {
+                if a.id == f.id {
+                    a.paused = f.paused;
+                }
+            }
+            self.save_state()?;
+            kernel_bridge::notice(format!(
+                "dropped the break .tm/state.json held running since {} ({}m) — that is before the wake the \
+                 log holds at {}, and no break runs across a wake, so it was not logged (D138)",
+                at.format("%Y-%m-%d %H:%M"),
+                here.planned_min,
+                woke.with_timezone(&self.cfg.tz).format("%Y-%m-%d %H:%M"),
+            ));
             return Ok(false);
         }
         // The place is read through the kernel's one table (the owner's D111): a word the cache holds that the
         // table does not know (a hand edit) would make the line malformed, so the break is logged without it and
-        // the line says so (README gap 5528).
+        // the line says so (README gap 5561; the next verb's reconcile names both places).
         let table = kernel_log::places().map_err(|e| CliError::Kernel(kernel_bridge::fault_issue(&e, "")))?;
         let (place, dropped) = match here.place.clone() {
             Some(w) if table.iter().any(|t| *t == w) => (Some(w), None),
@@ -1244,13 +1290,20 @@ impl Ctx {
                 }
                 (Some(here), Some(b)) if here != b => {
                     if loud {
+                        // The place is named too (W-51 repair track H, the W-50 repair critic's fourth finding,
+                        // README gap 5561): a cache whose place the kernel's table does not know is logged
+                        // without it (D133, D111), and this notice then read "10:00 (15m) and … 10:00 (15m)" —
+                        // two equal halves for the one field that differed.
+                        let place = |b: &BreakState| b.place.as_ref().map(|p| format!(", {p}")).unwrap_or_else(|| ", no place".to_string());
                         eprintln!(
-                            "tm: .tm/state.json said a break began at {} ({}m) and .tm/log.jsonl says one began at {} \
-                             ({}m) — the log decides (§10.2 is a cache of it, D42, D105)",
+                            "tm: .tm/state.json said a break began at {} ({}m{}) and .tm/log.jsonl says one began at {} \
+                             ({}m{}) — the log decides (§10.2 is a cache of it, D42, D105)",
                             hhmm(&here),
                             here.planned_min,
+                            place(&here),
                             hhmm(&b),
-                            b.planned_min
+                            b.planned_min,
+                            place(&b)
                         );
                     }
                     self.state.break_ = Some(b);
@@ -1402,6 +1455,52 @@ impl Ctx {
         self.ended_cached_break().is_some()
     }
 
+    /// **A replay whose rows hold the open block `block`'s own `start` row** — this context's, when its
+    /// rows reach it, else one asked for the dates from the block's start to today (W-51 repair track H,
+    /// README gap 5509). Under a served `Hot` replay the view is the unsealed tail: once a reseal has
+    /// folded the block's `start` line, [`Replay::start_row`] finds nothing, so `tm check`'s
+    /// `log-taken-block` named no taken block after its first run and D130's last activity read no
+    /// mark of the block. The rows of a sealed day come back with its day record, so a [`ReplayScope::Dates`]
+    /// replay from the start's date holds the start row and every mark logged since; it is asked only
+    /// when the block's start has been folded (a block left running across a reseal), and when even
+    /// that replay does not find it, this context's is answered as before.
+    pub(crate) fn block_rows(&self, block: &tm_core::log::OpenBlock) -> std::borrow::Cow<'_, Replay> {
+        let found = |r: &Replay| r.start_row(Some(block.id.as_str()), block.started).is_some();
+        if found(&self.replay) || self.scope == ReplayScope::All {
+            return std::borrow::Cow::Borrowed(&self.replay);
+        }
+        let from = block.started.with_timezone(&self.cfg.tz).date_naive().min(self.today);
+        let scope = ReplayScope::Dates { from, to: self.today };
+        match self.replay_in(scope) {
+            Some(replay) if found(&replay) => std::borrow::Cow::Owned(replay),
+            _ => std::borrow::Cow::Borrowed(&self.replay),
+        }
+    }
+
+    /// **A second replay of this context's log in `scope`, for a question its own replay's scope cannot
+    /// answer** — [`Ctx::replay_with`] for a CLI verb, and while housekeeping is HELD (a TUI past midnight,
+    /// the owner's D96) the replay that writes nothing, over the log as held ([`kernel_log::replay_unsealed`],
+    /// as [`Ctx::settle`] reads it), so asking it writes no checkpoint. `None` when it cannot be answered (a
+    /// refusal, or a held read that would rebuild a sealed month file); the callers then keep their own.
+    fn replay_in(&self, scope: ReplayScope) -> Option<Replay> {
+        if !self.holding() {
+            return Ctx::replay_with(&self.store, &self.cfg, self.now, self.today, scope).ok().map(|r| r.replay);
+        }
+        let bytes = self.log_now().ok()?;
+        let tz = Ctx::tz_wire(&self.store, &self.cfg);
+        kernel_log::replay_unsealed(self.store.root(), &bytes, self.cfg.tz, &tz, self.today, scope.to_kernel())
+            .ok()
+            .flatten()
+            .map(|r| r.replay)
+    }
+
+    /// **The latest wake the log holds at or before `now`** (the owner's D138): the wake records of the
+    /// replay's days. The scoped replay holds the open days, and a wake that is the latest one has
+    /// opened the newest of them.
+    fn latest_logged_wake(&self) -> Option<DateTime<FixedOffset>> {
+        self.replay.days.values().filter_map(|d| d.wake).filter(|w| *w <= self.now).max()
+    }
+
     /// **The log's record of the running break `.tm/state.json` holds, when the log has ENDED it** (the
     /// W-46 audit, README gap 4903; matched by its REAL start since W-50 repair track B, README gap 5520).
     /// `None` while the log holds a running break (the cache's is then the log's, or contradicted by it —
@@ -1464,8 +1563,16 @@ impl Ctx {
         // The scoped replay holds the open days only; the record of a break ended in a sealed month is
         // in the whole replay. Asked only here — a cached break the log holds no running break for —
         // which the reconcile then settles, so it is not asked again.
-        let whole = Ctx::replay_with(&self.store, &self.cfg, self.now, self.today, ReplayScope::All).ok()?;
-        latest(&whole.replay)
+        // Asked once per verb (README gap 5523 as corrected by W-51 repair track H): remembered against the
+        // cached break and `now`.
+        if let Some((b, t, answer)) = self.break_lookup.borrow().as_ref() {
+            if b == here && *t == now {
+                return answer.clone();
+            }
+        }
+        let answer = self.replay_in(ReplayScope::All).and_then(|whole| latest(&whole));
+        *self.break_lookup.borrow_mut() = Some((here.clone(), now, answer.clone()));
+        answer
     }
 
     /// **What the rebuild could not put back — computed, not listed** (README
@@ -2156,6 +2263,7 @@ impl Ctx {
             model: self.model.clone(),
             timed_out: self.timed_out.clone(),
             held: self.held.clone(),
+            break_lookup: std::cell::RefCell::new(self.break_lookup.borrow().clone()),
         }
     }
 
