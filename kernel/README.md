@@ -101539,7 +101539,51 @@ Each plant applied to this track's tree alone, the named test target run, the pl
 
 ### 9. Measurements
 
-MEASURE
+All capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on this track's tree (`1f2ca51`; the
+docs commit after it changes `kernel/README.md` alone).  Another track and other jobs shared the machine (load 4.5-8).
+
+* **`check.sh`**: 17 lines, every one `ok` — axiom audit 6908 theorems, FFI 97 tests, corpus 29/37 files and 4/5
+  whole plans, stage goals 1 (stage 6), check 8 67,598 citations (0 unused allow entries), parity P1-P133 with
+  next free P134, checks 11-14 ok; 35.5 s wall.  No Lean changed, so check 9's roster is unchanged (no new
+  definition to mutate).
+* **`cargo test --workspace --no-fail-fast`, three runs**:
+  run 1 **3,041 passed / 0 failed / 53 ignored over 175 result lines** (15 m 58 s);
+  run 2 **3,040 / 1 / 53 over 175** (load 6.6) and run 3 **3,040 / 1 / 53 over 175** (load 7.4) — each failure
+  `cli_latency`'s three-year test, row 6, `` `tm drop ^z15` was still running after 1s `` (README gap 5541, the known
+  noise).  No compiler warning in any run (the `let started` warning is gone); no `.proptest-regressions` file moved.
+* **`cli_latency` alone, this track's build against the base build** (`w50r-land`'s `cli_latency` binary, tree of
+  `3e553a5`), back to back, twice, at load 4.4-4.8 (it never fell under 3 while this step ran): **both fail row 6 the
+  same way in all four runs** and agree elsewhere to the noise — e.g. the year-of-log later verb 121.7 ms vs 116.4 ms,
+  the three-year genesis 3.15 s vs 3.07 s, a bare `tm log` over three years 278.6 ms vs 278.3 ms.  `Ctx::block_rows`
+  asks no `dates` replay on the stall row: an open block with marks holds the ledger day (§9's probe), so its `start`
+  row is in the `Hot` view.
+* **`kernel/tm-kernel-ffi`, `cargo test`**: **105 passed / 0 failed** over 5 result lines.
+* **The new tests**: `tm/tests/cli_w51h_host.rs` 12 tests and `tui::tests::d133_the_tui_past_midnight_holds_the_close_stop_and_logs_the_cached_break_after_it`,
+  each shown failing under its plant (§8).
+
+**One trap of this step's own, recorded so the next plant script does not repeat it.**  The first two full runs
+(before acceptance) failed the TUI test on a checkpoint write, and it then passed every run after.  The cause was the
+plant script: it saved each file to `.bak` BEFORE writing the plant and moved the `.bak` back after, so the restored
+file carried an mtime OLDER than the binary the plant had just built, and cargo kept the planted binary (`Ctx::replay_in`
+forced to the writing replay) until the next edit to the crate rebuilt it.  The acceptance runs above were all made
+after such an edit (the binary is newer than every source and was rebuilt from them), and the drive transcripts were
+re-taken with that binary (identical).
+
+**The fold probe (gap 5563).**  Worlds derived from the critic's C8 (no wake logged; `^t3` started 09-07 10:20 and moved
+to an open W38 so a later close can take it), each checkpoint written by two `tm check`s at 2026-09-14 10:10 with the
+cache removed first, read from `.tm/cache/replay/ckpt.json`'s `meta`:
+
+| world | marks of the block after its start | cut | ledger day L |
+|---|---|---|---|
+| Y1 | none | 1 | 2026-09-12 (09-07 sealed: the start row leaves the `Hot` view) |
+| Y3 | `pause` 10:30, `unpause` 10:50 (09-07) | 1 | 2026-09-07 |
+| Y4 | `break_start` + `break` 10:30 (09-07) | 1 | 2026-09-07 |
+| Y5 | `interrupt` 10:30, `resume` 10:50 (09-07) | 1 | 2026-09-07 |
+| Y6 | `interrupt` 10:00, `resume` 10:30 on 09-09 | 1 | 2026-09-07 (also at a 09-21 check) |
+| Y1 + `tm pause`/`tm pause` at 09-14 10:20/10:40 | written after the seal | 1 | 2026-09-07 (the pause's checkpoint rebuilt L back) |
+
+And D130 on that last world at 2026-09-21 10:00 (the W38 close) stops `^t3` at 09-14 10:40 on `94542be` and on this
+track alike: the start row was in view.
 
 ### 10. Records corrected (append-only: the earlier paragraphs stand as written)
 
@@ -101606,3 +101650,67 @@ here; the reachable case is the cache-only break (§4).  2. *Why.*  A `break` li
 ended it or before the break's start (the brief's item 4).  3. *Cost.*  None known.  4. *Clears it.*  Nothing owed.
 
 New gaps start at **5566**.
+
+### 12. The §5.13 drive of items 1-3 (the built binary, `TZ=America/Chicago`)
+
+`tm init --example`, `wake` 09-07 08:00, `start ^t3` 10:20, `drop ^t3` 10:40 (the live W37), then each verb at 10:50 on
+a copy (the orchestrator's `v/Q`).  Before (`94542be`):
+
+    $ tm done
+    ✓ ^t3 Exercises 5.3–5.5 · 30m/60m
+      week: - [x] 4 1b Exercises 5.3–5.5            @m1 ^t3
+      log:  {"t":"2026-09-07T10:50:00-05:00","ev":"done","id":"t3","est_min":60,"actual_min":30,"tags":[],"ci":4}
+      journal: 10:50 done ^t3 30m/60m
+    $ tm done --partial
+    ✓ ^t3 Exercises 5.3–5.5 · 30m/60m · 5m left
+      week: - [ ] 4 5m Exercises 5.3–5.5            @m1 ^t3
+      log:  {"t":"2026-09-07T10:50:00-05:00","ev":"done","id":"t3","est_min":60,"actual_min":30,"tags":[],"ci":4,"partial":true}
+      journal: 10:50 done ^t3 30m/60m
+    $ tm stop
+    stopped ^t3 after 30m · its line is settled and left as it stands (D132)
+      week: - [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+      log:  {"t":"2026-09-07T10:50:00-05:00","ev":"stop","id":"t3","remaining_min":5}
+      journal: 10:50 stop ^t3 30m · 5m left
+
+After (this track):
+
+    $ tm done
+    ✓ ^t3 Exercises 5.3–5.5 · 30m/60m · its line is settled and left as it stands (D135)
+      week: - [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+      log:  {"t":"2026-09-07T10:50:00-05:00","ev":"done","id":"t3","est_min":60,"actual_min":30,"tags":[],"ci":4}
+      journal: 10:50 done ^t3 30m/60m · line settled, left as it stands
+    $ tm done --partial
+    ✓ ^t3 Exercises 5.3–5.5 · 30m/60m · its line is settled and left as it stands (D135)
+      week: - [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+      log:  {"t":"2026-09-07T10:50:00-05:00","ev":"done","id":"t3","est_min":60,"actual_min":30,"tags":[],"ci":4,"partial":true}
+      journal: 10:50 done ^t3 30m/60m · line settled, left as it stands
+    $ tm stop
+    stopped ^t3 after 30m · its line is settled and left as it stands (D132)
+      week: - [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+      log:  {"t":"2026-09-07T10:50:00-05:00","ev":"stop","id":"t3","remaining_min":5}
+      journal: 10:50 stop ^t3 30m · line settled, left as it stands
+
+D138 — `tm init --example`, `wake` 09-08 08:00, the cache's `break` set to `11:00`, 15m, `walk`, `tm plan` at 09-08
+10:05 (the critic's d/K5).  Before:
+
+    tm: logged the break .tm/state.json holds running since 2026-09-07 11:00 (15m, walk) — it was begun before tm logged a break's start, so .tm/log.jsonl now holds it (D133)
+    00:00  ·      break 10h5m                              walk
+    14:00  ·      break 20m
+    16:20  ·      break 20m
+      log break lines: 1  state.break: {'started': '11:00', 'planned_min': 15, 'where': 'walk'}
+
+After:
+
+    tm: dropped the break .tm/state.json held running since 2026-09-07 11:00 (15m) — that is before the wake the log holds at 2026-09-08 08:00, and no break runs across a wake, so it was not logged (D138)
+    14:00  ·      break 20m
+    16:20  ·      break 20m
+      log break lines: 0  state.break: None
+
+The TUI's held path was driven by its unit test (§4), not through a pty: the drive this track owed is the CLI's,
+and the held date change is a function of the context the TUI read, which the test sets.
+
+### 13. Owed, by name
+
+* Gap 5562 (the brief's "a break's start is no activity" against gap 5507's campaign call) is the owner's.
+* Gap 5560 (the settled `stop`'s `remaining_min`) waits on a log-grammar decision the fork would refuse.
+* Nothing uncommitted.
