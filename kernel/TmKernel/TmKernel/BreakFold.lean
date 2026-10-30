@@ -178,10 +178,12 @@ theorem arm_openAfter (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
         subst hm
         exact openAfter_congr rfl rfl h
       · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
+        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+          List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
         exact hF _ _ _ _ m' hm
     · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+          List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
       exact hF _ _ _ _ m' hm
   case brkStart pl w =>
     split at hm
@@ -306,6 +308,25 @@ theorem netClosed_noBrkSeg (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (m : 
   unfold netClosed
   apply flatten_noBrkSeg
   intro l hl; obtain ⟨C, -, rfl⟩ := List.mem_map.1 hl; exact netOne_noBrkSeg dy _ _ _ C
+
+/-- **A give-back draws no break** (the owner's D137): it re-draws a block's pieces and credits it. -/
+theorem giveBack_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) : NoBrkSeg (giveBack dy m).2 := by
+  unfold giveBack
+  apply flatten_noBrkSeg
+  intro l hl; obtain ⟨C, -, rfl⟩ := List.mem_map.1 hl
+  unfold giveOne; split
+  · exact noBrkSeg_nil
+  · refine noBrkSeg_append (redraw_noBrkSeg dy _ _ _) ?_
+    split
+    · apply noBrkSeg_of_no_segment; intro x hx d g
+      simp only [List.mem_cons, List.not_mem_nil] at hx
+      rcases hx with rfl | rfl | rfl | rfl | h
+      · simp
+      · simp
+      · simp
+      · simp
+      · exact h.elim
+    · exact noBrkSeg_nil
 
 theorem netStart_noBrkSeg (dy : Cal.Instant → Nat) (t : At) (d : Nat) (m : Machine) :
     NoBrkSeg (netStart dy t d m).2 := by
@@ -630,6 +651,9 @@ theorem DayOp.apply_segments (op : DayOp) (a : DayAcc) :
   | idle r =>
     left; simp only [DayOp.apply] at hg; repeat' split at hg
     all_goals exact hg
+  | undur l k =>
+    left; simp only [DayOp.apply, DayAcc.undurOf] at hg; repeat' split at hg
+    all_goals exact hg
   | _ => left; exact hg
 
 theorem DayOp.alterFn_segments (op : DayOp) (o : Option DayAcc) (a' : DayAcc) (h : op.alterFn o = some a') :
@@ -710,15 +734,17 @@ theorem stepWith_brks_of_brk (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat �
         st.machine.brks) := by
   rw [Seal.stepWith_machine_eq]
   have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
-      brkFx dy st.machine (e.t.val, e.off.val) (brkEnd (e.t.val, e.off.val) p.val (a.map (·.val))) (dy e.t.val) ++
+      (giveBack dy st.machine).2 ++ brkFx dy (giveBack dy st.machine).1 (e.t.val, e.off.val)
+        (brkEnd (e.t.val, e.off.val) p.val (a.map (·.val))) (dy e.t.val) ++
         dayArm dy sl (placed st.machine e) (e.t.val, e.off.val) (dy e.t.val) := by
     unfold Replay.arm; simp only [hev]
     rcases hK : st.machine.brkEnded with _ | s0
     · rfl
     · simp only [hown s0 hK, Bool.false_eq_true, if_false]; rfl
-  rw [harm, List.filterMap_append, (Replay.dayArm_obs dy sl _ _ _).1, List.append_nil]
-  have hm := Replay.brkFx_brk dy st.machine (e.t.val, e.off.val) (brkEnd (e.t.val, e.off.val) p.val (a.map (·.val)))
-    (dy e.t.val)
+  rw [harm, List.filterMap_append, (Replay.dayArm_obs dy sl _ _ _).1, List.append_nil, List.filterMap_append,
+    (Replay.giveBack_obs dy _).2.2, List.nil_append, ← (Replay.giveBack_keeps dy st.machine).2.2.1]
+  have hm := Replay.brkFx_brk dy (giveBack dy st.machine).1 (e.t.val, e.off.val)
+    (brkEnd (e.t.val, e.off.val) p.val (a.map (·.val))) (dy e.t.val)
   revert hm
   unfold brkFx
   simp only [List.filterMap_append, (settle_fx_obs dy _).2.2, (netClosed_obs dy _ _ _ _).2.2, List.nil_append,
@@ -811,7 +837,8 @@ theorem stepWith_brkHeld (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → O
           · rfl
           · exact absurd ⟨s0, hs0, hat⟩ hown
         have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
-            brkFx dy st.machine (e.t.val, e.off.val) (brkEnd (e.t.val, e.off.val) p.val (a0.map (·.val)))
+            (giveBack dy st.machine).2 ++ brkFx dy (giveBack dy st.machine).1 (e.t.val, e.off.val)
+              (brkEnd (e.t.val, e.off.val) p.val (a0.map (·.val)))
               (dy e.t.val) ++ dayArm dy sl (placed st.machine e) (e.t.val, e.off.val) (dy e.t.val) := by
           unfold Replay.arm; simp only [hev]
           rcases hK : st.machine.brkEnded with _ | s0
@@ -819,7 +846,9 @@ theorem stepWith_brkHeld (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → O
           · simp only [hown' s0 hK, Bool.false_eq_true, if_false]; rfl
         rw [harm] at hx
         rcases List.mem_append.1 hx with hx | hx
-        · exact absurd hk (brkFx_noBrkSeg dy _ _ _ _ _ hx d g rfl w)
+        · rcases List.mem_append.1 hx with hx | hx
+          · exact absurd hk (giveBack_noBrkSeg dy _ _ hx d g rfl w)
+          · exact absurd hk (brkFx_noBrkSeg dy _ _ _ _ _ hx d g rfl w)
         · unfold dayArm at hx
           rw [placed_ev_of_brk st.machine e hev] at hx
           simp only [List.mem_cons, List.not_mem_nil, or_false] at hx

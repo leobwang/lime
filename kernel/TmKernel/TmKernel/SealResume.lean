@@ -88,6 +88,12 @@ def runReads (m : Machine) : List Cal.Instant :=
     if o.s.1 < (Replay.runTo o.s m.closed).1 then closedReads o.s (Replay.runTo o.s m.closed) o.day m.closed else []
   | none => []
 
+/-- **The instants a give-back reads the index at** (the owner's D137, README gaps 5504 and 5302; `Replay.giveBack`): each
+held closed block a running break netted, the starts of the pieces it re-draws anew — where a piece the running break took
+began (`Replay.Closed.ran`), which the machine holds. -/
+def giveReads (m : Machine) : List Cal.Instant :=
+  m.closed.flatMap (fun C => if C.ran.isEmpty then [] else redrawReads C.drawn C.restored)
+
 /-- **The instants a break held as `[s, e)` on ledger day `d` reads the index at** (D87, D94, D100; `Replay.brkFx`): the
 open block's new pieces once the break is held (`settleReads`), and each held closed block's it nets (`closedReads`). -/
 def brkFxReads (m : Machine) (s e : Replay.At) (d : Nat) : List Cal.Instant :=
@@ -162,11 +168,11 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       match m.brkEnded with
       | some s =>
         if Replay.atEq s (e.t.val, e.off.val) then []
-        else brkFxReads m (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)))
-          (dy e.t.val)
+        else giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (e.t.val, e.off.val)
+          (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
       | none =>
-        brkFxReads m (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val)))
-          (dy e.t.val)
+        giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (e.t.val, e.off.val)
+          (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
     | _ => []
 
 /-! ### What a netting reads depends on the held blocks' days and spans alone (README gap 5180)
@@ -257,6 +263,29 @@ theorem netOne_shp (dy₁ dy₂ : Cal.Instant → Nat) (s e : Replay.At) (d : Na
   · rfl
   · simp only [Replay.Closed.spans, redraw_fst_map]
 
+/-- **A give-back's held blocks' days and spans do not depend on the index** (D137): each is its block as it stood
+(`Replay.Closed.restored`) on its own ledger day. -/
+theorem giveBack_shp (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) :
+    (Replay.giveBack dy₁ m).1.closed.map (fun C => (C.day, C.spans)) =
+      (Replay.giveBack dy₂ m).1.closed.map (fun C => (C.day, C.spans)) := by
+  show (m.closed.map (fun C => (Replay.giveOne dy₁ C).1)).map _ = (m.closed.map (fun C => (Replay.giveOne dy₂ C).1)).map _
+  simp only [List.map_map]
+  apply List.map_congr_left
+  intro C _
+  simp only [Function.comp_apply]
+  unfold Replay.giveOne
+  by_cases hr : C.ran.isEmpty = true
+  · simp only [hr, if_true]
+  · simp only [hr, if_false, Bool.false_eq_true, Replay.Closed.spans, redraw_fst_map]
+
+/-- **What a `break` line nets after its give-back does not depend on the index** (D137): the give-back moves only the
+held closed blocks and the last cut, and their days and spans not by the index (`giveBack_shp`). -/
+theorem brkFxReads_giveBack (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (s e : Replay.At) (d : Nat) :
+    brkFxReads (Replay.giveBack dy₁ m).1 s e d = brkFxReads (Replay.giveBack dy₂ m).1 s e d := by
+  unfold brkFxReads
+  rw [closedReads_shp s e d _ _ (giveBack_shp dy₁ dy₂ m)]
+  rfl
+
 theorem netStart_shp (dy₁ dy₂ : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Machine) :
     (Replay.netStart dy₁ t d m).1.closed.map (fun C => (C.day, C.spans)) =
       (Replay.netStart dy₂ t d m).1.closed.map (fun C => (C.day, C.spans)) := by
@@ -342,6 +371,12 @@ theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e :
             (Replay.doneClose dy₂ m (e.t.val, e.off.val) id actual.val went).1.brkOpen
           rw [Replay.doneClose_brkOpen, Replay.doneClose_brkOpen])
       (doneClosed_shp dy₁ dy₂ m e.line (e.t.val, e.off.val) id actual.val ci)]
+  case brk planned actual where_ =>
+    split
+    · split
+      · rfl
+      · rw [brkFxReads_giveBack dy₁ dy₂]
+    · rw [brkFxReads_giveBack dy₁ dy₂]
 
 /-- **The tail without its settled undos** (§7.4): a settled undo cancels nothing after the cut. -/
 def unsettled (settled : List Nat) (bs : List Entry) : List Entry :=

@@ -1104,8 +1104,9 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
   case brk planned actual where_ =>
     have hb : (Replay.brkArm dy sl m e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := by
       unfold Replay.brkArm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).2.1, List.append_nil]
-      exact (Replay.brkFx_obs dy m t _ d).2
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).2.1, List.append_nil,
+        List.filterMap_append, (Replay.giveBack_obs dy m).2.1, List.nil_append]
+      exact (Replay.brkFx_obs dy _ t _ d).2
     split
     · split
       · rfl

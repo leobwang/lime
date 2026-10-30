@@ -103,6 +103,16 @@ theorem netOne_congr (s e : Replay.At) (d : Nat) (C : Replay.Closed)
     have hr := redraw_congr dy₁ dy₂ C.id C.drawn (Replay.cutOut s e C.spans) (h.resolve_left (fun h' => hd (Or.inl h')))
     simp only [hr]
 
+/-- **Each held closed block a netting meets reads the index only at `closedReads`** (the owner's D100). -/
+theorem netOne_congr_mem (s e : Replay.At) (d : Nat) (m : Machine)
+    (h : ∀ q ∈ closedReads s e d m.closed, dy₁ q = dy₂ q) :
+    ∀ C ∈ m.closed, Replay.netOne dy₁ s e d C = Replay.netOne dy₂ s e d C := by
+  intro C hC
+  by_cases hd : d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) = true
+  · unfold Replay.netOne; simp only [if_pos hd]
+  · apply netOne_congr
+    exact Or.inr (fun q hq => h q (List.mem_flatMap.2 ⟨C, hC, by simp only [if_neg hd]; exact hq⟩))
+
 /-- **Netting the held closed blocks reads the index only at `closedReads`** (the owner's D100). -/
 theorem netClosed_congr (s e : Replay.At) (d : Nat) (m : Machine)
     (h : ∀ q ∈ closedReads s e d m.closed, dy₁ q = dy₂ q) :
@@ -165,9 +175,38 @@ theorem runNet_congr (m : Machine) (h : ∀ q ∈ runReads m, dy₁ q = dy₂ q)
     split
     · rename_i hlt
       rw [if_pos hlt] at h
-      exact netClosed_congr dy₁ dy₂ _ _ _ m h
+      have e : m.closed.map (Replay.runOne dy₁ o.s (Replay.runTo o.s m.closed) o.day) =
+          m.closed.map (Replay.runOne dy₂ o.s (Replay.runTo o.s m.closed) o.day) :=
+        List.map_congr_left (fun C hC => by
+          unfold Replay.runOne
+          rw [netOne_congr_mem dy₁ dy₂ _ _ _ m h C hC])
+      rw [netClosed_congr dy₁ dy₂ _ _ _ m h, e]
     · rfl
   · rfl
+
+/-- **A give-back reads the index only at `giveReads`** (the owner's D137). -/
+theorem giveBack_congr (m : Machine) (h : ∀ q ∈ giveReads m, dy₁ q = dy₂ q) :
+    Replay.giveBack dy₁ m = Replay.giveBack dy₂ m := by
+  have hC : ∀ C ∈ m.closed, Replay.giveOne dy₁ C = Replay.giveOne dy₂ C := by
+    intro C hC
+    unfold Replay.giveOne
+    by_cases hr : C.ran.isEmpty = true
+    · simp only [hr, if_true]
+    · simp only [hr, if_false, Bool.false_eq_true]
+      rw [redraw_congr dy₁ dy₂ C.id C.drawn C.restored (fun q hq => h q (List.mem_flatMap.2 ⟨C, hC, by
+        simp only [hr, if_false, Bool.false_eq_true]; exact hq⟩))]
+  unfold Replay.giveBack
+  have e1 : m.closed.map (fun C => (Replay.giveOne dy₁ C).1) = m.closed.map (fun C => (Replay.giveOne dy₂ C).1) :=
+    List.map_congr_left (fun C hC' => by rw [hC C hC'])
+  have e2 : m.closed.map (fun C => (Replay.giveOne dy₁ C).2.1) = m.closed.map (fun C => (Replay.giveOne dy₂ C).2.1) :=
+    List.map_congr_left (fun C hC' => by rw [hC C hC'])
+  rw [e1, e2]
+  congr 2
+  cases hcl : m.closed with
+  | nil => cases m.lastCut <;> rfl
+  | cons C rest =>
+    have := hC C (by rw [hcl]; exact List.mem_cons_self ..)
+    split <;> simp_all
 
 /-- **Settling the open block leaves what the running break's netting reads** (README gap 5180): it moves neither the
 held closed blocks nor the running break. -/
@@ -349,13 +388,14 @@ theorem arm_congr (sl : Nat → Option Nat) (m : Machine) (e : Entry)
     have h2 : Replay.dayArm dy₁ sl (Replay.placed m e) (e.t.val, e.off.val) (dy₂ e.t.val)
         = Replay.dayArm dy₂ sl (Replay.placed m e) (e.t.val, e.off.val) (dy₂ e.t.val) := by
       unfold Replay.dayArm; simp only [Replay.placed_ev_of_brk m e hev]
-    have hb : (∀ q ∈ brkFxReads m (e.t.val, e.off.val)
+    have hb : (∀ q ∈ giveReads m ++ brkFxReads (Replay.giveBack dy₁ m).1 (e.t.val, e.off.val)
         (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy₂ e.t.val), dy₁ q = dy₂ q) →
         Replay.brkArm dy₁ sl m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) =
           Replay.brkArm dy₂ sl m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) := by
       intro hq
+      have hg := giveBack_congr dy₁ dy₂ m (fun q h' => hq q (List.mem_append_left _ h'))
       unfold Replay.brkArm
-      rw [brkFx_congr dy₁ dy₂ _ _ _ _ hq, h2]
+      rw [brkFx_congr dy₁ dy₂ _ _ _ _ (fun q h' => hq q (List.mem_append_right _ h')), hg, h2]
     rcases hK : m.brkEnded with _ | s0 <;> simp only [hK] at h ⊢
     · exact hb (fun q hq => h q (List.mem_append_right _ hq))
     · split
@@ -406,21 +446,23 @@ theorem foldl_stepWith_congr (z : Cal.Tz) (dy₁ dy₂ : Cal.Instant → Nat) (s
 spans (the owner's D99: a piece a later step draws begins at its start or at one of these ends), and — since the
 owner's D92 (README gap 4241), every break it holds since D94 (README gaps 4361 and 4506) — the ends of the breaks it
 holds, where a piece after one begins; and — since the owner's D100 (README gap 4520b) — the starts of the pieces of
-every closed block it holds, where a piece a late break re-draws for one begins (or at the break's end). -/
+every closed block it holds, where a piece a late break re-draws for one begins (or at the break's end); and — since the
+owner's D137 (README gaps 5504 and 5302) — the starts of the pieces a running break took from one (`Closed.ran`), where
+a piece the `break` line gives back begins. -/
 def machineInstants (m : Machine) : List Cal.Instant :=
   (match m.block with
    | some b => b.started.1 :: ((b.since.map (·.1)).toList ++ (b.pausedAt.map (·.1)).toList ++ b.idle.map (·.2.1))
-   | none => []) ++ (m.brks.map (·.e.1) ++ m.closed.flatMap (fun C => C.drawn.map (·.s.1)))
+   | none => []) ++ (m.brks.map (·.e.1) ++ m.closed.flatMap (fun C => (C.drawn ++ C.ran).map (·.s.1)))
 
 /-- **What a machine holds, by where it is held** (D99). -/
 theorem mem_machineInstants (m : Machine) (q : Cal.Instant) :
     q ∈ machineInstants m ↔
       (∃ b, m.block = some b ∧ (b.started.1 = q ∨ (∃ x, b.since = some x ∧ x.1 = q) ∨
         (∃ x, b.pausedAt = some x ∧ x.1 = q) ∨ (∃ sp ∈ b.idle, sp.2.1 = q))) ∨
-      ((∃ k ∈ m.brks, k.e.1 = q) ∨ (∃ C ∈ m.closed, ∃ p ∈ C.drawn, p.s.1 = q)) := by
+      ((∃ k ∈ m.brks, k.e.1 = q) ∨ (∃ C ∈ m.closed, ∃ p ∈ C.drawn ++ C.ran, p.s.1 = q)) := by
   unfold machineInstants
   cases hb : m.block with
-  | none => simp [List.mem_flatMap]
+  | none => simp [List.mem_flatMap, or_and_right, exists_or]
   | some b =>
     simp only [List.mem_append, List.mem_cons, List.mem_map, Option.mem_toList, Option.map_eq_some_iff,
       Option.some.injEq, exists_eq_left', or_assoc, List.mem_flatMap]
@@ -783,7 +825,7 @@ theorem runReads_starts (m : Machine) (q : Cal.Instant) (hq : q ∈ runReads m) 
 
 theorem runReads_mi (m : Machine) (q : Cal.Instant) (hq : q ∈ runReads m) : q ∈ machineInstants m := by
   obtain ⟨C, hC, p, hp, rfl⟩ := runReads_starts m q hq
-  exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩))
+  exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, rfl⟩))
 
 theorem doneFx_machines (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : Replay.At) (d : Nat) (id : Log.Id)
     (est actual : Nat) (went : Option Log.U8) (tags : List (List Char)) (ci : Log.U8) (isPartial : Bool) :
@@ -813,7 +855,8 @@ theorem cut_mi (dy : Cal.Instant → Nat) (m : Machine) (t : Replay.At) (q : Cal
     · cases hb'
     · exact (mem_machineInstants m _).2 (Or.inr (Or.inl ⟨k, hk, rfl⟩))
     · rcases List.mem_cons.1 (Replay.mem_pruneClosed hC) with rfl | hC
-      · obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy b.id b.drawn _ pc hpc
+      · have hpc : pc ∈ (Replay.redraw dy b.id b.drawn (Replay.cutPieces b m t)).1 := by simpa using hpc
+        obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy b.id b.drawn _ pc hpc
         rw [hpq]
         exact cutPieces_mi b m hb t q' hq'
       · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc, rfl⟩))
@@ -829,14 +872,18 @@ theorem netClosed_mi (dy : Cal.Instant → Nat) (s e : Replay.At) (d : Nat) (m :
   · rw [k3] at hk; exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inl ⟨k, hk, rfl⟩)))
   · have hC'' : C' ∈ m.closed.map (fun C => (Replay.netOne dy s e d C).1) := hC'
     obtain ⟨C, hC, rfl⟩ := List.mem_map.1 hC''
+    rcases List.mem_append.1 hpc with hpc | hpc
+    case inr =>
+      rw [(Replay.netOne_ran dy s e d C).1] at hpc
+      exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_right _ hpc, rfl⟩)))
     unfold Replay.netOne at hpc
     split at hpc
-    · exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc, rfl⟩)))
+    · exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_left _ hpc, rfl⟩)))
     · obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy C.id C.drawn _ pc hpc
       rcases Replay.cutOut_starts s e C.spans q' hq' with ⟨r, hr, hre⟩ | h
       · unfold Replay.Closed.spans at hr
         obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
-        exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, by rw [hpq, hre]⟩)))
+        exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, by rw [hpq, hre]⟩)))
       · exact Or.inr (by rw [hpq, h])
 
 /-- **The machine a late start's cut leaves holds no new instant** (the owner's D115): every piece it draws anew begins
@@ -850,9 +897,13 @@ theorem netStart_mi (dy : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Ma
   · rw [k3] at hk; exact (mem_machineInstants m _).2 (Or.inr (Or.inl ⟨k, hk, rfl⟩))
   · have hC'' : C' ∈ m.closed.map (fun C => (Replay.netOne dy t (Replay.startEnd t C) d C).1) := hC'
     obtain ⟨C, hC, rfl⟩ := List.mem_map.1 hC''
+    rcases List.mem_append.1 hpc with hpc | hpc
+    case inr =>
+      rw [(Replay.netOne_ran dy t _ d C).1] at hpc
+      exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_right _ hpc, rfl⟩))
     unfold Replay.netOne at hpc
     split at hpc
-    · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc, rfl⟩))
+    · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_left _ hpc, rfl⟩))
     · rename_i hg
       obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy C.id C.drawn _ pc hpc
       cases ha : C.drawn.any (fun p => decide (p.s.1 < t.1)) with
@@ -861,7 +912,7 @@ theorem netStart_mi (dy : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Ma
         obtain ⟨r, hr, hre⟩ := Replay.cutOut_startEnd_starts t C ha q' hq'
         unfold Replay.Closed.spans at hr
         obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
-        exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, by rw [hpq, hre]⟩))
+        exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, by rw [hpq, hre]⟩))
 
 /-- **The machine the running break's netting leaves holds no new instant** (README gap 5180): every piece it draws anew
 begins where one of the held block's own began (`Replay.cutOut_runTo_starts`). -/
@@ -875,21 +926,33 @@ theorem runNet_mi (dy : Cal.Instant → Nat) (m : Machine) (q : Cal.Instant)
     rcases hq with ⟨b, hb, h'⟩ | ⟨k, hk, rfl⟩ | ⟨C', hC', pc, hpc, rfl⟩
     · rw [k1] at hb; exact (mem_machineInstants m _).2 (Or.inl ⟨b, hb, h'⟩)
     · rw [k3] at hk; exact (mem_machineInstants m _).2 (Or.inr (Or.inl ⟨k, hk, rfl⟩))
-    · have hC'' : C' ∈ m.closed.map (fun C => (Replay.netOne dy o.s (Replay.runTo o.s m.closed) o.day C).1) := hC'
+    · have hC'' : C' ∈ m.closed.map (Replay.runOne dy o.s (Replay.runTo o.s m.closed) o.day) := hC'
       obtain ⟨C, hC, rfl⟩ := List.mem_map.1 hC''
+      rcases List.mem_append.1 hpc with hpc | hpc
+      case inr =>
+        have hpc : pc ∈ (if o.day < C.day then C.ran else C.ran ++ C.drawn.filter
+            (Replay.meets o.s (Replay.runTo o.s m.closed))) := hpc
+        have hpc' : pc ∈ C.drawn ++ C.ran := by
+          split at hpc
+          · exact List.mem_append_right _ hpc
+          · rcases List.mem_append.1 hpc with h1 | h1
+            · exact List.mem_append_right _ h1
+            · exact List.mem_append_left _ (List.mem_filter.1 h1).1
+        exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc', rfl⟩))
+      have hpc : pc ∈ (Replay.netOne dy o.s (Replay.runTo o.s m.closed) o.day C).1.drawn := hpc
       unfold Replay.netOne at hpc
       split at hpc
-      · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc, rfl⟩))
+      · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_left _ hpc, rfl⟩))
       · obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy C.id C.drawn _ pc hpc
         obtain ⟨r, hr, hre⟩ := Replay.cutOut_runTo_starts o.s m.closed C hC q' hq'
         unfold Replay.Closed.spans at hr
         obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
-        exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, by rw [hpq, hre]⟩))
+        exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, by rw [hpq, hre]⟩))
 
 /-- **The closed blocks a `done` leaves begin where the machine already holds** (the owner's D100). -/
 theorem doneClosed_mi (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : Replay.At) (id : Log.Id)
     (actual : Nat) (ci : Log.U8) (C : Replay.Closed) (hC : C ∈ Replay.doneClosed dy m line t id actual ci)
-    (p : Replay.Piece) (hp : p ∈ C.drawn) : p.s.1 ∈ machineInstants m := by
+    (p : Replay.Piece) (hp : p ∈ C.drawn ++ C.ran) : p.s.1 ∈ machineInstants m := by
   unfold Replay.doneClosed at hC
   cases hb : m.block with
   | some b =>
@@ -897,7 +960,8 @@ theorem doneClosed_mi (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t :
     simp only at hC
     split at hC
     · rcases List.mem_cons.1 (Replay.mem_pruneClosed hC) with rfl | hC
-      · obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy b.id b.drawn _ p hp
+      · have hp : p ∈ (Replay.redraw dy b.id b.drawn (Replay.cutPieces b m t)).1 := by simpa using hp
+        obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy b.id b.drawn _ p hp
         rw [hpq]; exact cutPieces_mi b m hb t q' hq'
       · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩))
     · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩))
@@ -942,7 +1006,7 @@ theorem startQueries_sub (dy : Cal.Instant → Nat) (M : Machine) (line : Nat) (
   simp only [List.mem_append] at hq
   rcases hq with (((hq | hq) | hq) | hq) | hq
   · obtain ⟨C, hC, p, hp, rfl⟩ := startReads_mi _ _ _ q hq
-    exact Or.inr ((mem_machineInstants M _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)))
+    exact Or.inr ((mem_machineInstants M _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, rfl⟩)))
   · exact Or.inr (cutReads_mi M _ q hq)
   · exact Or.inr (blockPaused_mi M q hq)
   · exact Or.inr (netStart_mi dy _ _ M q (cut_mi dy _ _ q (runReads_mi _ q hq)))
@@ -950,11 +1014,58 @@ theorem startQueries_sub (dy : Cal.Instant → Nat) (M : Machine) (line : Nat) (
     · exact Or.inr h
     · exact Or.inl h
 
+/-- **Where a held block's restored pieces begin, it held a piece** (the owner's D137): its own drawn pieces' starts and
+those of the pieces the running break took (`Replay.Closed.ran`). -/
+theorem restored_starts (C : Replay.Closed) (q : Replay.At × Replay.At) (hq : q ∈ C.restored) :
+    ∃ p ∈ C.drawn ++ C.ran, p.s = q.1 := by
+  unfold Replay.Closed.restored at hq
+  rcases List.mem_append.1 hq with hq | hq
+  · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hq
+    exact ⟨p, List.mem_append_left _ (List.mem_filter.1 hp).1, rfl⟩
+  · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hq
+    exact ⟨p, List.mem_append_right _ hp, rfl⟩
+
+/-- **What a give-back reads, the machine holds** (the owner's D137). -/
+theorem giveReads_mi (m : Machine) (q : Cal.Instant) (hq : q ∈ giveReads m) : q ∈ machineInstants m := by
+  obtain ⟨C, hC, hq⟩ := List.mem_flatMap.1 hq
+  split at hq
+  · cases hq
+  · unfold redrawReads at hq
+    obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hq
+    obtain ⟨p, hp, hpr⟩ := restored_starts C r (List.mem_filter.1 hr).1
+    exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, by rw [hpr]⟩))
+
+/-- **The machine a give-back leaves holds no new instant** (the owner's D137): every piece it re-draws begins where a
+held block's piece, or a piece the running break took from it, began. -/
+theorem giveBack_mi (dy : Cal.Instant → Nat) (m : Machine) (q : Cal.Instant)
+    (hq : q ∈ machineInstants (Replay.giveBack dy m).1) : q ∈ machineInstants m := by
+  rw [mem_machineInstants] at hq
+  obtain ⟨k1, -, k3, -, -, -⟩ := Replay.giveBack_keeps dy m
+  rcases hq with ⟨b, hb, h⟩ | ⟨k, hk, rfl⟩ | ⟨C', hC', pc, hpc, rfl⟩
+  · rw [k1] at hb; exact (mem_machineInstants m _).2 (Or.inl ⟨b, hb, h⟩)
+  · rw [k3] at hk; exact (mem_machineInstants m _).2 (Or.inr (Or.inl ⟨k, hk, rfl⟩))
+  · have hC'' : C' ∈ m.closed.map (fun C => (Replay.giveOne dy C).1) := hC'
+    obtain ⟨C, hC, rfl⟩ := List.mem_map.1 hC''
+    unfold Replay.giveOne at hpc
+    by_cases hr : C.ran.isEmpty = true
+    · simp only [hr, if_true] at hpc
+      exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc, rfl⟩))
+    · simp only [hr, if_false, Bool.false_eq_true, List.append_nil] at hpc
+      obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy C.id C.drawn _ pc hpc
+      obtain ⟨p, hp, hpr⟩ := restored_starts C q' hq'
+      exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, by rw [hpq, hpr]⟩))
+
 /-- **The machine a start ending a running break starts from holds the old one's instants and the start's stamp**
 (D129, `Replay.endMachine`): the break is held with the ones before it, its end the start's stamp. -/
 theorem endMachine_mi (m : Machine) (o : Replay.OpenBrk) (t : Replay.At) (q : Cal.Instant)
-    (hq : q ∈ machineInstants (Replay.endMachine m o t)) : q ∈ machineInstants m ∨ q = t.1 :=
-  heldBrk_mi m o.s t o.day q hq
+    (hq : q ∈ machineInstants (Replay.endMachine m o t)) : q ∈ machineInstants m ∨ q = t.1 := by
+  apply heldBrk_mi m o.s t o.day q
+  rw [mem_machineInstants] at hq ⊢
+  rcases hq with h | h | ⟨C', hC', p, hp, rfl⟩
+  · exact Or.inl h
+  · exact Or.inr (Or.inl h)
+  · obtain ⟨C, hC, rfl⟩ := List.mem_map.1 hC'
+    exact Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ (by simpa using hp), rfl⟩)
 
 /-- **What `firstStart` answers, the machine holds** (D129): the open block's start, or a held closed block's piece
 start. -/
@@ -963,7 +1074,7 @@ theorem firstStart_mi (s : Replay.At) (d : Nat) (m : Machine) (x : Replay.At) (h
   rw [mem_machineInstants]
   rcases Replay.firstStart_mem s d m x h with ⟨b, hb, rfl⟩ | ⟨C, hC, p, hp, rfl⟩
   · exact Or.inl ⟨b, hb, Or.inl rfl⟩
-  · exact Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)
+  · exact Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, rfl⟩)
 
 /-- **A held break's queries are instants the machine holds, or its end** (D87, D94, D100). -/
 theorem brkFxReads_sub (M : Machine) (s E : Replay.At) (d : Nat) (q : Cal.Instant) (hq : q ∈ brkFxReads M s E d) :
@@ -972,7 +1083,7 @@ theorem brkFxReads_sub (M : Machine) (s E : Replay.At) (d : Nat) (q : Cal.Instan
   rcases List.mem_append.1 hq with hq | hq
   · exact heldBrk_mi M s E d q (settleReads_mi _ q hq)
   · rcases closedReads_mi _ _ _ _ q hq with ⟨C, hC, p, hp, rfl⟩ | h
-    · exact Or.inl ((mem_machineInstants M _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)))
+    · exact Or.inl ((mem_machineInstants M _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, rfl⟩)))
     · exact Or.inr h
 
 theorem stepQueries_sub (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (q : Cal.Instant)
@@ -1033,7 +1144,7 @@ theorem stepQueries_sub (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (q 
         · exact Or.inr h
         · exact Or.inl (h ▸ hte)
       · rcases closedReads_mi _ _ _ _ q hq with ⟨C, hC, p, hp, rfl⟩ | h
-        · exact Or.inr ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, rfl⟩)))
+        · exact Or.inr ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, rfl⟩)))
         · exact Or.inl (h ▸ hte)
     · rcases resumed_mi m none (e.t.val, e.off.val) (fun sp hsp => by cases hsp) _ q (settleReads_mi _ q hq) with h | h
       · exact Or.inr h
@@ -1058,7 +1169,7 @@ theorem stepQueries_sub (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (q 
         · simp at hq
       · simp at hq
     · obtain ⟨C, hC, p, hp, rfl⟩ := runReads_starts _ q hq
-      exact Or.inr (doneClosed_mi dy m e.line _ id actual.val ci C hC p hp)
+      exact Or.inr (doneClosed_mi dy m e.line _ id actual.val ci C hC p (List.mem_append_left _ hp))
   case brkStart planned where_ =>
     split at hq
     · rename_i t0 hF
@@ -1071,11 +1182,13 @@ theorem stepQueries_sub (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (q 
       · have h := runReads_mi _ q hq
         exact Or.inr h
   case brk planned actual where_ =>
-    have hbk : q ∈ brkFxReads m (e.t.val, e.off.val)
+    have hbk : q ∈ giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (e.t.val, e.off.val)
         (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val) →
         q ∈ entryInstants e ∨ q ∈ machineInstants m := fun hq => by
+      rcases List.mem_append.1 hq with hq | hq
+      · exact Or.inr (giveReads_mi m q hq)
       rcases brkFxReads_sub _ _ _ _ q hq with h | h
-      · exact Or.inr h
+      · exact Or.inr (giveBack_mi dy m q h)
       · left
         unfold entryInstants brkEndAt?
         simp [hev, h]
@@ -1237,9 +1350,10 @@ theorem arm_mi (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine
     have hbk : m' ∈ (Replay.brkArm dy sl m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? →
         q ∈ machineInstants m ∨ q = t.1 ∨ q ∈ (brkEndAt? e t.1).toList := fun hm => by
       unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-      rcases brkFx_mi dy m t _ d m' hm q hq with h | h
-      · exact Or.inl h
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+        List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
+      rcases brkFx_mi dy _ t _ d m' hm q hq with h | h
+      · exact Or.inl (giveBack_mi dy m q h)
       · right; right
         unfold brkEndAt?
         simp only [hev, Option.toList_some, List.mem_singleton, h]
@@ -1437,11 +1551,17 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
         subst hm
         exact Or.inl rfl
       · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-        exact Or.inr ⟨_, Replay.brkFx_brk dy m t _ d m' hm⟩
+        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+          List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
+        have h := Replay.brkFx_brk dy _ t _ d m' hm
+        rw [(Replay.giveBack_keeps dy m).2.2.1] at h
+        exact Or.inr ⟨_, h⟩
     · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-      exact Or.inr ⟨_, Replay.brkFx_brk dy m t _ d m' hm⟩
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+        List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
+      have h := Replay.brkFx_brk dy _ t _ d m' hm
+      rw [(Replay.giveBack_keeps dy m).2.2.1] at h
+      exact Or.inr ⟨_, h⟩
   case brkStart pl w =>
     split at hm
     · rename_i t0 _

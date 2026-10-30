@@ -3617,4 +3617,29 @@ theorem aBreakTheReplayBeganAfterNowRuns :
 theorem theRuntimeCarriesABreak :
     (Planner.RuntimeIn.mk none (some ⟨none, 10, none⟩) none none).active = none := rfl
 
+-- ===========================================================================
+-- APPENDED 2026-10-30 (stage 6, W-51, track K — the owner's D137, README gaps 5580-5599, parity P134).
+-- A running break's `break` line gives back what its running took outside its own span (`Replay.giveBack`), so a
+-- late break inside a closed block nets the block by its own span, as D100 nets any late break.  Cheats 591-592.
+-- ===========================================================================
+
+/- CHEAT 591 — the reading before D137: a late break's line leaves the block netted from the break's start.
+   `start a` 08:00, `done a` 09:00 with sixty, a `break_start` at 08:30 logged after the `done`, then its ten-minute
+   `break` line: claimed thirty, what the running break netted.  Since D137 the line gives back what lies after its
+   span; `decide` computes fifty (`Replay.a_late_breaks_line_gives_back_what_lies_after_it`). -/
+theorem aLateBreaksLineGivesNothingBack :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924366600 (.brkStart 20 none),
+      Replay.bE 4 63924366600 (.brk 20 (some 10) none)]).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+/- CHEAT 592 — the give-back claimed to give everything back: the same log, claimed sixty, as if the break's line
+   netted nothing once it had given back.  The line nets its own span `[08:30, 08:40)` (D100); `decide` computes
+   fifty. -/
+theorem aLateBreaksLineNetsNothing :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924366600 (.brkStart 20 none),
+      Replay.bE 4 63924366600 (.brk 20 (some 10) none)]).items.get ['a']).map (·.minutes) = some 60 := by
+  decide
+
 end Tm

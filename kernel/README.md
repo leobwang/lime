@@ -101344,3 +101344,214 @@ line), gap 5509 (the warning and D130's last activity read only the replay's sco
 over decoder-built runs, the last goal), gap 5541, gaps 5521-5523 and 5526-5529, 5506-5508; `hrec` (gap 5342) and gap
 5343; gaps 5360-5362, 5380, 5382; K's 5432-5436, 5438, 5439 and C's 5472-5475; `tm drop` of a running item; and the
 §5.13 drive of the TUI, D129-D134 included.
+
+<!-- =====================================================================
+     APPENDED 2026-10-30: stage 6 (the planner), run **W-51**, **track K** —
+     the owner's D137 (a running break's line gives back what lies outside
+     its span) and the record fixes the W-50 repair's auditor and critic
+     asked for.  Gaps 5580-5599 are this track's (5580-5585 taken).
+     Cheats 591-592.  Parity **P134** taken; P131-P133 are declared holes
+     (track H's range — the land fills them).
+     ===================================================================== -->
+
+## Stage 6 — W-51 track K: D137, the give-back
+
+### 1. D137 — what landed (gaps 5504 and 5302 closed)
+
+**The rule** (the owner's D137).  A `break_start` with no `break` line is a running break, and since gap 5180 it nets
+every held closed block it lies across from its start on (`Replay.runNet`, over `[s, runTo s)`).  When the break's own
+`break` line arrives, the block's credit is now the block less what the break's SPAN takes from it — the rest given
+back — as D100 nets any late break inside a block.  Until this step the line found nothing left to net and gave
+nothing back, so a late `tm break --now <earlier>` inside a done block left it at 0 (gap 5504), and a sync that
+interleaved a `done` between a `break_start` and its `break` left the block short by the break's overrun (gap 5302).
+
+**How** (`Replay.lean`):
+
+* `Closed` gains two fields: **`ran`**, the drawn pieces the running break's netting met, whole, and **`ranMin`**, the
+  minutes it took from the credit.  `runNet` now nets each held block by **`runOne`** — `netOne` over the running span,
+  with what it met and took remembered (`runOne_netOne`: every other field is the netting's).
+* **`giveBack`** (by **`giveOne`** per held block) puts each block back as it stood before the running break netted it:
+  its drawn pieces but the remainder of each piece the running break cut, plus the pieces it took, whole
+  (**`Closed.restored`**), re-drawn by `redraw`; and the minutes it took credited back — on the day the credit was filed
+  at its ci (`DayOp.credit`), to the item and its minutes on that day, and to the `done`'s duration observation through
+  a new **`DayOp.undur`** (D100's `net` took them from `durNet`; `undur` returns them).  The last cut is raised with its
+  block (`HeadOk`).
+* **`brkArm`** = `giveBack`, then `brkFx` over the machine it leaves — so the `break` line nets its own `[t, e)` from the
+  block as it stood (D100), and nothing after it.
+* The stop-then-done replacement (`doneClosed`) clears `ranMin` (the `done`'s `actual_min` replaces the cut's credit
+  whole) and keeps `ran`, so the line still re-draws the pieces and nets its span from the `done`'s credit.
+* A `start` that ends a running break (`endMachine`, D129) forgets `ran`/`ranMin`: the break's own line, which alone
+  gives back, is the one D129 makes the machine skip (gap 5580).
+* **The checkpoint codec moves** (`Seal.cMachine`'s held-block tuple gains `ran` and `ranMin`), so the archive and the
+  **kernel id move** and every replay cache rebuilds once (D113).
+
+**Laws re-proved over the new shape (D5)**, none weakened: `runNet_cases` restated (its machine is the netting's with
+`runOne` per block; every consumer — `runNet_conserves`, `runNet_headOk`, `runNet_mi`, `runNet_congr`, `runNet_keeps`
+… — re-proved through it), `arm_split`, `conserves_arm` (the break case now through `giveBack_conserves`,
+`giveBack_headOk` and the new `conserves_brkFx_of`), `arm_sleptOk`, `arm_obs`, `conserves_doneClosed`, the seal's
+`stepQueries` (the break arm reads **`Seal.giveReads`** and then `brkFxReads` over the give-back's machine) with
+`stepQueries_congr` (`brkFxReads_giveBack`, `giveBack_shp`), `stepQueries_sub`, `arm_congr` (`giveBack_congr`),
+`arm_mi`, `arm_brks`, `endMachine_mi`, `cut_mi`, `netClosed_mi`, `netStart_mi`, `doneClosed_mi`, `firstStart_mi`, and
+`BreakFold`'s `stepWith_brks_of_brk` and the break-segment law (`giveBack_noBrkSeg`), `SealPending`'s and
+`SealCutMachine`'s break cases (`giveBack_brkFx_machine`), `SealLaw`'s duration case.  **`Seal.machineInstants`** holds
+the starts of `ran`'s pieces too (`mem_machineInstants`' held-block disjunct reads `C.drawn ++ C.ran`): the give-back
+re-draws pieces beginning there, so a resumed fold must know them as a whole replay does — law 1 (genesis = resume)
+stands on `stepQueries_sub`/`arm_mi` as before.  `the_running_breaks_line_moves_nothing_it_netted` still holds as
+stated: its break runs past the block's end, so its span covers everything the running break took.
+
+**Witnesses** (`Replay.lean`, the give-back section at the module's end, each `decide`d, probed under 8 GB): 
+`a_late_breaks_line_gives_back_what_lies_after_it` (the gap 5504 shape: `start a` 08:00, `done` 09:00 with sixty, a
+late `break_start` 08:30, its ten-minute line — fifty on the item, the day and the duration observation, drawn
+`[08:00, 08:30]`, Break `[08:30, 08:40]`, `[08:40, 09:00]`), `a_running_breaks_line_gives_back_the_close_it_did_not_reach`
+(gap 5302's interleaving: fifty), `a_late_breaks_line_gives_back_a_stopped_block` (a cut's credit, back to the day's
+ci-unknown minutes: fifty), and `giveOne_of_no_run` (§5.8: a block no running break netted gets nothing).  **Cheats
+591-592** (`Negative.lean`): the old reading (thirty) and the over-reading (sixty, the line netting nothing), each
+refuted by `decide`.
+
+**Parity P134 taken**: a late break that ran inside a block already closed nets the block, once its own `break` line ends it, by the break's span alone and gives back the rest (its pieces re-drawn, its credit, item minutes and duration observation restored), where until W-51 the block stayed netted from the break's start (the owner's D137, README gaps 5504 and 5302)
+
+**Behaviour row**: `tm/tests/cli_d137_give_back.rs` — `a_late_breaks_line_gives_back_what_lies_after_it_p134`
+(`^t1` 09:00–10:00, `tm break --now 09:30 10m`, ended 09:40: `tm review day`'s block minutes 60 → 30 while the break
+runs → **50** once ended; the `break_start` and the ten-minute `break` in `tm log`) and
+`a_late_break_inside_a_meeting_gives_the_whole_block_back_p134` (the brief's repro, below).
+
+**The §5.13 drive** (`TZ=America/Chicago`, `scratchpad/w51/k/drive/drive.sh`; *before* is the W-50 repair land
+worktree's binary, `524f1b8`, the tree `94542be` carries; *after* is this track's).  The brief's repro — `start ^t4`
+2026-09-07 12:55 inside the 12:50–13:50 meeting (D110 holds it paused until 13:50), `done` 14:30, then `tm --now 13:00
+break 10m` and `tm --now 13:10 break`:
+
+```
+$ tm --now 2026-09-07T14:30:00-05:00 done
+  tm: paused ^t4 for Meeting w/ host 12:50–13:50
+  ✓ ^t4 Claude Code drafts tests · 40m/60m
+  (review day, before any break)   block_min 40
+$ tm --now 2026-09-07T13:00:00-05:00 break 10m          ->  (review day, while it runs) block_min 0
+$ tm --now 2026-09-07T13:10:00-05:00 break
+  break ended · 10m of 10m
+before: block_min 0    (review day)  Day 2026-09-07 · home · 1/6 blocks · load 0.0 · …
+after:  block_min 40   (review day)  Day 2026-09-07 · home · 1/6 blocks · load 24.0 · …
+  log: {"t":"2026-09-07T13:00:00-05:00","ev":"break_start","planned_min":10}
+  log: {"t":"2026-09-07T13:00:00-05:00","ev":"break","planned_min":10,"actual_min":10}
+```
+
+The break's span lies inside the meeting, where the block drew nothing, so D100 nets nothing and the whole forty
+minutes come back — **not** "the block less ten", as the brief put it (§6, brief correction).  A plain block, `^t1`
+2026-09-08 09:00–10:00, `--now 09:30 break 10m`, ended at 09:40:
+
+```
+  (review day) before 60 · while the break runs 30 · ended:  before: 30   after: 50
+  after (tm plan):  09:00  5    ✓ Read ch.6 §1–2               @m3  1b  (30m)
+                    09:30  ·      break 10m
+                    09:40  5    ✓ Read ch.6 §1–2               @m3  1b  (20m)
+  before (tm plan): the 09:00 row and the break only — the stretch after the break was un-drawn for good
+```
+
+### 2. Record fixes (the W-50 repair auditor's notes 3 and 4; the critic's finding 5)
+
+* **The PlanStable twin laws' witnesses run their break through `PlannerWit.withBreak`.**  The four places the laws
+  are met on a computed day — `the_short_break_running_and_logged_plan_one_day_from_now`,
+  `the_counter_reads_the_sit_as_a_break_running_or_logged`, `the_cut_law_fires_at_the_short_break`
+  (`PlanStable.the_cut_does_not_change_when_an_overrun_break_is_logged`) and the instance of
+  `PlanStable.the_day_from_now_does_not_change_when_an_overrun_break_is_logged` — compare `theShortBreakRequest`, whose
+  running sit is put straight into `Seal.Answer.openBreak` by `withBreak`, with `theShortBreakLoggedRequest`, a real
+  replayed log.  The running half is a run no log produces: its replay holds no `break_start`.  The laws are stated
+  over every request and hold of any run; it is the non-vacuity witnesses' running side that stands on a hand-built
+  run.  A replayed subject exists — `theBreakAfterDoneRequest`'s `runningBreak` starts at 08:30 off a real
+  `break_start` — but no logged twin of it (the same log with the break's `break` line) is in the tree, and building
+  one with its `decide`d day is a planner-witness step of its own (each of these `decide`s runs at `maxRecDepth
+  400000`), not cheap here: gap 5582.
+* **`PlannerWit.the_hosts_running_break_lays_a_block_across_it_is_refuted` is not a refutation of its old statement.**
+  W-49 track Q's statement held of W-49's host-break request (a host runtime break at 07:30 beside the log's 08:30); since
+  D133 that request cannot be built, and the theorem proves *no Block overlaps a Break* on `theBreakAfterDoneRequest`,
+  the request the decoder now builds from that log — a positive fact about the world D133 made, under a `…_is_refuted`
+  name.  Its docstring says so; the name is kept (a rename moves check-8/9 rows for no change in what is proved), and
+  this paragraph is the honest wording: gap 5583.
+* **`PlanWire.placeOf_reads_the_word`'s docstring** said the running break's note spells "the `place` the host sent";
+  since D133 the place is the logged `break_start`'s (D111's table reads it in the log grammar).  Corrected, same line
+  count.
+
+### 3. Acceptance, capped
+
+All capped (§2.1, §5.10a), on this track's final tree:
+
+* `check.sh`: all **seventeen** lines ok, rc 0.  Axiom audit **6,938**; FFI target **97**; corpus 29/37 files and 4/5
+  whole plans; stage goals **1**; check 9 **913** rostered, 0 owed (322 unfoldable, 187 witness fixtures, 54 pinned by
+  nothing — `giveOne` among them, gap 5585); parity P1-P134 with P131-P133 declared holes; check 12 **1,651** reachable
+  / 1,096 exempt (the `Replay.lean` and `SealResume.lean` sections' census re-derived: 140 of 279 and 38 of 55); check
+  14 all **97** modules replayed.
+* Check 9's pins: the edit drifted **373** recorded pin sites over **108** rostered definitions; each was re-run with
+  `mutate.py --verify --write --only <name>`, **108 runs, 0 failed re-verification** (75 re-pinned with nothing
+  unfoldable, 32 with one or two unfoldable constants beside their pins).  The new definitions: `meets` PINNED both ways
+  (`:= true` by `runOne_remembers_only_the_pieces_it_met`, `:= false` by
+  `a_late_breaks_line_gives_back_what_lies_after_it`), `Closed.restored` and `Seal.giveReads` PINNED, `runOne`,
+  `giveBack` and `DayAcc.undurOf` unfoldable and pinned by their identity or synthesised term, `giveOne` and the re-bodied
+  `Seal.cMachine` unfoldable and pinned by nothing (gap 5585).
+* `cargo test --workspace --no-fail-fast`, **three runs**: **3,029 passed / 1 failed / 53 ignored over 175 result
+  lines** (one-minute load 1.8 at its start), **3,030 / 0 / 53** over 175 (load 3.3), **3,029 / 1 / 53** over 175
+  (load 4.5).  Both failures are `cli_latency`'s three-year test on the stalled-day row — `tm drop ^z15` past 1 s, and
+  day 2026-09-21 at 1.003 s — the known noise gap 5541 records on the base tree.  `cargo test -p tm --test cli_latency
+  -- --include-ignored` alone afterwards, load 3.3: **8 passed / 0 failed**.  No `.proptest-regressions` file moved.
+* FFI crate `cargo test`: **105** passed.
+* `cli_d137_give_back`: **2 passed**.
+
+### 4. Gaps
+
+**Gap 5504 — closed** (§1): a one-machine late break's line gives the block back what lies after its span.
+
+**Gap 5302 — closed** (§1): a `break` line arriving after a close it did not reach re-credits the held block.
+
+**Gap 5580 — a start that ends a running break gives nothing back.**  1. *What.*  D129's `start` ending a running break
+holds it as `[s, t)` and forgets what the running break took (`endMachine` clears `ran`); it does not give back what
+lies after `t`.  2. *Why.*  On a forward clock every block the break netted closed before `t`, so `[s, t)` covers all it
+took; only a clock behind the log (a block closed after the ending start) differs, and that is D115's late-start
+reading's territory.  3. *Cost.*  On that log a closed block keeps minutes netted past the start that ended the break.
+4. *Clears it.*  `giveBack` then `netClosed [s, t)` at the D129 end, beside D115's cut — the next replay step, if wanted.
+
+**Gap 5581 — a netting logged while the break runs is not applied to what the break took.**  1. *What.*  `ran` holds
+the pieces the running break took as they stood; a late interruption or late `start` netted while the break still
+runs finds nothing after the break's start to cut, and the give-back re-draws the taken pieces whole.  2. *Why.*  Every
+netting is `netOne`, which leaves `ran` alone; cutting `ran` too changes every netting's laws.  3. *Cost.*  On a log
+with two late marks inside one closed block, the second inside the stretch the running break took, the give-back
+credits that stretch across the second mark.  4. *Clears it.*  `netOne` cutting `ran` beside `drawn` (and `ranMin`).
+
+**Gap 5582 — the twin laws' running witnesses are hand-built runs** (§2).  4. A logged twin of
+`theBreakAfterDoneRequest` and the twin laws instanced on it.
+
+**Gap 5583 — a `…_is_refuted` name over a positive statement** (§2).  4. A rename with its check-8/9 rows re-verified,
+or the statement restated as the negation over the request the old one named, if that request is ever buildable.
+
+**Gap 5584 — a second `break_start` while one runs.**  1. *What.*  `brkStartArm` replaces the running break; what the
+first took stays in `ran`, and the next `break` line gives back both before netting its own span.  2. *Why.*  The
+machine holds one running break (D105); the binary never logs two.  3. *Cost.*  On a hand-edited log, the first break's
+netting is undone by the second's line.  4. Recorded.
+
+**Gap 5585 — `giveOne` is pinned by no mutation.**  1. *What.*  Check 9 has no constant for `Replay.giveOne`'s
+result type (`Closed × List Effect × Nat`, no `Inhabited`), no identity on an accumulator (the result is not an
+argument's type) and no synthesised term, so its row reads `unfoldable` with no pin — the shape `Seal.cMachine` already
+had, whose row this step re-wrote at its new body.  2. *Why.*  The definition's shape; `giveBack` (which maps it) is
+pinned by its synthesised machine through `giveBack_mem`/`giveBack_keeps`, and the three give-back witnesses fail if
+`giveOne` gives nothing back.  3. *Cost.*  check 9's "pinned by nothing" count grows by one.  4. *Clears it.*  A
+synthesised constant for the triple in `mutate.py`, or `giveOne` split into a block half and an effects half.
+
+### 6. Brief corrections
+
+* **"The block reads 0 minutes; it must read the block less 10"** (the brief's repro): on that tree it must read the
+  whole forty minutes — the break `[13:00, 13:10)` lies inside the 12:50–13:50 meeting, during which D110 held the block
+  paused and drew nothing, so D100 nets nothing (§1's drive).  "The block less the break's span" is the reading only
+  where the span meets the block's drawn pieces (the plain block, 60 → 50).
+* **"The four PlanStable twin laws' witnesses"**: the witnesses are in `PlannerWit.lean`, not `PlanStable.lean` (which
+  holds no `withBreak`); §2 names the four.
+* **"Re-verify moved pin sites with `mutate.py --verify --write --only <names>`"** is right, and its cost is worth
+  saying for the next brief: the mid-file insertions D137 needs in `Replay.lean`, `SealStep.lean`, `SealResume.lean`,
+  `BreakFold.lean` and `Seal.lean` drifted **373 recorded pin sites over 108 rostered definitions**; re-verifying them
+  took one `--only` run per definition, 108 runs, every one re-pinned (0 failed re-verification).
+* The preamble's `parity.txt` anchors are re-resolved by `parity.py`: the edit moved P36's `cite` anchor in
+  `Replay.lean` (11156 → 11519), re-anchored at the line `parity.py` named.
+
+### 7. Owed
+
+Track K's: gap 5580 (the D129 end gives nothing back), 5581 (a netting during the run is not applied to what the run
+took), 5582 (a replayed twin witness), 5583 (the `…_is_refuted` wording), 5584 (two `break_start`s), 5585 (`giveOne`
+pinned by nothing).  The brief's stretch item — gap 5525, `hrun` of `Goals.plan_places_no_block_over_a_break` over the
+runs the decoder builds — was **not started**: the give-back and the re-verification of 108 drifted roster rows took
+the run; the goal stays in `Goals.lean`, unproved (burn-down 1).  The TUI half of the §5.13 drive was not run.

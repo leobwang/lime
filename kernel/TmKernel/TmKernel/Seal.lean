@@ -561,9 +561,13 @@ def cMachine : Codec Machine :=
       <| tCons (cList maxList (cIso (cTuple <| tCons cStr <| tCons cNat <| tCons cNat <| tCons cOptU8 <| tCons cNat
           <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
               (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
-          <| tCons cOptNat <| tCons cAt <| tNil)
-        (fun (c : Replay.Closed) => (c.id, c.day, c.credDay, c.ci, c.min, c.drawn, c.durLine, c.started, ()))
-        (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
+          <| tCons cOptNat <| tCons cAt
+          <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
+              (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
+          <| tCons cNat <| tNil)
+        (fun (c : Replay.Closed) => (c.id, c.day, c.credDay, c.ci, c.min, c.drawn, c.durLine, c.started, c.ran, c.ranMin, ()))
+        (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
+          p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
       <| tCons cOptAt
       <| tNil)
     (fun m => (m.block, m.lastCut, m.interrupt, m.brks, m.brkOpen, m.closed, m.brkEnded, ()))

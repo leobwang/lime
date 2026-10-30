@@ -9067,3 +9067,38 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.PlannerWit.the_hosts_running_break_lays_a_block_across_it_is_refuted
 #print axioms Tm.PlannerWit.a_break_running_since_the_day_before_lays_todays_block_across_it_is_refuted
 #print axioms Tm.PlannerWit.hrun_holds_on_the_host_and_yd_break_logs
+
+-- ===========================================================================
+-- APPENDED 2026-10-30 (stage 6, W-51, track K — the owner's D137, README gaps 5580-5599, parity P134).
+-- A running break's `break` line gives back what its running took outside its own span (`Replay.giveBack`).
+-- ===========================================================================
+#print axioms Tm.Replay.runOne_netOne
+#print axioms Tm.Replay.netOne_ran
+#print axioms Tm.Replay.heldOf_map_congr
+#print axioms Tm.Replay.giveOne_mem
+#print axioms Tm.Replay.giveBack_mem
+#print axioms Tm.Replay.giveBack_plain
+#print axioms Tm.Replay.giveBack_keeps
+#print axioms Tm.Replay.giveOne_keeps
+#print axioms Tm.Replay.endMachine_held
+#print axioms Tm.Replay.giveOne_conserves
+#print axioms Tm.Replay.giveAll_conserves
+#print axioms Tm.Replay.giveBack_conserves
+#print axioms Tm.Replay.giveBack_headOk
+#print axioms Tm.Replay.conserves_brkFx_of
+#print axioms Tm.Replay.giveBack_sleptOk
+#print axioms Tm.Replay.giveBack_obs
+#print axioms Tm.Replay.giveBack_brkFx_machine
+#print axioms Tm.Replay.giveOne_of_no_run
+#print axioms Tm.Replay.a_late_breaks_line_gives_back_what_lies_after_it
+#print axioms Tm.Replay.a_running_breaks_line_gives_back_the_close_it_did_not_reach
+#print axioms Tm.Replay.a_late_breaks_line_gives_back_a_stopped_block
+#print axioms Tm.Seal.giveBack_shp
+#print axioms Tm.Seal.brkFxReads_giveBack
+#print axioms Tm.Seal.netOne_congr_mem
+#print axioms Tm.Seal.giveBack_congr
+#print axioms Tm.Seal.restored_starts
+#print axioms Tm.Seal.giveReads_mi
+#print axioms Tm.Seal.giveBack_mi
+#print axioms Tm.BreakFold.giveBack_noBrkSeg
+#print axioms Tm.Replay.runOne_remembers_only_the_pieces_it_met

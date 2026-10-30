@@ -135,11 +135,17 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm; exact Or.inl rfl
       · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-        exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).2.2
+        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+          List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
+        have h := (Replay.brkFx_machine dy _ t _ d m' hm).2.2
+        rw [(Replay.giveBack_keeps dy m).1] at h
+        exact Or.inl h
     · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil] at hm
-      exact Or.inl (Replay.brkFx_machine dy m t _ d m' hm).2.2
+      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+        List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
+      have h := (Replay.brkFx_machine dy _ t _ d m' hm).2.2
+      rw [(Replay.giveBack_keeps dy m).1] at h
+      exact Or.inl h
   case brkStart pl w =>
     split at hm
     · rename_i t0 _
