@@ -222,9 +222,13 @@ fn end_break(ctx: &mut Ctx) -> Result<Option<u32>, CliError> {
 /// that ends the running break has one writer.
 ///
 /// **A break that BEGAN after `end` is not ended by it** (W-51 repair track H, the W-50 repair
-/// critic's first finding): only an end stated before `now` can precede the break's start — a `tm
+/// critic's first finding): an end stated before `now` can precede the break's start — a `tm
 /// stop --at`, or the stop §6.3's close writes at a block's last logged activity (the owner's D130)
-/// — and a break the cache alone holds (begun by a binary before D105) is placed by D81 at the
+/// — and so can `now` itself: any verb that ends a break (`tm start`, `tm interrupt`, `tm done`, `tm
+/// resume`, `tm stop`) run with a `--now` before a logged running break's start skips ending it,
+/// which agrees with D129's reading of a running break as ending at the first `start` stamped after
+/// it (the W-51 repair's correction, README gap 5613: this paragraph named only the first two). A
+/// break the cache alone holds (begun by a binary before D105) is placed by D81 at the
 /// latest instant at or before `now` with its clock, which can fall days after that stop. Ending it
 /// there wrote a `break` line stamped AFTER the stop that ended it, with `actual_min: 0`, and the
 /// break was never logged as D133 says. The break runs on, and the verb's housekeeping logs it
@@ -1391,80 +1395,205 @@ pub fn start(g: &Globals, args: &super::StartArgs) -> Result<i32, CliError> {
 pub struct EstCorrected {
     /// The item.
     pub id: Id,
-    /// The minutes its line's estimate read, as its closing `stop` (or partial `done`) wrote them.
+    /// The minutes its line's estimate read before this verb.
     pub from_min: u32,
-    /// The minutes it reads now: as the closing verb would have written them with the netted minutes.
+    /// The minutes it reads now: what its closing verb would have written with the minutes the log now counts.
     pub to_min: u32,
-    /// What the late mark took from the closed block.
-    pub netted_min: u32,
 }
 
-/// **A late mark that nets a stopped or partly done block corrects the `est:` its closing verb wrote** — the owner's
-/// **D126** (W-49 track L; the W-48 recheck's fourth finding; parity **P125**). `tm stop` (and `tm done --partial`)
-/// writes the remainder — the estimate less the minutes worked — and a line logged after it and stamped inside its
-/// block — a late `start` (D115), a `break` or its running start (D100, README gap 5180), an interruption's `resume`
-/// (D119) — nets the block, so the replay counts fewer minutes worked while the line kept the stale remainder: after
-/// `tm stop` wrote `5m left`, a late `start` netted the block to thirty minutes and the Markdown kept `5m`, and the
-/// planner and `tm review day` read one block two ways (AGENTS §5.3). The verb that logs the late mark compares the
-/// replay before and after it: every item whose worked minutes FELL, whose last logged line is the `stop` or the
-/// partial `done` that closed the block (no `edit`, `extend` or later block of it since, so the estimate is still the
-/// one that verb wrote), and whose line is open, gets the remainder that verb would have written with the netted
-/// minutes — its estimate plus what the mark took — through the one estimate writer (D56, D62: `write_estimate`).
-/// A late line no verb wrote (a sync, a hand edit) is named by `tm check` instead (`lifecycle::stale_estimates`).
+/// The tags of the lines that can be logged after a block's `stop` and stamped inside it, changing the minutes it
+/// counts — a late `start` (D115), a `break` or its running start (D100, D129, D137), an interruption (D119).
+pub(crate) const LATE_MARKS: &[&str] = &["start", "break", "break_start", "interrupt", "resume"];
+
+/// **D126's one reading of a stopped block's estimate** — what [`correct_netted_estimates`] writes and what `tm check`'s
+/// stale-estimate warning compares the line with (`lifecycle::stale_estimates`), so the verb and the check cannot
+/// disagree about one line (AGENTS §5.3).
+#[derive(Debug, Clone)]
+pub(crate) struct D126Reading {
+    /// The view index of the `stop` (or partial `done`) that wrote the remainder.
+    pub closing: usize,
+    /// The remainder that verb wrote: the line's estimate, or the `from` of the first D126 correction since.
+    pub written: u32,
+    /// The block's minutes as the closing verb's author counted them: the replay of the log up to it, a
+    /// `break_start` still running there taken out (that verb ends a running break first, D97, so a running one is
+    /// a line it never saw — a sync's).
+    pub at_close: u32,
+    /// The minutes the whole log counts now.
+    pub now: u32,
+    /// What the closing verb would have written with `now`: `written + (at_close − now)`, never below the floor
+    /// `tm stop` itself writes ([`MIN_REMAINING_MIN`]).
+    pub expected: u32,
+}
+
+/// The replay of the log's lines `1..=last` with line `drop` left out, through the replay that writes nothing.
+fn replay_of_prefix(ctx: &Ctx, last: u64, drop: Option<u64>) -> Option<tm_core::log::Replay> {
+    let bytes = ctx.log_now().ok()?;
+    let mut prefix: Vec<u8> = Vec::new();
+    for (n, l) in bytes.split(|b| *b == b'\n').enumerate() {
+        let line = n as u64 + 1;
+        if line > last {
+            break;
+        }
+        if Some(line) == drop {
+            continue;
+        }
+        prefix.extend_from_slice(l);
+        prefix.push(b'\n');
+    }
+    let tz = Ctx::tz_wire(&ctx.store, &ctx.cfg);
+    super::kernel_log::replay_unsealed(
+        ctx.store.root(),
+        &prefix,
+        ctx.cfg.tz,
+        &tz,
+        ctx.today,
+        super::kernel_log::Scope::Hot,
+    )
+    .ok()
+    .flatten()
+    .map(|r| r.replay)
+}
+
+/// One log line's own JSON, by its 1-based line.
+fn log_line_json(ctx: &Ctx, line: u64) -> Option<serde_json::Value> {
+    let bytes = ctx.log_now().ok()?;
+    let raw = bytes.split(|b| *b == b'\n').nth(line.checked_sub(1)? as usize)?;
+    serde_json::from_slice(raw).ok()
+}
+
+/// `"35m"` (what a D126 correction's `edit` logs) as minutes.
+fn minutes_of(v: &serde_json::Value) -> Option<u32> {
+    v.as_str()?.strip_suffix('m')?.parse().ok()
+}
+
+/// `written + (at_close − now)`, floored where `tm stop` floors (D126's reading: the remainder the closing verb would
+/// have written had it counted `now` minutes).
+fn d126_expected(written: u32, at_close: u32, now: u32) -> u32 {
+    if at_close == now {
+        return written;
+    }
+    let raw = i64::from(written) + i64::from(at_close) - i64::from(now);
+    u32::try_from(raw.max(i64::from(MIN_REMAINING_MIN))).unwrap_or(u32::MAX)
+}
+
+/// **D126's reading of `key`**, when its estimate is still the one its closing `stop` (or partial `done`) wrote:
+/// the item's last logged lines are that verb's and, after it, only `edit`s that are D126 corrections — an `est` edit
+/// logged straight after a late mark, rewriting the then estimate to exactly what this reading gave there — or edits of
+/// another field. Any other line of the item (a typed `tm edit est=`, an `extend`, a later block) makes the estimate
+/// the user's, and `None` is answered. The line's openness is the caller's to check.
+pub(crate) fn d126_reading(ctx: &Ctx, key: &str) -> Option<D126Reading> {
+    let view = ctx.replay.view();
+    let rows: Vec<usize> = (0..view.len())
+        .filter(|&i| !view[i].cancelled && view[i].id.as_deref() == Some(key))
+        .collect();
+    let mut k = rows.len();
+    while k > 0 && view[rows[k - 1]].tag == "edit" {
+        k -= 1;
+    }
+    let closing = *rows.get(k.checked_sub(1)?)?;
+    if view[closing].tag != "stop" && view[closing].tag != "done" {
+        return None;
+    }
+    let edits: Vec<(usize, serde_json::Value)> = rows[k..]
+        .iter()
+        .filter_map(|&j| log_line_json(ctx, view[j].line).map(|v| (j, v)))
+        .filter(|(_, v)| v["field"].as_str() == Some("est"))
+        .collect();
+    let id = Id::new(key);
+    let written = match edits.first() {
+        Some((_, v)) => minutes_of(&v["from"])?,
+        None => ctx.tree.remaining(&id)?,
+    };
+    // The running `break_start` at the closing line, if any: the closing verb ends a running break before it logs
+    // itself (D97), so one still running there is a line its author never saw.
+    let mut open_break = None;
+    for r in view[..=closing].iter().filter(|r| !r.cancelled) {
+        match r.tag.as_str() {
+            "break_start" => open_break = Some(r.line),
+            "break" => open_break = None,
+            _ => {}
+        }
+    }
+    let at_close = replay_of_prefix(ctx, view[closing].line, open_break)?.block_minutes(key);
+    let mut chain = written;
+    for (j, v) in &edits {
+        let after_mark = view[..*j]
+            .iter()
+            .rev()
+            .find(|r| !r.cancelled && r.tag != "edit")
+            .is_some_and(|r| LATE_MARKS.contains(&r.tag.as_str()));
+        let then = replay_of_prefix(ctx, view[*j].line, None)?.block_minutes(key);
+        let to = minutes_of(&v["to"])?;
+        if !after_mark || minutes_of(&v["from"]) != Some(chain) || to != d126_expected(written, at_close, then) {
+            return None;
+        }
+        chain = to;
+    }
+    let now = ctx.replay.block_minutes(key);
+    Some(D126Reading { closing, written, at_close, now, expected: d126_expected(written, at_close, now) })
+}
+
+/// **A late mark that changes a stopped or partly done block's minutes corrects the `est:` its closing verb wrote** —
+/// the owner's **D126** (W-49 track L; the W-48 recheck's fourth finding; parity **P125**), in both directions since
+/// the W-51 repair (the critic's blocker, README gap 5610). `tm stop` (and `tm done --partial`) writes the remainder —
+/// the estimate less the minutes worked — and a line logged after it and stamped inside its block changes the minutes
+/// the replay counts: a late `start` (D115), a `break`'s running start (D100, D129, README gap 5180) or an
+/// interruption's `resume` (D119) nets the block, and the running break's own `break` line gives back what its running
+/// took outside the break's span (D137). The verb that logs such a line compares the replay before and after it, and
+/// every item whose minutes MOVED, whose estimate is still its closing verb's ([`d126_reading`]), and whose line is
+/// open gets the remainder that verb would have written with the minutes the log now counts — through the one estimate
+/// writer (D56, D62: `write_estimate`), logged as an `edit`. Until the W-51 repair only minutes that FELL were
+/// corrected, so a give-back left the netted estimate standing (`35m` over a block the log counted at fifty minutes,
+/// and `tm check` silent). A late line no verb wrote (a sync, a hand edit) is named by `tm check` instead
+/// (`lifecycle::stale_estimates`), over the same reading.
 fn correct_netted_estimates(
     ctx: &mut Ctx,
     before: &tm_core::log::Replay,
     verb: &str,
 ) -> Result<Vec<EstCorrected>, CliError> {
     let mut out = Vec::new();
-    let fell: Vec<(String, u32)> = before
+    let moved: Vec<String> = before
         .items
         .keys()
-        .filter_map(|k| {
-            let (was, now) = (before.block_minutes(k), ctx.replay.block_minutes(k));
-            (now < was).then(|| (k.clone(), was - now))
-        })
+        .chain(ctx.replay.items.keys())
+        .filter(|k| before.block_minutes(k) != ctx.replay.block_minutes(k))
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
         .collect();
-    for (key, netted) in fell {
+    for key in moved {
         let id = Id::new(&key);
         let Some(item) = ctx.tree.get(&id) else { continue };
         if is_stateless(item) || item.state.is_closed() {
             continue;
         }
-        let closing = ctx
-            .replay
-            .view()
-            .iter()
-            .rev()
-            .find(|r| !r.cancelled && r.id.as_deref() == Some(key.as_str()))
-            .is_some_and(|r| r.tag == "stop" || r.tag == "done");
-        if !closing {
+        let Some(reading) = d126_reading(ctx, &key) else { continue };
+        let Some(from) = ctx.tree.remaining(&id) else { continue };
+        let to = reading.expected;
+        if to == from {
             continue;
         }
-        let Some(from) = ctx.tree.remaining(&id) else { continue };
-        let to = from.saturating_add(netted);
         let line = write_estimate(ctx, verb, &id, u64::from(to))?;
         ctx.write_line(&id, &line)?;
-        // The correction is a fact the log holds, as a typed `tm edit est=` is: `tm check`'s half of D126 reads an
-        // item whose last line is still its `stop`, and this `edit` is what says the estimate was rewritten since.
+        // The correction is a fact the log holds, as a typed `tm edit est=` is: `tm check`'s half of D126 reads it
+        // as a correction (`d126_reading`), so the estimate stays the closing verb's for every later mark.
         ctx.append_event(Event::Edit {
             id: id.to_string(),
             field: "est".to_string(),
             from: format!("{from}m"),
             to: format!("{to}m"),
         })?;
-        out.push(EstCorrected { id, from_min: from, to_min: to, netted_min: netted });
+        out.push(EstCorrected { id, from_min: from, to_min: to });
     }
     if !out.is_empty() {
         ctx.reload()?;
         for c in &out {
             super::kernel_bridge::notice(format!(
-                "{}'s estimate is now {}m (was {}m): this line netted {}m from the block its `stop` closed, and the \
-                 remainder reads the minutes worked as the log now does (D126).",
+                "{}'s estimate is now {}m (was {}m): this line changed the minutes the log counts for the block its \
+                 `stop` closed, and the remainder reads them as the log now does (D126).",
                 c.id.token(),
                 c.to_min,
                 c.from_min,
-                c.netted_min
             ));
         }
     }
@@ -1642,6 +1771,14 @@ pub fn done(g: &Globals, args: &super::DoneArgs) -> Result<i32, CliError> {
         None if retro => return Err(missing(&id)),
         None => None,
     };
+    // **D140** (the W-51 critic's second finding, parity **P135**): a retro `tm done ^id` — one that
+    // ends no block — on a SETTLED line (`[~]`, `[x]`) is refused by name, before anything is
+    // written: no line, no log line, no journal. Until the W-51 repair it set `[x]` on a dropped line
+    // inside a week a close had already taken, the closed-file edit D132 and D135 exist to prevent,
+    // by the one natural verb they left. A user who wants a dropped item marked done edits the line.
+    if let Some(item) = item.as_ref().filter(|i| retro && is_settled(i)) {
+        return Err(settled_retro_done(&ctx, &id, item));
+    }
     // **D79**: the stated end, checked, and D61's marks up to it; `None`
     // without `--at`, when the block ends now.
     let stated = match (&args.at, &active) {
@@ -1675,8 +1812,8 @@ pub fn done(g: &Globals, args: &super::DoneArgs) -> Result<i32, CliError> {
     // --partial` — a block whose item is SETTLED (`[~]`, `[x]`) logs its event and leaves the line
     // exactly as it stands: no box set, no remainder written, no line reopened, inside a closed
     // period or not. Fork 4748911 (and this verb until the W-51 repair) set `[x]` on a dropped line,
-    // and `--partial` reopened it as `[ ] 5m`. A retro `tm done ^id` ends no block and is the user
-    // asking for the box, so it is outside D135 and sets it as before.
+    // and `--partial` reopened it as `[ ] 5m`. A retro `tm done ^id` ends no block, so it is outside
+    // D135 — and since the owner's D140 (P135) one on a settled line is refused above, by name.
     let settled = !retro && item.as_ref().is_some_and(is_settled);
     // **D62**: a partial's remainder is written by the kernel's `est` op FIRST —
     // before the break is ended or the box is moved — so a refusal (a value
@@ -1973,6 +2110,21 @@ const SETTLED_NOTE: &str = " · line settled, left as it stands";
 /// has `tm stop` leave as they stand.
 fn is_settled(item: &tm_core::model::Item) -> bool {
     matches!(item.state, State::Dropped | State::Done)
+}
+
+/// **D140's refusal** (parity **P135**): a retro `tm done` on a settled line names the line as settled, says
+/// nothing was written, and says to edit the line to mark it done.
+fn settled_retro_done(ctx: &Ctx, id: &Id, item: &tm_core::model::Item) -> CliError {
+    let file = ctx.tree.file_of(id).map(|f| f.path.clone()).unwrap_or_default();
+    let (glyph, what, advice) = match item.state {
+        State::Done => ("[x]", "already done", "The line is already marked done"),
+        _ => ("[~]", "dropped", "To mark it done, edit its line's box to `[x]`"),
+    };
+    CliError::msg(format!(
+        "{} is settled — {what} (`{glyph}`) in {file} — and a retro `tm done` on a settled line is refused; nothing \
+         was written. {advice} (D140)",
+        id.token()
+    ))
 }
 
 /// **Ending the running block — the ONE body** `tm stop` runs and, since the owner's **D130**

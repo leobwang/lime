@@ -130,11 +130,51 @@ fn d135_done_and_done_partial_leave_a_dropped_or_done_line_as_it_stands_p131() {
     }
 }
 
-/// **A retro `tm done ^id` ends no block** and is outside D135: it still sets the box.
+/// **A retro `tm done ^id` on a settled line is REFUSED by name** — the owner's **D140** (the W-51 critic's second
+/// finding, parity **P135**; README "Stage 6 — W-51 repair track H"). This test pinned the old behaviour as
+/// d135_a_retro_done_still_sets_the_box (a retro done set `[x]` on a dropped line, inside a week a close had already
+/// taken) and changes with P135's behaviour row. The orchestrator's `Q2` world: `^t3` dropped in W37, the week closed
+/// at 09-14, then `tm done ^t3` — nothing is written (no line, no log line, no journal), the message names the line as
+/// settled and says to edit it, and `--json` carries the refusal in the shape of the verb's other refusals.
 #[test]
-fn d135_a_retro_done_still_sets_the_box() {
+fn d140_a_retro_done_on_a_settled_line_is_refused_p135() {
+    for glyph in ["~", "x"] {
+        let tm = example();
+        if glyph == "~" {
+            tm.ok_at(&at("2026-09-07", "10:40"), &["drop", "^t3"]);
+        } else {
+            tm.ok_at(&at("2026-09-07", "10:40"), &["done", "^t3"]);
+        }
+        tm.ok_at(&at("2026-09-14", "09:00"), &["plan"]);
+        let line = tm.line("week/2026-W37.md", "t3");
+        assert!(line.starts_with(&format!("- [{glyph}]")), "{line}");
+        let (log, week, journal) = (tm.read(".tm/log.jsonl"), tm.read("week/2026-W37.md"), tm.read("day/2026-09-14.md"));
+        let out = tm.run_at(&at("2026-09-14", "09:05"), &["done", "^t3"]);
+        assert_eq!(out.code, 1, "[{glyph}] {}{}", out.stdout, out.stderr);
+        assert!(out.stderr.contains("^t3 is settled") && out.stderr.contains("week/2026-W37.md"), "{}", out.stderr);
+        assert!(out.stderr.contains("nothing was written") && out.stderr.contains("(D140)"), "{}", out.stderr);
+        if glyph == "~" {
+            assert!(out.stderr.contains("edit its line's box to `[x]`"), "{}", out.stderr);
+        }
+        let json = tm.run_at(&at("2026-09-14", "09:05"), &["done", "^t3", "--json"]);
+        // A refusal's JSON is on stderr, as every verb's (`out::CliError`).
+        let v: Value = serde_json::from_str(&json.stderr).expect("json");
+        assert_eq!((v["ok"].as_bool(), v["kind"].as_str(), json.code), (Some(false), Some("error"), 1), "{v}");
+        // The verb's other refusals have the same shape: `--went 7` is one.
+        let other = tm.run_at(&at("2026-09-14", "09:05"), &["done", "^t3", "--went", "7", "--json"]);
+        let o: Value = serde_json::from_str(&other.stderr).expect("json");
+        let keys = |v: &Value| v.as_object().map(|m| m.keys().cloned().collect::<Vec<_>>()).unwrap_or_default();
+        assert_eq!(keys(&v), keys(&o), "{v} vs {o}");
+        assert_eq!(tm.read(".tm/log.jsonl"), log, "[{glyph}] a log line was written");
+        assert_eq!(tm.read("week/2026-W37.md"), week, "[{glyph}] the week file was written");
+        assert_eq!(tm.read("day/2026-09-14.md"), journal, "[{glyph}] the journal was written");
+    }
+}
+
+/// **D140's boundary** (AGENTS §5.8): a retro `tm done ^id` on an OPEN line still sets the box, as before.
+#[test]
+fn d140_a_retro_done_on_an_open_line_still_sets_the_box() {
     let tm = example();
-    tm.ok_at(&at("2026-09-07", "10:40"), &["drop", "^t3"]);
     tm.ok_at(&at("2026-09-07", "10:50"), &["done", "^t3"]);
     assert!(tm.line("week/2026-W37.md", "t3").starts_with("- [x]"), "{}", tm.line("week/2026-W37.md", "t3"));
 }

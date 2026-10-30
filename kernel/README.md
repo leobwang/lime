@@ -101956,3 +101956,210 @@ committed sources (its own plant-mtime finding, its README §9); every drive her
 
 **The owner's ruling taken at this land:** gap 5562 is D139 — a logged `break_start` stays a block's last logged
 activity for D130's stop (gap 5507's reading stands), and the upgrade-path over-credit is recorded, not built around.
+
+<!-- ======================================================================
+     APPENDED 2026-10-30: stage 6 (the planner), run **W-51 REPAIR (the
+     second)**, **track H** (`w51r-h`, the host: D126 after a give-back,
+     the owner's D140, the stale words around settled lines).  Gaps
+     5610-5629 are this track's (5610-5616 taken).  Parity P135.  No cheat.
+     No Lean module touched.  Whoever merges renumbers (AGENTS §6.4).
+     ====================================================================== -->
+
+## Stage 6 — W-51 repair (after the land), track H
+
+Branch `w51r-h` from `bb41657`.  Rust only: `tm/src/cli/{day,lifecycle,mod}.rs`, `tm/src/tui/{app,prompts}.rs`, and
+`tm/tests/{cli_late_mark_estimate,cli_w51h_host}.rs`; `kernel/citations-allow.txt` gains one dead name (§2).
+
+### 1. D126 follows a give-back, in both directions (gaps 5610 and 5611 closed)
+
+**The critic's blocker, driven.**  `tm init --example`, `wake` 07:00, `arrive` 08:00, `start ^t1` 09:00, `stop` 10:00,
+then `--now 09:30 break 10m` and `--now 09:40 break`, all on 2026-09-08, `TZ=America/Chicago`.
+
+Before (`bb41657`, the W-51 land's binary):
+
+    stopped ^t1 after 60m · 5m left
+    - [ ] 5 5m Read ch.6 §1–2               @m3 ^t1
+    tm: ^t1's estimate is now 35m (was 5m): this line netted 30m from the block its `stop` closed, and the remainder reads the minutes worked as the log now does (D126).
+    - [ ] 5 35m Read ch.6 §1–2               @m3 ^t1
+    break ended · 10m of 10m
+    - [ ] 5 35m Read ch.6 §1–2               @m3 ^t1
+    "block_min": 50
+    $ tm --now 2026-09-08T10:30:00-05:00 check
+    no problems
+
+After (this track):
+
+    stopped ^t1 after 60m · 5m left
+    - [ ] 5 5m Read ch.6 §1–2               @m3 ^t1
+    tm: ^t1's estimate is now 35m (was 5m): this line changed the minutes the log counts for the block its `stop` closed, and the remainder reads them as the log now does (D126).
+    - [ ] 5 35m Read ch.6 §1–2               @m3 ^t1
+    tm: ^t1's estimate is now 15m (was 35m): this line changed the minutes the log counts for the block its `stop` closed, and the remainder reads them as the log now does (D126).
+    break ended · 10m of 10m
+    - [ ] 5 15m Read ch.6 §1–2               @m3 ^t1
+    {"t":"2026-09-08T09:40:00-05:00","ev":"edit","id":"t1","field":"est","from":"35m","to":"15m"}
+    "block_min": 50
+    no problems
+
+And the new binary's `tm check` on the tree the land's binary left (line `35m`, log fifty minutes):
+
+    .tm/log.jsonl:10: warning[log-stale-est]: this `break` is logged after line 7's `stop` of ^t1 and stamped inside its block; ... reads 15m as the log now does — `tm edit ^t1 est=15m` (D126)
+
+**The one reading.**  `day::d126_reading(ctx, key)` is what the verb writes (`day::correct_netted_estimates`) and what
+the check compares the line with (`lifecycle::stale_estimates`); there was a reading in each, and they disagreed in
+direction.  It answers only while the estimate is still the closing verb's: the item's last logged lines are its
+`stop` (or partial `done`) and, after it, only `edit`s of another field or D126's own corrections — an `est` edit
+logged straight after a late mark, rewriting the then estimate to exactly what this reading gave there (checked by a
+replay of the log up to the edit).  A typed `tm edit est=`, an `extend` or a later block makes the estimate the user's.
+Then
+
+    expected = written + (at_close − now),  never below MIN_REMAINING_MIN (5)
+
+where `written` is the remainder the closing verb wrote (the line's estimate, or the `from` of the first correction),
+`at_close` the block's minutes as that verb's author counted them (the replay of the log up to it, a `break_start`
+still running there taken out), and `now` the whole log's.  The verb now corrects on any change of a closed block's
+minutes, not only a fall; the check names every open line whose estimate is not `expected` after a late line.
+
+**Is it the reading `stop` gives?**  `tm stop` writes `max(est − worked, MIN_REMAINING_MIN)` (`day::end_the_block`),
+so `est = written + at_close` exactly whenever the stop did not floor, and then `expected` is `max(est − now, 5)`:
+`stop` with the minutes the log now counts.  Where the stop floored (`est − worked < 5`), the estimate before it is
+not in the log (a `start` carries no estimate), and `expected` reads above the exact re-run — gap 5614.  The floor is
+`tm stop`'s 5, not the brief's "zero": the estimate never reads below what `stop` itself writes.
+
+**The second shape (the critic's, pre-existing).**  A synced log: `start 09:00`, another machine's `break_start
+09:30` merged in BEFORE the `stop 10:00` that wrote `5m`, and the break's `break 09:30 10m` after.  The old baseline,
+the replay up to the `stop`, held that `break_start` running and counted thirty minutes — less than the fifty the log
+counts — so the check read the block as already netted.  But a `stop` ends a running break before it logs itself
+(D97, `day::end_break_first_at`), so a `break_start` still running at a `stop` is a line its author never saw, and the
+baseline leaves it out: sixty.  Before / after, `tm check` at 10:30:
+
+    no problems
+    .tm/log.jsonl:9: warning[log-stale-est]: this `break` is logged after line 8's `stop` of ^t1 and stamped inside its block; that `stop` wrote 5m when it counted 60m, the log now counts 50m, so the estimate (5m) reads 15m as the log now does — `tm edit ^t1 est=15m` (D126)
+
+**Behaviour rows** (`tm/tests/cli_late_mark_estimate.rs`, each failing with `day.rs` and `lifecycle.rs` at `bb41657`,
+driven): `a_give_back_corrects_the_estimate_again`, `a_give_back_no_verb_corrected_is_named_by_tm_check`,
+`a_synced_break_its_stop_never_saw_is_named_by_tm_check`; and the boundary, `a_typed_estimate_after_the_mark_is_not_rewritten`
+(a typed `est=50m` between the break's start and its end is the user's, and the give-back rewrites nothing).  The four
+W-49 rows stand unchanged.
+
+**No new parity number.**  D126 is **P125**, and its register row said "rewrites the `est:` that verb wrote, by the
+minutes it took" — a fall only, the shape the code had.  The row is restated in `kernel/parity.txt` (as D134 restated
+P128): the rewrite follows the minutes the log counts in both directions, a give-back included.
+
+### 2. D140 — a retro `tm done` on a settled line is refused by name (parity P135)
+
+`day::done` refuses, before anything is written, a retro `tm done ^id` — one that ends no block, including one typed
+while another block runs — whose line is settled (`[~]`, `[x]`; `day::is_settled`, D132's predicate).  Driven on the
+orchestrator's `Q2` world (`drop ^t3` 09-07 10:40, `tm plan` 09-14 09:00 closing W37, `tm done ^t3` at 09:05):
+
+Before (`bb41657`):
+
+    ✓ ^t3 Exercises 5.3–5.5 · 0m/0m
+    - [x] 4 1b Exercises 5.3–5.5            @m1 ^t3          (W37, closed, rewritten; log, journal and undo written)
+
+After:
+
+    tm: ^t3 is settled — dropped (`[~]`) in week/2026-W37.md — and a retro `tm done` on a settled line is refused; nothing was written. To mark it done, edit its line's box to `[x]` (D140)
+    [rc=1]
+    {"ok": false, "kind": "error", "message": "^t3 is settled — …", "exit_code": 1, "detail": {}}
+    nothing written                                          (every file's md5 equal before and after)
+    - [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+
+On an `[x]` line the advice is "The line is already marked done".  `--json` is on stderr in the shape of the verb's
+other refusals (the test compares its keys with `--went 7`'s).  `tm done --help` says it on both arguments.
+
+**Parity P135 taken**: a retro `tm done ^id` — one that ends no block — on an item whose line is settled (`[~]` or `[x]`) is refused by name before anything is written (no line, no log line, no journal), the message naming the line as settled and saying to edit it to mark it done; fork 4748911 (and this binary until the W-51 repair) set `[x]` on a dropped line, inside a week a close had already taken too (the owner's D140, W-51 repair track H, the W-51 critic's second finding, tree `Q2`)
+
+**Behaviour rows** (`tm/tests/cli_w51h_host.rs`): `d140_a_retro_done_on_a_settled_line_is_refused_p135` (both glyphs;
+fails with the refusal disabled, driven), and `d140_a_retro_done_on_an_open_line_still_sets_the_box`.  The test that
+pinned the old behaviour, d135_a_retro_done_still_sets_the_box, changes WITH this row — renamed, not re-blessed; its
+one backticked citation, in W-51 repair track H's block above, is a counted dead name in `kernel/citations-allow.txt`.
+P131's row said "(a retro `tm done ^id`, which ends no block, still sets the box)", true of an open line only since
+D140; it is restated in the register to say so.
+
+### 3. The stale words around settled lines (gaps 5612 and 5613 closed)
+
+**The TUI's overtime box** (`tui::app::App::overtime`, `tui::prompts::overtime_lines`) promised `s stop, demote rest
+→ 5m stays in the week queue` and `d done` on a block running on a dropped line, where `tm stop` and `tm done` leave
+it as it stands (D132, D135).  `Overtime` gains `settled`; the box says so.  Driven through a pty (`script -qfc "stty
+cols 120 rows 40; tm --dir <tree> --now 2026-09-07T12:10:00-05:00 tui"`; `start ^t3` 10:20, `drop ^t3` 10:40; the
+frame rendered by a small emulator over the raw stream):
+
+    before │  s  stop, demote rest    → 5m stays in the week queue  │
+           │  d  done                                               │
+    after  │  s  stop                 → the line is settled, left as it stands  │
+           │  d  done                 → the line is settled, left as it stands  │
+
+Unit test `tui::prompts::tests::a_settled_lines_box_promises_no_remainder`; the four committed overtime snapshots (an
+open line) do not move.  The comment above the box's remainder ("Exactly what `tm stop` writes as `est:`") now says on
+which lines.
+
+**`day::end_break_at`'s doc** — and W-51 repair track H's §4 above, which is history and is corrected here — said only
+`tm stop --at` or D130's stop can end a block before a break's start.  So can `now` itself: every verb that ends a
+break (`tm start`, `tm interrupt`, `tm done`, `tm resume`, `tm stop`) run with a `--now` before a logged running
+break's start skips ending it, which agrees with D129 (a running break ends at the first `start` stamped after it).
+The doc comment says so.
+
+### 4. The record: gap 5562 / D139 (the critic's note 4)
+
+The upgrade-path over-credit D139 records is not minutes but **days**, and the earlier verb that logs the cache-only
+break can be **the TUI's own opening**.  The critic's drive: a TUI opened at 2026-09-13 23:59:45 on a pre-D105 tree
+(a block on `^t3` begun 09-07 10:20, the cache holding a break at 10:40 with no `break_start`) — its load's
+housekeeping logs the break at 09-13 10:40 (D133); at midnight its held close of W37 stops the block at that
+`break_start`, its last logged activity, crediting about 8,660 minutes.  Re-driven here through the CLI, which takes
+the same path (a verb at 09-13 23:59:45, then one at 09-14 00:00:15), on this track's binary:
+
+    tm: logged the break .tm/state.json holds running since 2026-09-13 10:40 (15m, walk) — it was begun before tm logged a break's start, so .tm/log.jsonl now holds it (D133)
+    tm: stopped ^t3 at 2026-09-13 10:40, its last logged activity, before the close of 2026-W37 took it · 8395m worked · 5m left
+
+(8,395, not 8,660: the CLI's stop nets the week's calendar walls, D61; the TUI drive was not repeated.)  D139 stands:
+recorded, not built around.
+
+### 5. Gaps
+
+**Gap 5610 — D126 did not follow a give-back (CLOSED).**  1. *What.*  `correct_netted_estimates` acted only when a
+block's minutes fell, and `stale_estimates` only when the replay up to the `stop` counted more than the whole log, so
+after D137's give-back the estimate kept the netting and nothing named it.  2. *Why.*  D126 predates D137; the code
+read "nets" as "falls".  3. *Cost, before.*  A user-visible wrong `est:` with `tm check` green.  4. Closed here (§1).
+
+**Gap 5611 — a synced `break_start` before the `stop` read as already netted (CLOSED).**  1. *What.*  The check's
+baseline counted a `break_start` its `stop`'s author never saw.  2.–3.  Pre-existing since D126; a stale estimate with
+`tm check` silent.  4. Closed here (§1): the running `break_start` at the `stop` is left out of the baseline.
+
+**Gap 5612 — the TUI's overtime box on a settled line (CLOSED).**  §3.
+
+**Gap 5613 — `day::end_break_at`'s doc named two of the ends that can precede a break's start (CLOSED).**  §3.
+
+**Gap 5614 — D126 reads above `stop`'s exact re-run where the `stop` floored.**  1. *What.*  `expected = written +
+(at_close − now)` recovers the estimate before the stop as `written + at_close`, which is exact only when the stop did
+not floor at `MIN_REMAINING_MIN`.  An estimate of 60 worked 60 is written `5m`; a late mark netting it to thirty reads
+`35m` where `stop` at thirty minutes would write `30m`.  2. *Why.*  The estimate before a `stop` is in no log line (a
+`start` carries none; a partial `done`'s `est_min` is the running block's planned minutes, not the line's), so it is
+not recoverable.  3. *Cost.*  At most the floor (5 minutes) of over-estimate, on a block stopped within five minutes
+of its estimate and later netted; the same as W-49's D126 always wrote.  4. A log-grammar change (an estimate on
+`stop`) would close it; not this track's, and not asked.
+
+**Gap 5615 — the price of the one reading.**  1. *What.*  `d126_reading` replays the log up to the `stop` once, and up
+to each D126 correction once, through `kernel_log::replay_unsealed`.  2. *Why.*  The verb's old reading used the two
+replays it already held (before and after the mark), which is why it could only add what the mark moved; one reading
+for the verb and the check needs the baseline.  3. *Cost.*  The replays are asked only for an item whose closed block's
+minutes moved (the verb) or that has a late line after its `stop` (the check) — none on an ordinary tree; on a
+three-year log each is a genesis-sized read (README D113: 2.6–3.2 s).  Not measured on a long log here.  4. Open; a
+checkpointed prefix would bound it.
+
+**Gap 5616 — a typed estimate equal to D126's is read as D126's.**  1. *What.*  A `tm edit est=` logged straight
+after a late mark whose value is exactly the one D126 would write there is taken as a correction.  2. *Why.*  The
+log's `edit` carries no author; adjacency and the value are what distinguish them.  3. *Cost.*  None visible: the
+estimate it reads is the one the user typed.  Only a later mark then rewrites it, as it would have rewritten D126's.
+4. Recorded.
+
+### 6. brief_corrections
+
+* "never write below zero" — `tm stop` floors at `MIN_REMAINING_MIN` (5), and so does D126 now (§1); zero is never
+  reached.
+* "what the closing `stop` wrote plus (minutes at the stop as its author saw them − minutes now) — verify that it is
+  the reading `stop` gives" — it is, except where the stop floored (gap 5614).
+* `tm done --help`'s `--partial` said "`est:` keeps the remainder"; it does, on an open line — the clause added is for
+  the settled line (D135), and the `id` argument gains D140's.
+* D140's "nothing written" is the verb's own writes: the refusal comes after the load, so a load's housekeeping (the
+  automatic close of a period that has ended, D61's wall marks, D133) still runs first, as before every other refusal
+  of a verb (the D140 behaviour row closes W37 with a `tm plan` first, so the refused `tm done` alone is measured).

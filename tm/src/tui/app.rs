@@ -365,6 +365,10 @@ pub struct Overtime {
     pub drops: Vec<String>,
     /// What "stop" would leave in the queue, in blocks (`0.5b`).
     pub stays: String,
+    /// **The running block's line is SETTLED** (`[~]`, `[x]` — a `tm drop` while it runs, or a close
+    /// before the owner's D130, leaves a block running on one): `tm stop` and `tm done` then leave the line exactly as it stands
+    /// (D132, D135), so the box offers no remainder and no box change (README gap 5612).
+    pub settled: bool,
     /// Minutes until the next prompt (`cfg.day.overtime_reprompt_min`).
     pub reprompt_min: u32,
 }
@@ -1383,8 +1387,12 @@ impl App {
                 None => self.title_of(&dropped),
             })
             .collect();
-        // Exactly what `tm stop` writes as `est:` (see `cli::day::stop`), so
-        // the consequence line promises what the verb actually does.
+        // What `tm stop` writes as `est:` on an open line (`cli::day::end_the_block`), so the
+        // consequence line promises what the verb actually does. On a SETTLED line (`[~]`, `[x]`) it
+        // writes nothing (D132, D135), and the box says so instead (`settled`).
+        let settled = item.is_some_and(|i| {
+            matches!(i.state, tm_core::model::State::Dropped | tm_core::model::State::Done)
+        });
         let remaining = self
             .tree
             .remaining(id)
@@ -1408,6 +1416,7 @@ impl App {
             elapsed_min,
             drops,
             stays,
+            settled,
             reprompt_min: self.cfg.day.overtime_reprompt_min,
         }
     }
