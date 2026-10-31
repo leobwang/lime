@@ -102422,3 +102422,149 @@ reproduced as track K recorded it (gaps 5633 and 5634).
 already ended at a later block's start ends that break there, and D137 gives back what lies after it; and gap 5634 is
 **D142** — overlapping logged breaks are read as their union, each break drawn and recorded only where no earlier break
 covers it.  Both are the next run's to build; neither is built here.
+
+<!-- ======================================================================
+     Stage 6 — W-52 track H (2026-10-31): the host, D141's `tm break` half. Gaps 5680-5699 are this block's
+     (5680-5684 taken); cheats 671-690 (none taken); parity P138 (P136 and P137 are track K's, declared as holes
+     in kernel/parity.txt until the land fills them). Whoever merges renumbers.
+     ====================================================================== -->
+
+## Stage 6 — W-52 track H: a `tm break` typed inside a break D129 ended ends it there (D141, the verb)
+
+**What landed.**  The owner's **D141**, the host half (README gap 5633): with no break running, a `tm break` typed at an
+instant strictly inside a logged break that D129 ended at a later block's `start`, and that no `break` line has ended
+yet, ENDS THAT BREAK THERE.  It writes the break's `break` line in the shape every break end has — `t` the break's
+start, `actual_min` the typed instant less it, the break's own planned minutes and place — through the kernel's writer
+(`Ctx::append_entry`, D16); writes the journal line (`break ended 10m/10m`, D97) and the human clause (`break ended ·
+10m of 10m`, D101) every break end writes; says in one line, on stderr, that it ended the break D129 had ended at the
+later start; and never logs a second `break_start` inside the first.  `tm break --json` reports a break end (`action`
+`ended`, the minutes) with one new key, `superseded_end` (`"10:10"`, the end D129 had given it), absent on every other
+`tm break`.
+
+*Where.*  `tm/src/cli/ctx.rs`'s `Ctx::break_a_start_ended_at` is the one reader: a record of the replay's days
+(`BreakRecord`, the one the kernel writes when a start ends a running break, stamped at its `break_start` and its minutes
+up to that start, so its `BreakRecord::span` is the end D129 gave it — the instant the D129 notice already printed), told
+from a break its own line ended by the log's rows (`Replay::rows`): a surviving `break_start` row at the record's stamp
+and no surviving `break` row there, since the line that ends a break is stamped at the break's start.  Nothing re-derives
+D129's end (§5.3).  `tm/src/cli/day.rs`'s `take_break` asks it after the ending arm and before the starting one, so a
+running break is still ended by the ending arm, and an instant at or after D129's end, at the break's own start, or
+inside a break a line already ended, keeps the behaviour before D141.  The kernel is untouched: the replay that reads
+the new line as the break's end is W-52 track K's (below).
+
+**Parity P138 taken**: a `tm break` typed, with no break running, at an instant strictly inside a logged break that a later block's `start` ended (D129) and that no `break` line has ended yet, ends that break there — its `break` line written at the break's start with `actual_min` the typed instant less it, `break ended` journalled and said, a stderr line naming the end D129 had given it, `superseded_end` in `--json` — and logs no second `break_start`; this binary until W-52 (and fork 4748911, which logged no break's start and so had no break a start could end) began a second break inside the first (the owner's D141, W-52 track H, README gap 5633)
+
+**Behaviour rows** (`tm/tests/cli_d141_break_end.rs`, each driving the J sequence through the binary):
+`a_break_typed_inside_a_break_a_later_start_ended_ends_it_there_p138` (one `break` line, `t` 09:30, `actual_min` 10, no
+second `break_start`; the notice; the clause; the journal line) and `the_d141_arm_reports_a_break_end_and_does_not_retime_p138`
+(`--json`; D20's arguments: `zzzz` and `--where moon` refused and nothing written, `25m` not retimed); the behaviour
+before D141 kept and pinned by `a_break_typed_at_or_after_the_end_d129_gave_begins_a_break` (10:10 and 10:20),
+`a_break_typed_at_the_breaks_own_start_begins_a_break` (09:30) and `a_break_its_own_line_ended_is_not_ended_again` (the J
+break after D141's line, and D137's day, where the break ended while it ran); `undo_takes_the_d141_line_back`;
+`a_plain_break_end_carries_no_superseded_end`.  **Ignored for the land** (D19's shape, its full body written):
+`the_d141_line_ends_the_break_in_the_replay_p138` — `#[ignore = "needs W-52 track K's replay (D141); the land un-ignores
+it"]` — asserting the J day's `block_min` 110 (`^t1` fifty), one break of ten in `tm review day`, and one break segment
+09:30–09:40 in `tm --json plan`.  Run with `--include-ignored` on this tree it fails as it should: `block_min` 90 and a
+break of forty, the replay skipping the new line as it skips every `break` line stamped at a break D129 ended (P127).
+
+**Mutations, by hand** (`mutate.py`, check 9, mutates Lean definitions only, and this track adds none; the Rust reader
+was mutated the same way, one change at a time, the test file run after each): the reader answering `None` — four
+tests fail; dropping the "no `break` row" condition — `a_break_its_own_line_ended_is_not_ended_again` fails; the end
+bound `at < until` made true — `a_break_typed_at_or_after_the_end_d129_gave_begins_a_break` fails; the start bound
+`from < at` made `from <= at` — `a_break_typed_at_the_breaks_own_start_begins_a_break` fails.  One mutant survives, gap
+5683.
+
+### The drive (§5.13), `TZ=America/Chicago`, the J sequence on a fresh `tm init --example` tree
+
+`^t1` 09:00–10:00 and `^t4` 10:10–11:10 done, then `tm --now 09:30 break 10m` (D129 ends it at 10:10), then
+`tm --now 09:40 break`.  **Before** (the binary built at `796d09f`):
+
+    tm: the break that began at 09:40 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+    break 20m
+      [rc=0 2026-09-08T09:40:00-05:00 break]
+      block_min 90
+    {"t":"2026-09-08T09:30:00-05:00","ev":"break_start","planned_min":10}
+    {"t":"2026-09-08T09:40:00-05:00","ev":"break_start","planned_min":20}
+    09:30  ·      break 40m
+    09:40  ·      break 30m
+    day/2026-09-08.md journal:  09:30 break 10m · 09:40 break 20m
+
+**After** (this tree):
+
+    tm: the break that began at 09:30 ends here, at 09:40 — the `start` the log holds at 10:10 had ended it (D129); typed inside it, `tm break` ends it (D141)
+    break ended · 10m of 10m
+      [rc=0 2026-09-08T09:40:00-05:00 break]
+      block_min 90
+    {"t":"2026-09-08T09:30:00-05:00","ev":"break_start","planned_min":10}
+    {"t":"2026-09-08T09:30:00-05:00","ev":"break","planned_min":10,"actual_min":10}
+    09:30  ·      break 40m
+    day/2026-09-08.md journal:  09:30 break 10m · 09:40 break ended 10m/10m
+
+    $ tm --now 09:40 --json break 25m
+    {"action": "ended", "planned_min": 10, "actual_min": 10, "place": null, "superseded_end": "10:10"}
+
+`block_min` stays 90 and the plan still draws `09:30 break 40m` on this tree: the kernel at `796d09f` skips a `break` line
+stamped at a break D129 ended (`Replay.Machine.brkEnded`, P127), so the line is written and not yet read.  Track K's
+replay is what reads it as the end (the ignored test above).  The note `D129` prints at the first `tm break --now 09:30
+10m` is unchanged.
+
+**What `tm undo` of the new line does** (driven): `undid break (break ended) · 1 file(s) restored · 7 left`; the log
+gains `{"ev":"undo","of":"break"}`, which cancels the D141 line (the undo mask's latest surviving `break`, this one); the
+day file's `09:40 break ended 10m/10m` goes with the restored file; the break is then once more one D129 ended with no
+line, and `tm --now 09:40 break` ends it again (`undo_takes_the_d141_line_back`).
+
+**What `tm check` says on the J log**: `no problems` before the D141 line (the break D129 ended has a record and no line,
+which is the kernel's reading of a merged log and not a defect) and after it (on this tree the kernel skips the line —
+P127 — and nothing names it; after the land it is read as the break's end).  On the log where a later `tm --now 09:35
+break` begins a break inside the J break after D141's line (`a_break_its_own_line_ended_is_not_ended_again`), `tm check`
+also says `no problems`, the overlap being D142's union to read (track K).
+
+### Gaps (5680-5684)
+
+**Gap 5680 — D141's verb half is landed; its replay half is track K's.**  (1) The host writes D141's line and none of
+the replay's facts move on this tree.  (2) The owner's D141 is one rule with two halves, split across W-52's tracks.
+(3) Until the land, the line is written and skipped (P127): `tm review day`, `tm plan` and the heat grid read the break
+at D129's forty minutes and `^t1` at thirty — exactly as before this track, never worse.  (4) The W-52 land, which
+un-ignores `the_d141_line_ends_the_break_in_the_replay_p138`.  With track K's half, gap 5633 is closed.
+
+**Gap 5681 — a break the replay's scope does not hold is not found.**  (1) `Ctx::break_a_start_ended_at` reads the
+verb's own replay (`ctx.replay`); a break D129 ended on a ledger day the scoped replay does not hold (a sealed month, or
+rows a narrowed scope leaves out) is not found, and the verb begins a second break as it did before D141.  (2) Asking a
+whole-log replay on every `tm break` would add a full replay to the verb's cost to find a break typed a month into the
+past; `ended_cached_break` takes that cost only for a cache it already knows to be stale.  (3) `tm break --now <an
+instant weeks back>` inside such a break begins a break and does not end the old one; no test reaches it.  (4) Whoever
+next measures `tm break`'s latency, if a user reports it.
+
+**Gap 5682 — the campaign's call: D20 governs the D141 arm.**  (1) `tm break --now 09:40 10m` (or `25m`) inside the
+break ends it at 09:40 with its own planned minutes; the duration is parsed and refused if malformed (D20), and a valid
+one does nothing.  (2) D141 makes this arm an ENDING arm, and D20 settled that a valid argument does nothing to a break
+being ended ("retiming was considered and declined as a new feature"); a place (`--where walk`) likewise.  (3) A user
+who meant "a ten-minute break from 09:40" gets the old break ended instead; the clause says `break ended`, so it is
+visible.  (4) The owner, if they want it otherwise.
+
+**Gap 5683 — one mutant of the reader survives.**  (1) Dropping the reader's "a surviving `break_start` row at the
+record's stamp" condition leaves every test green.  (2) On every log the binary or a hand edit can produce, a break
+record with no surviving `break` row at its stamp came from a `break_start` (the kernel's D129 record, `endRecs`), so the
+condition is equivalent; it is kept as the guard that a narrowed scope's rows reach the record's day, which the
+"no `break` row" condition alone would read as "no line" when the rows simply do not reach it.  (3) The guard is
+unwitnessed: removing it would change no answer any test can ask.  (4) None owed unless a scope is found whose rows and
+days differ.
+
+**Gap 5684 — `tm check` names no `break` line the replay skips.**  (1) On this tree the D141 line is written and the
+kernel skips it (P127); `tm check` says `no problems`.  (2) Transitional: after the land the line is read.  (3) A tree
+written by this track's binary and read by the binary at `796d09f` holds a line that binary skips silently — the same
+as a hand-written one would be.  (4) Closed by the land with gap 5680.
+
+### Acceptance (this tree, every command capped)
+
+`kernel/check.sh`: **17/17 ok**, rc 0 (7 min 34 s wall, parallel with track K): axiom audit 6,957, FFI target 97,
+corpus 29/37 files and 4/5 whole plans, stage goals 1, check 9 916 rostered and 0 owed (this track adds no Lean), the
+register P1-P138 with 2 declared holes (P136, P137; next free P139), check 12 1,654 reachable and 1,096 exempt, 97
+modules replayed.  `cargo test --workspace --no-fail-fast`, three runs: run 1 (load 9.2) **3,063 passed / 7 failed / 54
+ignored** over 177 result lines, the seven being all of `cli_latency`'s timing tests (`tm drop ^a1` past 5 s, `tm plan`
+3.3 s); run 2 (load 6.8) **3,069 / 1 / 54**, the one being gap 5541's stalled-day row (`tm drop ^z15` past 1 s); run 3
+(load 6.5) **3,070 passed / 0 failed / 54 ignored** over 177 — the base's 3,063 / 53 / 176 and this track's seven tests
+and one ignored.  `cargo test -p tm --test cli_latency` alone at load 2.95: 6 passed, 1 failed (the same `tm drop ^z15`
+row), 1 ignored; the same test on the base sources (`796d09f`'s `ctx.rs` and `day.rs` restored for the run) at load
+2.72 fails the same way — gap 5541's noise, not this track.  No `.proptest-regressions` file moved.  FFI crate
+(`kernel/tm-kernel-ffi`, `cargo test`): **105 passed**, 0 failed.  The drive above was made with this tree's binary
+against the one built at `796d09f`.
