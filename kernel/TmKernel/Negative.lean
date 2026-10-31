@@ -3642,4 +3642,30 @@ theorem aLateBreaksLineNetsNothing :
       Replay.bE 4 63924366600 (.brk 20 (some 10) none)]).items.get ['a']).map (·.minutes) = some 60 := by
   decide
 
+/- ======================================================================
+   W-51 repair track K (w51r-k): cheats 631-650 are this track's (631-632 taken).
+   ====================================================================== -/
+
+/- CHEAT 631 — the W-51 land's give-back: the auditor's K log, a late `start b` at 08:10 cutting `a` while the break
+   started at 08:30 runs, then the break's line.  Claimed thirty for `a`, the land's reading (every minute the running break
+   took handed back across `b`'s cut).  Since the repair the cut stays cut; `decide` computes ten
+   (`Replay.the_k_log_reads_as_its_break_had_no_start`). -/
+theorem theKLogGivesBackAcrossTheCut :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924366600 (.brkStart 20 none),
+      Replay.bE 4 63924365400 (Replay.bStart ['b']), Replay.bE 5 63924365700 (Replay.bDone ['b'] 5 false),
+      Replay.bE 6 63924366600 (.brk 20 (some 10) none)]).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+/- CHEAT 632 — the land's drawing of the auditor's C log: `a` drawn `[08:00, 08:30]` across the late interruption
+   `[08:10, 08:20)` once the break's line arrived.  Since the repair the interruption stays cut out of `a`; `decide`
+   computes the five segments `Replay.the_c_log_reads_as_its_break_had_no_start` names. -/
+theorem theCLogDrawsAcrossTheInterruption :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924366600 (.brkStart 20 none),
+      Replay.bE 4 63924365400 (.interrupt none), Replay.bE 5 63924366000 (.resume 10 []),
+      Replay.bE 6 63924366600 (.brk 20 (some 10) none)]).days.get 739865).map
+        (fun a => a.segments.any (fun g => g.start.1.sec = 63924364800 ∧ g.stop.1.sec = 63924366600)) = some true := by
+  decide
+
 end Tm
