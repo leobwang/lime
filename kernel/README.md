@@ -102713,3 +102713,118 @@ changes).
   `mutate.py --verify --write --only`" — inserting D142's definitions into the middle of `Replay.lean` drifted **260**
   pin sites (81 rows); re-verifying is one kernel build per constant, a day of builds here.  The edit was made
   line-neutral instead (§4).  A brief that adds definitions to `Replay.lean`'s middle should say so up front.
+
+<!-- =====================================================================
+     APPENDED 2026-10-31: stage 6 (the planner), run **W-52b**, **track K2** (`w52-k2`) — the owner's D141, its replay
+     half (README gap 5660, written by W-52 track K as a design and built here; with track H's verb half, `73a4449`, it
+     closes gap 5633).  Gaps 5710-5729 are this track's.  Cheats 691-710 (691-692 taken).  Parity **P137** taken.
+     Whoever merges renumbers.
+     ===================================================================== -->
+
+## Stage 6 — W-52b track K2: a `break` line ends a break D129 already ended, where it says (D141's replay half)
+
+### 1. The rule (gap 5660 closed)
+
+**Parity P137 taken**: a `break` line stamped at the start of a break D129 already ended at a later block's `start`, whose end (`t + actual_min`, else planned) falls strictly before that start, ends the break there — the ending's drawing and record undone, the break held, drawn and recorded as `[t, t + actual_min)`, and what the ending's netting took after that end given back, so the block it ran inside reads its minutes less the break's own span; fork 4748911 (and this binary until W-52b) read such a line as the break's own and nothing else (P127), the block netted to the later start (the owner's D141, W-52b track K2, README gaps 5633 and 5660)
+
+**What the replay does** (`Replay.lean`; the definitions sit beside the D129 arms and the laws at the module's end,
+section `End141`):
+
+* **The ending remembers what it took.**  `endBrkFx` (a `break_start` a held start ends, D129 in stamp order) now runs
+  `takeFx` over `forget m` where it ran `brkFx`: the same effects, with each held closed block remembering the pieces the
+  netting met and the minutes it took (`netTake` — `netClosed` with `runOne`, the netting `runNet` runs for a running
+  break).  `forget` clears any take held before, so the ending's own is the only one.
+* **The line.**  `arm`'s `break` arm, when `Machine.brkEnded` is the line's stamp, is `d141Arm`: when the newest held
+  break is that ending's span `[k.s, k.e)`, no break runs, the line ends strictly before `k.e` and `k.day` is not after
+  the line's ledger day, the line writes `DayOp.unsegBrks k rest` (the Break segments `k` witnesses that no break of
+  `rest` witnesses, un-drawn) and `DayOp.unbrkAt` (the ending's record, by its stamp and the minutes `endRecs` gave it),
+  then `brkArm` over the machine with `k` let go: `giveBack` returns the take (D137), `brkFx` nets `[t, end)` (D100) and
+  `brkDay` draws and records it (D142).  Otherwise the line is the break's own (P127) and the take is forgotten
+  (`forgetIdle`).  A `break` line that is not the ended break's own, and a new `break_start` with no break running, also
+  forget it, so a later give-back never returns a D129 ending's take.
+* **No `Machine` or codec change.**  The take lives in `Closed.ran`/`Closed.ranMin` (D137's fields).  The kernel id moves,
+  as it does on any kernel change (`build.rs` hashes the archive).
+* **The host's gate stays shut after the line.**  Track H's gate (Ctx::break_a_start_ended_at, branch w52-h's ctx.rs) asks for a `break_start` row
+  with no `break` row at the same `t`; the line is that row, so the verb cannot fire twice on one break.
+
+**On the J log by hand** (`^t1` 09:00–10:00 and `^t4` 10:10–11:10 done, the 09:30 `break_start` logged after `^t4`'s
+`done`, then the line `t` 09:30 `actual_min` 10): `^t1` **50**, `^t4` 60, `block_min` **110**, one break drawn
+09:30–09:40, one record of ten (`Replay.a_break_line_before_its_d129_end_ends_the_break_there`).  A line ending at or
+after 10:10 keeps P127's reading: `^t1` 30, the break forty minutes drawn 09:30–10:10
+(`Replay.a_break_line_at_or_after_its_d129_end_is_the_breaks_own`; 40 minutes exactly,
+`Replay.a_break_line_ending_at_its_d129_end_is_the_breaks_own`).
+
+**Beside D142.**  Two `break_start`s at one stamp, both ended by D129, the second covered whole and recorded at zero:
+the line ends the newest, the covered one — its zero record is undone, the first keeps its segment (a break of `rest`
+witnesses it) and its forty, and the line, covered as wholly, is recorded at zero: **two records, forty break minutes**,
+`a` thirty (`Replay.a_break_line_ending_a_covered_break_leaves_two_records`; cheat 692 is the undoing that took the
+first's segment too).  No dropped head's zero record survives beside the line's.
+
+### 2. Laws (D5)
+
+**Restated over the new shapes** (each statement names the definition it now reads; none weakened):
+`Replay.endBrkFx_obs` and `Replay.endBrkFx_mem` (the machine is `takeFx`'s over `forget m`),
+`Replay.the_break_start_arm_opens_the_running_break` and
+`Replay.the_break_start_arm_writes_only_the_running_break_with_nothing_open_or_drawn_after_it` (over `forgetIdle m`, which
+clears a D129 ending's take), `Seal.arm_brks` (a third case: the line D141 reads drops the head, `pruneBrks (k :: tail)`,
+carried with the guard that fired), `BreakFold.stepWith_brks` (its consumer, the same third case).
+
+**Re-proved, statements unchanged:** `Replay.endBrkFx_blockOnly`, `Replay.arm_split`, `Replay.DayOp.bal_apply`,
+`Replay.conserves_brkFx`, `Replay.conserves_brkFx_of`, `Replay.conserves_endBrkFx`, `Replay.conserves_brkStartArm`,
+`Replay.conserves_arm`, `Replay.endBrkFx_sleptOk`, `Replay.brkStartArm_sleptOk`, `Replay.arm_sleptOk`, the `break`
+and `break_start` cases of the observations law, `Seal.brkFx_congr`, `Seal.arm_congr`, `Seal.stepQueries_congr`,
+`Seal.stepQueries_sub`, `Seal.arm_mi`, `Seal.stepWith_brks_within`, the three arm laws of `SealCutMachine`, the pending
+law of `SealPending`, the duration law of `SealLaw`, `BreakFold.arm_openAfter`, `BreakFold.DayOp.apply_segments`,
+`BreakFold.stepWith_brks_of_brk`, `BreakFold.stepWith_brks_of_brkStart` and `BreakFold.stepWith_brkHeld`.
+`Seal.stepQueries` reads what the arm reads: over `forget`/`forgetIdle` where the arm does, and in the ended break's own
+line's branch the reads of `brkArm` over the machine with the head let go.
+
+**New:** `Replay.forget_held`, `Replay.forget_headOk`, `Replay.forgetIdle_held`, `Replay.forgetIdle_headOk`,
+`Replay.forgetIdle_keeps`, `Replay.conserves_netTake`, `Replay.conserves_takeFx`, `Replay.takeFx_brk`,
+`Replay.takeFx_brkOpen`, `Replay.takeFx_machine`, `Replay.takeFx_block`; `Seal.takeFx_congr`, `Seal.mi_of_sub`,
+`Seal.forget_mi`, `Seal.forgetIdle_mi`, `Seal.tail_mi`, `Seal.takeFx_mi`; `BreakFold.takeFx_noBrkSeg`,
+`BreakFold.undo141_seg` (what the two day operations leave of a day: on the ended break's day a Break segment the dropped
+head witnesses survives only when a break of `rest` witnesses it) and `BreakFold.stepWith_brkHeld_d141` (`BrkHeld` over
+the line D141 reads — the invariant `the_resumed_open_block_runs_after_every_break` rests on).  Witnesses (`decide`, each
+with a subject): the five above and `Replay.forgetIdle_clears_a_take_only_with_no_break_running`.  Cheats **691**
+(P127's reading of the line: `^t1` thirty) and **692**.
+
+### 3. Gaps
+
+**Gap 5711 — D141 reaches only the newest break D129 ended.**  1. *What.*  The line is read as an ended break's end only
+when that break is the newest held (`m.brks = k :: rest`) and `Machine.brkEnded` is its stamp.  On the J log as the W-51
+repair binary wrote it — `break_start`s 09:30 and 09:40, both ended at 10:10 — a line at 09:30 is not the newest's, so it
+is read as a break of its own, wholly covered by the 09:30 one (D142): a third record of zero minutes, `^t1` still thirty
+(`Replay.a_break_line_for_an_older_ended_break_is_a_covered_break`).  2. *Why.*  The machine remembers one ending
+(`brkEnded`) and one take; reaching an older one needs a list of each, a `Machine` and checkpoint change.  3. *Cost.*  On
+a log a pre-W-52 binary wrote with two late `break_start`s, `tm break --now <t>` inside the first leaves the block netted
+to the later start.  4. *Clears it.*  A list of endings with their takes in the machine (D113's cost on the checkpoint).
+
+**Gap 5712 — a running break D129 ended at a `start` gives nothing back.**  1. *What.*  `endMachine` (a `start` ending
+the running break) still forgets what the running break took, so a D141 line for that break redraws and re-records the
+break at its own span but gives the held closed blocks nothing back.  2. *Why.*  Keeping that take would move the
+`start`'s own cut (`startEnd` reads `Closed.ran`), a change to D129's start arm and every law over it, for a log two
+machines write.  3. *Cost.*  On such a log, a block closed while the break ran stays netted from the break's start; the
+drawing shows neither break nor block between the line's end and the start.  4. *Clears it.*  A take that `startEnd`
+does not read.
+
+**Gap 5713 — `DayOp.unbrkAt` finds the ending's record by stamp and minutes.**  1. *What.*  It removes the first record
+stamped `k.s` with the minutes `endRecs` gave it (`d141Arm` recomputes them over `rest`).  2. *Why.*  A record carries no
+id.  3. *Cost.*  Two breaks at one stamp with one record's minutes: the other's record may be the one removed — the
+counts and minutes are the same either way.  4. *Clears it.*  A record keyed by its `break_start`'s line.
+
+### 4. Frozen comparands
+
+**None moved, measured**: (filled after the workspace runs).
+
+### 5. The §5.13 drive
+
+(filled after the drive).
+
+### 6. Measured acceptance
+
+(filled after the runs).
+
+### 7. brief_corrections
+
+(filled at the end).

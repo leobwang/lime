@@ -160,15 +160,15 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
         closed := Replay.doneClosed dy m e.line (e.t.val, e.off.val) id actual.val ci }
     | .brkStart planned where_ =>
       match Replay.firstStart (e.t.val, e.off.val) (dy e.t.val) m with
-      | some t0 => brkFxReads { m with brkEnded := some (e.t.val, e.off.val) } (e.t.val, e.off.val) t0 (dy e.t.val)
+      | some t0 => brkFxReads { Replay.forget m with brkEnded := some (e.t.val, e.off.val) } (e.t.val, e.off.val) t0 (dy e.t.val)
       | none =>
-        settleReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
-          runReads { m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
+        settleReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
+          runReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
     | .brk planned actual _ =>
       match m.brkEnded with
       | some s =>
-        if Replay.atEq s (e.t.val, e.off.val) then []
-        else giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (e.t.val, e.off.val)
+        if Replay.atEq s (e.t.val, e.off.val) then giveReads m ++ brkFxReads (Replay.giveBack dy { m with brks := m.brks.tail, brkEnded := none }).1 (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
+        else giveReads (Replay.forgetIdle m) ++ brkFxReads (Replay.giveBack dy (Replay.forgetIdle m)).1 (e.t.val, e.off.val)
           (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
       | none =>
         giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (e.t.val, e.off.val)
@@ -374,7 +374,7 @@ theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e :
   case brk planned actual where_ =>
     split
     · split
-      · rfl
+      · rw [brkFxReads_giveBack dy₁ dy₂]
       · rw [brkFxReads_giveBack dy₁ dy₂]
     · rw [brkFxReads_giveBack dy₁ dy₂]
 

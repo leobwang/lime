@@ -3694,4 +3694,32 @@ theorem aCoveredBreakIsRecordedWhole :
         (fun a => a.breaks.map (·.actualMin)) = some [some 20, some 20] := by
   decide
 
+/- ======================================================================
+   W-52b track K2 (w52-k2): cheats 691-710 are this track's (691-692 taken).
+   ====================================================================== -/
+
+/- CHEAT 691 — P127's reading of a `break` line that ends a break D129 already ended (README gaps 5633 and 5660): the J
+   log with the line track H's `tm break` writes — `t` 08:30, ten minutes — after the 08:30 `break_start` D129 ended at
+   `b`'s 09:10 start.  Claimed `a` stays at thirty, the line the break's own and nothing else.  Since the owner's D141
+   the line ends the break at 08:40 and gives back what the ending took after it; `decide` computes fifty
+   (`Replay.a_break_line_before_its_d129_end_ends_the_break_there`). -/
+theorem aBreakLineBeforeItsD129EndIsTheBreaksOwn :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924366600 (.brk 10 (some 10) none)]).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+/- CHEAT 692 — D141's undoing taking a segment another held break witnesses (`DayOp.unsegBrks`): two late `break_start`s
+   at one stamp, both ended by D129, then the line ending the newest.  Claimed no Break segment survives — the undoing
+   removing every segment the dropped head witnesses.  The first break witnesses `[08:30, 09:10)` too, so it is kept;
+   `decide` computes one (`Replay.a_break_line_ending_a_covered_break_leaves_two_records`). -/
+theorem theUndoingTakesASegmentAnotherBreakWitnesses :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924366600 (.brkStart 10 none), Replay.bE 7 63924366600 (.brk 10 (some 10) none)]).days.get 739865).map
+        (fun a => (a.segments.filter (fun g => g.kind == .brk none)).length) = some 0 := by
+  decide
+
 end Tm
