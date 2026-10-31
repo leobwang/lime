@@ -102163,3 +102163,17 @@ estimate it reads is the one the user typed.  Only a later mark then rewrites it
 * D140's "nothing written" is the verb's own writes: the refusal comes after the load, so a load's housekeeping (the
   automatic close of a period that has ended, D61's wall marks, D133) still runs first, as before every other refusal
   of a verb (the D140 behaviour row closes W37 with a `tm plan` first, so the refused `tm done` alone is measured).
+
+### 7. Acceptance (every command capped, on `2fa4682`'s tree)
+
+* `check.sh`: 17/17 `ok`, rc 0, 36.8 s with the Lean tree copied built (no Lean source changed): axiom audit 6,938,
+  FFI target 97, corpus 29/37 files and 4/5 whole plans, stage goals 1, check 8 67,873 citations / 0 unused allow
+  entries, check 9 913 rostered / 0 owed, the register P1-P135 (next free P136), check 12 1,651 reachable / 1,096
+  exempt, 97 modules replayed.
+* `cargo test --workspace --no-fail-fast`, three runs at one-minute load 1.2, 3.8 and 6.4: **3,062 passed / 0 failed /
+  53 ignored over 176 result lines**, each run; no warning; no `.proptest-regressions` file moved.  (Run 1 was built
+  before a comment-and-layout-only edit to `tui/app.rs`; runs 2 and 3 are the committed tree.)  Gap 5541's
+  stalled-day row passed all three.  This track adds six tests (four D126 rows, D140's two in place of the one it
+  renamed, one TUI unit test).
+* `kernel/tm-kernel-ffi`: `cargo test` 105 passed.
+* §5.13: the drives in §1-§4, on binaries built from this track's sources and from `bb41657`.
