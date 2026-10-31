@@ -101956,3 +101956,469 @@ committed sources (its own plant-mtime finding, its README §9); every drive her
 
 **The owner's ruling taken at this land:** gap 5562 is D139 — a logged `break_start` stays a block's last logged
 activity for D130's stop (gap 5507's reading stands), and the upgrade-path over-credit is recorded, not built around.
+
+<!-- ======================================================================
+     APPENDED 2026-10-30: stage 6 (the planner), run **W-51 REPAIR (the
+     second)**, **track H** (`w51r-h`, the host: D126 after a give-back,
+     the owner's D140, the stale words around settled lines).  Gaps
+     5610-5629 are this track's (5610-5616 taken).  Parity P135.  No cheat.
+     No Lean module touched.  Whoever merges renumbers (AGENTS §6.4).
+     ====================================================================== -->
+
+## Stage 6 — W-51 repair (after the land), track H
+
+Branch `w51r-h` from `bb41657`.  Rust only: `tm/src/cli/{day,lifecycle,mod}.rs`, `tm/src/tui/{app,prompts}.rs`, and
+`tm/tests/{cli_late_mark_estimate,cli_w51h_host}.rs`; `kernel/citations-allow.txt` gains one dead name (§2).
+
+### 1. D126 follows a give-back, in both directions (gaps 5610 and 5611 closed)
+
+**The critic's blocker, driven.**  `tm init --example`, `wake` 07:00, `arrive` 08:00, `start ^t1` 09:00, `stop` 10:00,
+then `--now 09:30 break 10m` and `--now 09:40 break`, all on 2026-09-08, `TZ=America/Chicago`.
+
+Before (`bb41657`, the W-51 land's binary):
+
+    stopped ^t1 after 60m · 5m left
+    - [ ] 5 5m Read ch.6 §1–2               @m3 ^t1
+    tm: ^t1's estimate is now 35m (was 5m): this line netted 30m from the block its `stop` closed, and the remainder reads the minutes worked as the log now does (D126).
+    - [ ] 5 35m Read ch.6 §1–2               @m3 ^t1
+    break ended · 10m of 10m
+    - [ ] 5 35m Read ch.6 §1–2               @m3 ^t1
+    "block_min": 50
+    $ tm --now 2026-09-08T10:30:00-05:00 check
+    no problems
+
+After (this track):
+
+    stopped ^t1 after 60m · 5m left
+    - [ ] 5 5m Read ch.6 §1–2               @m3 ^t1
+    tm: ^t1's estimate is now 35m (was 5m): this line changed the minutes the log counts for the block its `stop` closed, and the remainder reads them as the log now does (D126).
+    - [ ] 5 35m Read ch.6 §1–2               @m3 ^t1
+    tm: ^t1's estimate is now 15m (was 35m): this line changed the minutes the log counts for the block its `stop` closed, and the remainder reads them as the log now does (D126).
+    break ended · 10m of 10m
+    - [ ] 5 15m Read ch.6 §1–2               @m3 ^t1
+    {"t":"2026-09-08T09:40:00-05:00","ev":"edit","id":"t1","field":"est","from":"35m","to":"15m"}
+    "block_min": 50
+    no problems
+
+And the new binary's `tm check` on the tree the land's binary left (line `35m`, log fifty minutes):
+
+    .tm/log.jsonl:10: warning[log-stale-est]: this `break` is logged after line 7's `stop` of ^t1 and stamped inside its block; ... reads 15m as the log now does — `tm edit ^t1 est=15m` (D126)
+
+**The one reading.**  `day::d126_reading(ctx, key)` is what the verb writes (`day::correct_netted_estimates`) and what
+the check compares the line with (`lifecycle::stale_estimates`); there was a reading in each, and they disagreed in
+direction.  It answers only while the estimate is still the closing verb's: the item's last logged lines are its
+`stop` (or partial `done`) and, after it, only `edit`s of another field or D126's own corrections — an `est` edit
+logged straight after a late mark, rewriting the then estimate to exactly what this reading gave there (checked by a
+replay of the log up to the edit).  A typed `tm edit est=`, an `extend` or a later block makes the estimate the user's.
+Then
+
+    expected = written + (at_close − now),  never below MIN_REMAINING_MIN (5)
+
+where `written` is the remainder the closing verb wrote (the line's estimate, or the `from` of the first correction),
+`at_close` the block's minutes as that verb's author counted them (the replay of the log up to it, a `break_start`
+still running there taken out), and `now` the whole log's.  The verb now corrects on any change of a closed block's
+minutes, not only a fall; the check names every open line whose estimate is not `expected` after a late line.
+
+**Is it the reading `stop` gives?**  `tm stop` writes `max(est − worked, MIN_REMAINING_MIN)` (`day::end_the_block`),
+so `est = written + at_close` exactly whenever the stop did not floor, and then `expected` is `max(est − now, 5)`:
+`stop` with the minutes the log now counts.  Where the stop floored (`est − worked < 5`), the estimate before it is
+not in the log (a `start` carries no estimate), and `expected` reads above the exact re-run — gap 5614.  The floor is
+`tm stop`'s 5, not the brief's "zero": the estimate never reads below what `stop` itself writes.
+
+**The second shape (the critic's, pre-existing).**  A synced log: `start 09:00`, another machine's `break_start
+09:30` merged in BEFORE the `stop 10:00` that wrote `5m`, and the break's `break 09:30 10m` after.  The old baseline,
+the replay up to the `stop`, held that `break_start` running and counted thirty minutes — less than the fifty the log
+counts — so the check read the block as already netted.  But a `stop` ends a running break before it logs itself
+(D97, `day::end_break_first_at`), so a `break_start` still running at a `stop` is a line its author never saw, and the
+baseline leaves it out: sixty.  Before / after, `tm check` at 10:30:
+
+    no problems
+    .tm/log.jsonl:9: warning[log-stale-est]: this `break` is logged after line 8's `stop` of ^t1 and stamped inside its block; that `stop` wrote 5m when it counted 60m, the log now counts 50m, so the estimate (5m) reads 15m as the log now does — `tm edit ^t1 est=15m` (D126)
+
+**Behaviour rows** (`tm/tests/cli_late_mark_estimate.rs`, each failing with `day.rs` and `lifecycle.rs` at `bb41657`,
+driven): `a_give_back_corrects_the_estimate_again`, `a_give_back_no_verb_corrected_is_named_by_tm_check`,
+`a_synced_break_its_stop_never_saw_is_named_by_tm_check`; and the boundary, `a_typed_estimate_after_the_mark_is_not_rewritten`
+(a typed `est=50m` between the break's start and its end is the user's, and the give-back rewrites nothing).  The four
+W-49 rows stand unchanged.
+
+**No new parity number.**  D126 is **P125**, and its register row said "rewrites the `est:` that verb wrote, by the
+minutes it took" — a fall only, the shape the code had.  The row is restated in `kernel/parity.txt` (as D134 restated
+P128): the rewrite follows the minutes the log counts in both directions, a give-back included.
+
+### 2. D140 — a retro `tm done` on a settled line is refused by name (parity P135)
+
+`day::done` refuses, before anything is written, a retro `tm done ^id` — one that ends no block, including one typed
+while another block runs — whose line is settled (`[~]`, `[x]`; `day::is_settled`, D132's predicate).  Driven on the
+orchestrator's `Q2` world (`drop ^t3` 09-07 10:40, `tm plan` 09-14 09:00 closing W37, `tm done ^t3` at 09:05):
+
+Before (`bb41657`):
+
+    ✓ ^t3 Exercises 5.3–5.5 · 0m/0m
+    - [x] 4 1b Exercises 5.3–5.5            @m1 ^t3          (W37, closed, rewritten; log, journal and undo written)
+
+After:
+
+    tm: ^t3 is settled — dropped (`[~]`) in week/2026-W37.md — and a retro `tm done` on a settled line is refused; nothing was written. To mark it done, edit its line's box to `[x]` (D140)
+    [rc=1]
+    {"ok": false, "kind": "error", "message": "^t3 is settled — …", "exit_code": 1, "detail": {}}
+    nothing written                                          (every file's md5 equal before and after)
+    - [~] 4 1b Exercises 5.3–5.5            @m1 ^t3
+
+On an `[x]` line the advice is "The line is already marked done".  `--json` is on stderr in the shape of the verb's
+other refusals (the test compares its keys with `--went 7`'s).  `tm done --help` says it on both arguments.
+
+**Parity P135 taken**: a retro `tm done ^id` — one that ends no block — on an item whose line is settled (`[~]` or `[x]`) is refused by name before anything is written (no line, no log line, no journal), the message naming the line as settled and saying to edit it to mark it done; fork 4748911 (and this binary until the W-51 repair) set `[x]` on a dropped line, inside a week a close had already taken too (the owner's D140, W-51 repair track H, the W-51 critic's second finding, tree `Q2`)
+
+**Behaviour rows** (`tm/tests/cli_w51h_host.rs`): `d140_a_retro_done_on_a_settled_line_is_refused_p135` (both glyphs;
+fails with the refusal disabled, driven), and `d140_a_retro_done_on_an_open_line_still_sets_the_box`.  The test that
+pinned the old behaviour, d135_a_retro_done_still_sets_the_box, changes WITH this row — renamed, not re-blessed; its
+one backticked citation, in W-51 repair track H's block above, is a counted dead name in `kernel/citations-allow.txt`.
+P131's row said "(a retro `tm done ^id`, which ends no block, still sets the box)", true of an open line only since
+D140; it is restated in the register to say so.
+
+### 3. The stale words around settled lines (gaps 5612 and 5613 closed)
+
+**The TUI's overtime box** (`tui::app::App::overtime`, `tui::prompts::overtime_lines`) promised `s stop, demote rest
+→ 5m stays in the week queue` and `d done` on a block running on a dropped line, where `tm stop` and `tm done` leave
+it as it stands (D132, D135).  `Overtime` gains `settled`; the box says so.  Driven through a pty (`script -qfc "stty
+cols 120 rows 40; tm --dir <tree> --now 2026-09-07T12:10:00-05:00 tui"`; `start ^t3` 10:20, `drop ^t3` 10:40; the
+frame rendered by a small emulator over the raw stream):
+
+    before │  s  stop, demote rest    → 5m stays in the week queue  │
+           │  d  done                                               │
+    after  │  s  stop                 → the line is settled, left as it stands  │
+           │  d  done                 → the line is settled, left as it stands  │
+
+Unit test `tui::prompts::tests::a_settled_lines_box_promises_no_remainder`; the four committed overtime snapshots (an
+open line) do not move.  The comment above the box's remainder ("Exactly what `tm stop` writes as `est:`") now says on
+which lines.
+
+**`day::end_break_at`'s doc** — and W-51 repair track H's §4 above, which is history and is corrected here — said only
+`tm stop --at` or D130's stop can end a block before a break's start.  So can `now` itself: every verb that ends a
+break (`tm start`, `tm interrupt`, `tm done`, `tm resume`, `tm stop`) run with a `--now` before a logged running
+break's start skips ending it, which agrees with D129 (a running break ends at the first `start` stamped after it).
+The doc comment says so.
+
+### 4. The record: gap 5562 / D139 (the critic's note 4)
+
+The upgrade-path over-credit D139 records is not minutes but **days**, and the earlier verb that logs the cache-only
+break can be **the TUI's own opening**.  The critic's drive: a TUI opened at 2026-09-13 23:59:45 on a pre-D105 tree
+(a block on `^t3` begun 09-07 10:20, the cache holding a break at 10:40 with no `break_start`) — its load's
+housekeeping logs the break at 09-13 10:40 (D133); at midnight its held close of W37 stops the block at that
+`break_start`, its last logged activity, crediting about 8,660 minutes.  Re-driven here through the CLI, which takes
+the same path (a verb at 09-13 23:59:45, then one at 09-14 00:00:15), on this track's binary:
+
+    tm: logged the break .tm/state.json holds running since 2026-09-13 10:40 (15m, walk) — it was begun before tm logged a break's start, so .tm/log.jsonl now holds it (D133)
+    tm: stopped ^t3 at 2026-09-13 10:40, its last logged activity, before the close of 2026-W37 took it · 8395m worked · 5m left
+
+(8,395, not 8,660: the CLI's stop nets the week's calendar walls, D61; the TUI drive was not repeated.)  D139 stands:
+recorded, not built around.
+
+### 5. Gaps
+
+**Gap 5610 — D126 did not follow a give-back (CLOSED).**  1. *What.*  `correct_netted_estimates` acted only when a
+block's minutes fell, and `stale_estimates` only when the replay up to the `stop` counted more than the whole log, so
+after D137's give-back the estimate kept the netting and nothing named it.  2. *Why.*  D126 predates D137; the code
+read "nets" as "falls".  3. *Cost, before.*  A user-visible wrong `est:` with `tm check` green.  4. Closed here (§1).
+
+**Gap 5611 — a synced `break_start` before the `stop` read as already netted (CLOSED).**  1. *What.*  The check's
+baseline counted a `break_start` its `stop`'s author never saw.  2.–3.  Pre-existing since D126; a stale estimate with
+`tm check` silent.  4. Closed here (§1): the running `break_start` at the `stop` is left out of the baseline.
+
+**Gap 5612 — the TUI's overtime box on a settled line (CLOSED).**  §3.
+
+**Gap 5613 — `day::end_break_at`'s doc named two of the ends that can precede a break's start (CLOSED).**  §3.
+
+**Gap 5614 — D126 reads above `stop`'s exact re-run where the `stop` floored.**  1. *What.*  `expected = written +
+(at_close − now)` recovers the estimate before the stop as `written + at_close`, which is exact only when the stop did
+not floor at `MIN_REMAINING_MIN`.  An estimate of 60 worked 60 is written `5m`; a late mark netting it to thirty reads
+`35m` where `stop` at thirty minutes would write `30m`.  2. *Why.*  The estimate before a `stop` is in no log line (a
+`start` carries none; a partial `done`'s `est_min` is the running block's planned minutes, not the line's), so it is
+not recoverable.  3. *Cost.*  At most the floor (5 minutes) of over-estimate, on a block stopped within five minutes
+of its estimate and later netted; the same as W-49's D126 always wrote.  4. A log-grammar change (an estimate on
+`stop`) would close it; not this track's, and not asked.
+
+**Gap 5615 — the price of the one reading.**  1. *What.*  `d126_reading` replays the log up to the `stop` once, and up
+to each D126 correction once, through `kernel_log::replay_unsealed`.  2. *Why.*  The verb's old reading used the two
+replays it already held (before and after the mark), which is why it could only add what the mark moved; one reading
+for the verb and the check needs the baseline.  3. *Cost.*  The replays are asked only for an item whose closed block's
+minutes moved (the verb) or that has a late line after its `stop` (the check) — none on an ordinary tree; on a
+three-year log each is a genesis-sized read (README D113: 2.6–3.2 s).  Not measured on a long log here.  4. Open; a
+checkpointed prefix would bound it.
+
+**Gap 5616 — a typed estimate equal to D126's is read as D126's.**  1. *What.*  A `tm edit est=` logged straight
+after a late mark whose value is exactly the one D126 would write there is taken as a correction.  2. *Why.*  The
+log's `edit` carries no author; adjacency and the value are what distinguish them.  3. *Cost.*  None visible: the
+estimate it reads is the one the user typed.  Only a later mark then rewrites it, as it would have rewritten D126's.
+4. Recorded.
+
+### 6. brief_corrections
+
+* "never write below zero" — `tm stop` floors at `MIN_REMAINING_MIN` (5), and so does D126 now (§1); zero is never
+  reached.
+* "what the closing `stop` wrote plus (minutes at the stop as its author saw them − minutes now) — verify that it is
+  the reading `stop` gives" — it is, except where the stop floored (gap 5614).
+* `tm done --help`'s `--partial` said "`est:` keeps the remainder"; it does, on an open line — the clause added is for
+  the settled line (D135), and the `id` argument gains D140's.
+* D140's "nothing written" is the verb's own writes: the refusal comes after the load, so a load's housekeeping (the
+  automatic close of a period that has ended, D61's wall marks, D133) still runs first, as before every other refusal
+  of a verb (the D140 behaviour row closes W37 with a `tm plan` first, so the refused `tm done` alone is measured).
+
+### 7. Acceptance (every command capped, on `2fa4682`'s tree)
+
+* `check.sh`: 17/17 `ok`, rc 0, 36.8 s with the Lean tree copied built (no Lean source changed): axiom audit 6,938,
+  FFI target 97, corpus 29/37 files and 4/5 whole plans, stage goals 1, check 8 67,873 citations / 0 unused allow
+  entries, check 9 913 rostered / 0 owed, the register P1-P135 (next free P136), check 12 1,651 reachable / 1,096
+  exempt, 97 modules replayed.
+* `cargo test --workspace --no-fail-fast`, three runs at one-minute load 1.2, 3.8 and 6.4: **3,062 passed / 0 failed /
+  53 ignored over 176 result lines**, each run; no warning; no `.proptest-regressions` file moved.  (Run 1 was built
+  before a comment-and-layout-only edit to `tui/app.rs`; runs 2 and 3 are the committed tree.)  Gap 5541's
+  stalled-day row passed all three.  This track adds six tests (four D126 rows, D140's two in place of the one it
+  renamed, one TUI unit test).
+* `kernel/tm-kernel-ffi`: `cargo test` 105 passed.
+* §5.13: the drives in §1-§4, on binaries built from this track's sources and from `bb41657`.
+
+<!-- =====================================================================
+     APPENDED 2026-10-30: stage 6 (the planner), run **W-51 repair**, **track K**
+     (`w51r-k`) — the W-51 auditor's finding 1 and notes 2, 4 and 5: a give-back
+     must not undo a later netting.  Gaps 5630-5649 are this track's
+     (5630-5634 taken).  Cheats 631-650 (631-632 taken).  No new parity number:
+     **P134**'s row is restated.  Whoever merges renumbers.
+     ===================================================================== -->
+
+## Stage 6 — W-51 repair track K: a give-back keeps every later netting
+
+### 1. The finding (gap 5630; gap 5581 closed)
+
+W-51's D137 gave a block back what a running break took by re-drawing the pieces it took **whole** (`Closed.ran`) and
+crediting back **every** minute it took (`Closed.ranMin`).  Neither was touched by any netting logged while the break
+ran (`netOne` left both alone, the old `netOne_ran`), so when the break's own line arrived the give-back undid them.
+The W-51 auditor's kernel probes, re-run on this tree's base:
+
+| log (08:00 = `a`'s start) | no `break_start` | W-51 land | this repair |
+|---|---|---|---|
+| **K**: `a` 08:00–09:00 done 60; `break_start` 08:30; late `start b` 08:10; `done b` 08:15 (5); `break` 08:30 10m | `a` 10, day 15; `a [08:00,08:10]`, `b [08:10,08:15]`, Break | **`a` 30**, day 35; `a [08:00,08:30]` across `b`, `a [08:40,09:00]` | `a` 10, day 15; the same three segments |
+| **C**: the same `a`; `break_start` 08:30; late interruption 08:10–08:20; `break` 08:30 10m | `a` 40; `a [08:00,08:10]`, Interruption, `a [08:20,08:30]`, Break, `a [08:40,09:00]` | `a` 40, but **`a [08:00,08:30]` drawn across the interruption** beside `[08:20,08:30]` | `a` 40; the same five segments |
+
+The land's `Closed.restored` docstring said "its later nettings kept"; they were not.  Gap 5581 had recorded the class
+as two late marks inside one closed block, the second inside the stretch the running break took — too narrowly: a
+late `start` that cuts the block **before** the break (K) is undone as well, because the cut's span `[t, startEnd t C)`
+ended at the end of the pieces still drawn, short of the stretch the running break had taken.
+
+### 2. The fix — the auditor's named one, and the part it left out
+
+The auditor named "`netOne` cutting `ran` and `ranMin` alongside `drawn`".  Taken, with three additions without which
+K still read wrong; each was found by working the K log through by hand before writing it.
+
+* **`reNet`** (new; `Replay.lean`, beside `netOne`): a netting over `[s, e)` on ledger day `d` that leaves the block's
+  credit at `min'` cuts the pieces the running break took as it cuts the drawn ones (**`cutRan`**, `pieces` per piece,
+  the piece's own day kept — read by nothing but `Closed.restored`, which reads spans, so no new index read), and the
+  minutes to give back become **the restored block's credit netted by the same span (`shadowNet`, `netMin`'s reading
+  over `Closed.restored` and `min + ranMin`) less the block's own, never more than they were**.  Nothing when no running
+  break netted the block, the span is empty, or the netting is filed before the block's ledger day (D94).  `netOne`
+  applies it in **both** branches — also when the span meets no piece still drawn, because the stretch the running
+  break took is exactly where a later netting can land without meeting a drawn piece.
+* **`Closed.restored`** drops a drawn piece when it **meets** a piece the running break took (`meets`), not when it
+  begins where one began (`atEq`): after a later netting cuts a remainder in two, the second half begins somewhere new,
+  and the start test kept it beside the cut piece it lay inside (C's `[08:20, 08:30]`).  `meets` moved above `netOne`.
+* **`startEnd`** reads `C.drawn ++ C.ran`: a block the running break netted down to before a late `start` is still the
+  block the `start` is stamped inside, and its cut must reach past what the give-back will restore — K's `start b`
+  cut `[08:10, 08:30)` and left `[08:30, 09:00]` of the restored block standing.  With `Closed.ran` empty `startEnd` is
+  unchanged.
+
+What the repair does **not** do, by name: it does not re-derive the block from the log; the restored block is carried
+as `Closed.ran` and `Closed.ranMin` beside the drawn one and netted step for step.  So it is exact where every later
+netting's loss on the restored block is between its loss on the drawn block and that plus what the running break took
+(`netOne_nets_the_give_back`'s hypotheses) — true whenever the drawn pieces are the restored ones less the running span,
+which no theorem here proves in general (gap 5632).
+
+### 3. Laws (D5)
+
+**Re-proved over the new shape:** every `Seal*` law that reads `netOne`, `startEnd` or `Closed.restored` — the build
+of all 198 targets is the evidence, and four proofs moved: `Seal.startReads_mi`, `Seal.netClosed_mi`,
+`Seal.netStart_mi` (the pieces `reNet` keeps begin where a taken piece began or, for a break, at its end —
+`Replay.reNet_starts`, `Replay.reNet_startEnd_starts`; never at a late start's span end, which lies past every drawn
+and taken piece — `Replay.cutOut_startEnd_starts_of`, `Replay.startEnd_ge_run`), and `Replay.startEnd_ge` (same
+statement, through `startEnd_ge_run`).
+
+**Restated, the old statement refuted by name:** `Replay.netOne_ran` (now: the taken pieces are `reNet`'s, the minutes
+`reNet`'s at the credit the netting leaves; `Replay.netOne_ran_as_w51_stated_it_is_refuted` on C's interruption, and
+`Replay.netOne_ran_of_no_run` keeps W-51's statement where nothing was taken); `Replay.startEnd_guard` (hypothesis over
+`C.drawn ++ C.ran`; `Replay.startEnd_guard_as_w51_stated_it_is_refuted`).
+
+**New laws (auditor note 2 — the land had witnesses and no law):**
+
+* `Replay.giveOne_runOne_min` — from a block no running break netted, the running netting and the give-back leave the
+  credit where it was, whatever the running span (the auditor's statement; proved here through
+  `Replay.netOne_min_add` and `Replay.netOne_took_of_no_meet` rather than its probe's unfolding).
+* `Replay.netOne_nets_the_give_back` and `Replay.giveOne_after_a_later_netting_min` — the composed form over one later
+  netting: after it, the credit the give-back restores (`min + ranMin`), and the give-back's result, are the restored
+  block's credit netted by the later span (`shadowNet`); its subdomain is not empty
+  (`Replay.netOne_nets_the_give_back_is_not_vacuous`, C's block: fifty).
+* The auditor's two logs against the replay with no `break_start`, minutes **and** drawn segments:
+  `Replay.the_k_log_reads_as_its_break_had_no_start` / `Replay.the_k_log_without_its_break_start`,
+  `Replay.the_c_log_reads_as_its_break_had_no_start` / `Replay.the_c_log_without_its_break_start`.
+
+**The plant re-run** (the auditor's: `giveOne := (C, [], 0)`, in a scratch copy of this tree's `Replay.lean`, compiled
+against the built package, capped at 16 GB): nine errors — `giveOne_mem`, `giveOne_keeps`, `giveOne_conserves` (their
+proofs unfold the body), the land's three D137 witnesses, and **`giveOne_runOne_min`**, **`giveOne_after_a_later_netting_min`**
+and `the_c_log_reads_as_its_break_had_no_start`.  The land's plant failed only its three witnesses; the laws now fail
+with it.
+
+**Auditor note 5.** `Replay.a_late_breaks_line_gives_back_a_stopped_block`'s docstring named the day's ci-unknown
+minutes and its statement read only the item's minutes and `blockMin`: the projection is added
+(`(f.days.get 739865).map (fun a => a.ciUnknown.get ['a']) = some (some 50)`), decided.
+
+Cheats **631** (K's `a` claimed thirty, the land's reading) and **632** (C's `a [08:00, 08:30]` claimed drawn), each
+refused by `decide` proving its statement false.  Check.lean: 19 audit lines under this track's banner.
+
+### 4. Records (auditor note 4)
+
+**Gap 5633 — D137 does not reach a late break D129 already ended at a later block's start.**  1. *What.*  The
+auditor's `drive/J.sh`: `^t1` 09:00–10:00 and `^t4` 10:10–11:10, both done; then `tm break --now 09:30 10m` — D129 ends
+the break at `^t4`'s start, 10:10, and nets `^t1` to thirty — then `tm break --now 09:40`, meant to end it after ten
+minutes.  The host says the 09:30 break "ended at 10:10 … it is not running" and opens a **second** break at 09:40,
+which D129 also ends at 10:10.  `^t1` stays at thirty; D137 never runs, because no `break` line ends either break.
+2. *Why.*  D129 reads the later block's `start` as the break's end, and a break so ended has no line to give back
+(gap 5580's class).  3. *Cost.*  On a log where a later block is already logged, a late break the user ends by hand
+keeps the block netted to the later block's start.  4. *Clears it.*  An owner reading of `tm break` (ending) when the
+log already ended the break: refuse by name, or end it with a line D137 then gives back from.
+
+**Gap 5634 — the J log draws two overlapping breaks and counts both (a defect).**  1. *What.*  On the same tree `tm
+plan` draws `09:30 break 40m` and `09:40 break 30m`, and `tm review day` reports breaks `actual 40 30` — seventy
+minutes of break over forty minutes of wall time.  2. *Why.*  Each `break_start` is ended by D129 at the same start,
+and nothing unions two breaks' segments or records.  3. *Cost.*  One span read twice (§5.3): break minutes, `over`
+and the drawn day.  The block's own minutes are right (the replay nets the union).  4. *Clears it.*  The host's
+`tm break` not opening a second break inside one D129 already ended (gap 5633's decision), or the replay drawing and
+recording only the part of a break no earlier break covers — the host's, with an owner reading; track H's file.
+
+Driven with the land's binary and this tree's (the transcript is §6): the same on both, since nothing here moves it.
+
+### 5. Gaps opened
+
+**Gap 5630 — closed by this block** (§1–§3).
+
+**Gap 5631 — a give-back whose taken pieces a later netting cut away entirely is skipped.**  1. *What.*  `giveOne`
+gives back only when `Closed.ran` is not empty; `reNet` can leave it empty while `ranMin` is above zero, when the
+block's credit was below its drawn minutes (a `done` with an `actual_min` under its span) and later nettings cut every
+taken piece.  2. *Why.*  The gate is the land's, and changing it moves `giveOne`'s laws for a case no corpus or
+generated log holds.  3. *Cost.*  On that log the block keeps less credit than the log with no `break_start` gives
+it.  4. *Clears it.*  Gate on `ran` empty **and** `ranMin = 0`.
+
+**Gap 5632 — the restored block's spans are not proved to be the drawn ones before the running break, cut.**  1.
+*What.*  `netOne_nets_the_give_back` states the minutes; that `Closed.restored` after the running netting and any later
+nettings is, as a set of spans, the block before the running netting cut by the later spans is decided on the two logs
+above and not proved.  2. *Why.*  It needs the drawn pieces of a held block to be pairwise disjoint and nonempty, an
+invariant of the fold nobody has stated.  3. *Cost.*  The composed law carries its two hypotheses.  4. *Clears it.*
+State and carry that invariant (BreakFold's shape), then prove `restored (netOne X C) ~ cutOut X (restored C)`.
+
+**Parity P134 restated** (no new number): the row now ends "… gives back the rest, keeping every netting logged while
+it ran — a late `start`'s cut, a late interruption (the W-51 repair, gap 5630)".
+
+### 6. The §5.13 drive (`TZ=America/Chicago`, every command capped at 8 GB; the land binary is
+`.claude/worktrees/w51-land/target/debug/tm`, built from `179d83c`, and this tree's is the workspace run's)
+
+**The K shape** — the orchestrator's tree `w51/v/AK` (copied fresh for each binary; its log is the K log on the binary's
+own items: `^t1` 09:00–10:00 done 60, `break_start` 09:30, late `start ^t4` 09:10, `done ^t4` 09:15 with 5, `break`
+09:30 10m — written by hand, because on one machine `tm start` ends a running break first, D97, so the verbs cannot
+log it in this order; driven, `tm start ^t4 --now 09:10` wrote `break … actual_min 0` before its `start`):
+
+```
+land                                          this tree
+  review day block_min 35                       review day block_min 15
+09:00 5 ✓ Read ch.6 §1–2   @m3 1b (30m)       09:00 5 ✓ Read ch.6 §1–2   @m3 1b (10m)
+09:10 3 ✓ Claude Code ...  @m2 1b (5m)        09:10 3 ✓ Claude Code ...  @m2 1b (5m)
+09:30 ·   break 10m                           09:30 ·   break 10m
+09:40 5 ✓ Read ch.6 §1–2   @m3 1b (20m)       10:30 ·   laundry 30m
+10:30 ·   laundry 30m
+```
+
+**The C shape** — the auditor's `drive/C.sh` through the verbs (`^t1` 09:00–10:00 done; `tm break --now 09:30 10m`;
+`tm interrupt --now 09:10`; `tm resume --now 09:20`; `tm break --now 09:40`), `review day`'s `block_min` after each
+of the three marks, then `tm plan` at 10:30:
+
+```
+land                                          this tree
+  block_min 30 / 20 / 40                        block_min 30 / 20 / 40
+09:00 5 ✓ Read ch.6 §1–2 ... (30m)            09:00 5 ✓ Read ch.6 §1–2 ... (10m)
+09:10 ·   lost 10m        interruption        09:10 ·   lost 10m        interruption
+09:20 5 ✓ Read ch.6 §1–2 ... (10m)            09:20 5 ✓ Read ch.6 §1–2 ... (10m)
+09:30 ·   break 10m                           09:30 ·   break 10m
+09:40 5 ✓ Read ch.6 §1–2 ... (20m)            09:40 5 ✓ Read ch.6 §1–2 ... (20m)
+```
+
+Forty minutes on both; the land drew `^t1` 09:00–09:30 across the interruption (sixty drawn), this tree draws forty.
+
+**The J shape** (§4) — the same on both binaries: `block_min` 120 → 90 → 90, the host's notice "the break that began
+at 09:30 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running", then a second
+`break_start` at 09:40, `tm plan` drawing `09:30 break 40m` and `09:40 break 30m`, and `tm review day`'s
+`breaks planned 20m ×1 10m ×1 · actual 40 30`.
+
+What the drive did not cover: the TUI (no TUI surface moves with a replay reading, and none was opened).
+
+### 7. Measured acceptance (every command capped, on `29d3411` plus this block)
+
+* `check.sh`: **17/17 `ok`, rc 0**, on the final tree (34 s warm; axiom audit 6,957, FFI target 97, corpus 29/37 and
+  4/5, stage goals 1, check 12 0 UNANSWERED, 97 modules replayed; the cold run on `29d3411` took 14m08s).  The first run on `29d3411`'s tree before its reach census was
+  corrected printed 16 `ok` and check 12 `FAILED` on the census line alone (`Replay.lean`'s reason said 140 of 279
+  reached, the measurement 143 of 282); after the correction `reach.py` alone exits 0 with 0 UNANSWERED.
+* `cargo test --workspace --no-fail-fast`, three runs (load 1.3–3.4): **3,044 passed / 0 failed / 53 ignored over 176
+  result lines** each — the land's 3,043 and this block's one new test; no `.proptest-regressions` file moved.
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**.
+* check 9: 916 new or changed since the baseline, 916 rostered, 0 owed — the three new definitions (`cutRan` by
+  `cutRan_spans` and the C witness, `shadowNet` by the K witness's statement decided false, `reNet` by `reNet_fst` and
+  `netOne_ran`), `netOne`, `startEnd` and `Closed.restored` re-rowed, and the 83 rows whose pin sites the insertions
+  moved re-verified one by one with `mutate.py --verify --write --only` (every one re-ran and failed where it said;
+  none changed verdict).
+* `parity.py`: P1–P134, no hole, next free P135; P36's anchor re-pointed to `Replay.lean:11666`, the line its cite
+  moved to.
+
+### 8. brief_corrections
+
+* The auditor's named fix (`netOne` cutting `ran` and `ranMin` beside `drawn`) is **not enough for K**: K's late
+  `start` cut the block's drawn pieces over `[08:10, startEnd)` with `startEnd` the end of the pieces still drawn
+  (08:30), so the restored block kept `[08:30, 09:00]`; and `Closed.restored`'s start-match kept a cut remainder's
+  second half beside the cut piece.  `startEnd` reads the taken pieces and `restored` matches by `meets` (§2).
+* "the auditor's plant (`giveOne := (C, [], 0)`) failed only the three witnesses": true of the auditor's plant,
+  which kept the body and set the guard to `true`; a plant replacing the whole body also fails `giveOne_mem`,
+  `giveOne_keeps` and `giveOne_conserves`, whose proofs unfold it.  Re-run here both ways (§3).
+* The K shape cannot be produced through the binary's verbs on one machine: `tm start` ends a running break first
+  (D97), even one stamped after the start — so the binary drive and the new test write the log lines by hand.
+* The auditor's own `target/debug/tm` is not the land's host: on the C drive its `tm interrupt --now 09:10` wrote a
+  `break … actual_min 0` before the interruption (D90 on a break stamped after the interrupt) where the land binary
+  writes none; every "before" here uses the land's binary.
+
+<!-- ======================================================================
+     Stage 6 — W-51 repair, Land (2026-10-30). Gaps 5650-5659 are this block's; none is taken.
+     ====================================================================== -->
+
+## Stage 6 — W-51 repair, Land
+
+**What landed.**  Repair track H (`w51r-h`: D126 read once, `day::d126_reading`, and followed in both directions, a
+give-back included — P125 restated; the owner's D140 as P135, P131 restated; the TUI's overtime box on a settled line;
+gaps 5610-5613 closed) and repair track K (`w51r-k`: a give-back keeps every netting logged while the break ran —
+`reNet`, `cutRan`, `shadowNet`, `Closed.restored` by `meets`, `startEnd` over the taken pieces; P134 restated; gaps 5630
+and 5581 closed) as one octopus over `bb41657`.  The tracks shared only `kernel/README.md` and `kernel/parity.txt`: the
+README is track H's file followed by track K's block (102,179 + 210 lines before this block), and the register is track
+H's with track K's two row changes (P36 re-anchored to `Replay.lean:11666`, P134 restated).  Every other shared file
+merged as the union of the two sides, line counts checked (`Check.lean` 9,124, `Negative.lean` 3,671, `mutations.txt`
+1,068, `citations-allow.txt` 1,785).  The merged Lean is track K's byte for byte.
+
+**Acceptance, on the merged tree, every command capped.**  `check.sh` 17/17, rc 0: axiom audit 6,957, FFI target 97,
+corpus 29/37 files and 4/5 whole plans, stage goals 1, check 9 916 rostered and 0 owed, the register P1-P135 with no
+hole (next free P136), check 12 1,654 reachable and 1,096 exempt, 97 modules replayed.  `cargo test --workspace --no-fail-fast`, three
+runs: at load 1.1, 9.3 and 8.1: **3,063 passed / 0 failed / 53 ignored** over 176 result lines in runs 2 and 3 (track H's 3,062 and track K's one new test), and run 1 3,062 passed / **1 failed** / 53 ignored — `cli_latency`'s three-year test, gap 5541's stalled-day row (`day 2026-09-21 of a stall took 1.002549863s`, bound 1 s), the same row that read 1.0019-1.0025 s on the W-50 lands' builds; no other failure, no `.proptest-regressions` file moved.  FFI crate 105 passed.
+
+**Verified outside the tracks' own claims** (the main session, on binaries rebuilt from the committed sources): the
+W-51 critic's blocker on track H's build (the critic's world C1: the `est:` 5m → 35m while the break runs → 15m once it
+ends, 50 minutes worked, `tm check` clean; the same 50 with `.tm/state.json` and the cache deleted; `tm undo` of the
+break's end brings back 35m and 30) and D140 (the retro `tm done ^t3` on the dropped line in the closed week refused by
+name, every file's digest unchanged); the W-51 auditor's finding 1 on track K's build (the orchestrator's tree AK:
+`tm review day` 35 on the W-51 land's binary, 15 on track K's, and `tm plan` no longer draws `^t1` across `^t4`; the
+auditor's C drive 30 → 20 → 40, drawn 10 + lost 10 + 10 + break 10 + 20 with no overlap); and the auditor's J drive
+reproduced as track K recorded it (gaps 5633 and 5634).
+
+**The owner's rulings taken at this land:** gap 5633 is **D141** — a `tm break` typed at an instant inside a break D129
+already ended at a later block's start ends that break there, and D137 gives back what lies after it; and gap 5634 is
+**D142** — overlapping logged breaks are read as their union, each break drawn and recorded only where no earlier break
+covers it.  Both are the next run's to build; neither is built here.

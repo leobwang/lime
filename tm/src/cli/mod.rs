@@ -244,9 +244,10 @@ pub struct StartArgs {
 #[derive(Debug, Args)]
 pub struct DoneArgs {
     /// The item (default: the running block; with an id and no block this is
-    /// a retro done, §13).
+    /// a retro done, §13 — refused on a settled `[~]`/`[x]` line, D140).
     pub id: Option<String>,
-    /// The block is done but the item is not: `est:` keeps the remainder.
+    /// The block is done but the item is not: `est:` keeps the remainder (a
+    /// settled `[~]`/`[x]` line is left as it stands, D135).
     #[arg(long)]
     pub partial: bool,
     /// How it went: 1 fine, 2 hard, 3 collapsed (§8.5).

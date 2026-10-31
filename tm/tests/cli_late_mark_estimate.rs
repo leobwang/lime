@@ -94,3 +94,91 @@ fn a_late_line_no_verb_wrote_is_named_by_tm_check() {
     tm.ok_at(&at("10:32"), &["edit", "^t1", "est=35m"]);
     assert!(problems(&tm, &at("10:33")).is_empty(), "{:?}", problems(&tm, &at("10:33")));
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// W-51 repair track H (README gaps 5610, 5611): D126 follows the minutes in BOTH directions. The critic's blocker,
+// driven on the W-51 land's binary: `--now 09:30 break 10m` inside the stopped block nets it (`5m` -> `35m`), and
+// ending the break at 09:40 gives back what the running took outside its own span (D137) — the log counts fifty
+// minutes — while the line kept `35m` and `tm check` said `no problems`.
+// ---------------------------------------------------------------------------------------------------------------
+
+/// Appends raw lines to the log, as a sync or a hand edit would, and drops the cache (D42 rebuilds it).
+fn append(tm: &Tm, lines: &[&str]) {
+    let mut f = std::fs::OpenOptions::new().append(true).open(tm.plan.join(".tm/log.jsonl")).expect("log");
+    for l in lines {
+        writeln!(f, "{l}").expect("append");
+    }
+    drop(f);
+    let _ = std::fs::remove_file(tm.plan.join(".tm/state.json"));
+}
+
+const BREAK_0930_10M: &str = r#"{"t":"2026-09-07T09:30:00-05:00","ev":"break","planned_min":10,"actual_min":10}"#;
+
+/// **The critic's world, through the verbs**: the late break's start corrects `5m` to `35m`, and its end — which
+/// gives back twenty minutes — corrects `35m` to `15m`, what `tm stop` would have written with the fifty minutes the
+/// log now counts (`5m` written + 60 counted at the stop − 50 counted now). The second correction is logged as an
+/// `edit`, and `tm check` names nothing.
+#[test]
+fn a_give_back_corrects_the_estimate_again() {
+    let tm = stopped();
+    tm.ok_at(&at("09:30"), &["break", "10m"]);
+    assert!(tm.line("week/2026-W37.md", "t1").contains(" 35m "), "{}", tm.line("week/2026-W37.md", "t1"));
+    let end = tm.ok_at(&at("09:40"), &["break"]);
+    assert!(end.stderr.contains("^t1's estimate is now 15m (was 35m)"), "{}", end.stderr);
+    assert!(tm.line("week/2026-W37.md", "t1").contains(" 15m "), "{}", tm.line("week/2026-W37.md", "t1"));
+    let edit = tm.last_ev("edit");
+    assert_eq!((edit["id"].as_str(), edit["from"].as_str(), edit["to"].as_str()), (Some("t1"), Some("35m"), Some("15m")));
+    assert!(problems(&tm, &at("10:31")).is_empty(), "{:?}", problems(&tm, &at("10:31")));
+}
+
+/// **The same give-back with no verb to correct it** (the break's end synced from another machine): `tm check`
+/// names the `break` line, after D126's own correction `edit`, with the estimate the log now reads; `tm edit` with
+/// that value takes the name away.
+#[test]
+fn a_give_back_no_verb_corrected_is_named_by_tm_check() {
+    let tm = stopped();
+    tm.ok_at(&at("09:30"), &["break", "10m"]);
+    append(&tm, &[BREAK_0930_10M]);
+    let check = tm.run_at(&at("10:31"), &["check"]);
+    assert_eq!(check.code, 0, "a warning moves no exit code: {}", check.stdout);
+    assert!(check.stdout.contains("log-stale-est") && check.stdout.contains("est=15m"), "{}", check.stdout);
+    let lines = tm.read(".tm/log.jsonl").lines().count() as u64;
+    assert_eq!(problems(&tm, &at("10:31")), vec![("log-stale-est".to_string(), lines)]);
+    tm.ok_at(&at("10:32"), &["edit", "^t1", "est=15m"]);
+    assert!(problems(&tm, &at("10:33")).is_empty(), "{:?}", problems(&tm, &at("10:33")));
+}
+
+/// **The critic's second shape, a synced log** (pre-existing): `start 09:00`, another machine's `break_start 09:30`
+/// merged in before the `stop 10:00` that wrote `5m` — its author never saw the break, or the stop would have ended
+/// it (D97) — and the break's own `break 09:30 10m` after. The log counts fifty minutes and the line reads `5m`; the
+/// old baseline, the replay up to the `stop` with that `break_start` in it, counted thirty and read the block as
+/// already netted. `tm check` names the `break` line with `est=15m`.
+#[test]
+fn a_synced_break_its_stop_never_saw_is_named_by_tm_check() {
+    let tm = stopped();
+    let log = tm.plan.join(".tm/log.jsonl");
+    let text = std::fs::read_to_string(&log).expect("log");
+    let mut lines: Vec<&str> = text.lines().collect();
+    let stop = lines.iter().rposition(|l| l.contains(r#""ev":"stop""#)).expect("the stop");
+    lines.insert(stop, r#"{"t":"2026-09-07T09:30:00-05:00","ev":"break_start","planned_min":10}"#);
+    std::fs::write(&log, lines.join("\n") + "\n").expect("log");
+    append(&tm, &[BREAK_0930_10M]);
+    assert!(tm.line("week/2026-W37.md", "t1").contains(" 5m "), "{}", tm.line("week/2026-W37.md", "t1"));
+    let check = tm.run_at(&at("10:31"), &["check"]);
+    assert!(check.stdout.contains("log-stale-est") && check.stdout.contains("est=15m"), "{}", check.stdout);
+    let n = tm.read(".tm/log.jsonl").lines().count() as u64;
+    assert_eq!(problems(&tm, &at("10:31")), vec![("log-stale-est".to_string(), n)]);
+}
+
+/// **The boundary** (AGENTS §5.8): an estimate the user typed after the late mark is theirs — a later give-back
+/// rewrites nothing, and `tm check` names nothing, because the typed `edit` is not one D126 would have written.
+#[test]
+fn a_typed_estimate_after_the_mark_is_not_rewritten() {
+    let tm = stopped();
+    tm.ok_at(&at("09:30"), &["break", "10m"]);
+    tm.ok_at(&at("09:35"), &["edit", "^t1", "est=50m"]);
+    let end = tm.ok_at(&at("09:40"), &["break"]);
+    assert!(!end.stderr.contains("estimate is now"), "{}", end.stderr);
+    assert!(tm.line("week/2026-W37.md", "t1").contains(" 50m"), "{}", tm.line("week/2026-W37.md", "t1"));
+    assert!(problems(&tm, &at("10:31")).is_empty(), "{:?}", problems(&tm, &at("10:31")));
+}

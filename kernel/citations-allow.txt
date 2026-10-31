@@ -407,6 +407,11 @@ can_fail
 # successor `PlannerWit.the_close_under_a_running_break_is_netted_from_its_block`; its three backticked citations are in
 # W-48 track G's append-only block, which named it while it stood, and W-49 track L's block says it is gone.
 3 PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break
+# W-51 repair track H (the owner's D140, parity P135): the test that pinned a retro `tm done` setting `[x]` on a
+# dropped line is RENAMED with the behaviour it pinned — `d140_a_retro_done_on_a_settled_line_is_refused_p135`, and
+# `d140_a_retro_done_on_an_open_line_still_sets_the_box` for the box on an open line; its one backticked citation is
+# W-51 repair track H's append-only README block, which named it while it stood.
+1 d135_a_retro_done_still_sets_the_box
 # W-49 track L (README gap 5300): D108's first-of-the-ledger-day law is DELETED with its audit line — the day keeps one
 # answer, the latest input (the owner's D125) — and its citations are W-48's append-only README blocks and W-48
 # repair's Check.lean banner, which named it while it stood.

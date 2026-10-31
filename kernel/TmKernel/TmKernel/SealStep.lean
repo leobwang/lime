@@ -794,10 +794,13 @@ theorem startReads_mi (t : Replay.At) (d : Nat) (l : List Replay.Closed) (q : Ca
   · rename_i hg
     unfold redrawReads at hq
     obtain ⟨q', hq', rfl⟩ := List.mem_map.1 hq
-    cases ha : C.drawn.any (fun p => decide (p.s.1 < t.1)) with
+    cases ha : (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) with
     | false => exact absurd (Or.inr (Replay.startEnd_guard t C ha)) hg
     | true =>
-      obtain ⟨r, hr, hre⟩ := Replay.cutOut_startEnd_starts t C ha q' (List.mem_filter.1 hq').1
+      obtain ⟨r, hr, hre⟩ := Replay.cutOut_startEnd_starts_of t C C.spans (fun r hr => by
+        unfold Replay.Closed.spans at hr
+        obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
+        exact Replay.startEnd_ge_run t C ha p (List.mem_append_left _ hp)) q' (List.mem_filter.1 hq').1
       unfold Replay.Closed.spans at hr
       obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
       exact ⟨C, hC, p, hp, by rw [hre]⟩
@@ -875,7 +878,9 @@ theorem netClosed_mi (dy : Cal.Instant → Nat) (s e : Replay.At) (d : Nat) (m :
     rcases List.mem_append.1 hpc with hpc | hpc
     case inr =>
       rw [(Replay.netOne_ran dy s e d C).1] at hpc
-      exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_right _ hpc, rfl⟩)))
+      rcases Replay.reNet_starts s e d C _ pc hpc with ⟨r, hr, hre⟩ | h
+      · exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, r, List.mem_append_right _ hr, by rw [hre]⟩)))
+      · exact Or.inr (by rw [h])
     unfold Replay.netOne at hpc
     split at hpc
     · exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_left _ hpc, rfl⟩)))
@@ -900,16 +905,20 @@ theorem netStart_mi (dy : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Ma
     rcases List.mem_append.1 hpc with hpc | hpc
     case inr =>
       rw [(Replay.netOne_ran dy t _ d C).1] at hpc
-      exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_right _ hpc, rfl⟩))
+      obtain ⟨r, hr, hre⟩ := Replay.reNet_startEnd_starts t d C _ pc hpc
+      exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, r, List.mem_append_right _ hr, by rw [hre]⟩))
     unfold Replay.netOne at hpc
     split at hpc
     · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, List.mem_append_left _ hpc, rfl⟩))
     · rename_i hg
       obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy C.id C.drawn _ pc hpc
-      cases ha : C.drawn.any (fun p => decide (p.s.1 < t.1)) with
+      cases ha : (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) with
       | false => exact absurd (Or.inr (Replay.startEnd_guard t C ha)) hg
       | true =>
-        obtain ⟨r, hr, hre⟩ := Replay.cutOut_startEnd_starts t C ha q' hq'
+        obtain ⟨r, hr, hre⟩ := Replay.cutOut_startEnd_starts_of t C C.spans (fun r hr => by
+          unfold Replay.Closed.spans at hr
+          obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
+          exact Replay.startEnd_ge_run t C ha p (List.mem_append_left _ hp)) q' hq'
         unfold Replay.Closed.spans at hr
         obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
         exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ hp, by rw [hpq, hre]⟩))

@@ -50,14 +50,22 @@ pub fn overtime_lines(o: &Overtime) -> Vec<Line<'static>> {
     } else {
         format!("→ drops: {}", o.drops.join(", "))
     };
+    // A settled line (`[~]`, `[x]`) is left exactly as it stands by `tm stop` and `tm done` (the
+    // owner's D132, D135): no remainder stays in any queue and no box changes, and the box says so
+    // rather than promising what the verbs no longer write (README gap 5612).
+    let (stop, done) = if o.settled {
+        (
+            "  s  stop                 → the line is settled, left as it stands".to_string(),
+            "  d  done                 → the line is settled, left as it stands".to_string(),
+        )
+    } else {
+        (format!("  s  stop, demote rest    → {} stays in the week queue", o.stays), "  d  done".to_string())
+    };
     vec![
         Line::from(overtime_head(o)),
         Line::from(format!("  x  extend +1 block      {drops}")),
-        Line::from(format!(
-            "  s  stop, demote rest    → {} stays in the week queue",
-            o.stays
-        )),
-        Line::from("  d  done".to_string()),
+        Line::from(stop),
+        Line::from(done),
         Line::styled(
             format!("  any other key: ask again in {}m", o.reprompt_min),
             theme::HINT,
@@ -212,8 +220,20 @@ mod tests {
             elapsed_min: 199,
             drops: vec!["Review the drafts (p3)".to_string()],
             stays: "0.5b".to_string(),
+            settled: false,
             reprompt_min: 15,
         }
+    }
+
+    /// **A settled line's box** (README gap 5612): `s` and `d` say the line is left as it stands,
+    /// and no remainder is promised.
+    #[test]
+    fn a_settled_lines_box_promises_no_remainder() {
+        let lines = overtime_lines(&Overtime { settled: true, ..overtime() });
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(text[2].contains("s  stop") && text[2].contains("settled, left as it stands"), "{text:?}");
+        assert!(text[3].contains("d  done") && text[3].contains("settled, left as it stands"), "{text:?}");
+        assert!(!text.iter().any(|l| l.contains("week queue") || l.contains("demote")), "{text:?}");
     }
 
     #[test]

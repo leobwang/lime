@@ -9102,3 +9102,23 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Seal.giveBack_mi
 #print axioms Tm.BreakFold.giveBack_noBrkSeg
 #print axioms Tm.Replay.runOne_remembers_only_the_pieces_it_met
+-- APPENDED W-51 repair track K (w51r-k): a give-back keeps every later netting (README gap 5630)
+#print axioms Tm.Replay.startEnd_ge_run
+#print axioms Tm.Replay.startEnd_guard_as_w51_stated_it_is_refuted
+#print axioms Tm.Replay.reNet_fst
+#print axioms Tm.Replay.netOne_ran_as_w51_stated_it_is_refuted
+#print axioms Tm.Replay.netOne_ran_of_no_run
+#print axioms Tm.Replay.cutOut_startEnd_starts_of
+#print axioms Tm.Replay.cutRan_spans
+#print axioms Tm.Replay.reNet_starts
+#print axioms Tm.Replay.reNet_startEnd_starts
+#print axioms Tm.Replay.netOne_min_add
+#print axioms Tm.Replay.netOne_took_of_no_meet
+#print axioms Tm.Replay.giveOne_runOne_min
+#print axioms Tm.Replay.netOne_nets_the_give_back
+#print axioms Tm.Replay.giveOne_after_a_later_netting_min
+#print axioms Tm.Replay.the_k_log_reads_as_its_break_had_no_start
+#print axioms Tm.Replay.the_k_log_without_its_break_start
+#print axioms Tm.Replay.the_c_log_reads_as_its_break_had_no_start
+#print axioms Tm.Replay.the_c_log_without_its_break_start
+#print axioms Tm.Replay.netOne_nets_the_give_back_is_not_vacuous

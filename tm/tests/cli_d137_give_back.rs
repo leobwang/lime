@@ -75,3 +75,62 @@ fn a_late_break_inside_a_meeting_gives_the_whole_block_back_p134() {
     let b = breaks(&tm);
     assert_eq!(b.last().map(|e| e["actual_min"].clone()), Some(Value::from(10)), "{b:?}");
 }
+
+/// `(kind, start, end, item)` of every segment `tm --json plan` draws at `now`.
+fn segments(tm: &Tm, now: &str) -> Vec<(String, String, String, Option<String>)> {
+    let plan = tm.json_at(now, &["plan"]);
+    plan["segments"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|s| {
+            let st = |k: &str| s[k].as_str().unwrap_or_default().to_string();
+            (st("kind"), st("start"), st("end"), s["item"].as_str().map(str::to_string))
+        })
+        .collect()
+}
+
+/// **The W-51 auditor's K shape (README gap 5630, the W-51 repair): a give-back never undoes a later netting.** `^t1`
+/// 09:00–10:00, done with sixty; then, on a log a sync or a clock behind it wrote, a `break_start` stamped 09:30 (the
+/// break runs and nets `^t1` from 09:30, D129), a late `start ^t4` stamped 09:10 that cuts `^t1` there (D115), `^t4`
+/// done at 09:15 with five, and the break's line saying it lasted ten minutes. The break's line ends a break that lies
+/// after the cut, so `^t1` stays at ten — the day fifteen — and the plan draws `^t1` 09:00–09:10 and `^t4` 09:10–09:15,
+/// never one across the other. The W-51 land gave `^t1` back thirty at the break's line (the day thirty-five) and drew
+/// `^t1` from 09:00 to 09:30 across `^t4`. The lines are written by hand because the binary logs none of them in this
+/// order on one machine: its `tm start` ends a running break first (D97).
+#[test]
+fn a_late_start_logged_while_the_break_runs_stays_cut_when_the_break_ends() {
+    let tm = tree(TUE);
+    tm.ok_at(&at(TUE, "09:00"), &["start", "^t1"]);
+    tm.ok_at(&at(TUE, "10:00"), &["done"]);
+    let now = at(TUE, "10:30");
+    assert_eq!(review_block_min(&tm, &now), 60, "the block, before any late mark");
+    let log = tm.plan.join(".tm/log.jsonl");
+    let mut text = std::fs::read_to_string(&log).expect("the log");
+    let append = |text: &mut String, line: &str| {
+        text.push_str(line);
+        text.push('\n');
+    };
+    append(&mut text, r#"{"t":"2026-09-08T09:30:00-05:00","ev":"break_start","planned_min":10}"#);
+    std::fs::write(&log, &text).expect("write the log");
+    assert_eq!(review_block_min(&tm, &now), 30, "the running break nets ^t1 from 09:30 (D129)");
+    append(&mut text, r#"{"t":"2026-09-08T09:10:00-05:00","ev":"start","id":"t4","pred":3,"hsw":2.17,"slept_min":0,"loc":"home","blocks_done":1,"since_break_min":0}"#);
+    append(&mut text, r#"{"t":"2026-09-08T09:15:00-05:00","ev":"done","id":"t4","est_min":60,"actual_min":5,"tags":[],"ci":3}"#);
+    std::fs::write(&log, &text).expect("write the log");
+    assert_eq!(review_block_min(&tm, &now), 15, "the late start cuts ^t1 at 09:10 (D115): ten, and ^t4's five");
+    append(&mut text, r#"{"t":"2026-09-08T09:30:00-05:00","ev":"break","planned_min":10,"actual_min":10}"#);
+    std::fs::write(&log, &text).expect("write the log");
+    assert_eq!(review_block_min(&tm, &now), 15, "the break's line gives back nothing the late start cut (gap 5630)");
+    let blocks: Vec<_> = segments(&tm, &now)
+        .into_iter()
+        .filter(|s| s.3.as_deref() == Some("t1") || s.3.as_deref() == Some("t4"))
+        .collect();
+    let mut spans: Vec<(String, String)> = blocks.iter().map(|s| (s.1.clone(), s.2.clone())).collect();
+    spans.sort();
+    for w in spans.windows(2) {
+        assert!(w[0].1 <= w[1].0, "no two drawn blocks overlap: {blocks:?}");
+    }
+    assert!(blocks.iter().any(|s| s.3.as_deref() == Some("t1") && s.1 == "09:00" && s.2 == "09:10"), "{blocks:?}");
+    assert!(blocks.iter().any(|s| s.3.as_deref() == Some("t4") && s.1 == "09:10" && s.2 == "09:15"), "{blocks:?}");
+}

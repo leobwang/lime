@@ -2589,13 +2589,13 @@ structure Closed where
   durLine : Option Nat
   started : At
   /-- **The pieces a running break took from it, as they stood** (the owner's **D137**, README gaps 5504 and 5302, W-51
-  track K, parity **P134**): every drawn piece the running break's netting (`runNet`, gap 5180) met, whole, so that the
-  `break` line that ends the break gives the block back what lies outside the break's own span (`giveOne`) — D100's
-  netting of a late break inside a block, which nets the break's span and nothing after it.  `[]` when no running break
-  has netted it.  Fork `Machine` held no closed block. -/
+  track K, parity **P134**): every drawn piece the running break's netting (`runNet`, gap 5180) met, whole, then cut by
+  every later netting as the drawn pieces are (`reNet`, the W-51 repair, gap 5630), so that the `break` line that ends the
+  break gives back what lies outside its own span and no later netting undoes (`giveOne`) — D100's netting of a late
+  break inside a block.  `[]` when no running break has netted it.  Fork `Machine` held no closed block. -/
   ran : List Piece
-  /-- **The minutes a running break took from its credit** (D137): what `runNet`'s netting took (`netMin`), given back
-  with its pieces when the break's line ends the break (`giveOne`).  `0` when no running break has netted it. -/
+  /-- **The minutes a running break took from its credit** (D137): what `runNet`'s netting took (`netMin`), less what a
+  later netting took from the restored block (`reNet`), given back when the break's line ends it (`giveOne`). -/
   ranMin : Nat
 deriving DecidableEq, Repr
 
@@ -4085,16 +4085,56 @@ def cutOut (s e : At) (P : List (At × At)) : List (At × At) := P.flatMap (fun 
 per piece), never more than its credit still standing. -/
 def netMin (s e : At) (C : Closed) : Nat := min (minutesOf C.spans - minutesOf (cutOut s e C.spans)) C.min
 
+/-- **Whether a span `[s, e)` meets a drawn piece** — the pieces `netOne` cuts (D137). -/
+def meets (s e : At) (p : Piece) : Bool := !decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)
+
+/-- **A held closed block's pieces with what a running break took put back** (the owner's **D137**, README gaps 5504 and
+5302; restated at the W-51 repair, README gap 5630): its drawn pieces but those that meet a piece the running break took
+(`Closed.ran`) — the remainder of each piece it cut, which lies inside the piece it took — and the pieces it took: the
+block as it would stand had the running break never netted it.  `Closed.ran` is cut by every later netting as the drawn
+pieces are (`reNet`, `cutRan`), so a later netting stays netted in what this restores; the W-51 land matched a remainder
+by its start alone (`atEq`) and kept the pieces it took whole, so a late `start` or interruption logged while the break
+ran was undone when its line arrived (the W-51 auditor's finding 1). -/
+def Closed.restored (C : Closed) : List (At × At) :=
+  (C.drawn.filter (fun p => !C.ran.any (fun r => meets r.s r.e p))).map (fun p => (p.s, p.e)) ++
+    C.ran.map (fun p => (p.s, p.e))
+
+/-- **The pieces a running break took, cut by a later span `[s, e)`** (the W-51 repair, README gap 5630): each cut as
+`cutOut` cuts a span (`pieces`), keeping the day it was drawn on — read by nothing but `Closed.restored`, which reads
+spans. -/
+def cutRan (s e : At) (R : List Piece) : List Piece :=
+  R.flatMap (fun p => (pieces [(s, e)] p.s p.e).map (fun q => ⟨q.1, q.2, p.day⟩))
+
+/-- **What a later span `[s, e)` takes from the block a running break's give-back would restore** (the W-51 repair, README
+gap 5630): `netMin`'s reading over `Closed.restored` and the credit it would carry (`min + ranMin`). -/
+def shadowNet (s e : At) (C : Closed) : Nat :=
+  min (minutesOf C.restored - minutesOf (cutOut s e C.restored)) (C.min + C.ranMin)
+
+/-- **What a running break took, after a later netting** (the W-51 repair, README gap 5630; the owner's D100, D115, D119 and
+D137): a later netting over `[s, e)` stepped on ledger day `d` — a late `break`, a late interruption's span, a late
+`start`'s cut — that leaves the block's credit at `min'` cuts the pieces the running break took as it cuts the drawn ones
+(`cutRan`), and the minutes to give back become the restored block's credit netted by the same span (`shadowNet`) less
+the block's own, never more than they were — so the give-back restores the block a later netting has netted, and undoes
+nothing logged after the break began.  Nothing when no running break netted the block (`Closed.ran` empty), the span is
+empty, or the netting is filed on a ledger day before the block's (D94's rule). -/
+def reNet (s e : At) (d : Nat) (C : Closed) (min' : Nat) : List Piece × Nat :=
+  if d < C.day ∨ C.ran.isEmpty ∨ e.1 ≤ s.1 then (C.ran, C.ranMin)
+  else (cutRan s e C.ran, min (C.min + C.ranMin - shadowNet s e C - min') C.ranMin)
+
 /-- **One held closed block netted by a `break` `[s, e)` stepped on ledger day `d`** (the owner's **D100**, README gap
 4520b, parity P105): a break filed on a ledger day before the block's nets nothing (D94's rule), nor one that meets
 none of its pieces — there is nothing of it to cut (gap 4920's early exit); otherwise its pieces are cut around the break
 (`pieces`, each on its own) and re-drawn (`redraw`), and what that took — the pieces' minutes before less after (site
 R8, per piece), never more than its credit still standing — comes off its credit (`DayOp.net` on the day it was filed,
-the item's minutes, its minutes on that day) and off its `done`'s duration observation.  Block, effects, minutes. -/
+the item's minutes, its minutes on that day) and off its `done`'s duration observation.  **Since the W-51 repair** (README
+gap 5630) what a running break took from it (`Closed.ran`, `Closed.ranMin`) is netted by the same span (`reNet`), whether or
+not the span meets a piece still drawn, so the break's give-back keeps this netting.  Block, effects, minutes. -/
 def netOne (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) : Closed × List Effect × Nat :=
-  if d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) then (C, [], 0)
+  if d < C.day ∨ C.drawn.all (fun p => decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)) then
+    ({ C with ran := (reNet s e d C C.min).1, ranMin := (reNet s e d C C.min).2 }, [], 0)
   else
-    ({ C with drawn := (redraw dy C.id C.drawn (cutOut s e C.spans)).1, min := C.min - netMin s e C },
+    ({ C with drawn := (redraw dy C.id C.drawn (cutOut s e C.spans)).1, min := C.min - netMin s e C,
+              ran := (reNet s e d C (C.min - netMin s e C)).1, ranMin := (reNet s e d C (C.min - netMin s e C)).2 },
       (redraw dy C.id C.drawn (cutOut s e C.spans)).2 ++
         (if 0 < netMin s e C then
           [.dayAdd C.credDay (.net C.id C.ci (netMin s e C) C.durLine), .itemAdd C.id (.uncredit (netMin s e C)),
@@ -4117,9 +4157,6 @@ from `s` on is netted, as the `break` line that ends the break will net it (D100
 def runTo (s : At) : List Closed → At
   | [] => s
   | C :: l => runTo (C.drawn.foldl (fun b p => if b.1 < p.e.1 then p.e else b) s) l
-
-/-- **Whether a span `[s, e)` meets a drawn piece** — the pieces `netOne` cuts (D137). -/
-def meets (s e : At) (p : Piece) : Bool := !decide (p.e.1 ≤ s.1 ∨ e.1 ≤ p.s.1)
 
 /-- **One held closed block netted by the running break, what it took remembered** (the owner's **D137**, README gaps 5504
 and 5302): `netOne` over the running span, and the pieces it met, whole (`Closed.ran`), with the minutes it took
@@ -4145,14 +4182,6 @@ def runNet (dy : Cal.Instant → Nat) (m : Machine) : Machine × List Effect :=
         (netClosed dy o.s (runTo o.s m.closed) o.day m).2)
     else (m, [])
   | none => (m, [])
-
-/-- **A held closed block's pieces with what a running break took put back** (the owner's **D137**, README gaps 5504 and
-5302): its drawn pieces but the remainder of each piece the running break cut — the one beginning where a piece it took
-began, which `Closed.ran` holds whole — and the pieces it took, whole: the block as it stood before the running break
-netted it, its later nettings kept. -/
-def Closed.restored (C : Closed) : List (At × At) :=
-  (C.drawn.filter (fun p => !C.ran.any (fun r => atEq r.s p.s))).map (fun p => (p.s, p.e)) ++
-    C.ran.map (fun p => (p.s, p.e))
 
 /-- **One held closed block given back what a running break took** (the owner's **D137**, README gaps 5504 and 5302, W-51
 track K, parity **P134**): nothing when no running break netted it (`Closed.ran` empty); otherwise its pieces re-drawn as
@@ -4199,9 +4228,13 @@ def doneFx (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : At) (d : N
 /-- **Where a late `start` at `t` cuts a held closed block** (the owner's **D115**, README gap 5034, parity **P120**): the
 end of its last piece when it has a piece begun before `t` — the block the `start` is stamped inside, a later `done` or
 `stop` having closed it — and `t` otherwise, so the span `[t, startEnd t C)` the `start` nets from it is the part of it
-after `t`, or empty.  On a log a forward clock writes, every held block ended by `t` and every span is empty. -/
+after `t`, or empty.  On a log a forward clock writes, every held block ended by `t` and every span is empty.  **Since the
+W-51 repair** (README gap 5630) the pieces a running break took (`Closed.ran`) count as the block's: a block the running
+break netted down to before `t` is still the block the `start` is stamped inside, so its cut reaches past what the break's
+give-back will restore (`reNet`), as it would had the break been logged with its line. -/
 def startEnd (t : At) (C : Closed) : At :=
-  if C.drawn.any (fun p => decide (p.s.1 < t.1)) then C.drawn.foldl (fun b p => if b.1 < p.e.1 then p.e else b) t
+  if (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) then
+    (C.drawn ++ C.ran).foldl (fun b p => if b.1 < p.e.1 then p.e else b) t
   else t
 
 /-- **The held closed blocks a late `start` at `t` cuts** (the owner's **D115**, README gap 5034, parity **P120**): each
@@ -5688,10 +5721,39 @@ theorem runOne_netOne (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Close
       ran := if d < C.day then C.ran else C.ran ++ C.drawn.filter (meets s e),
       ranMin := C.ranMin + (netOne dy s e d C).2.2 } := rfl
 
-/-- **`netOne` leaves what a running break took alone** (D137). -/
+/-- **`reNet`'s pieces do not read the credit** (the W-51 repair). -/
+theorem reNet_fst (s e : At) (d : Nat) (C : Closed) (a b : Nat) : (reNet s e d C a).1 = (reNet s e d C b).1 := by
+  unfold reNet; split <;> rfl
+
+/-- **`netOne` nets what a running break took by its own span** (D137, restated at the W-51 repair, README gap 5630):
+the pieces it took cut as the drawn ones are and the minutes to give back re-read (`reNet`) at the credit the netting
+leaves.  As W-51 stated it — `netOne` leaves them alone — it is refuted (`netOne_ran_as_w51_stated_it_is_refuted`). -/
 theorem netOne_ran (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) :
+    (netOne dy s e d C).1.ran = (reNet s e d C C.min).1 ∧
+      (netOne dy s e d C).1.ranMin = (reNet s e d C (netOne dy s e d C).1.min).2 := by
+  unfold netOne; split
+  · exact ⟨rfl, rfl⟩
+  · exact ⟨reNet_fst _ _ _ _ _ _, rfl⟩
+
+/-- **`netOne_ran` as W-51 stated it is refuted** (the W-51 repair, README gap 5630): `a` drawn `[08:00, 09:00]`, netted by a
+running break from 08:30, then a late interruption `[08:10, 08:20)` — the netting cuts the piece the running break took
+into two, where W-51's `netOne` kept it whole. -/
+theorem netOne_ran_as_w51_stated_it_is_refuted :
+    ¬ ∀ (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed),
+      (netOne dy s e d C).1.ran = C.ran ∧ (netOne dy s e d C).1.ranMin = C.ranMin := by
+  intro h
+  have := (h (fun _ => 739865) (⟨63924365400, 0⟩, ⟨false, 0⟩) (⟨63924366000, 0⟩, ⟨false, 0⟩) 739865
+    ⟨['a'], 739865, 739865, none, 30,
+      [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924366600, 0⟩, ⟨false, 0⟩), 739865⟩],
+      some 2, (⟨63924364800, 0⟩, ⟨false, 0⟩),
+      [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩], 30⟩).1
+  revert this; decide
+
+/-- **With nothing a running break took, `netOne` leaves it so** (D137): the case W-51 stated for every block. -/
+theorem netOne_ran_of_no_run (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) (h : C.ran = []) :
     (netOne dy s e d C).1.ran = C.ran ∧ (netOne dy s e d C).1.ranMin = C.ranMin := by
-  unfold netOne; split <;> exact ⟨rfl, rfl⟩
+  obtain ⟨h1, h2⟩ := netOne_ran dy s e d C
+  rw [h1, h2]; unfold reNet; simp [h]
 
 theorem runNet_mem (dy : Cal.Instant → Nat) (m : Machine) (x : Effect) (hx : x ∈ (runNet dy m).2) :
     ∃ s e dd, x ∈ (netClosed dy s e dd m).2 := by
@@ -6836,19 +6898,42 @@ theorem foldl_end_ge : ∀ (l : List Piece) (b : At),
       · exact h2 p' hp'
 
 /-- **A late start's span lies past every piece of a block it is stamped inside** (the owner's D115). -/
+theorem startEnd_ge_run (t : At) (C : Closed) (h : (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) = true) :
+    ∀ p ∈ C.drawn ++ C.ran, p.e.1 ≤ (startEnd t C).1 := by
+  unfold startEnd; rw [if_pos h]; exact (foldl_end_ge (C.drawn ++ C.ran) t).2
+
+/-- **A late start's span lies past every piece of a block it is stamped inside** (the owner's D115) — re-proved over the
+W-51 repair's `startEnd`, which reads the pieces a running break took as well (README gap 5630). -/
 theorem startEnd_ge (t : At) (C : Closed) (h : C.drawn.any (fun p => decide (p.s.1 < t.1)) = true) :
     ∀ p ∈ C.drawn, p.e.1 ≤ (startEnd t C).1 := by
-  unfold startEnd; rw [if_pos h]; exact (foldl_end_ge C.drawn t).2
+  have h' : (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) = true := by
+    rw [List.any_append, h, Bool.true_or]
+  exact fun p hp => startEnd_ge_run t C h' p (List.mem_append_left _ hp)
 
-/-- **A block with no piece begun before a `start` is not cut by it** (the owner's D115): `netOne`'s guard holds. -/
-theorem startEnd_guard (t : At) (C : Closed) (h : C.drawn.any (fun p => decide (p.s.1 < t.1)) = false) :
+/-- **A block with no piece begun before a `start` is not cut by it** (the owner's D115): `netOne`'s guard holds —
+restated at the W-51 repair (README gap 5630) over the pieces the block draws **and** those a running break took, which
+`startEnd` reads since; as W-51 stated it, over the drawn pieces alone, it is refuted
+(`startEnd_guard_as_w51_stated_it_is_refuted`). -/
+theorem startEnd_guard (t : At) (C : Closed) (h : (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) = false) :
     C.drawn.all (fun p => decide (p.e.1 ≤ t.1 ∨ (startEnd t C).1 ≤ p.s.1)) = true := by
   unfold startEnd; rw [if_neg (by simp [h])]
   rw [List.all_eq_true]
   intro p hp
-  have := List.any_eq_false.1 h p hp
+  have := List.any_eq_false.1 h p (List.mem_append_left _ hp)
   simp only [decide_eq_true_eq] at this ⊢
   exact Or.inr ((Cal.Instant.not_lt _ _).1 this)
+
+/-- **`startEnd_guard` as W-51 stated it is refuted** (README gap 5630): a block whose one drawn piece `[40, 50)` begins
+after a `start` at `30` while the running break took `[0, 60)` from it is still the block the `start` is stamped inside,
+so the start's span reaches `60` and meets the drawn piece. -/
+theorem startEnd_guard_as_w51_stated_it_is_refuted :
+    ¬ ∀ (t : At) (C : Closed), C.drawn.any (fun p => decide (p.s.1 < t.1)) = false →
+      C.drawn.all (fun p => decide (p.e.1 ≤ t.1 ∨ (startEnd t C).1 ≤ p.s.1)) = true := by
+  intro h
+  have := h (⟨30, 0⟩, ⟨false, 0⟩)
+    ⟨['a'], 0, 0, none, 10, [⟨(⟨40, 0⟩, ⟨false, 0⟩), (⟨50, 0⟩, ⟨false, 0⟩), 0⟩], none, (⟨0, 0⟩, ⟨false, 0⟩),
+      [⟨(⟨0, 0⟩, ⟨false, 0⟩), (⟨60, 0⟩, ⟨false, 0⟩), 0⟩], 0⟩ (by decide)
+  revert this; decide
 
 /-- **A late start's cut draws no piece beginning anywhere new** (the owner's D115): with a piece of `C` begun before
 `t`, every piece `cutOut t (startEnd t C)` leaves begins where one of `C`'s began — never at the span's end, which lies
@@ -6864,6 +6949,68 @@ theorem cutOut_startEnd_starts (t : At) (C : Closed) (h : C.drawn.any (fun p => 
     have hge := startEnd_ge t C h p hp
     rw [h1] at hlt
     rw [Cal.Instant.lt_iff] at hlt; rw [Cal.Instant.le_iff] at hge; simp only at hlt; omega
+
+/-- **A late start's cut of any spans its end lies past draws no piece beginning anywhere new** (the owner's D115, the
+W-51 repair): `cutOut_startEnd_starts`' argument over any list of spans, so it covers the pieces a running break took. -/
+theorem cutOut_startEnd_starts_of (t : At) (C : Closed) (P : List (At × At))
+    (hP : ∀ r ∈ P, r.2.1 ≤ (startEnd t C).1) (q : At × At) (hq : q ∈ cutOut t (startEnd t C) P) :
+    ∃ r ∈ P, q.1 = r.1 := by
+  rcases cutOut_starts t (startEnd t C) P q hq with h1 | h1
+  · exact h1
+  · exfalso
+    obtain ⟨r, hr, hlt⟩ := cutOut_lt t (startEnd t C) P q hq
+    have hge := hP r hr
+    rw [h1] at hlt
+    rw [Cal.Instant.lt_iff] at hlt; rw [Cal.Instant.le_iff] at hge; omega
+
+/-- **`cutRan` is `cutOut` on the spans** (the W-51 repair). -/
+theorem cutRan_spans (s e : At) (R : List Piece) :
+    (cutRan s e R).map (fun p => (p.s, p.e)) = cutOut s e (R.map (fun p => (p.s, p.e))) := by
+  unfold cutRan cutOut
+  induction R with
+  | nil => rfl
+  | cons r R ih =>
+    simp only [List.flatMap_cons, List.map_append, List.map_cons, ih, List.map_map]
+    congr 1
+    induction (pieces [(s, e)] r.s r.e) with
+    | nil => rfl
+    | cons q l ih2 => simp only [List.map_cons, Function.comp, ih2]
+
+/-- **What `reNet` keeps of the pieces a running break took begins where one of them began, or at the span's end** (the
+W-51 repair). -/
+theorem reNet_starts (s e : At) (d : Nat) (C : Closed) (a : Nat) (pc : Piece) (h : pc ∈ (reNet s e d C a).1) :
+    (∃ r ∈ C.ran, pc.s = r.s) ∨ pc.s = e := by
+  unfold reNet at h
+  split at h
+  · exact Or.inl ⟨pc, h, rfl⟩
+  · have hm : (pc.s, pc.e) ∈ cutOut s e (C.ran.map (fun p => (p.s, p.e))) := by
+      rw [← cutRan_spans]; exact List.mem_map.2 ⟨pc, h, rfl⟩
+    rcases cutOut_starts s e _ _ hm with ⟨r, hr, hre⟩ | h1
+    · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
+      exact Or.inl ⟨p, hp, hre⟩
+    · exact Or.inr h1
+
+/-- **A late start's cut of the pieces a running break took begins nowhere new** (the owner's D115, the W-51 repair). -/
+theorem reNet_startEnd_starts (t : At) (d : Nat) (C : Closed) (a : Nat) (pc : Piece)
+    (h : pc ∈ (reNet t (startEnd t C) d C a).1) : ∃ r ∈ C.ran, pc.s = r.s := by
+  unfold reNet at h
+  split at h
+  · exact ⟨pc, h, rfl⟩
+  · rename_i hg
+    have hm : (pc.s, pc.e) ∈ cutOut t (startEnd t C) (C.ran.map (fun p => (p.s, p.e))) := by
+      rw [← cutRan_spans]; exact List.mem_map.2 ⟨pc, h, rfl⟩
+    have ha : (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) = true := by
+      cases hx : (C.drawn ++ C.ran).any (fun p => decide (p.s.1 < t.1)) with
+      | true => rfl
+      | false =>
+        exfalso; apply hg; right; right
+        unfold startEnd; rw [if_neg (by simp [hx])]
+        rw [Cal.Instant.le_iff]; omega
+    obtain ⟨r, hr, hre⟩ := cutOut_startEnd_starts_of t C _ (fun r hr => by
+      obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
+      exact startEnd_ge_run t C ha p (List.mem_append_right _ hp)) _ hm
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
+    exact ⟨p, hp, hre⟩
 
 /-- **The running break's span lies past every piece a held closed block drew** (README gap 5180): `runTo s l` is at or
 after `s` and every held piece's end. -/
@@ -13640,11 +13787,14 @@ theorem a_running_breaks_line_gives_back_the_close_it_did_not_reach :
   decide
 
 /-- **…and a stopped block's credit comes back to its day's ci-unknown minutes** (D137 over a cut's credit, which has no
-ci): `start a` 08:00, `stop` 09:00, the late `break_start` at 08:30 and its ten-minute line — fifty. -/
+ci): `start a` 08:00, `stop` 09:00, the late `break_start` at 08:30 and its ten-minute line — fifty, on the item, the day's
+block minutes and the day's ci-unknown minutes of `a` (the last projection since the W-51 repair: the statement read only
+the first two while this sentence named the third, the W-51 auditor's note 5). -/
 theorem a_late_breaks_line_gives_back_a_stopped_block :
     let f := replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (.stop ['a'] 0),
       bE 3 63924366600 (.brkStart 20 none), bE 4 63924366600 (.brk 20 (some 10) none)]
-    (f.items.get ['a']).map (·.minutes) = some 50 ∧ (f.days.get 739865).map (·.blockMin) = some 50 := by
+    (f.items.get ['a']).map (·.minutes) = some 50 ∧ (f.days.get 739865).map (·.blockMin) = some 50 ∧
+    (f.days.get 739865).map (fun a => a.ciUnknown.get ['a']) = some (some 50) := by
   decide
 
 /-- **The running break remembers exactly the pieces it met** (the owner's D137; README gap 5585's pin for `meets`): a
@@ -13659,6 +13809,181 @@ theorem runOne_remembers_only_the_pieces_it_met :
     let R := runOne (fun _ => 739865) (⟨63924366600, 0⟩, ⟨false, 0⟩) (⟨63924368400, 0⟩, ⟨false, 0⟩) 739865 C
     R.ran = [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩] ∧ R.ranMin = 30 ∧
       R.min = 60 := by
+  decide
+
+/-! ### The give-back keeps every later netting (the W-51 repair, README gap 5630)
+
+The W-51 land's give-back re-drew the pieces a running break took whole and credited back every minute it took, so a
+netting logged while the break ran — a late `start` that cut the block (D115), a late interruption (D119) — was undone
+when the break's line arrived (the W-51 auditor's finding 1).  Since the repair a later netting cuts what the running
+break took as it cuts the drawn pieces (`reNet`), and these are the laws that say so: the single-netting form (the
+auditor's `giveOne_runOne_min`), the composed form over one later netting, and the auditor's two logs decided against the
+replay with no `break_start`. -/
+
+/-- **What a netting takes it takes from the credit** (D100): the block's credit after it and the minutes it took sum to the
+credit before. -/
+theorem netOne_min_add (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) :
+    (netOne dy s e d C).1.min + (netOne dy s e d C).2.2 = C.min := by
+  unfold netOne; split
+  · rfl
+  · show C.min - netMin s e C + netMin s e C = C.min
+    have := Nat.min_le_right (minutesOf C.spans - minutesOf (cutOut s e C.spans)) C.min
+    unfold netMin; omega
+
+/-- **A netting meeting no piece the running break could take takes nothing** (D100, D137). -/
+theorem netOne_took_of_no_meet (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed)
+    (h : C.drawn.filter (meets s e) = []) : (netOne dy s e d C).2.2 = 0 := by
+  unfold netOne
+  rw [if_pos (Or.inr ?_)]
+  rw [List.all_eq_true]
+  intro p hp
+  have : p ∉ C.drawn.filter (meets s e) := by rw [h]; simp
+  simp only [List.mem_filter, not_and] at this
+  have h2 := this hp
+  unfold meets at h2
+  simp only [Bool.not_eq_true', decide_eq_false_iff_not, not_or, not_and, Classical.not_not] at h2
+  simp only [decide_eq_true_eq]
+  by_cases hx : p.e.1 ≤ s.1
+  · exact Or.inl hx
+  · exact Or.inr (by simpa using h2 hx)
+
+/-- **The give-back restores exactly the credit a running break took** (the owner's D137; the W-51 auditor's note 2): from a
+block no running break had netted, the running netting and the give-back its line makes leave the credit where it was —
+whatever the running span.  The land's three witnesses were the only check of this; a give-back that gives nothing
+(`giveOne := (C, [], 0)`) fails it. -/
+theorem giveOne_runOne_min (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) (h0 : C.ran = [])
+    (h1 : C.ranMin = 0) : (giveOne dy (runOne dy s e d C)).1.min = C.min := by
+  have hk := (giveOne_keeps dy (runOne dy s e d C)).2.2.2.1
+  rw [hk]
+  have hm := netOne_min_add dy s e d C
+  have hR : (runOne dy s e d C).min = (netOne dy s e d C).1.min := rfl
+  by_cases hr : (runOne dy s e d C).ran = []
+  · rw [giveOne_of_no_run dy _ hr]
+    simp only [Nat.add_zero, hR]
+    have h2 : (netOne dy s e d C).2.2 = 0 := by
+      by_cases hd : d < C.day
+      · unfold netOne; rw [if_pos (Or.inl hd)]
+      · apply netOne_took_of_no_meet
+        have : (runOne dy s e d C).ran = C.ran ++ C.drawn.filter (meets s e) := by
+          show (if d < C.day then C.ran else C.ran ++ C.drawn.filter (meets s e)) = _
+          rw [if_neg hd]
+        rw [this, h0] at hr; simpa using hr
+    omega
+  · unfold giveOne
+    rw [if_neg (by simpa using hr)]
+    show (runOne dy s e d C).min + (runOne dy s e d C).ranMin = C.min
+    show (netOne dy s e d C).1.min + (C.ranMin + (netOne dy s e d C).2.2) = C.min
+    omega
+
+/-- **A later netting nets what the give-back will restore** (the W-51 repair, README gap 5630; the owner's D100, D115,
+D119, D137): on a block a running break netted, a later netting over `[s, e)` filed on or after the block's ledger day
+leaves the credit the give-back will restore (`min + ranMin`) at the restored block's credit netted by the same span
+(`shadowNet`) — the reading of a block the break was logged with its line before this netting — whenever the restored
+block loses at least what the drawn one does and no more than that and what the running break took (the case of a block
+whose drawn pieces are the restored ones less the running span: the auditor's two logs, below).  The W-51 land's
+`netOne` left the give-back's credit where it was and so undid the netting. -/
+theorem netOne_nets_the_give_back (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) (hd : ¬ d < C.day)
+    (hne : C.ran ≠ []) (hs : s.1 < e.1)
+    (hlo : (netOne dy s e d C).1.min ≤ C.min + C.ranMin - shadowNet s e C)
+    (hhi : C.min + C.ranMin - shadowNet s e C ≤ (netOne dy s e d C).1.min + C.ranMin) :
+    (netOne dy s e d C).1.min + (netOne dy s e d C).1.ranMin = C.min + C.ranMin - shadowNet s e C := by
+  rw [(netOne_ran dy s e d C).2]
+  unfold reNet
+  rw [if_neg (by
+    intro h
+    rcases h with h | h | h
+    · exact hd h
+    · exact hne (List.isEmpty_iff.1 h)
+    · rw [Cal.Instant.lt_iff] at hs; rw [Cal.Instant.le_iff] at h; omega)]
+  simp only
+  omega
+
+/-- **…and the give-back then restores it** (the W-51 repair): the block's credit after the later netting and the
+give-back is the restored block's credit netted by the later span, on the same subdomain, while anything the running
+break took still stands. -/
+theorem giveOne_after_a_later_netting_min (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) (hd : ¬ d < C.day)
+    (hne : C.ran ≠ []) (hs : s.1 < e.1)
+    (hlo : (netOne dy s e d C).1.min ≤ C.min + C.ranMin - shadowNet s e C)
+    (hhi : C.min + C.ranMin - shadowNet s e C ≤ (netOne dy s e d C).1.min + C.ranMin)
+    (hstill : (netOne dy s e d C).1.ran ≠ []) :
+    (giveOne dy (netOne dy s e d C).1).1.min = C.min + C.ranMin - shadowNet s e C := by
+  unfold giveOne
+  rw [if_neg (by simpa using hstill)]
+  exact netOne_nets_the_give_back dy s e d C hd hne hs hlo hhi
+
+/-- **The auditor's K log reads as the log with no `break_start`** (the W-51 repair, README gap 5630; the owner's D115 and
+D137): `start a` 08:00, `done a` 09:00 with sixty, a `break_start` stamped 08:30 — which runs and nets `a` from 08:30 —
+then a late `start b` 08:10, which cuts `a` there (D115), `done b` 08:15 with five, and the break's ten-minute line.  `a`
+reads ten, `b` five, the day fifteen, drawn `a [08:00, 08:10]`, `b [08:10, 08:15]` and the Break `[08:30, 08:40]` —
+exactly what the same log without the `break_start` reads (`the_k_log_without_its_break_start`).  The W-51 land gave
+`a` back thirty at the line and drew it across `b` (cheat 631). -/
+theorem the_k_log_reads_as_its_break_had_no_start :
+    let f := replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924366600 (.brkStart 20 none), bE 4 63924365400 (bStart ['b']), bE 5 63924365700 (bDone ['b'] 5 false),
+      bE 6 63924366600 (.brk 20 (some 10) none)]
+    (f.items.get ['a']).map (·.minutes) = some 10 ∧ (f.items.get ['b']).map (·.minutes) = some 5 ∧
+    (f.days.get 739865).map (·.blockMin) = some 15 ∧ f.durations.map (·.actualMin) = [10, 5] ∧
+    (f.days.get 739865).map (fun a => a.segments.map (fun g => (g.start.1.sec, g.stop.1.sec, g.kind)))
+      = some [(63924364800, 63924365400, .block ['a']), (63924365400, 63924365700, .block ['b']),
+        (63924366600, 63924367200, .brk none)] := by
+  decide
+
+/-- **…the same log without its `break_start`** (the subject the witness above is compared with): ten, five, fifteen, the
+same three segments. -/
+theorem the_k_log_without_its_break_start :
+    let f := replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 4 63924365400 (bStart ['b']), bE 5 63924365700 (bDone ['b'] 5 false),
+      bE 6 63924366600 (.brk 20 (some 10) none)]
+    (f.items.get ['a']).map (·.minutes) = some 10 ∧ (f.items.get ['b']).map (·.minutes) = some 5 ∧
+    (f.days.get 739865).map (·.blockMin) = some 15 ∧ f.durations.map (·.actualMin) = [10, 5] ∧
+    (f.days.get 739865).map (fun a => a.segments.map (fun g => (g.start.1.sec, g.stop.1.sec, g.kind)))
+      = some [(63924364800, 63924365400, .block ['a']), (63924365400, 63924365700, .block ['b']),
+        (63924366600, 63924367200, .brk none)] := by
+  decide
+
+/-- **The auditor's C log reads as the log with no `break_start`** (the W-51 repair, README gap 5630; the owner's D119 and
+D137): `a` 08:00–09:00 done with sixty, a `break_start` at 08:30, a late interruption 08:10–08:20, then the break's
+ten-minute line.  `a` reads forty, drawn `[08:00, 08:10]`, `[08:20, 08:30]` and `[08:40, 09:00]` around the
+Interruption and the Break — what the log with no `break_start` reads (`the_c_log_without_its_break_start`).  The W-51
+land credited forty too but drew `a [08:00, 08:30]` across the interruption beside `[08:20, 08:30]` (README gap 5630). -/
+theorem the_c_log_reads_as_its_break_had_no_start :
+    let f := replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924366600 (.brkStart 20 none), bE 4 63924365400 (.interrupt none), bE 5 63924366000 (.resume 10 []),
+      bE 6 63924366600 (.brk 20 (some 10) none)]
+    (f.items.get ['a']).map (·.minutes) = some 40 ∧ (f.days.get 739865).map (·.blockMin) = some 40 ∧
+    f.durations.map (·.actualMin) = [40] ∧
+    (f.days.get 739865).map (fun a => a.segments.map (fun g => (g.start.1.sec, g.stop.1.sec, g.kind)))
+      = some [(63924364800, 63924365400, .block ['a']), (63924365400, 63924366000, .interrupt none),
+        (63924366000, 63924366600, .block ['a']), (63924366600, 63924367200, .brk none),
+        (63924367200, 63924368400, .block ['a'])] := by
+  decide
+
+/-- **…the same log without its `break_start`**: forty, the same five segments. -/
+theorem the_c_log_without_its_break_start :
+    let f := replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 4 63924365400 (.interrupt none), bE 5 63924366000 (.resume 10 []),
+      bE 6 63924366600 (.brk 20 (some 10) none)]
+    (f.items.get ['a']).map (·.minutes) = some 40 ∧ (f.days.get 739865).map (·.blockMin) = some 40 ∧
+    f.durations.map (·.actualMin) = [40] ∧
+    (f.days.get 739865).map (fun a => a.segments.map (fun g => (g.start.1.sec, g.stop.1.sec, g.kind)))
+      = some [(63924364800, 63924365400, .block ['a']), (63924365400, 63924366000, .interrupt none),
+        (63924366000, 63924366600, .block ['a']), (63924366600, 63924367200, .brk none),
+        (63924367200, 63924368400, .block ['a'])] := by
+  decide
+
+/-- **`netOne_nets_the_give_back`'s subdomain is not empty** (AGENTS §7.4 item 2): `a` drawn `[08:00, 09:00]` with sixty,
+netted by a running break from 08:30 (`runOne`), then a late interruption `[08:10, 08:20)`: every hypothesis holds, and the
+give-back's credit is fifty — the block less the interruption, the running break's thirty restored. -/
+theorem netOne_nets_the_give_back_is_not_vacuous :
+    let C : Closed := ⟨['a'], 739865, 739865, none, 60,
+      [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924368400, 0⟩, ⟨false, 0⟩), 739865⟩],
+      none, (⟨63924364800, 0⟩, ⟨false, 0⟩), [], 0⟩
+    let R := runOne (fun _ => 739865) (⟨63924366600, 0⟩, ⟨false, 0⟩) (⟨63924368400, 0⟩, ⟨false, 0⟩) 739865 C
+    let N := netOne (fun _ => 739865) (⟨63924365400, 0⟩, ⟨false, 0⟩) (⟨63924366000, 0⟩, ⟨false, 0⟩) 739865 R
+    ¬ 739865 < R.day ∧ R.ran ≠ [] ∧
+      N.1.min ≤ R.min + R.ranMin - shadowNet (⟨63924365400, 0⟩, ⟨false, 0⟩) (⟨63924366000, 0⟩, ⟨false, 0⟩) R ∧
+      R.min + R.ranMin - shadowNet (⟨63924365400, 0⟩, ⟨false, 0⟩) (⟨63924366000, 0⟩, ⟨false, 0⟩) R ≤ N.1.min + R.ranMin ∧
+      N.1.ran ≠ [] ∧ N.1.min + N.1.ranMin = 50 := by
   decide
 
 end GiveBack137
