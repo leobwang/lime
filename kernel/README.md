@@ -102422,3 +102422,294 @@ reproduced as track K recorded it (gaps 5633 and 5634).
 already ended at a later block's start ends that break there, and D137 gives back what lies after it; and gap 5634 is
 **D142** — overlapping logged breaks are read as their union, each break drawn and recorded only where no earlier break
 covers it.  Both are the next run's to build; neither is built here.
+
+<!-- =====================================================================
+     APPENDED 2026-10-31: stage 6 (the planner), run **W-52**, **track K** (`w52-k`) — the owner's D142 (overlapping
+     logged breaks read as their union), README gap 5631 (a give-back's gate), and D141's replay half, which did NOT
+     land (gap 5660).  Gaps 5660-5679 are this track's (5660-5662 taken).  Cheats 651-670 (651-652 taken).  Parity:
+     **P136** taken, for D142 — the brief assigned `P136` to D141 and `P137` to D142, and `parity.py` requires the register
+     contiguous, so with D141 unlanded D142 takes P136 and D141 takes the next free number when it lands (§8).
+     Whoever merges renumbers.
+     ===================================================================== -->
+
+## Stage 6 — W-52 track K: logged breaks read as their union (D142), and a give-back's gate (gap 5631)
+
+### 1. D142 — overlapping logged breaks are read as their union (gap 5634 closed)
+
+**The rule** (`Replay.lean`, section D142 above the D129 arms, and the module's last section `Union142`): a break is
+drawn and recorded only where no earlier break covers it.  *Earlier* is stamp order of the break's start, as D129 reads
+— a break the machine holds (`Machine.brks`) whose start is at or before this one's (at the same stamp it was logged
+earlier), **filed on this one's ledger day or a later one**, covers `[s, …)` up to its end (D94: a break filed on a ledger
+day before a block's nets no clock of it, so the host's union of that block's breaks would lose what it covered), so what is left of a break is one span, from `coverFrom H s` — the latest end of
+a held break begun at or before `s`, or `s` itself — to the break's own end.  `brkRecsC c s e d planned actual w` writes,
+for that span:
+
+* nothing covers its head (`c` = `s`): the `Break` segment `[s, e)` and the record **as logged** — the line's
+  `actual_min` kept, `None` included — exactly what `dayArm`'s `break` arm and D129's `endRecs` wrote before;
+* an earlier break covers a head of it (`s < c < e`): the segment `[c, e)`, and a record of the drawn minutes **stamped
+  at `c`** for a `break` line — the host reads a record's span as `[t, t + actual_or_planned)` when it nets a running
+  block's breaks (D95), so the record must be the drawn span — while a D129 ending keeps its record **whole**, stamped at
+  the break's start, because the host finds a break a start ended by that stamp (D133's `Ctx::ended_cached_break`)
+  (gap 5662);
+* an earlier break covers all of it (`c ≥ e`): **no segment, and a record of zero minutes**.
+
+**Why a zero-minute record for a wholly covered break, and not none.**  No record was built first, and driving it
+refuted it: the host finds a break that a later `start` ended by its **record** (`Ctx::ended_cached_break` matches the
+cached break's stamp against the day's `BreakRecord`s), so with no record the next verb took the J log's second break —
+which `.tm/state.json` still held — for one the log never held and logged its `break_start` again (D133's notice, on
+every verb; §6 has the transcript).  A zero-minute record keeps the host's one reading of "the log holds this break",
+the wire shape unchanged (a `BreakRec` list), and the minutes honest: `tm review day` counts the two breaks the log
+holds and forty minutes of break (`by_where["-"] = [2, 40]`; a zero-minute break is never `over`, so `over_share`
+counts it in its denominator only), the planned minutes of both in `planned_min`.
+
+**Where it is read.**  Two sites write a break's segment and record, and both now go through `brkRecs`: a `break`
+line's day half (`brkDay`, which replaces `dayArm` of `placed m e` inside `brkArm`), and D129's ending
+(`endRecs H o t := brkRecs H o.s t o.day o.planned (some (t − o.s)) o.where_`, at both of its callers — a `start` ending
+the running break and a `break_start` a held start ends).  The block minutes do not move: the replay already netted a
+block by the union of the breaks on its days (D94), so only the breaks' own drawing and records changed.  The heat grid
+(`review::heat_of`) reads the day's segments, so it counts a minute once by construction; it was not driven separately.
+
+**Repro** (the J log as the W-51 repair binary writes it: `^t1` 09:00–10:00 and `^t4` 10:10–11:10 done, then two late
+`break_start`s, 09:30 and 09:40, both ended by D129 at 10:10): one break drawn 09:30–10:10, forty break minutes, one
+record of forty and the covered one of zero, `by_where["-"] = [2, 40]`; block minutes 90 before and after the second
+`break_start`.  On the W-51 repair
+binary: `09:30 break 40m` and `09:40 break 30m`, breaks `actual 40 30`.  §6 is the drive.
+
+**Gap 5661 — D142 reads "earlier" when the later break is stepped, so two overlapping breaks logged out of stamp order
+both keep the overlap.**  1. *What.*  A break is cut by the held breaks begun at or before it; a break logged *before* one
+stamped earlier than it was drawn and recorded when stepped, and the later-logged, earlier-stamped one does not reach
+back to cut it, so their overlap is drawn and counted twice (a late `tm break --now 13:50 30m` logged after a 14:00
+break: `[13:50, 14:20)` and `[14:00, …)` both whole).  2. *Why.*  Re-cutting a break already drawn needs its segment and
+record undone, which needs the place and planned minutes the held break (`HeldBrk`) does not carry — the shape D141's
+design (gap 5660) gives the one case it needs; the stamp-ordered logs every verb writes, and the J log, are read once.
+3. *Cost.*  On such a log `tm review day`'s break minutes and the drawn day count the overlap twice, as every log did
+before D142.  4. *Clears it.*  A reach-back pass when a break is stepped that an already-held, later-stamped break
+overlaps — with D141's two record-undoing day operations, or an owner reading that file order is "earlier" there.
+
+**Gap 5662 — a D129 ending an earlier break covers in part keeps its record whole, so `tm review day` counts the
+overlap twice there.**  1. *What.*  A `break_start` a later start ends, whose head an earlier break covers, is drawn
+from the earlier break's end but recorded whole.  2. *Why.*  The host finds such a break by its record's stamp
+(`Ctx::ended_cached_break`, D133), and reads a record's span from its stamp (D95); a record cut to the drawn span would
+leave it unfound and logged again by every verb, and one stamped at the start with cut minutes is a span the host reads
+wrong.  3. *Cost.*  On that log the review's break minutes count the overlap twice; the drawn day and the block minutes
+count it once.  4. *Clears it.*  The host finding a D129-ended break by its record's place in the day rather than its
+stamp — track H's file — after which `endRecs` records the drawn span as `brkRecs` does.
+
+**Found by a proptest, kept (D46).**  The first build of this step stamped a cut record at the break's own start with the
+drawn minutes; `tm/tests/kernel_break_union.rs`'s `the_host_and_the_replay_net_every_spelling_of_a_break_once` drew two
+logs (`kernel_break_union.proptest-regressions`, two new seeds: two breaks at one stamp, three and four minutes; and
+`[-11, +18)` with `[2, 27)`) on which the host then netted the union of `[t, t + actual)` spans the record no longer
+spelled, and the stop's credit and the host's running minutes read the block two ways.  Stamping the cut record at `c`
+is the fix.  The second build then drew three more (`day_before` days: a break filed on the ledger day before covering a
+break of the block's day, which D94 does not net from the block, so the host's union of the block's day lost the covered
+minutes — 40 against 42, 30 against 29); covering only by a break filed on the same ledger day or later is the fix.
+All five seeds are tracked and pass.
+
+**Parity P136 taken**: overlapping logged breaks are read as their union — a break is drawn and recorded only where no break begun at or before it (stamp order) covers it: from the end of such a break, its record's minutes the drawn ones, and with no segment and a zero-minute record when one covers it whole — so `tm plan`, `tm review day`'s break minutes, `over` and `by_where`, and the heat grid count each minute of wall time once; fork 4748911 (and this binary until W-52) drew and recorded every logged break whole, the J log's second `break_start` as `09:40 break 30m` beside `09:30 break 40m` (the owner's D142, W-52 track K, README gap 5634)
+
+**Behaviour row** — `tm/tests/cli_d142_breaks_read_as_their_union.rs`: `two_breaks_d129_ended_at_one_start_are_drawn_and_counted_once_p136`
+(the J log: records `[40, 0]`, `actual_min` 40, `by_where["-"] = [2, 40]`, one logged Break row 09:30–10:10, block
+minutes unmoved) and `a_break_an_earlier_one_covers_in_part_is_counted_from_its_end_p136` (`break` 13:00 20m at walk,
+a late `break` stamped 13:10 20m at seat: actual `[20, 10]`, thirty minutes, `by_where` walk `[1, 20]` and seat
+`[1, 10]`, rows 13:00–13:20 and 13:20–13:30).
+
+### 2. Gap 5631 — a give-back whose taken pieces a later netting cut away (closed)
+
+`giveOne` gave back only when `Closed.ran` was not empty; it now gives back unless `ran` is empty **and** `ranMin` is
+zero, so a block whose taken pieces later nettings cut away entirely, with minutes still the running break's, is
+credited them when the break's line arrives.  `reNet`'s gate moves with it — it is the same question ("did a running break
+net this block?") asked one step earlier, and a block with no piece but minutes left must keep having them netted by a
+later span; when `ranMin` is zero the new gate and the old one answer alike (`reNet`'s else branch gives `([], 0)` on
+`([], 0)`).  `Seal.giveReads` (the instants the give-back reads) moves with `giveOne`.
+
+**Laws.**  Restated, the old statements refuted by name: `Replay.giveOne_of_no_run` (now over no piece **and** no
+minute; `Replay.giveOne_of_no_run_as_w51_stated_it_is_refuted`: a block with no taken piece and thirty taken minutes is
+given them) and `Replay.netOne_ran_of_no_run` (likewise; `Replay.netOne_ran_of_no_run_as_w51r_stated_it_is_refuted`: a
+five-minute credit over a thirty-minute piece, a twenty-minute netting inside it, the minutes to give back fall to
+fifteen).  Re-proved over the new gate, statements unchanged: `Replay.giveOne_runOne_min`,
+`Replay.netOne_nets_the_give_back`, `Replay.giveOne_after_a_later_netting_min`, `Seal.giveBack_shp`,
+`Seal.giveBack_congr` and `Seal.giveBack_mi`.  The witness is
+`Replay.a_give_back_with_no_piece_left_still_gives_its_minutes`: a block drawn `[08:00, 08:20)` and `[08:40, 09:00)`
+with fifty, thirty of it taken over the piece `[08:30, 09:00)`, then a later netting `[08:29:50, 09:06:40)` — no piece is
+left to re-draw, twenty minutes are still the break's, and the give-back credits them (the land's gate gave nothing).
+
+**What the witness is not.**  Its subject is a held block as the fold *can* carry it, written down, not a log the fold
+was driven through: on a block whose drawn pieces are the restored ones less the running span — every log the corpus,
+the generated classes and this track's drives hold — one netting that cuts every taken piece also takes `ranMin` to
+zero (the restored block loses at least the drawn block's loss plus the taken minutes, so `reNet`'s
+`min + ranMin − shadowNet − min'` is at most zero).  Gap 5632's invariant is what would settle whether the fold can reach
+the case at all; the gate is right whichever way it is settled.
+
+### 3. D141's replay half — NOT landed (gap 5660)
+
+**Gap 5660 — D141's replay half (a `break` line stamped at the start of a break D129 already ended, whose end falls
+before that ending, ends the break there) is not built.**  1. *What.*  The J log with the line track H's `tm break`
+writes (`t` 09:30, `actual_min` 10, after `^t4`'s `done` and the 09:30 `break_start`) still reads as P127 has it: the
+line is the break's own and nothing else — `^t1` thirty, the break forty minutes, drawn 09:30–10:10.  2. *Why.*  Time:
+it was designed and its definitions written (below), and the re-proof through the `Seal*` modules and `BreakFold` did not
+fit this run beside D142's, at about eighty minutes a library build on a loaded machine; the brief's rule is to commit
+what is green rather than push into an unfinished rewrite.  3. *Cost.*  Until it lands, a user who ends a late break D129
+already ended (track H's D141 host half) keeps the block netted to the later block's start; with D142 in, the break is
+at least drawn and counted once.  4. *Clears it.*  W-53 (or a repair) builds it on this design, which needs **no
+`Machine` or checkpoint change**:
+
+* **The take.**  `endBrkFx` (a `break_start` a held start ends) nets the held closed blocks remembering what it took —
+  netTake dy s e d m := ({ (netClosed dy s e d m).1 with closed := m.closed.map (runOne dy s e d) }, (netClosed …).2),
+  `runNet`'s netting over a given span — after first clearing any take the machine held (forget: every
+  `Closed.ran`/`ranMin` cleared).  A new `break_start` with no break running (`brkStartArm`), a `break` line that is not
+  the ended break's own, and the own line read as P127 reads it all clear the take first (forgetIdle: forget when no
+  break runs), so a later give-back never returns a D129 ending's take.
+* **Liveness without a flag.**  The line is read as the ending's end only when the newest held break is that ending's
+  span (`m.brks = k :: rest`, `k.s` the ended stamp), no break runs, the line's end is strictly before `k.e`, and
+  `k.day ≤ d` — any step that could invalidate the take pushes a new head or opens a break, so the guard is the flag.
+* **The arm** (d141Fx): [.dayAdd k.day (.unsegBrks k), .dayAdd k.day (.unbrkAt k.s (minutes (coverFrom rest k.s) k.e))]
+  ++ brkArm dy sl { m with brks := rest, brkEnded := none } e t d planned actual — two new `DayOp`s, `unsegBrks k`
+  (remove every Break segment `k` witnesses: begun at or after `k.s`, ending at `k.e`) and `unbrkAt s mins` (remove the
+  first record stamped `s` with `mins` minutes), then the line read as the `break` line of a break running since `k.s`:
+  `giveBack` returns the take, `brkFx` nets `[t, end)` (D100), `brkDay` draws and records it (D142).
+* **BreakFold needs no new invariant.**  `BrkHeld` (restated here, §4) implies, for the head `k`, that every Break segment
+  `k` does not witness has a witness in `rest` (a witness equal to `k` by value witnesses only what `k` witnesses), so
+  removing the head and every segment it witnesses keeps `BrkHeld`, the escape bound held by `k.day ≤ d`.
+* **What moves in the Seal modules**: `stepQueries`' `brkStart` and `brk` branches (the reads over forget/forgetIdle
+  and, over-approximated whatever the guard, the D141 reads `giveReads m₀ ++ brkFxReads (giveBack dy m₀).1 …`),
+  `arm_congr` (a `brkArm` congruence over any machine, takeFx_congr beside `brkFx_congr`), `arm_brks` (restated: the
+  head may be dropped), `arm_mi`, and the `brk`/`brkStart` cases of `SealCutMachine`, `SealPending` and `SealLaw`.
+* **The Replay half was written and is the starting point**: the definitions above with takeFx, forget_keeps,
+  forgetIdle_keeps, conserves_netTake, conserves_takeFx, forget_held, forget_headOk, takeFx_machine,
+  takeFx_brk, takeFx_brkOpen, brkArm_blockOnly, d141Fx_blockOnly, and the `brk` cases of `conserves_arm`,
+  `arm_sleptOk`, the observations law and `arm_split` rewritten over them; with the witnesses
+  (a_break_line_before_its_d129_end_ends_the_break_there: `a` fifty, the break `[08:30, 08:40)` recorded ten;
+  …_draws_the_block_around_it; a_break_line_at_or_after_its_d129_end_is_the_breaks_own, forty-five minutes;
+  a_break_line_ending_at_its_d129_end_is_the_breaks_own, exactly forty) and the CLI test
+  tm/tests/cli_d141_break_line_ends_an_ended_break.rs (the J log by hand; `^t1` fifty, one Break 09:30–09:40,
+  breaks `[10]`).  None of it was compiled; it is not in this commit.
+* **Cost accepted by the design, to be recorded when it lands**: a `break_start` a held start ends while another break
+  runs forgets what the running one took (today that running break's state is already lost there, `brkFx` clearing
+  `brkOpen`); the line's place is its own word (D116's start is not held once D129 ended the break); unsegBrks removes
+  every segment the dropped head witnesses, a second break's too on an out-of-order log whose two breaks end at one
+  start; unbrkAt matches a record by stamp and minutes.
+
+### 4. Laws (D5)
+
+**Restated at D142, the old statement refuted by name:** none of D142's restatements needed a new refutation — the
+three it moved were stated about the segment a break draws and each still holds in the form it had where nothing covers
+the break:
+
+* `BreakFold.BrkHeld` — a held break witnesses a Break segment when it **begins at or before** the segment
+  (`k.s.1 ≤ g.start.1`; it was `k.s = g.start`), ends where it ends and is held on its day: a segment D142 draws from
+  `coverFrom` begins after its own break's start.  Every consumer re-proved: `BreakFold.held_of_prune`,
+  `BreakFold.stepWith_brkHeld`, `BreakFold.the_resumed_open_block_runs_after_every_break` (its nonempty-span step now
+  `k.s ≤ g.start < g.stop = k.e`), through to `PlanCheck.hopen_on_a_resumed_run`, unchanged in statement.
+* `BreakFold.endRecs_seg` — the segment an ending draws begins at or after the break's start (`o.s.1 ≤ g.start.1`; it was
+  `g.start = o.s`); its `break`-line twin is `Replay.brkDay_cases`, which `BreakFold.stepWith_brkHeld` reads in place.
+* `Replay.arm_split`'s `break` case: the statement is unchanged (a disjunction); its proof now takes the second case —
+  the whole arm block family effects — because a `break` line's day half is `brkDay`, not `dayArm`.
+
+**Re-proved over the new shapes, statements unchanged:** `Replay.endBrkFx_blockOnly`, `Replay.endRecs_blockOnly`,
+`Replay.endRecs_safe`, `Replay.conserves_endBrkFx`, `Replay.conserves_arm` (the `break` case: `brkDay_cases`),
+`Replay.endRecs_sleptOk`, `Replay.endBrkFx_sleptOk`, `Replay.arm_sleptOk`, `Replay.endRecs_obs`, `Replay.endBrkFx_obs`,
+`Replay.endBrkFx_mem`, the `break` case of the observations law, `BreakFold.stepWith_brks_of_brk`,
+`BreakFold.stepWith_brks_of_brkStart`, `BreakFold.stepWith_brks_of_start`, `Seal.arm_congr`, `Seal.arm_sl`, and the
+`break` cases of `SealCutMachine`, `SealPending` and `SealLaw` (`Replay.brkDay_obs3` in `dayArm_obs`'s shape).
+
+**New:** `Replay.brkRecsC_cases` and `Replay.brkDay_cases` (what the two write: a `Break` segment begun at or after the
+break's stamp and ending where it ends, and a record — every re-proof above reads one of them), `Replay.brkDay_obs3`
+(`dayArm_obs`'s shape, for the `Seal*` modules); the witnesses `Replay.the_j_log_draws_and_records_its_breaks_once` (the J log: `a` thirty, `b`
+sixty, records `(08:30, 10, some 40)` and `(08:40, 20, some 0)`, one Break `[08:30, 09:10)`), `Replay.a_break_an_earlier_covers_in_part_is_drawn_from_its_end`,
+`Replay.a_break_no_earlier_covers_is_drawn_as_logged` (AGENTS §5.8: the union bites only where breaks overlap) and
+`Replay.coverFrom_reads_only_earlier_breaks` (stamp order: a break begun after `s` covers nothing of it).
+
+Cheats **651** (the J log's records forty and thirty — the W-51 repair's reading) and **652** (a break
+covered in part recorded whole), each refused by `decide` proving its statement false.  Check.lean: 17 audit lines under
+this track's banner.
+
+**No mutation pin moved.**  `check.sh` check 9 re-resolves every roster row's pin site by line, and the first build of
+this step drifted 260 of them (81 definitions) — every line of `Replay.lean` below the new definitions moved.  Re-running
+81 rows is one kernel build per constant, a day of this machine's builds, so the edit was made line-neutral instead: the
+D142 definitions and the two `_cases` lemmas sit between `firstStart_mem` and the D129 arms, and the docstrings of the
+arms they feed (`endRecs` through `lateWarnList_not_status`) are each joined onto one line, which moves no word; the
+re-proofs are written line for line; every new witness and law is appended at the module's end.  `mutate.py --gate`
+then reads 0 drifted, and the owed rows are this step's own definitions alone (§7).
+
+### 5. Frozen comparands
+
+**None moved, measured**: the workspace runs below compare every frozen fork answer (`tm/tests/fixtures/`, T5's corpus,
+classes and door arms, the planner comparands) and none failed, so no fork-written or generated log in them holds two
+overlapping breaks; no D64 clause is used.
+
+### 6. The §5.13 drive
+
+`TZ=America/Chicago`, every command capped at 8 GB, the auditor's `drive/J.sh` re-pointed (`t <now> <args>` runs the
+binary, `r` prints `tm --json review day`'s block minutes and breaks).  The base binary is the W-51 repair land's
+(`.claude/worktrees/w51r-land/target/debug/tm`, `c3086a2`); this tree's is the workspace run's.  The tree: `init
+--example`, `wake 07:00`, `arrive home`, `^t1` 09:00–10:00 and `^t4` 10:10–11:10 done, then `tm break --now 09:30 10m`
+and `tm break --now 09:40`.
+
+```
+W-51 repair land (c3086a2)                            this tree (w52-k)
+after the two blocks:                                 after the two blocks:
+  block_min 120 | breaks []                             block_min 120 | breaks []
+after tm break --now 09:30 10m:                       after tm break --now 09:30 10m:
+  block_min 90 | breaks [40] | actual 40                block_min 90 | breaks [40] | actual 40
+after tm break --now 09:40:                           after tm break --now 09:40:
+  block_min 90 | breaks [40, 30] | actual 70            block_min 90 | breaks [40, 0] | actual 40
+  by_where {'-': [2, 70]}                               by_where {'-': [2, 40]}
+tm plan at 11:15:                                     tm plan at 11:15:
+09:00  5  ✓ Read ch.6 §1–2  @m3 1b (30m)              09:00  5  ✓ Read ch.6 §1–2  @m3 1b (30m)
+09:30  ·    break 40m                                 09:30  ·    break 40m
+09:40  ·    break 30m                                 10:10  3  ✓ Claude Code drafts tests  @m2 1b (60m)
+10:10  3  ✓ Claude Code drafts tests  @m2 1b (60m)    11:30  ·    lunch 30m
+11:30  ·    lunch 30m
+tm review day:                                        tm review day:
+ breaks planned 20m ×1 10m ×1 · actual 40 30           breaks planned 20m ×1 10m ×1 · actual 40 0
+```
+
+The log holds two `break_start`s on both after every verb (09:30, 09:40) — the second `tm break` still opens a second
+break, which is D141's host half (track H) — and the block minutes do not move.  **The drive that refuted the first
+build**: with no record for the covered break, every verb after `tm break --now 09:40` printed `tm: logged the break
+.tm/state.json holds running since 2026-09-08 09:40 (20m) … (D133)` and appended a third, then a fourth `break_start`
+(`review day`, then `plan`), because the host finds a break a start ended by its record (§1).  The D141 log (the
+second line a `break` line ending the first at 09:40) was not driven: D141's replay half is not built (gap 5660).
+
+What the drive did not cover: the TUI (no TUI surface reads anything but the replay's segments and records this step
+changes).
+
+### 7. Measured acceptance (every command capped)
+
+* `check.sh`: **17/17 `ok`, rc 0**, on the final tree (5m23s; axiom audit 6,967, FFI target 97, corpus 29/37 and 4/5,
+  stage goals 1, check 9: 920 new or changed since `86c4dc6`, 920 rostered, 0 owed, check 12: 1,658 reachable, 0
+  UNANSWERED, check 14: 97 modules replayed).  The `## Replay.lean` census line of `reach-exempt.txt` reads 147 of 286
+  reached (it read 143 of 282; `coverFrom`, `brkRecsC`, `brkRecs` and `brkDay` joined, each reached through `brkArm` or
+  `endRecs`) — the exempt set did not move.
+* `cargo test --workspace --no-fail-fast`, three runs (load 3.5–4.9): **3,065 / 0 / 53 over 177 result lines**,
+  **3,064 / 1 / 53 over 177** and **3,065 / 0 / 53 over 177**.  Run 2's one failure is the known noise the preamble names
+  (`cli_latency`'s three-year row 6, the stalled-day loop: 1.0029 s against its 1 s bound, README gap 5541); `cargo test
+  -p tm --test cli_latency` alone at load 5.0 passed 7 / 0 / 1.  `kernel_break_union.proptest-regressions` gained five
+  seeds during this step (§1, D46) — tracked, and every run since passes them; no other regressions file moved.
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed** over 5 result lines.
+* check 9: the step's own definitions — `coverFrom` (pinned by the identity on its accumulator; `default` has no
+  inhabitant), `brkRecsC`, `brkRecs`, `brkDay` (new), `endRecs`, `endBrkFx`, `brkArm`, `reNet`, `giveOne`,
+  `Seal.giveReads`, `BreakFold.BrkHeld` (re-rowed) — audited by `mutate.py --write`, every constant failing where the row
+  says; `giveOne` stays "pinned by nothing" for `default` (no inhabitant), as its row already said.  0 pin sites moved
+  (§4).
+
+### 8. brief_corrections
+
+* **Item 2's choice is decided by the host, not by the count.**  The brief offered "no record, or a zero-minute record —
+  whichever keeps `tm review day`'s count honest".  No record was built first; the drive (§6) showed the host's
+  `Ctx::ended_cached_break` finds a break a start ended by its **record**, so with none the next verb took the J log's
+  second break, still held by `.tm/state.json`, for one the log never held and logged its `break_start` again on every
+  verb (D133's notice).  The zero-minute record is the reading that keeps the host's one reading.
+* **"If `Machine` or the checkpoint codec changes, the kernel id moves (D113)"**: the kernel id is
+  `tm-kernel-ffi/build.rs`'s hash of the built archive (`TM_KERNEL_ID`), so it moves on **any** kernel change; it moves
+  here, with neither `Machine` nor the codec changed.
+* **Item 3 names `giveOne`'s gate; `reNet`'s is the same question** ("did a running break net this block?") one step
+  earlier and moves with it (and `Seal.giveReads` with `giveOne`).  The case is not reached on any log this track met: on a
+  block whose drawn pieces are the restored ones less the running span, one netting that cuts every taken piece takes
+  `ranMin` to zero too (§2); the witness is a held block written down.
+* **Parity numbers**: the brief assigned `P136` to D141 and `P137` to D142; D141 did not land, `parity.py` requires the
+  register contiguous, so D142 is **P136** and D141 takes the next free number when it lands.
+* **The preamble's pin rule priced**: "if an edit moves other rows' pin sites, re-verify them with
+  `mutate.py --verify --write --only`" — inserting D142's definitions into the middle of `Replay.lean` drifted **260**
+  pin sites (81 rows); re-verifying is one kernel build per constant, a day of builds here.  The edit was made
+  line-neutral instead (§4).  A brief that adds definitions to `Replay.lean`'s middle should say so up front.

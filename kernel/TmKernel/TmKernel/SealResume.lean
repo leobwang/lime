@@ -92,7 +92,7 @@ def runReads (m : Machine) : List Cal.Instant :=
 held closed block a running break netted, the starts of the pieces it re-draws anew — where a piece the running break took
 began (`Replay.Closed.ran`), which the machine holds. -/
 def giveReads (m : Machine) : List Cal.Instant :=
-  m.closed.flatMap (fun C => if C.ran.isEmpty then [] else redrawReads C.drawn C.restored)
+  m.closed.flatMap (fun C => if C.ran.isEmpty && C.ranMin == 0 then [] else redrawReads C.drawn C.restored)
 
 /-- **The instants a break held as `[s, e)` on ledger day `d` reads the index at** (D87, D94, D100; `Replay.brkFx`): the
 open block's new pieces once the break is held (`settleReads`), and each held closed block's it nets (`closedReads`). -/
@@ -274,9 +274,9 @@ theorem giveBack_shp (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) :
   intro C _
   simp only [Function.comp_apply]
   unfold Replay.giveOne
-  by_cases hr : C.ran.isEmpty = true
-  · simp only [hr, if_true]
-  · simp only [hr, if_false, Bool.false_eq_true, Replay.Closed.spans, redraw_fst_map]
+  by_cases hr : C.ran.isEmpty = true ∧ C.ranMin = 0
+  · rw [if_pos hr, if_pos hr]
+  · rw [if_neg hr, if_neg hr]; simp only [Replay.Closed.spans, redraw_fst_map]
 
 /-- **What a `break` line nets after its give-back does not depend on the index** (D137): the give-back moves only the
 held closed blocks and the last cut, and their days and spans not by the index (`giveBack_shp`). -/

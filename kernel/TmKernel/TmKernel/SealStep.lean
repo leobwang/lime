@@ -190,11 +190,11 @@ theorem giveBack_congr (m : Machine) (h : ∀ q ∈ giveReads m, dy₁ q = dy₂
   have hC : ∀ C ∈ m.closed, Replay.giveOne dy₁ C = Replay.giveOne dy₂ C := by
     intro C hC
     unfold Replay.giveOne
-    by_cases hr : C.ran.isEmpty = true
-    · simp only [hr, if_true]
-    · simp only [hr, if_false, Bool.false_eq_true]
+    by_cases hr : C.ran.isEmpty = true ∧ C.ranMin = 0
+    · rw [if_pos hr, if_pos hr]
+    · rw [if_neg hr, if_neg hr]
       rw [redraw_congr dy₁ dy₂ C.id C.drawn C.restored (fun q hq => h q (List.mem_flatMap.2 ⟨C, hC, by
-        simp only [hr, if_false, Bool.false_eq_true]; exact hq⟩))]
+        rw [show (C.ran.isEmpty && C.ranMin == 0) = false by simpa using hr]; exact hq⟩))]
   unfold Replay.giveBack
   have e1 : m.closed.map (fun C => (Replay.giveOne dy₁ C).1) = m.closed.map (fun C => (Replay.giveOne dy₂ C).1) :=
     List.map_congr_left (fun C hC' => by rw [hC C hC'])
@@ -385,17 +385,14 @@ theorem arm_congr (sl : Nat → Option Nat) (m : Machine) (e : Entry)
         hE _ (by simp [entryInstants, gapStart?, hev, hst, hact])
       simp [this]
   case brk planned actual where_ =>
-    have h2 : Replay.dayArm dy₁ sl (Replay.placed m e) (e.t.val, e.off.val) (dy₂ e.t.val)
-        = Replay.dayArm dy₂ sl (Replay.placed m e) (e.t.val, e.off.val) (dy₂ e.t.val) := by
-      unfold Replay.dayArm; simp only [Replay.placed_ev_of_brk m e hev]
     have hb : (∀ q ∈ giveReads m ++ brkFxReads (Replay.giveBack dy₁ m).1 (e.t.val, e.off.val)
         (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy₂ e.t.val), dy₁ q = dy₂ q) →
-        Replay.brkArm dy₁ sl m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) =
-          Replay.brkArm dy₂ sl m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) := by
+        Replay.brkArm dy₁ m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) =
+          Replay.brkArm dy₂ m e (e.t.val, e.off.val) (dy₂ e.t.val) planned.val (actual.map (·.val)) := by
       intro hq
       have hg := giveBack_congr dy₁ dy₂ m (fun q h' => hq q (List.mem_append_left _ h'))
       unfold Replay.brkArm
-      rw [brkFx_congr dy₁ dy₂ _ _ _ _ (fun q h' => hq q (List.mem_append_right _ h')), hg, h2]
+      rw [brkFx_congr dy₁ dy₂ _ _ _ _ (fun q h' => hq q (List.mem_append_right _ h')), hg]
     rcases hK : m.brkEnded with _ | s0 <;> simp only [hK] at h ⊢
     · exact hb (fun q hq => h q (List.mem_append_right _ hq))
     · split
@@ -1056,10 +1053,12 @@ theorem giveBack_mi (dy : Cal.Instant → Nat) (m : Machine) (q : Cal.Instant)
   · have hC'' : C' ∈ m.closed.map (fun C => (Replay.giveOne dy C).1) := hC'
     obtain ⟨C, hC, rfl⟩ := List.mem_map.1 hC''
     unfold Replay.giveOne at hpc
-    by_cases hr : C.ran.isEmpty = true
-    · simp only [hr, if_true] at hpc
+    by_cases hr : C.ran.isEmpty = true ∧ C.ranMin = 0
+    · rw [if_pos hr] at hpc
       exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc, rfl⟩))
-    · simp only [hr, if_false, Bool.false_eq_true, List.append_nil] at hpc
+    · rw [if_neg hr] at hpc
+      dsimp only at hpc
+      simp only [List.append_nil] at hpc
       obtain ⟨q', hq', hpq⟩ := Replay.redraw_fst_starts dy C.id C.drawn _ pc hpc
       obtain ⟨p, hp, hpr⟩ := restored_starts C q' hq'
       exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, hp, by rw [hpq, hpr]⟩))
@@ -1356,10 +1355,10 @@ theorem arm_mi (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine
     (hq : q ∈ machineInstants m') : q ∈ machineInstants m ∨ q = t.1 ∨ q ∈ (brkEndAt? e t.1).toList := by
   by_cases hb : ∃ p a w, e.ev = .brk p a w
   · obtain ⟨p, a, w, hev⟩ := hb
-    have hbk : m' ∈ (Replay.brkArm dy sl m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? →
+    have hbk : m' ∈ (Replay.brkArm dy m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? →
         q ∈ machineInstants m ∨ q = t.1 ∨ q ∈ (brkEndAt? e t.1).toList := fun hm => by
       unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+      rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
       rcases brkFx_mi dy _ t _ d m' hm q hq with h | h
       · exact Or.inl (giveBack_mi dy m q h)
@@ -1560,13 +1559,13 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
         subst hm
         exact Or.inl rfl
       · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+        rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
           List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
         have h := Replay.brkFx_brk dy _ t _ d m' hm
         rw [(Replay.giveBack_keeps dy m).2.2.1] at h
         exact Or.inr ⟨_, h⟩
     · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+      rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
       have h := Replay.brkFx_brk dy _ t _ d m' hm
       rw [(Replay.giveBack_keeps dy m).2.2.1] at h

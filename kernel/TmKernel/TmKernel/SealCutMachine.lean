@@ -169,13 +169,13 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm; exact Or.inl rfl
       · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+        rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
           List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
         have h := congrArg (Option.map (fun x => x.2.2)) (Replay.giveBack_brkFx_machine dy m t _ d m' hm).1
         simp only [Option.map_map, Function.comp_def] at h
         exact Or.inl h
     · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+      rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
           List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
       have h := congrArg (Option.map (fun x => x.2.2)) (Replay.giveBack_brkFx_machine dy m t _ d m' hm).1
       simp only [Option.map_map, Function.comp_def] at h
@@ -291,11 +291,11 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm; exact Or.inl rfl
       · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+        rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
           List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
         exact Or.inl (Replay.giveBack_brkFx_machine dy m t _ d m' hm).2.1
     · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+      rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
           List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
       exact Or.inl (Replay.giveBack_brkFx_machine dy m t _ d m' hm).2.1
   case brkStart pl w =>
@@ -399,11 +399,11 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
         subst hm; exact Or.inl rfl
       · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+        rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
           List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
         exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy _ t _ d m' hm))
     · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).1, List.append_nil,
+      rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
           List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
       exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy _ t _ d m' hm))
   case brkStart pl w =>

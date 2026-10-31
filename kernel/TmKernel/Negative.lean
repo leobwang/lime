@@ -3668,4 +3668,30 @@ theorem theCLogDrawsAcrossTheInterruption :
         (fun a => a.segments.any (fun g => g.start.1.sec = 63924364800 ∧ g.stop.1.sec = 63924366600)) = some true := by
   decide
 
+
+/- ======================================================================
+   W-52 track K (w52-k): cheats 651-670 are this track's.
+   ====================================================================== -/
+
+/- CHEAT 651 — the W-51 repair's reading of the J log (README gap 5634): two late `break_start`s, 08:30 and 08:40, both
+   ended by D129 at `b`'s 09:10 start, each drawn and recorded — forty and thirty minutes of break over forty of wall
+   time.  Claimed the two records' minutes.  Since the owner's D142 the second lies wholly inside the first and adds no
+   minute; `decide` computes forty and zero (`Replay.the_j_log_draws_and_records_its_breaks_once`). -/
+theorem theJLogRecordsBothBreaks :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924367200 (.brkStart 20 none)]).days.get 739865).map
+        (fun a => a.breaks.map (·.actualMin)) = some [some 40, some 30] := by
+  decide
+
+/- CHEAT 652 — a break an earlier one covers in part, recorded whole (D142): `break` 08:00 for twenty, then one stamped
+   08:10 for twenty.  Claimed the second's twenty minutes; `decide` computes ten, the part no earlier break covers
+   (`Replay.a_break_an_earlier_covers_in_part_is_drawn_from_its_end`). -/
+theorem aCoveredBreakIsRecordedWhole :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (.brk 20 (some 20) none),
+      Replay.bE 2 63924365400 (.brk 20 (some 20) none)]).days.get 739865).map
+        (fun a => a.breaks.map (·.actualMin)) = some [some 20, some 20] := by
+  decide
+
 end Tm

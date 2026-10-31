@@ -9122,3 +9122,18 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.the_c_log_reads_as_its_break_had_no_start
 #print axioms Tm.Replay.the_c_log_without_its_break_start
 #print axioms Tm.Replay.netOne_nets_the_give_back_is_not_vacuous
+
+/- ======================================================================
+   APPENDED 2026-10-31: stage 6 W-52 track K (w52-k) — gap 5631 (a give-back's gate) and the owner's D142
+   (overlapping logged breaks read as their union, parity P136).
+   ====================================================================== -/
+#print axioms Tm.Replay.brkRecsC_cases
+#print axioms Tm.Replay.brkDay_cases
+#print axioms Tm.Replay.brkDay_obs3
+#print axioms Tm.Replay.giveOne_of_no_run_as_w51_stated_it_is_refuted
+#print axioms Tm.Replay.netOne_ran_of_no_run_as_w51r_stated_it_is_refuted
+#print axioms Tm.Replay.a_give_back_with_no_piece_left_still_gives_its_minutes
+#print axioms Tm.Replay.the_j_log_draws_and_records_its_breaks_once
+#print axioms Tm.Replay.a_break_an_earlier_covers_in_part_is_drawn_from_its_end
+#print axioms Tm.Replay.a_break_no_earlier_covers_is_drawn_as_logged
+#print axioms Tm.Replay.coverFrom_reads_only_earlier_breaks

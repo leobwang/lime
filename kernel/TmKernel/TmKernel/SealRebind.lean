@@ -63,7 +63,6 @@ theorem arm_sl (dy : Cal.Instant → Nat) (sl sl' : Nat → Option Nat) (m : Mac
   unfold Replay.arm Replay.brkArm Replay.dayArm
   cases hev : e.ev <;> simp only
   case energy pred rep hsw loc => exact absurd hev (h _ _ _ _)
-  case brk p a w => simp only [Replay.placed_ev_of_brk m e hev]
 
 /-- A state whose open block's pending observation is a start's (C5's `SleptInv`, its second half). -/
 def PendingStart (st : State) : Prop := ∀ o, st.machine.block.bind (·.obs) = some o → o.fromStart = true

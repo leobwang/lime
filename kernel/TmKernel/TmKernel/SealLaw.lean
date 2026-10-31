@@ -1073,7 +1073,7 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
       simp [List.filterMap_append, List.filterMap_cons, (Replay.cut_obs dy _ t).2.1, Replay.settle_duration,
         Effect.durationOf?, (Replay.netStart_obs dy _ _ _).2.1, Replay.runNet_duration]
     split
-    · rw [List.filterMap_append, (Replay.endRecs_obs _ t).2.1, hS, List.nil_append]
+    · rw [List.filterMap_append, (Replay.endRecs_obs _ _ t).2.1, hS, List.nil_append]
     · exact hS m
   case pause id =>
     split
@@ -1102,9 +1102,9 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
     simp only [List.filterMap_cons, Effect.durationOf?]
     exact (Replay.extendFx_obs m id by_.val).2
   case brk planned actual where_ =>
-    have hb : (Replay.brkArm dy sl m e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := by
+    have hb : (Replay.brkArm dy m e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := by
       unfold Replay.brkArm
-      rw [List.filterMap_append, (Replay.dayArm_obs dy sl (Replay.placed m e) t d).2.1, List.append_nil,
+      rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).2.1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy m).2.1, List.nil_append]
       exact (Replay.brkFx_obs dy _ t _ d).2
     split
