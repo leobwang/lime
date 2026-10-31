@@ -2233,6 +2233,11 @@ pub struct BreakOut {
     pub actual_min: Option<u32>,
     /// Where.
     pub place: Option<String>,
+    /// **The end a later block's `start` had given the break this run ended** (`HH:MM`) — the owner's
+    /// **D141** (README gap 5633, parity **P138**): `tm break` typed inside a logged break that D129 ended at
+    /// a later start ends it at the typed instant, and this is the end it replaced. Absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub superseded_end: Option<String>,
 }
 
 /// `tm break [20m] [--where walk]` — starts a break, or ends the running one.
@@ -2284,9 +2289,53 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     // The ending arm is the one body every verb that ends a break runs (the owner's D97):
     // `end_break_first`, then `note_break_ended` below.
     let ended = end_break_first(&mut ctx)?;
+    // **A break a later start already ended, typed inside, ENDS THERE** — the owner's **D141** (README gap
+    // 5633, stage 6 W-52 track H, parity **P138**). With no break running, a `tm break` typed at an instant
+    // inside a logged break that D129 ended at a later block's `start`, and that no `break` line has ended
+    // yet ([`Ctx::break_a_start_ended_at`]), is that break's end: its `break` line is written at the typed
+    // instant in the shape every break end has (`t` the break's start, `actual_min` the typed instant less
+    // it, its planned minutes and place — `end_break_at`'s, through the kernel's writer, D16), with the
+    // journal line and the human clause every break end writes (D97, D101). It never logs a second
+    // `break_start` inside the first, which is what this verb did until D141 (the W-51 auditor's J drive:
+    // `tm plan` drew `09:30 break 40m` and `09:40 break 30m`). It is an ENDING arm, so D20 settles what a
+    // valid argument does here as in the other one: nothing — `tm break --now 09:40 10m` ends the break at
+    // 09:40 and does not retime it (the campaign's call, README gap 5682); an invalid one was refused above.
+    let superseded = if ended.is_none() {
+        ctx.break_a_start_ended_at(ctx.now)
+    } else {
+        None
+    };
     let out = if let Some(ended) = ended {
         ctx.save_state()?;
         ended
+    } else if let Some(b) = superseded {
+        let actual = (ctx.now - b.t).num_minutes().max(0) as u32;
+        let entry = log::LogEntry::new(
+            b.t,
+            Event::Break {
+                planned_min: b.planned_min,
+                actual_min: Some(actual),
+                r#where: b.r#where.clone(),
+            },
+        );
+        ctx.append_entry(&entry)?;
+        let tz = ctx.cfg.tz;
+        let (from, until) = b.span();
+        let (from, until) = (from.with_timezone(&tz), until.with_timezone(&tz));
+        eprintln!(
+            "tm: the break that began at {} ends here, at {} — the `start` the log holds at {} had ended it \
+             (D129); typed inside it, `tm break` ends it (D141)",
+            from.format("%H:%M"),
+            ctx.now_tz.format("%H:%M"),
+            until.format("%H:%M")
+        );
+        BreakOut {
+            action: "ended".to_string(),
+            planned_min: b.planned_min,
+            actual_min: Some(actual),
+            place: b.r#where,
+            superseded_end: Some(until.format("%H:%M").to_string()),
+        }
     } else {
         let planned = asked.unwrap_or(ctx.cfg.day.break_min);
         // **The break's START is logged** — the owner's **D105** (README "Stage 6 —
@@ -2316,6 +2365,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             planned_min: planned,
             actual_min: None,
             place,
+            superseded_end: None,
         }
     };
     ctx.reload()?;
@@ -2452,6 +2502,7 @@ fn ended_report(running: Option<BreakState>, actual: Option<u32>) -> Option<Brea
             planned_min: br.planned_min,
             actual_min: Some(actual),
             place: br.place,
+            superseded_end: None,
         }),
         _ => None,
     }

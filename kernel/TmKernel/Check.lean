@@ -9137,3 +9137,35 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_break_an_earlier_covers_in_part_is_drawn_from_its_end
 #print axioms Tm.Replay.a_break_no_earlier_covers_is_drawn_as_logged
 #print axioms Tm.Replay.coverFrom_reads_only_earlier_breaks
+
+/- ======================================================================
+   APPENDED 2026-10-31: stage 6 W-52b track K2 (w52-k2) — the owner's D141, its replay half (README gaps 5633 and
+   5660, parity P137): a `break` line ending a break D129 already ended, where it says.
+   ====================================================================== -/
+#print axioms Tm.Replay.forget_held
+#print axioms Tm.Replay.forget_headOk
+#print axioms Tm.Replay.forgetIdle_held
+#print axioms Tm.Replay.forgetIdle_headOk
+#print axioms Tm.Replay.forgetIdle_keeps
+#print axioms Tm.Replay.conserves_netTake
+#print axioms Tm.Replay.conserves_takeFx
+#print axioms Tm.Replay.takeFx_brk
+#print axioms Tm.Replay.takeFx_brkOpen
+#print axioms Tm.Replay.takeFx_machine
+#print axioms Tm.Replay.takeFx_block
+#print axioms Tm.Replay.a_break_line_before_its_d129_end_ends_the_break_there
+#print axioms Tm.Replay.a_break_line_at_or_after_its_d129_end_is_the_breaks_own
+#print axioms Tm.Replay.a_break_line_ending_at_its_d129_end_is_the_breaks_own
+#print axioms Tm.Replay.a_break_line_ending_a_covered_break_leaves_two_records
+#print axioms Tm.Replay.a_break_line_for_an_older_ended_break_is_a_covered_break
+#print axioms Tm.Replay.forgetIdle_clears_a_take_only_with_no_break_running
+#print axioms Tm.Seal.takeFx_congr
+#print axioms Tm.Seal.mi_of_sub
+#print axioms Tm.Seal.forget_mi
+#print axioms Tm.Seal.forgetIdle_mi
+#print axioms Tm.Seal.tail_mi
+#print axioms Tm.Seal.takeFx_mi
+#print axioms Tm.BreakFold.takeFx_noBrkSeg
+#print axioms Tm.BreakFold.undo141_seg
+#print axioms Tm.BreakFold.stepWith_brkHeld_d141
+#print axioms Tm.Replay.a_d129_ending_covered_in_part_is_recorded_by_its_drawn_minutes

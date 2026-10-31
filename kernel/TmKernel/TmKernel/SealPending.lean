@@ -130,27 +130,28 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         · exact Or.inl rfl
       · exact Or.inl rfl
   case brk p a w =>
+    have hbk : ∀ M : Machine, M.block = m.block → m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → m'.block.bind (·.obs) = m.block.bind (·.obs) := fun M hM hm => by
+      unfold Replay.brkArm at hm
+      rw [List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
+        List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
+      have h := (Replay.brkFx_machine dy _ t _ d m' hm).2.2
+      rw [(Replay.giveBack_keeps dy M).1, hM] at h
+      exact h
     split at hm
     · split at hm
-      · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm
-        subst hm; exact Or.inl rfl
-      · unfold Replay.brkArm at hm
-        rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
-          List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
-        have h := (Replay.brkFx_machine dy _ t _ d m' hm).2.2
-        rw [(Replay.giveBack_keeps dy m).1] at h
-        exact Or.inl h
-    · unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.brkDay_obs3 m e t d _ _).1, List.append_nil,
-        List.filterMap_append, (Replay.giveBack_obs dy m).2.2, List.nil_append] at hm
-      have h := (Replay.brkFx_machine dy _ t _ d m' hm).2.2
-      rw [(Replay.giveBack_keeps dy m).1] at h
-      exact Or.inl h
+      · -- D141: the ending's segment and record undone write no machine; then a `break` line's arm over the machine
+        -- with that break let go, whose block is the old one's
+        unfold Replay.d141Arm at hm; split at hm <;> (try split at hm)
+        · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
+          exact Or.inl (hbk _ (by rfl) hm)
+        all_goals simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl (congrArg (·.bind (·.obs)) (Replay.forgetIdle_keeps m).1)
+      · exact Or.inl (hbk _ (Replay.forgetIdle_keeps m).1 hm)
+    · exact Or.inl (hbk m rfl hm)
   case brkStart pl w =>
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 m' hm
-      exact Or.inl (Replay.brkFx_machine dy { m with brkEnded := some t } t t0 d m' hm').2.2
+      exact Or.inl (Replay.takeFx_machine dy { Replay.forget m with brkEnded := some t } t t0 d m' hm').2.2
     unfold Replay.brkStartArm at hm
     -- D105: the running break is set and the block, with its pending observation, untouched — settled over the
     -- running break and the held closed blocks netted by it since README gap 5180, neither of which moves it.
@@ -158,7 +159,7 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
       List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
     subst hm
     rw [(Replay.runNet_keeps dy _).1, Replay.settle_obs]
-    exact Or.inl rfl
+    exact Or.inl (congrArg (·.bind (·.obs)) (Replay.forgetIdle_keeps m).1)
   all_goals rw [(Replay.dayArm_obs dy sl e t d).1] at hm; simp at hm
 
 /-- **A step's pending observation is its start's, none, or on the step's day.** -/

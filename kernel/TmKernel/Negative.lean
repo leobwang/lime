@@ -3694,4 +3694,42 @@ theorem aCoveredBreakIsRecordedWhole :
         (fun a => a.breaks.map (·.actualMin)) = some [some 20, some 20] := by
   decide
 
+/- ======================================================================
+   W-52b track K2 (w52-k2): cheats 691-710 are this track's (691-693 taken).
+   ====================================================================== -/
+
+/- CHEAT 691 — P127's reading of a `break` line that ends a break D129 already ended (README gaps 5633 and 5660): the J
+   log with the line track H's `tm break` writes — `t` 08:30, ten minutes — after the 08:30 `break_start` D129 ended at
+   `b`'s 09:10 start.  Claimed `a` stays at thirty, the line the break's own and nothing else.  Since the owner's D141
+   the line ends the break at 08:40 and gives back what the ending took after it; `decide` computes fifty
+   (`Replay.a_break_line_before_its_d129_end_ends_the_break_there`). -/
+theorem aBreakLineBeforeItsD129EndIsTheBreaksOwn :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924366600 (.brk 10 (some 10) none)]).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+/- CHEAT 692 — D141's undoing taking a segment another held break witnesses (`DayOp.unsegBrks`): two late `break_start`s
+   at one stamp, both ended by D129, then the line ending the newest.  Claimed no Break segment survives — the undoing
+   removing every segment the dropped head witnesses.  The first break witnesses `[08:30, 09:10)` too, so it is kept;
+   `decide` computes one (`Replay.a_break_line_ending_a_covered_break_leaves_two_records`). -/
+theorem theUndoingTakesASegmentAnotherBreakWitnesses :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924366600 (.brkStart 10 none), Replay.bE 7 63924366600 (.brk 10 (some 10) none)]).days.get 739865).map
+        (fun a => (a.segments.filter (fun g => g.kind == .brk none)).length) = some 0 := by
+  decide
+
+/- CHEAT 693 — W-52 track K's reading of a D129 ending an earlier break covers in part (README gap 5662): a `break` line
+   08:00 for thirty, then a `break_start` 08:10 a `start` at 08:40 ends.  Claimed the ending's record whole, thirty
+   minutes, the overlap with the first counted twice.  Since W-52b track K2 its minutes are the drawn ones; `decide`
+   computes ten (`Replay.a_d129_ending_covered_in_part_is_recorded_by_its_drawn_minutes`). -/
+theorem aD129EndingCoveredInPartIsRecordedWhole :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (.brk 30 (some 30) none),
+      Replay.bE 2 63924365400 (.brkStart 20 none), Replay.bE 3 63924367200 (Replay.bStart ['a'])]).days.get 739865).map
+        (fun a => a.breaks.map (·.actualMin)) = some [some 30, some 30] := by
+  decide
+
 end Tm
