@@ -101956,3 +101956,213 @@ committed sources (its own plant-mtime finding, its README §9); every drive her
 
 **The owner's ruling taken at this land:** gap 5562 is D139 — a logged `break_start` stays a block's last logged
 activity for D130's stop (gap 5507's reading stands), and the upgrade-path over-credit is recorded, not built around.
+
+<!-- =====================================================================
+     APPENDED 2026-10-30: stage 6 (the planner), run **W-51 repair**, **track K**
+     (`w51r-k`) — the W-51 auditor's finding 1 and notes 2, 4 and 5: a give-back
+     must not undo a later netting.  Gaps 5630-5649 are this track's
+     (5630-5634 taken).  Cheats 631-650 (631-632 taken).  No new parity number:
+     **P134**'s row is restated.  Whoever merges renumbers.
+     ===================================================================== -->
+
+## Stage 6 — W-51 repair track K: a give-back keeps every later netting
+
+### 1. The finding (gap 5630; gap 5581 closed)
+
+W-51's D137 gave a block back what a running break took by re-drawing the pieces it took **whole** (`Closed.ran`) and
+crediting back **every** minute it took (`Closed.ranMin`).  Neither was touched by any netting logged while the break
+ran (`netOne` left both alone, the old `netOne_ran`), so when the break's own line arrived the give-back undid them.
+The W-51 auditor's kernel probes, re-run on this tree's base:
+
+| log (08:00 = `a`'s start) | no `break_start` | W-51 land | this repair |
+|---|---|---|---|
+| **K**: `a` 08:00–09:00 done 60; `break_start` 08:30; late `start b` 08:10; `done b` 08:15 (5); `break` 08:30 10m | `a` 10, day 15; `a [08:00,08:10]`, `b [08:10,08:15]`, Break | **`a` 30**, day 35; `a [08:00,08:30]` across `b`, `a [08:40,09:00]` | `a` 10, day 15; the same three segments |
+| **C**: the same `a`; `break_start` 08:30; late interruption 08:10–08:20; `break` 08:30 10m | `a` 40; `a [08:00,08:10]`, Interruption, `a [08:20,08:30]`, Break, `a [08:40,09:00]` | `a` 40, but **`a [08:00,08:30]` drawn across the interruption** beside `[08:20,08:30]` | `a` 40; the same five segments |
+
+The land's `Closed.restored` docstring said "its later nettings kept"; they were not.  Gap 5581 had recorded the class
+as two late marks inside one closed block, the second inside the stretch the running break took — too narrowly: a
+late `start` that cuts the block **before** the break (K) is undone as well, because the cut's span `[t, startEnd t C)`
+ended at the end of the pieces still drawn, short of the stretch the running break had taken.
+
+### 2. The fix — the auditor's named one, and the part it left out
+
+The auditor named "`netOne` cutting `ran` and `ranMin` alongside `drawn`".  Taken, with three additions without which
+K still read wrong; each was found by working the K log through by hand before writing it.
+
+* **`reNet`** (new; `Replay.lean`, beside `netOne`): a netting over `[s, e)` on ledger day `d` that leaves the block's
+  credit at `min'` cuts the pieces the running break took as it cuts the drawn ones (**`cutRan`**, `pieces` per piece,
+  the piece's own day kept — read by nothing but `Closed.restored`, which reads spans, so no new index read), and the
+  minutes to give back become **the restored block's credit netted by the same span (`shadowNet`, `netMin`'s reading
+  over `Closed.restored` and `min + ranMin`) less the block's own, never more than they were**.  Nothing when no running
+  break netted the block, the span is empty, or the netting is filed before the block's ledger day (D94).  `netOne`
+  applies it in **both** branches — also when the span meets no piece still drawn, because the stretch the running
+  break took is exactly where a later netting can land without meeting a drawn piece.
+* **`Closed.restored`** drops a drawn piece when it **meets** a piece the running break took (`meets`), not when it
+  begins where one began (`atEq`): after a later netting cuts a remainder in two, the second half begins somewhere new,
+  and the start test kept it beside the cut piece it lay inside (C's `[08:20, 08:30]`).  `meets` moved above `netOne`.
+* **`startEnd`** reads `C.drawn ++ C.ran`: a block the running break netted down to before a late `start` is still the
+  block the `start` is stamped inside, and its cut must reach past what the give-back will restore — K's `start b`
+  cut `[08:10, 08:30)` and left `[08:30, 09:00]` of the restored block standing.  With `Closed.ran` empty `startEnd` is
+  unchanged.
+
+What the repair does **not** do, by name: it does not re-derive the block from the log; the restored block is carried
+as `Closed.ran` and `Closed.ranMin` beside the drawn one and netted step for step.  So it is exact where every later
+netting's loss on the restored block is between its loss on the drawn block and that plus what the running break took
+(`netOne_nets_the_give_back`'s hypotheses) — true whenever the drawn pieces are the restored ones less the running span,
+which no theorem here proves in general (gap 5632).
+
+### 3. Laws (D5)
+
+**Re-proved over the new shape:** every `Seal*` law that reads `netOne`, `startEnd` or `Closed.restored` — the build
+of all 198 targets is the evidence, and four proofs moved: `Seal.startReads_mi`, `Seal.netClosed_mi`,
+`Seal.netStart_mi` (the pieces `reNet` keeps begin where a taken piece began or, for a break, at its end —
+`Replay.reNet_starts`, `Replay.reNet_startEnd_starts`; never at a late start's span end, which lies past every drawn
+and taken piece — `Replay.cutOut_startEnd_starts_of`, `Replay.startEnd_ge_run`), and `Replay.startEnd_ge` (same
+statement, through `startEnd_ge_run`).
+
+**Restated, the old statement refuted by name:** `Replay.netOne_ran` (now: the taken pieces are `reNet`'s, the minutes
+`reNet`'s at the credit the netting leaves; `Replay.netOne_ran_as_w51_stated_it_is_refuted` on C's interruption, and
+`Replay.netOne_ran_of_no_run` keeps W-51's statement where nothing was taken); `Replay.startEnd_guard` (hypothesis over
+`C.drawn ++ C.ran`; `Replay.startEnd_guard_as_w51_stated_it_is_refuted`).
+
+**New laws (auditor note 2 — the land had witnesses and no law):**
+
+* `Replay.giveOne_runOne_min` — from a block no running break netted, the running netting and the give-back leave the
+  credit where it was, whatever the running span (the auditor's statement; proved here through
+  `Replay.netOne_min_add` and `Replay.netOne_took_of_no_meet` rather than its probe's unfolding).
+* `Replay.netOne_nets_the_give_back` and `Replay.giveOne_after_a_later_netting_min` — the composed form over one later
+  netting: after it, the credit the give-back restores (`min + ranMin`), and the give-back's result, are the restored
+  block's credit netted by the later span (`shadowNet`); its subdomain is not empty
+  (`Replay.netOne_nets_the_give_back_is_not_vacuous`, C's block: fifty).
+* The auditor's two logs against the replay with no `break_start`, minutes **and** drawn segments:
+  `Replay.the_k_log_reads_as_its_break_had_no_start` / `Replay.the_k_log_without_its_break_start`,
+  `Replay.the_c_log_reads_as_its_break_had_no_start` / `Replay.the_c_log_without_its_break_start`.
+
+**The plant re-run** (the auditor's: `giveOne := (C, [], 0)`, in a scratch copy of this tree's `Replay.lean`, compiled
+against the built package, capped at 16 GB): nine errors — `giveOne_mem`, `giveOne_keeps`, `giveOne_conserves` (their
+proofs unfold the body), the land's three D137 witnesses, and **`giveOne_runOne_min`**, **`giveOne_after_a_later_netting_min`**
+and `the_c_log_reads_as_its_break_had_no_start`.  The land's plant failed only its three witnesses; the laws now fail
+with it.
+
+**Auditor note 5.** `Replay.a_late_breaks_line_gives_back_a_stopped_block`'s docstring named the day's ci-unknown
+minutes and its statement read only the item's minutes and `blockMin`: the projection is added
+(`(f.days.get 739865).map (fun a => a.ciUnknown.get ['a']) = some (some 50)`), decided.
+
+Cheats **631** (K's `a` claimed thirty, the land's reading) and **632** (C's `a [08:00, 08:30]` claimed drawn), each
+refused by `decide` proving its statement false.  Check.lean: 19 audit lines under this track's banner.
+
+### 4. Records (auditor note 4)
+
+**Gap 5633 — D137 does not reach a late break D129 already ended at a later block's start.**  1. *What.*  The
+auditor's `drive/J.sh`: `^t1` 09:00–10:00 and `^t4` 10:10–11:10, both done; then `tm break --now 09:30 10m` — D129 ends
+the break at `^t4`'s start, 10:10, and nets `^t1` to thirty — then `tm break --now 09:40`, meant to end it after ten
+minutes.  The host says the 09:30 break "ended at 10:10 … it is not running" and opens a **second** break at 09:40,
+which D129 also ends at 10:10.  `^t1` stays at thirty; D137 never runs, because no `break` line ends either break.
+2. *Why.*  D129 reads the later block's `start` as the break's end, and a break so ended has no line to give back
+(gap 5580's class).  3. *Cost.*  On a log where a later block is already logged, a late break the user ends by hand
+keeps the block netted to the later block's start.  4. *Clears it.*  An owner reading of `tm break` (ending) when the
+log already ended the break: refuse by name, or end it with a line D137 then gives back from.
+
+**Gap 5634 — the J log draws two overlapping breaks and counts both (a defect).**  1. *What.*  On the same tree `tm
+plan` draws `09:30 break 40m` and `09:40 break 30m`, and `tm review day` reports breaks `actual 40 30` — seventy
+minutes of break over forty minutes of wall time.  2. *Why.*  Each `break_start` is ended by D129 at the same start,
+and nothing unions two breaks' segments or records.  3. *Cost.*  One span read twice (§5.3): break minutes, `over`
+and the drawn day.  The block's own minutes are right (the replay nets the union).  4. *Clears it.*  The host's
+`tm break` not opening a second break inside one D129 already ended (gap 5633's decision), or the replay drawing and
+recording only the part of a break no earlier break covers — the host's, with an owner reading; track H's file.
+
+Driven with the land's binary and this tree's (the transcript is §6): the same on both, since nothing here moves it.
+
+### 5. Gaps opened
+
+**Gap 5630 — closed by this block** (§1–§3).
+
+**Gap 5631 — a give-back whose taken pieces a later netting cut away entirely is skipped.**  1. *What.*  `giveOne`
+gives back only when `Closed.ran` is not empty; `reNet` can leave it empty while `ranMin` is above zero, when the
+block's credit was below its drawn minutes (a `done` with an `actual_min` under its span) and later nettings cut every
+taken piece.  2. *Why.*  The gate is the land's, and changing it moves `giveOne`'s laws for a case no corpus or
+generated log holds.  3. *Cost.*  On that log the block keeps less credit than the log with no `break_start` gives
+it.  4. *Clears it.*  Gate on `ran` empty **and** `ranMin = 0`.
+
+**Gap 5632 — the restored block's spans are not proved to be the drawn ones before the running break, cut.**  1.
+*What.*  `netOne_nets_the_give_back` states the minutes; that `Closed.restored` after the running netting and any later
+nettings is, as a set of spans, the block before the running netting cut by the later spans is decided on the two logs
+above and not proved.  2. *Why.*  It needs the drawn pieces of a held block to be pairwise disjoint and nonempty, an
+invariant of the fold nobody has stated.  3. *Cost.*  The composed law carries its two hypotheses.  4. *Clears it.*
+State and carry that invariant (BreakFold's shape), then prove `restored (netOne X C) ~ cutOut X (restored C)`.
+
+**Parity P134 restated** (no new number): the row now ends "… gives back the rest, keeping every netting logged while
+it ran — a late `start`'s cut, a late interruption (the W-51 repair, gap 5630)".
+
+### 6. The §5.13 drive (`TZ=America/Chicago`, every command capped at 8 GB; the land binary is
+`.claude/worktrees/w51-land/target/debug/tm`, built from `179d83c`, and this tree's is the workspace run's)
+
+**The K shape** — the orchestrator's tree `w51/v/AK` (copied fresh for each binary; its log is the K log on the binary's
+own items: `^t1` 09:00–10:00 done 60, `break_start` 09:30, late `start ^t4` 09:10, `done ^t4` 09:15 with 5, `break`
+09:30 10m — written by hand, because on one machine `tm start` ends a running break first, D97, so the verbs cannot
+log it in this order; driven, `tm start ^t4 --now 09:10` wrote `break … actual_min 0` before its `start`):
+
+```
+land                                          this tree
+  review day block_min 35                       review day block_min 15
+09:00 5 ✓ Read ch.6 §1–2   @m3 1b (30m)       09:00 5 ✓ Read ch.6 §1–2   @m3 1b (10m)
+09:10 3 ✓ Claude Code ...  @m2 1b (5m)        09:10 3 ✓ Claude Code ...  @m2 1b (5m)
+09:30 ·   break 10m                           09:30 ·   break 10m
+09:40 5 ✓ Read ch.6 §1–2   @m3 1b (20m)       10:30 ·   laundry 30m
+10:30 ·   laundry 30m
+```
+
+**The C shape** — the auditor's `drive/C.sh` through the verbs (`^t1` 09:00–10:00 done; `tm break --now 09:30 10m`;
+`tm interrupt --now 09:10`; `tm resume --now 09:20`; `tm break --now 09:40`), `review day`'s `block_min` after each
+of the three marks, then `tm plan` at 10:30:
+
+```
+land                                          this tree
+  block_min 30 / 20 / 40                        block_min 30 / 20 / 40
+09:00 5 ✓ Read ch.6 §1–2 ... (30m)            09:00 5 ✓ Read ch.6 §1–2 ... (10m)
+09:10 ·   lost 10m        interruption        09:10 ·   lost 10m        interruption
+09:20 5 ✓ Read ch.6 §1–2 ... (10m)            09:20 5 ✓ Read ch.6 §1–2 ... (10m)
+09:30 ·   break 10m                           09:30 ·   break 10m
+09:40 5 ✓ Read ch.6 §1–2 ... (20m)            09:40 5 ✓ Read ch.6 §1–2 ... (20m)
+```
+
+Forty minutes on both; the land drew `^t1` 09:00–09:30 across the interruption (sixty drawn), this tree draws forty.
+
+**The J shape** (§4) — the same on both binaries: `block_min` 120 → 90 → 90, the host's notice "the break that began
+at 09:30 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running", then a second
+`break_start` at 09:40, `tm plan` drawing `09:30 break 40m` and `09:40 break 30m`, and `tm review day`'s
+`breaks planned 20m ×1 10m ×1 · actual 40 30`.
+
+What the drive did not cover: the TUI (no TUI surface moves with a replay reading, and none was opened).
+
+### 7. Measured acceptance (every command capped, on `29d3411` plus this block)
+
+* `check.sh`: **17/17 `ok`, rc 0**, on the final tree (34 s warm; axiom audit 6,957, FFI target 97, corpus 29/37 and
+  4/5, stage goals 1, check 12 0 UNANSWERED, 97 modules replayed; the cold run on `29d3411` took 14m08s).  The first run on `29d3411`'s tree before its reach census was
+  corrected printed 16 `ok` and check 12 `FAILED` on the census line alone (`Replay.lean`'s reason said 140 of 279
+  reached, the measurement 143 of 282); after the correction `reach.py` alone exits 0 with 0 UNANSWERED.
+* `cargo test --workspace --no-fail-fast`, three runs (load 1.3–3.4): **3,044 passed / 0 failed / 53 ignored over 176
+  result lines** each — the land's 3,043 and this block's one new test; no `.proptest-regressions` file moved.
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**.
+* check 9: 916 new or changed since the baseline, 916 rostered, 0 owed — the three new definitions (`cutRan` by
+  `cutRan_spans` and the C witness, `shadowNet` by the K witness's statement decided false, `reNet` by `reNet_fst` and
+  `netOne_ran`), `netOne`, `startEnd` and `Closed.restored` re-rowed, and the 83 rows whose pin sites the insertions
+  moved re-verified one by one with `mutate.py --verify --write --only` (every one re-ran and failed where it said;
+  none changed verdict).
+* `parity.py`: P1–P134, no hole, next free P135; P36's anchor re-pointed to `Replay.lean:11666`, the line its cite
+  moved to.
+
+### 8. brief_corrections
+
+* The auditor's named fix (`netOne` cutting `ran` and `ranMin` beside `drawn`) is **not enough for K**: K's late
+  `start` cut the block's drawn pieces over `[08:10, startEnd)` with `startEnd` the end of the pieces still drawn
+  (08:30), so the restored block kept `[08:30, 09:00]`; and `Closed.restored`'s start-match kept a cut remainder's
+  second half beside the cut piece.  `startEnd` reads the taken pieces and `restored` matches by `meets` (§2).
+* "the auditor's plant (`giveOne := (C, [], 0)`) failed only the three witnesses": true of the auditor's plant,
+  which kept the body and set the guard to `true`; a plant replacing the whole body also fails `giveOne_mem`,
+  `giveOne_keeps` and `giveOne_conserves`, whose proofs unfold it.  Re-run here both ways (§3).
+* The K shape cannot be produced through the binary's verbs on one machine: `tm start` ends a running break first
+  (D97), even one stamped after the start — so the binary drive and the new test write the log lines by hand.
+* The auditor's own `target/debug/tm` is not the land's host: on the C drive its `tm interrupt --now 09:10` wrote a
+  `break … actual_min 0` before the interruption (D90 on a break stamped after the interrupt) where the land binary
+  writes none; every "before" here uses the land's binary.
