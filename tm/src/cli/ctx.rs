@@ -1449,6 +1449,44 @@ impl Ctx {
         Some(span)
     }
 
+    /// **The logged break a later block's `start` ended (D129) that `at` lies inside, and that no `break`
+    /// line has ended yet** — the owner's **D141** (README gap 5633, stage 6 W-52 track H, parity **P138**):
+    /// the break `tm break --now <at>` ends at `at` instead of opening a second break inside it.
+    ///
+    /// Read off the replay's own facts, never re-derived (§5.3): the break is a record of the replay's days
+    /// ([`BreakRecord`], the one the kernel writes when a start ends a running break: stamped at its
+    /// `break_start`, its minutes up to that start), and its span ([`BreakRecord::span`]) is the end D129 gave
+    /// it — the instant `tm break`'s D129 notice prints. What tells a break D129 ended from one its own line
+    /// ended is the log's rows ([`Replay::rows`]): a surviving `break_start` row at the record's stamp and no
+    /// surviving `break` row there, for the line that ends a break is stamped at the break's start (the fork's
+    /// shape, D105). `at` must lie STRICTLY inside the span: at or after D129's end, or at the break's own
+    /// start, the verb keeps its behaviour before D141. With several such breaks around `at` (a log D142 reads
+    /// as a union), the latest-begun is answered. `None` while a break runs — the ending arm ends that one —
+    /// and when the replay's scope does not hold the break's day (a sealed month; README gap 5681).
+    pub(crate) fn break_a_start_ended_at(&self, at: DateTime<FixedOffset>) -> Option<BreakRecord> {
+        if self.replay.open_break.is_some() || self.state.break_.is_some() {
+            return None;
+        }
+        // The tags are asked of `Event` rather than spelled a second time (§5.3).
+        let start = Event::BreakStart { planned_min: 0, r#where: None };
+        let end = Event::Break { planned_min: 0, actual_min: None, r#where: None };
+        let (start, end) = (start.name(), end.name());
+        let row = |tag: &str, t: DateTime<FixedOffset>| {
+            self.replay.rows.iter().any(|r| !r.cancelled && r.tag == tag && r.t == t)
+        };
+        self.replay
+            .days
+            .values()
+            .flat_map(|d| d.breaks.iter())
+            .filter(|b| {
+                let (from, until) = b.span();
+                from < at && at < until
+            })
+            .filter(|b| row(start, b.t) && !row(end, b.t))
+            .max_by_key(|b| b.t)
+            .cloned()
+    }
+
     /// **Whether the log ENDED the running break `.tm/state.json` holds** (the W-46 audit, README gap
     /// 4903) — [`Ctx::ended_cached_break`] found its record.
     fn log_ended(&self) -> bool {
