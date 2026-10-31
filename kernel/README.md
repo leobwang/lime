@@ -102845,7 +102845,7 @@ a `break` line ending a break D129 ended, nor a D129 ending an earlier break cov
 
 ### 5. The §5.13 drive
 
-`TZ=America/Chicago`, every command capped at 8 GB (`…/scratchpad/w52b/k2/drive/J141.sh` and `J5662.sh`, `t` and `r` as
+`TZ=America/Chicago`, every command capped at 8 GB (the scratchpad's drive/J141.sh and J5662.sh, `t` and `r` as
 the W-51 auditor's `lib.sh` has them, `r` printing `tm --json review day`'s block minutes, break minutes and `by_where`).
 The base binary is W-52 track K's (`.claude/worktrees/w52-k/target/debug/tm`, `34cde84`); this tree's is the final
 workspace run's.  The tree: `init --example`, `wake 07:00`, `arrive home`, `^t1` 09:00–10:00 and `^t4` 10:10–11:10
@@ -102897,10 +102897,52 @@ The drawn day is the same on both for gap 5662's log (the union was already draw
 now the fifty of wall time.  What the drive did not cover: the TUI (it reads the same segments and records), and the
 verb half end to end, which is track H's test (§6).
 
-### 6. Measured acceptance
+### 6. Measured acceptance (every command capped)
 
-(filled after the runs).
+* `check.sh`: **17/17 `ok`, rc 0**, on the final kernel tree (`e5585cb`'s; 14m22s at load 1.9–7): axiom audit 6,994,
+  FFI target 97, corpus 29/37 and 4/5, stage goals 1, check 9: 925 new or changed since `86c4dc6`, 925 rostered, 0 owed,
+  check 12: 1,663 reachable, 0 UNANSWERED, check 14: 97 modules replayed.  The `## Replay.lean` census line of
+  `reach-exempt.txt` reads 152 of 291 reached (it read 147 of 286; `forget`, `forgetIdle`, `netTake`, `takeFx` and
+  `d141Arm` joined) — the exempt set did not move.
+* `cargo test --workspace --no-fail-fast`, three runs on the final tree (load 0.9–7.1): **3,067 / 0 / 53 over 178 result
+  lines**, three times (15m23s, 14m59s, 14m59s).  No `.proptest-regressions` file moved.  An earlier run on the D141 commit's
+  tree before its test was finished read 3,065 / 2 / 53 — the two failures this track's own new test, which counted the
+  planner's future 14:30 break as a drawn one; it now reads the morning (09:00–11:59) the brief names.
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed** over 5 result lines.
+* check 9: `DayOp.apply`, `forget`, `forgetIdle`, `netTake`, `takeFx`, `endBrkFx`, `brkStartArm`, `d141Arm`, `arm`,
+  `Seal.stepQueries`, and at gap 5662 `brkRecsC` and `d141Arm` again — audited by `mutate.py --write`, every constant
+  failing where its row says (`forget`, `forgetIdle`, `netTake` unfoldable by `default`, pinned by the identity).  The
+  edits to `Replay.lean` were made line-neutral (0 of its pin sites moved); the `SealStep`, `BreakFold` and `Seal` rows
+  whose pin sites moved — `BreakFold.BrkHeld`, `BreakFold.NoBrkSeg`, `Seal.machineInstants`, `Seal.foldQueries`,
+  `Seal.giveReads`, `Seal.brkEndAt?` — were re-verified by `mutate.py --verify --write --only`, never re-anchored by hand.
+* **Track H's end-to-end test** (tm/tests/cli_d141_break_end.rs on `w52-h`, its the_d141_line_ends_the_break_in_the_replay_p138 test
+  `#[ignore]`d for this replay): run in a scratch worktree of this tree with `73a4449` cherry-picked, nothing committed
+  here — **8 passed / 0 failed with `--include-ignored`**, the ignored one included (`block_min` 110, breaks `actual 10`,
+  one record, one break drawn 09:30–09:40).  The verb end to end on that binary, the W-51 auditor's J drive:
+  `tm break --now 09:30 10m` → `block_min 90 | breaks [40]`; `tm break --now 09:40` → *"the break that began at 09:30 ends
+  here, at 09:40 …"* and `block_min 110 | breaks [10]`; the log holds one `break_start` and one `break`, both at 09:30;
+  `tm plan` draws `09:00 ✓ (30m)`, `09:30 · break 10m`, `09:40 ✓ (20m)`, `10:10 ✓ (60m)`; `tm check` *no problems*.
 
 ### 7. brief_corrections
 
-(filled at the end).
+* **`DayOp.unsegBrks` undoes only what no break of `rest` witnesses.**  Gap 5660's design removed "every Break segment `k`
+  witnesses".  Beside D142 that takes a segment another held break drew: two `break_start`s at one stamp, the newest
+  covered whole, then the line ending it — the design's undoing removed the first break's `[08:30, 09:10)` too and left
+  forty recorded minutes and nothing drawn (cheat 692).  `BrkHeld` still holds over the narrower undoing
+  (`BreakFold.undo141_seg`).
+* **The ending's record minutes.**  The design's `unbrkAt` minutes were `minutesBetween (coverFrom rest k.s) k.e`; at
+  `34cde84` a D129 ending covered in part kept its record whole, so they were wrong there until gap 5662 made the record
+  the drawn minutes — the formula is right since that step, and is what `d141Arm` uses.
+* **D129 has two arms and the design reaches one.**  A running break a `start` ends (`endMachine`) still forgets its take,
+  so the line gives it nothing back (gap 5712); a line for an older ended break (the J log as the W-51 repair binary
+  wrote it, two `break_start`s) is not the newest's and reads as a covered break of its own (gap 5711).
+* **Builds.**  "A library build took ~80 min under load": here a full `lake build TmKernel:static` after a `Replay.lean`
+  change took **9m44s** (load ~5), `check.sh` 11–14 min, `Replay.lean` alone ~20 s, a workspace run ~15 min.
+* **`mutate.py --gate` builds.**  With rows owed it runs their mutations, `lake build` included — once, early, it was
+  started uncapped by this track; it was stopped within two minutes, its sidecar showed the file restored, and every later
+  run was capped at 16 GB.
+* **Parity at the land.**  Track H's `5dd6306` writes `hole P136` and `hole P137` and takes the number after P137; W-52 track K took P136
+  and this track P137, so the octopus keeps H's row for that number and drops its two hole lines (`parity.py` refuses a hole for a
+  taken number).
+* **The brief's d141Fx took `sl`; `brkArm` has none at `34cde84`** (track K removed it); the arm here is `d141Arm`, one
+  definition holding the guard, the undoing and the read.
