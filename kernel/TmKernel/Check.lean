@@ -9168,3 +9168,4 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.BreakFold.takeFx_noBrkSeg
 #print axioms Tm.BreakFold.undo141_seg
 #print axioms Tm.BreakFold.stepWith_brkHeld_d141
+#print axioms Tm.Replay.a_d129_ending_covered_in_part_is_recorded_by_its_drawn_minutes

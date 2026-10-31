@@ -4514,9 +4514,9 @@ theorem firstStart_mem (s : At) (d : Nat) (m : Machine) (x : At) (h : firstStart
 def coverFrom : List HeldBrk → At → Nat → At
   | [], s, _ => s
   | k :: H, s, d => if k.s.1 ≤ s.1 ∧ d ≤ k.day ∧ (coverFrom H s d).1 < k.e.1 then k.e else coverFrom H s d
-/-- **The segment and record a break `[s, e)` writes on ledger day `d`, drawn from `c`** (D142): whole, its record as logged, when nothing covers its head (`c` not after `s`); from `c` on, its record stamped `r` with the minutes from `r` to `e` — `c` for a `break` line (`brkRecs`), so the host, which reads a record's span as `[t, t + actual)`, reads the drawn one; the break's own start for a D129 ending (`endRecs`), whose record the host finds by that stamp (`Ctx::ended_cached_break`) and so keeps whole — when an earlier break covers a head of it; no segment and a record of zero minutes when one covers it whole — kept because the host finds a break a start ended by its record (`Ctx::ended_cached_break`), and with none the next verb logs the break `.tm/state.json` holds again (D133). -/
+/-- **The segment and record a break `[s, e)` writes on ledger day `d`, drawn from `c`** (D142): whole, its record as logged, when nothing covers its head (`c` not after `s`); from `c` on, its record stamped `r` with the drawn minutes, from `c` to `e` — `r` is `c` for a `break` line (`brkRecs`), so the host, which reads a record's span as `[t, t + actual)`, reads the drawn one; the break's own start for a D129 ending (`endRecs`), whose record the host finds by that stamp (`Ctx::ended_cached_break`), its minutes the drawn ones since W-52b track K2 (README gap 5662: the record whole counted the overlap twice) — when an earlier break covers a head of it; no segment and a record of zero minutes when one covers it whole — kept because the host finds a break a start ended by its record (`Ctx::ended_cached_break`), and with none the next verb logs the break `.tm/state.json` holds again (D133). -/
 def brkRecsC (c s e : At) (d planned : Nat) (actual : Option Nat) (w : Option (List Char)) (r : At) : List Effect :=
-  if instLt s c then (if instLt c e then [.dayAdd d (.segment ⟨c, e, .brk w⟩), .dayAdd d (.brk ⟨r, d, planned, some (Cal.minutesBetween r.1 e.1), w⟩)] else [.dayAdd d (.brk ⟨s, d, planned, some 0, w⟩)])
+  if instLt s c then (if instLt c e then [.dayAdd d (.segment ⟨c, e, .brk w⟩), .dayAdd d (.brk ⟨r, d, planned, some (Cal.minutesBetween c.1 e.1), w⟩)] else [.dayAdd d (.brk ⟨s, d, planned, some 0, w⟩)])
   else [.dayAdd d (.segment ⟨s, e, .brk w⟩), .dayAdd d (.brk ⟨s, d, planned, actual, w⟩)]
 /-- **The segment and record a break `[s, e)` writes, against the breaks the machine holds** (D142): `brkRecsC` from `coverFrom`. -/
 def brkRecs (H : List HeldBrk) (s e : At) (d planned : Nat) (actual : Option Nat) (w : Option (List Char)) : List Effect :=
@@ -4550,7 +4550,7 @@ def forgetIdle (m : Machine) : Machine := if m.brkOpen.isNone then forget m else
 def netTake (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (m : Machine) : Machine × List Effect := ({ (netClosed dy s e d m).1 with closed := m.closed.map (runOne dy s e d) }, (netClosed dy s e d m).2)
 /-- **A D129 ending's netting, what it took remembered** (D141): `brkFx` — the break held as `[s, e)` on ledger day `d`, the open block settled over it, every held closed block it lies across netted — each held closed block remembering what the netting took (`netTake`), so the break's own `break` line ending it earlier can give back what lies after that end (`d141Arm`). -/
 def takeFx (dy : Cal.Instant → Nat) (m : Machine) (s e : At) (d : Nat) : List Effect := (settle dy { m with brks := pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none }).2 ++ (netTake dy s e d (settle dy { m with brks := pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none }).1).2 ++ [.machine (netTake dy s e d (settle dy { m with brks := pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none }).1).1]
-/-- **The segment and record a break ended at `t` writes** (the owner's **D129**): what the `break` line `tm start` logs on one machine writes on the break's own ledger day (D97, D105: stamped at the break's start, its minutes the elapsed ones, `dayArm`'s `break` arm) — the break's `Break` segment `[o.s, t)` and its record.  The span ends at `t` itself, the start's instant; the record's minutes are `t − o.s` in whole minutes, as `tm start` writes them. -/
+/-- **The segment and record a break ended at `t` writes** (the owner's **D129**): what the `break` line `tm start` logs on one machine writes on the break's own ledger day (D97, D105: stamped at the break's start, its minutes the elapsed ones, `dayArm`'s `break` arm) — the break's `Break` segment `[o.s, t)` and its record.  The span ends at `t` itself, the start's instant; the record's minutes are `t − o.s` in whole minutes, as `tm start` writes them — or, since W-52b track K2 (README gap 5662), the minutes drawn when an earlier break covers a head of it, stamped at `o.s` still (D142's union, `brkRecsC`). -/
 def endRecs (H : List HeldBrk) (o : OpenBrk) (t : At) : List Effect :=
   brkRecsC (coverFrom H o.s o.day) o.s t o.day o.planned (some (Cal.minutesBetween o.s.1 t.1)) o.where_ o.s
 
@@ -4581,7 +4581,7 @@ def brkArm (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (t : At) (d : Na
 /-- **A `break` line stamped at the start of a break D129 already ended** (the owner's **D141**, README gaps 5633 and 5660, W-52b track K2, parity **P137**): when the newest held break `k` is that ending's span `[k.s, k.e)` with the line's stamp, no break runs, the line's end (`t + actual_or_planned`) falls strictly before `k.e` and `k.day ≤ d`, the line ends the break there — what the ending drew undone on its day (`DayOp.unsegBrks`; its record, `DayOp.unbrkAt`, with the minutes `endRecs` gave it), `k` let go, and the line read as the `break` line of a break running since `k.s` (`brkArm`): what the ending took given back (`giveBack`, D137), the break held and netted by its own span (`brkFx`, D100), drawn and recorded there (`brkDay`, D142) — the later explicit fact (D100, D115).  Otherwise the line is the break's own and nothing else (P127), and what the ending took is forgotten (`forgetIdle`). -/
 def d141Arm (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (t : At) (d planned : Nat) (actual : Option Nat) : List Effect :=
   match m.brks with
-  | k :: rest => if m.brkOpen.isNone && atEq k.s t && instLt (brkEnd t planned actual) k.e && decide (k.day ≤ d) then [.dayAdd k.day (.unsegBrks k rest), .dayAdd k.day (.unbrkAt k.s (if instLt k.s (coverFrom rest k.s k.day) && !instLt (coverFrom rest k.s k.day) k.e then 0 else Cal.minutesBetween k.s.1 k.e.1))] ++ brkArm dy { m with brks := rest, brkEnded := none } e t d planned actual else [.machine { forgetIdle m with brkEnded := none }]
+  | k :: rest => if m.brkOpen.isNone && atEq k.s t && instLt (brkEnd t planned actual) k.e && decide (k.day ≤ d) then [.dayAdd k.day (.unsegBrks k rest), .dayAdd k.day (.unbrkAt k.s (Cal.minutesBetween (coverFrom rest k.s k.day).1 k.e.1))] ++ brkArm dy { m with brks := rest, brkEnded := none } e t d planned actual else [.machine { forgetIdle m with brkEnded := none }]
   | [] => [.machine { forgetIdle m with brkEnded := none }]
 
 /-- **The machine's arms of fork `Machine::step`**, one per event: the block family's (C3) here, every other event's the day family's (`dayArm`, C5); the completion family's are `completionArm`'s.  `dy` is the day index's `day_of`, `sl` fork `slept_by_day`, `t` the entry's stamp and `d` its day.  **Since the owner's D105** (parity P100) a `break_start` opens the running break (`Machine.brkOpen`, its stamp, planned minutes, place and day) and writes nothing else, and a `break` line's arm ends whatever break is open (`brkFx` writes no running break) — so the pair is matched in file order, whatever the `break` line's stamp (the binary writes the start's). -/
@@ -14238,6 +14238,20 @@ theorem forgetIdle_clears_a_take_only_with_no_break_running :
     (forget m).closed.map (fun C => (C.ran.length, C.ranMin)) = [(0, 0)] ∧
     (forgetIdle { m with brkOpen := some ⟨(⟨63924366600, 0⟩, ⟨false, 0⟩), 10, none, 739865⟩ }).closed.map
       (fun C => (C.ran.length, C.ranMin)) = [(1, 10)] := by
+  decide
+
+/-- **A D129 ending an earlier break covers in part is recorded by its drawn minutes** (README gap 5662, W-52b track K2;
+D142's union reaching the record): a `break` line 08:00 for thirty minutes, then a `break_start` 08:10 that the `start`
+of `a` at 08:40 ends (D129).  The ending is drawn `[08:30, 08:40)` and recorded ten minutes, stamped at its own start,
+08:10 — the stamp the host finds it by (D133) — so the day's break minutes are the forty of wall time the two cover.
+Until W-52b the record stood whole, thirty minutes, and `tm review day` counted the overlap twice (cheat 693). -/
+theorem a_d129_ending_covered_in_part_is_recorded_by_its_drawn_minutes :
+    let f := replay utcZone [bE 1 63924364800 (.brk 30 (some 30) none), bE 2 63924365400 (.brkStart 20 none),
+      bE 3 63924367200 (bStart ['a'])]
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.plannedMin, r.actualMin)))
+      = some [(63924364800, 30, some 30), (63924365400, 20, some 10)] ∧
+    (f.days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map
+      (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924364800, 63924366600), (63924366600, 63924367200)] := by
   decide
 
 end End141

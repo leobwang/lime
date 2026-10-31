@@ -102717,7 +102717,7 @@ changes).
 <!-- =====================================================================
      APPENDED 2026-10-31: stage 6 (the planner), run **W-52b**, **track K2** (`w52-k2`) — the owner's D141, its replay
      half (README gap 5660, written by W-52 track K as a design and built here; with track H's verb half, `73a4449`, it
-     closes gap 5633).  Gaps 5710-5729 are this track's.  Cheats 691-710 (691-692 taken).  Parity **P137** taken.
+     closes gap 5633).  Gaps 5710-5729 are this track's.  Cheats 691-710 (691-693 taken).  Parity **P137** taken.
      Whoever merges renumbers.
      ===================================================================== -->
 
@@ -102759,6 +102759,20 @@ the line ends the newest, the covered one — its zero record is undone, the fir
 witnesses it) and its forty, and the line, covered as wholly, is recorded at zero: **two records, forty break minutes**,
 `a` thirty (`Replay.a_break_line_ending_a_covered_break_leaves_two_records`; cheat 692 is the undoing that took the
 first's segment too).  No dropped head's zero record survives beside the line's.
+
+### 1b. Gap 5662 — a D129 ending an earlier break covers in part is recorded by its drawn minutes (closed)
+
+`brkRecsC`'s cut record now carries the minutes drawn, `c` to `e`, whatever its stamp: a `break` line's is stamped at `c`
+as before (W-52 track K), and a D129 ending's (`endRecs`) stays stamped at the break's own start — the stamp the host finds
+it by (D133's `Ctx::ended_cached_break`) — with the drawn minutes where it carried the whole.  So `tm review day` counts
+each minute of wall time once on that log too (`Replay.a_d129_ending_covered_in_part_is_recorded_by_its_drawn_minutes`: a
+`break` 08:00 for thirty, a `break_start` 08:10 a `start` at 08:40 ends — records thirty and ten, forty minutes; cheat
+**693** is the whole record, thirty).  `d141Arm` undoes that record by the same minutes
+(`Cal.minutesBetween (coverFrom rest k.s k.day) k.e`, zero when covered whole).  The host reads a record's span as
+`[t, t + actual)` (D95); for a D129 ending that span lies before the block whose `start` ended the break, so no running
+block's netting moves (gap 5714 says what does).  **P136's row is unchanged**: it already read "its record's minutes the
+drawn ones"; until this step the D129 ending was the exception the W-52 track K block named.  D142's own reading, so no
+new parity number.
 
 ### 2. Laws (D5)
 
@@ -102813,13 +102827,75 @@ stamped `k.s` with the minutes `endRecs` gave it (`d141Arm` recomputes them over
 id.  3. *Cost.*  Two breaks at one stamp with one record's minutes: the other's record may be the one removed — the
 counts and minutes are the same either way.  4. *Clears it.*  A record keyed by its `break_start`'s line.
 
+**Gap 5714 — track H's gate cannot find a D129 ending covered in part from the instants past its record's span.**
+1. *What.*  The host's gate for D141 (Ctx::break_a_start_ended_at, branch w52-h) finds the ended break by a record whose
+span `[t, t + actual)` contains the typed instant; since gap 5662 a D129 ending an earlier break covers in part is
+recorded at its own start with the drawn minutes, so its span ends early, and `tm break --now <x>` with `x` in the
+last stretch of the drawn break opens a new break instead of ending it.  2. *Why.*  The record must keep its stamp (D133
+finds it by that) and carry the drawn minutes (gap 5662); one `(t, actual)` pair cannot also spell the drawn span.
+3. *Cost.*  On that log only, the user ends such a break by a `break` line written by hand, or a time inside the
+record's span.  4. *Clears it.*  The gate reading the day's Break segments (the drawn span) beside the record — track
+H's file.
+
 ### 4. Frozen comparands
 
-**None moved, measured**: (filled after the workspace runs).
+**None moved, measured**: the three workspace runs below compare every frozen fork answer (`tm/tests/fixtures/`, T5's
+corpus, classes and door arms, the planner comparands) and none failed, so no fork-written or generated log in them holds
+a `break` line ending a break D129 ended, nor a D129 ending an earlier break covers in part; no D64 clause is used.
 
 ### 5. The §5.13 drive
 
-(filled after the drive).
+`TZ=America/Chicago`, every command capped at 8 GB (`…/scratchpad/w52b/k2/drive/J141.sh` and `J5662.sh`, `t` and `r` as
+the W-51 auditor's `lib.sh` has them, `r` printing `tm --json review day`'s block minutes, break minutes and `by_where`).
+The base binary is W-52 track K's (`.claude/worktrees/w52-k/target/debug/tm`, `34cde84`); this tree's is the final
+workspace run's.  The tree: `init --example`, `wake 07:00`, `arrive home`, `^t1` 09:00–10:00 and `^t4` 10:10–11:10
+done; then the log lines by hand, because the line D141 reads is written by track H's verb half (`73a4449`), not on this
+branch.
+
+The J log with D141's line (`break_start` 09:30 planned 10, then `break` `t` 09:30 `actual_min` 10):
+
+```
+W-52 track K (34cde84)                                          this tree (w52-k2)
+after the two blocks:                                           after the two blocks:
+  block_min 120 | breaks [] | by_where {}                         block_min 120 | breaks [] | by_where {}
+after a late break_start 09:30 (planned 10), by hand:           after a late break_start 09:30 (planned 10), by hand:
+  block_min 90 | breaks [40] | by_where {'-': [1, 40]}            block_min 90 | breaks [40] | by_where {'-': [1, 40]}
+after its break line t 09:30 actual_min 10 (what track H's tm   after its break line t 09:30 actual_min 10 (what track H's tm 
+  block_min 90 | breaks [40] | by_where {'-': [1, 40]}            block_min 110 | breaks [10] | by_where {'-': [1, 10]}
+tm plan at 11:15:                                               tm plan at 11:15:
+09:00  5    ✓ Read ch.6 §1–2               @m3  1b  (30m)       09:00  5    ✓ Read ch.6 §1–2               @m3  1b  (30m)
+09:30  ·      break 40m                                         09:30  ·      break 10m
+10:10  3    ✓ Claude Code drafts tests     @m2  1b  (60m)       09:40  5    ✓ Read ch.6 §1–2               @m3  1b  (20m)
+11:30  ·      lunch 30m                                         10:10  3    ✓ Claude Code drafts tests     @m2  1b  (60m)
+tm check:                                                       11:30  ·      lunch 30m
+no problems                                                     tm check:
+  [rc=0 2026-09-08T11:15:00-05:00 check]                        no problems
+                                                                  [rc=0 2026-09-08T11:15:00-05:00 check]
+```
+
+Gap 5662's log (a `break` line 09:20 for twenty, then a late `break_start` 09:30 that D129 ends at 10:10, its head
+covered by the first):
+
+```
+W-52 track K (34cde84)                                          this tree (w52-k2)
+after a late break line 09:20 for 20m, by hand:                 after a late break line 09:20 for 20m, by hand:
+  block_min 100 | breaks [20] | by_where {'-': [1, 20]}           block_min 100 | breaks [20] | by_where {'-': [1, 20]}
+after a late break_start 09:30 (D129 ends it at 10:10; 09:30-0  after a late break_start 09:30 (D129 ends it at 10:10; 09:30-0
+  block_min 80 | breaks [20, 40] | by_where {'-': [2, 60]}        block_min 80 | breaks [20, 30] | by_where {'-': [2, 50]}
+tm plan at 11:15:                                               tm plan at 11:15:
+09:00  5    ✓ Read ch.6 §1–2               @m3  1b  (20m)       09:00  5    ✓ Read ch.6 §1–2               @m3  1b  (20m)
+09:20  ·      break 20m                                         09:20  ·      break 20m
+09:40  ·      break 30m                                         09:40  ·      break 30m
+10:10  3    ✓ Claude Code drafts tests     @m2  1b  (60m)       10:10  3    ✓ Claude Code drafts tests     @m2  1b  (60m)
+11:30  ·      lunch 30m                                         11:30  ·      lunch 30m
+tm check:                                                       tm check:
+no problems                                                     no problems
+  [rc=0 2026-09-08T11:15:00-05:00 check]                          [rc=0 2026-09-08T11:15:00-05:00 check]
+```
+
+The drawn day is the same on both for gap 5662's log (the union was already drawn, D142); the review's break minutes are
+now the fifty of wall time.  What the drive did not cover: the TUI (it reads the same segments and records), and the
+verb half end to end, which is track H's test (§6).
 
 ### 6. Measured acceptance
 
