@@ -1783,3 +1783,11 @@ with_minute
 # that named the test as it stood.
 1 a_break_past_the_day_is_planned_and_past_the_width_refused
 2 a_running_break_that_started_after_now_is_refused
+# W-52 repair track R (kernel half): `Replay.Machine.brkEnded`, the one stamp of the one ending D129 left, is REPLACED by
+# `Replay.Machine.ended`, every ending keyed (README gap 5711); and gap 5711's witness of the defect, the line for an older
+# ending read as a covered break, is RENAMED a_break_line_for_an_older_ended_break_a_newer_one_overlaps_is_its_own with the
+# reading this repair gives it.  Each counted citation is an earlier README block naming the name as it stood.
+3 brkEnded
+5 Machine.brkEnded
+2 Replay.Machine.brkEnded
+1 Replay.a_break_line_for_an_older_ended_break_is_a_covered_break

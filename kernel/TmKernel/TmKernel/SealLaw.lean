@@ -838,6 +838,14 @@ theorem openBreak_reads_state (st : State) (hs : List (Nat × HeaderRec)) (n : N
   show some (Replay.Answer.openBreak v.openBreak) = some (Replay.Answer.openBreak (Replay.finish st).openBreak)
   rw [h]; rfl
 
+/-- **The breaks a `break` line would end now, of an answer holding a state's machine, are the finished state's** (the
+owner's D141, W-52 repair track R, README gaps 5714 and 5730): `openBreak_reads_state`'s, for `Replay.endable`. -/
+theorem openEnded_reads_state (st : State) (hs : List (Nat × HeaderRec)) (n : Nat) (v : Seal.Answer)
+    (h : v.openEnded = Replay.endable st.machine) :
+    askAnswer v .openEnded = some (Replay.ask ⟨Replay.finish st, hs, n⟩ .openEnded) := by
+  show some (Replay.Answer.openEnded v.openEnded) = some (Replay.Answer.openEnded (Replay.finish st).openEnded)
+  rw [h]; rfl
+
 /-! ### The answer of a specification checkpoint, field by field -/
 
 section Proj
@@ -872,6 +880,9 @@ theorem answer_openInterrupt : (answer (ckptOfEntries z T₀ L cut es er ws)).op
   simp only [answer, ckptOfEntries]
 theorem answer_openBreak : (answer (ckptOfEntries z T₀ L cut es er ws)).openBreak
     = (foldedState z es er).machine.brkOpen := by
+  simp only [answer, ckptOfEntries]
+theorem answer_openEnded : (answer (ckptOfEntries z T₀ L cut es er ws)).openEnded
+    = Replay.endable (foldedState z es er).machine := by
   simp only [answer, ckptOfEntries]
 theorem answer_lastDay :
     (answer (ckptOfEntries z T₀ L cut es er ws)).lastDay = Replay.maxDay? ((foldedState z es er).days.pairs.map Prod.fst) := by
@@ -931,6 +942,8 @@ theorem answer_reads_state (z : Cal.Tz) (T₀ L cut : Nat) (es : List Entry) (ws
   | openInterrupt => exact hsc.2.1
   | openBreak =>
     exact openBreak_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openBreak z T₀ L cut es [] ws)
+  | openEnded =>
+    exact openEnded_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openEnded z T₀ L cut es [] ws)
   | lastDay => exact hsc.2.2.1
   | lastEffective => exact hsc.2.2.2.1
   | unknown => exact hsc.2.2.2.2.1
@@ -1073,7 +1086,7 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
       simp [List.filterMap_append, List.filterMap_cons, (Replay.cut_obs dy _ t).2.1, Replay.settle_duration,
         Effect.durationOf?, (Replay.netStart_obs dy _ _ _).2.1, Replay.runNet_duration]
     split
-    · rw [List.filterMap_append, (Replay.endRecs_obs _ _ t).2.1, hS, List.nil_append]
+    · rw [List.filterMap_append, (Replay.endRecs_obs _ _ t _).2.1, hS, List.nil_append]
     · exact hS m
   case pause id =>
     split
@@ -1108,16 +1121,14 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
         List.filterMap_append, (Replay.giveBack_obs dy M).2.1, List.nil_append]
       exact (Replay.brkFx_obs dy _ t _ d).2
     split
-    · split
-      · -- D141: the ending's segment and record undone are day records; then a `break` line's arm
-        unfold Replay.d141Arm; split <;> (try split)
-        · simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _
-        all_goals rfl
-      · exact hb _
+    · -- D141: the ending's segment and record undone are day records; then a `break` line's arm
+      unfold Replay.d141Arm; split
+      · simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _
+      · rfl
     · exact hb _
   case brkStart planned where_ =>
     split
-    · exact (Replay.endBrkFx_obs dy m _ _).2.1
+    · exact (Replay.endBrkFx_obs dy m _ _ _).2.1
     · unfold Replay.brkStartArm
       simp [List.filterMap_append, Replay.settle_duration, Replay.runNet_duration, Effect.durationOf?]
   all_goals exact (Replay.dayArm_obs dy sl e t d).2.1

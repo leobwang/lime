@@ -3379,12 +3379,12 @@ def logLineStep (acc : List Log.Line × Nat) (seg : Option (List Char)) : List L
 /-- **The tail as `Log.Line`s**, numbered from `from` (`logLines_eq`). -/
 def logLines (r : LogReq) : List Log.Line := (r.lines.foldl logLineStep ([], r.from_)).1.reverse
 
-/-- **The facts of an answer** (§10.2, W3): its horizons, its all-time facts, window and days, every record in the
-codec shape the kernel reads back (`Seal.emitDayRecord`, `Seal.emitWindowRecord`, `Seal.cItemAgg`, `Seal.cInstRec`,
-`Seal.cNamedRec`: one emitter per shape, W1's disagreement 13), the open block and interruption, the counts, the
+/-- **The facts of an answer** (§10.2, W3): its horizons, its all-time facts, window and days, every record in the codec shape the kernel reads back (`Seal.emitDayRecord`, `Seal.emitWindowRecord`, `Seal.cItemAgg`, `Seal.cInstRec`, `Seal.cNamedRec`: one emitter per shape, W1's disagreement 13), the open block and interruption, the counts, the
 replay warnings, and the line warnings as the answer's `warnings` spells them (the first 256 and the overflow).  Since
 the owner's D105 (parity P100) `open` carries the running break as well, `open.break`: `null`, or `[start, planned,
-where?, day]` — what `.tm/state.json`'s `break` is rebuilt from. -/
+where?, day]` — what `.tm/state.json`'s `break` is rebuilt from; and since W-52 repair track R (the owner's D141, README
+gaps 5714 and 5730) `open.ended`, the breaks a `break` line would end now (`Replay.endable`), each `[start, end, planned,
+where?, day, key]` (`Seal.cEnded`) — the one fact `tm break`'s D141 gate and its D129 notice read. -/
 def emitAnswer (a : Seal.Answer) : JVal :=
   .obj [("ledgerDay".toList, .num a.ledgerDay), ("horizon".toList, .num a.horizon),
         ("items".toList, .arr (a.items.map Seal.cItemAgg.enc)),
@@ -3393,15 +3393,15 @@ def emitAnswer (a : Seal.Answer) : JVal :=
         ("days".toList, .arr (a.days.map Seal.emitDayRecord)),
         ("open".toList, .obj [("block".toList, Seal.cOptOpenBlock.enc a.openBlock),
           ("interrupt".toList, Seal.cOptInterruption.enc a.openInterrupt),
-          ("break".toList, Seal.cOptOpenBrk.enc a.openBreak)]),
+          ("break".toList, Seal.cOptOpenBrk.enc a.openBreak),
+          ("ended".toList, Seal.cEnded.enc a.openEnded)]),
         ("lastDay".toList, Seal.cOptNat.enc a.lastDay), ("lastEffective".toList, Seal.cOptAt.enc a.lastEffective),
         ("entryCount".toList, .num a.entryCount), ("unknown".toList, .num a.unknown),
         ("longestLeak".toList, Seal.cOptLeak.enc a.longestLeak), ("replayWarnings".toList, Seal.cRWarns.enc a.rwarns),
         ("warnings".toList, .obj [("first".toList, .arr (a.warnings.map (fun p => lwarnJson p.1 p.2))),
           ("overflow".toList, .num a.warnOverflow)])]
 
-/-- **The `log` answer** (§10.2): `lines` (the last physical line seen), `warnings` (this call's tail), `facts`,
-`headers`, `render` and `reseal`, keys in build order.  `render` looks its lines up in an array. -/
+/-- **The `log` answer** (§10.2): `lines` (the last physical line seen), `warnings` (this call's tail), `facts`, `headers`, `render` and `reseal`, keys in build order.  `render` looks its lines up in an array. -/
 def logBody (r : LogReq) (facts : JVal) (headers : List JVal) (reseal : JVal) : JVal :=
   let vs := logVerdicts r
   let arr := vs.toArray
@@ -12899,7 +12899,7 @@ theorem the_log_op_merges_a_sealed_day_below_its_ledger_day :
       = .inr (logBody ⟨1, [], true, none, [], true, Replay.utcZone, some 739900,
           some { Seal.Ckpt.empty Replay.utcZone with ledgerDay := 5 }, none,
           some ⟨[⟨3, none, none, [], [], [], [], [], []⟩, ⟨7, none, none, [], [], [], [], [], []⟩], []⟩⟩
-        (emitAnswer ⟨5, 0, [], [], [], [], [⟨3, none, none, [], [], [], [], [], []⟩], none, none, none, none, none, 0, 0,
+        (emitAnswer ⟨5, 0, [], [], [], [], [⟨3, none, none, [], [], [], [], [], []⟩], none, none, none, [], none, none, 0, 0,
           none, [], [], 0⟩) [] .null) := by
   decide
 

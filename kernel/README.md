@@ -103149,3 +103149,211 @@ a field the kernel adds), never re-derived in the host.
 
 **Frozen comparands.**  None moved: every frozen fork answer is compared by the workspace runs below and none failed;
 no D64 clause is used.
+
+<!-- ======================================================================
+     Stage 6 — W-52 repair track R (2026-10-31): D141 for every break D129 ended, one reader of
+     "endable", and the records.  ONE track, two halves: this first section is the kernel half
+     (gaps 5740-5749, cheats 711-720); the host half follows as its second section (gaps 5750-5759,
+     cheats 721-730, and the parity number the brief assigns it).  No parity number for the kernel half: it is P137's own reach.
+     Whoever merges renumbers.
+     ====================================================================== -->
+
+## Stage 6 — W-52 repair track R: D141 for every break D129 ended (the kernel half)
+
+### 1. What the replay does now (gaps 5711, 5712, 5713 closed)
+
+* **Every ending is held, keyed.**  Replay.Machine.brkEnded (one stamp, the newest ending) is REPLACED by
+  `Replay.Machine.ended : List Ending`, newest first.  An `Ending` is its span `[s, e)` — `s` the break's start, `e` the
+  end D129 gave it — its ledger day, planned minutes and place, and `key`, the log line of the entry that made the
+  ending: the `break_start` a held start ended (`endBrkFx`), or the `start` that ended a running break (`endMachine`).
+  The key is the identity.  An ending is kept while its break is held (`pushEnded`, D94's bound).
+* **Every ending's take is kept, under its key.**  `Closed.held : List Take` beside `Closed.ran`/`ranMin` (which stay
+  the RUNNING break's take, D137 unchanged): `endBrkFx`'s netting stashes what it took (`netTake` over `stash`), and
+  `endMachine` stashes the running break's take instead of forgetting it (gap 5712).  Every later netting cuts each held
+  take as it cuts `ran` (`netOne`'s `reNetTake`, `reNet` read with the take in `ran`'s place) — except the running
+  break's own netting (`runOne` keeps `held` as it stands; an ending it overlaps is no longer reachable, below).
+* **The line.**  `arm`'s `break` arm asks `findEnded` — the newest ending begun at the line's stamp, WHEREVER it sits —
+  and `d141Arm` reads the line as ending it when `d141Ok`: no break running, the line's end before `x.e`, `x.day` not
+  after the line's day, `x`'s break still held, and **no break held after `x`'s overlapping it** (`newerMeets`, gap
+  5741 — the one guard added beyond the brief).  Then: `x`'s segment undone (`DayOp.unsegBrks x.hb (brks.erase x.hb)`),
+  its record undone **by its key** (`DayOp.unbrkAt key`, the record's new `BreakRec.src`, gap 5713), and `brkArm` over
+  `d141Machine` — `x` and its break let go, `x`'s take and no other moved into `ran` (`unstash`), so `giveBack`
+  returns exactly that take (D137).  Otherwise the line is the break's own (P127): `x` and its take let go (`letGo`).
+  A `break` line with no ending at its stamp is `brkArm` over the machine as it stands — no `forgetIdle`, because no
+  ending's take lives in `ran`; so an ordinary break logged after an ending no longer closes D141's window (J2).
+* **A late start reads every take as the block's.**  `startEnd` reads `drawn ++ ran ++ held`'s pieces (D115, as the
+  W-51 repair made it read `ran`'s), so its cut of a held take begins nowhere new (`Replay.reNetTake_startEnd_starts`).
+* **The fact.**  `Replay.endable m`: with no break running, each ending `findEnded` answers at its own stamp, whose break
+  is held and that no later-held break overlaps; `[]` while a break runs.  It is `Facts.openEnded`, the query
+  `Query.openEnded`, `Seal.Answer.openEnded`, and on the wire **`open.ended`**: an array of
+  `[start, end, planned, where?, day, key]` (`Seal.cEnded` — ONE codec, the checkpoint's machine carries the same
+  shape).  **`Replay.d141_reads_iff_endable`**: a `break` line stamped `t`, ending at `E`, on ledger day `d`, is read
+  as D141 (`findEnded m t = some x ∧ d141Ok m x E d`) iff `∃ x ∈ endable m, atEq x.s t ∧ instLt E x.e ∧ x.day ≤ d` —
+  the host's question, "is `t` in the fact and `E` before its end", is that theorem.  `Replay.arm_brk_of_endable`
+  gives the arm's three readings.
+* **Codecs, the kernel id.**  The checkpoint's machine carries `ended` and each held block's `held`; a day record's
+  break is `[t, day, planned, actual?, where?, src?]` (six elements, was five).  The kernel id moves (D113: a cache
+  another kernel wrote is rebuilt).  The host's one decoder of a break record, `tm/src/cli/kernel_log.rs`'s
+  `d_tuple(r, 6, "a break")` (was 5), is the only Rust this half touched; `open.ended` is read by name, so a host that
+  does not read it ignores it.
+
+**P137's row, to its true reach.**  P137 said "a `break` line stamped at the start of a break D129 already ended";
+until this repair that held only for the NEWEST ending, and only until any other `break_start` or `break` line was
+stepped (gap 5711), and gave nothing back for a running break a `start` ended (gap 5712).  Since this repair it holds
+for every ending the machine holds, in either order, whatever was logged between — except an ending a later-held break
+overlaps (gap 5741).  No new parity number: it is the rule P137 registered.
+
+### 2. Laws (D5)
+
+**Restated over the new shapes, none weakened:** `Replay.runOne_netOne` (`held` kept as it stands),
+`Replay.startEnd_ge_run`, `Replay.startEnd_guard` (over `drawn ++ ran ++ held`), `Replay.endMachine_held` (over
+`stash`), `Replay.reNet_startEnd_starts` (now an instance of `reNet_startEnd_starts_of`),
+`Seal.arm_brks` and `BreakFold.stepWith_brks` (the D141 case: `pruneBrks (k :: brks.erase x.hb)`, the guard
+`findEnded … = some x ∧ d141Ok …`), `BreakFold.stepWith_brks_of_brk` (its hypothesis `findEnded … = none`),
+`BreakFold.stepWith_brkHeld_d141` (for an ending anywhere among those held), `BreakFold.undo141_seg` (the record
+operation by key), `Seal.mem_machineInstants` (a held block's pieces are `drawn ++ ran ++ held`'s; the held takes'
+starts are machine instants, as `ran`'s are), `Seal.mi_of_sub`, `Seal.doneClosed_mi`, `Seal.endMachine_mi`,
+`Seal.takeFx_mi`, `Seal.takeFx_congr`, the `key` argument threaded through every `endBrkFx`, `endRecs`, `endMachine`,
+`netTake`, `takeFx` law (`Replay.endBrkFx_obs`, `endBrkFx_mem`, `endBrkFx_blockOnly`, `endBrkFx_sleptOk`,
+`conserves_endBrkFx`, `conserves_takeFx`, `conserves_netTake`, `takeFx_brk`, `takeFx_brkOpen`, `takeFx_machine`,
+`takeFx_block`, `endRecs_obs`, `endRecs_blockOnly`, `endRecs_safe`, `endRecs_sleptOk`, `startEnds_mem`,
+`BreakFold.takeFx_noBrkSeg`, `BreakFold.endRecs_seg`), `Seal.stepQueries` (the D141 branch reads `giveReads` and
+`brkFxReads` of `d141Machine`, nothing in the guard-false branch).
+
+**Re-proved, statements unchanged:** `Replay.arm_split`, `Replay.conserves_arm`, `Replay.arm_sleptOk`, the
+observations law, `Seal.arm_congr`, `Seal.stepQueries_sub`, `Seal.stepQueries_congr` (`SealResume`), `Seal.arm_mi`,
+`Seal.netClosed_mi`, `Seal.netStart_mi`, `Seal.runNet_mi`, `Seal.giveBack_mi`, `Seal.giveReads_mi`,
+`Seal.forget_mi`, `Seal.tail_mi` (over `ended := []`), `Seal.stepWith_brks_within`, the three arm laws of
+`SealCutMachine`, `SealPending`'s pending law, `SealLaw`'s duration law and **law 1** (a new query, `openEnded`,
+answered by `Seal.openEnded_reads_state` and `Seal.answer_openEnded`), **law 2** (`SealLaw2D`'s resumed answer equals
+the full one, `openEnded` among its fields), `SealTwin.resumedAnswer_eq_resumedAnswerFast`,
+`BreakFold.arm_openAfter`, `BreakFold.stepWith_brkHeld`.
+
+**New:** the D141 laws — `Replay.d141_reads_iff_endable`, `Replay.arm_brk_of_endable`,
+**`Replay.the_d141_give_back_credits_exactly_its_endings_take`** (over `unstash` and `giveOne`, every held block's
+give-back credits the minutes of the take keyed by the ending, nothing when it holds none, never another's),
+**`Replay.the_d141_give_back_restores_the_endings_minutes`** (the block's credit after the give-back is its credit plus
+that take's minutes), **`Replay.no_give_back_twice`** (after a D141 line's give-back no held block holds a take keyed by
+that ending, nor any running take: gap 5631's unnamed law), `Replay.d141Machine_ended`, `Replay.giveOne_minutes`; the
+helpers `Replay.stash_keeps`, `dropTake_keeps`, `unstash_keeps`, `held_map_keeps`, `headOk_map_keeps`,
+`reNet_startEnd_starts_of`, `startEnd_past_all`, `reNetTake_startEnd_starts`, `reNetTake_starts`, `netOne_held`;
+`Seal.netOne_held_starts`, `netOne_held_startEnd`, `pcs_stash`, `pcs_dropTake`, `pcs_unstash`, `d141Machine_mi`,
+`letGo_mi`; `BreakFold.fm_erase_le`.
+
+**Which class the credit law covers.**  The two give-back laws are general: whatever a block holds, the line's give-back
+returns the ending's take and restores the block by its minutes, and `brkFx` then nets the line's own span (D100).
+That the block then reads exactly "its credit with the line's span netted instead of the ending's" needs the take to be
+all the ending took from it, which holds when no break held after the ending overlaps it — the class `d141Ok` admits
+(`newerMeets`) — and is witnessed end to end, not proved over every machine, on the logs below.
+
+**Witnesses** (`decide`, each probed under `MemoryMax=8G`, `timeout 120`; placed in `Seal.lean`, namespace
+`Tm.Replay`, because they need `maxRecDepth 8000`, a value that file uses and `Replay.lean` does not):
+`Replay.scenario_c_holds_two_endable_breaks` (before the lines: ninety, records forty and fifty, the fact both),
+`Replay.scenario_c_older_line_first_ends_both_breaks` and `scenario_c_newer_line_first_ends_both_breaks` (a hundred
+and forty, records ten and ten, either order), `Replay.j2_an_ordinary_break_after_the_ending_leaves_it_endable` (a
+hundred and ten), `Replay.b2_two_breaks_at_one_stamp_end_by_identity` (B2's log: thirty, forty minutes, the covered
+one's record undone by its key), `Replay.a_running_break_a_start_ended_gives_back_on_its_line` (gap 5712: fifty),
+`Replay.an_ending_a_later_break_overlaps_is_not_reached` (gap 5741's cost, below),
+`Replay.a_checkpoint_holding_two_endings_round_trips` (scenario C's machine before the lines: two endings, keys 8 and
+7, takes forty and thirty under them, within the checkpoint's bounds and read back from its bytes as itself — a cut
+there resumes what the whole replay holds, law 2).  The J log still reads 110 [10]
+(`Replay.a_break_line_before_its_d129_end_ends_the_break_there`, unchanged), and every K2 and K witness stands.
+Renamed: gap 5711's own witness, a_break_line_for_an_older_ended_break_is_a_covered_break, is
+`Replay.a_break_line_for_an_older_ended_break_a_newer_one_overlaps_is_its_own` (the J log as the W-51 binary wrote
+it: the 08:40 break overlaps the 08:30 one, so the 08:30 line is P127's — records forty and zero, `a` thirty, which is
+the union's reading of that log exactly).
+
+**Cheats** 711 (the newest-only reading: scenario C at ninety), 712 (`forgetIdle` dropping an ending's take: J2 at
+ninety), 713 (`endMachine` forgetting the running take: thirty), 714 (the fact naming a break while one runs), 715 (an
+ending a later break overlaps in the fact).
+
+### 3. Gaps (5740-5749)
+
+**Gaps 5711, 5712 and 5713 are closed**, by the replay of §1: every ending is reached (5711, but for 5741), a running
+break a `start` ended gives its take back on its line (5712), and an ending's record is undone by its key (5713).
+**Gaps 5714 and 5730 are closed on the kernel side**: the end D129 gave a break is a fact on the wire (`open.ended`),
+proved to be what the arm reads; the host's two readers move to it in this track's second section.
+
+**Gap 5741 — an ending a later-held break overlaps is not reached by D141.**  1. *What.*  When a break stepped after an
+ending's — a second D129 ending, an ordinary break line, a running break's line — overlaps the ending's span, the
+ending's own line is read as the break's own (P127, `newerMeets`), and the fact (`open.ended`) does not offer it.
+2. *Why.*  The later break's netting met the stretch the earlier ending had taken and found nothing drawn, its own take
+is empty, and its drawing and record were read against the earlier span (D142's `coverFrom`); shrinking the earlier
+ending would need the stretch handed to the later one and the later one re-drawn and re-recorded.  Without the guard
+the line gives the stretch back to the block and nothing nets it again — `a` fifty on the J log as the W-51 binary
+wrote it, where the 08:40 break still covers it, and the 08:40 break drawn nowhere: worse than P127.  3. *Cost.*  On
+such a log the line reads as P127 reads it: exact when the later break covers the rest of the earlier one (the J log as
+the W-51 binary wrote it — `Replay.a_break_line_for_an_older_ended_break_a_newer_one_overlaps_is_its_own`: forty break
+minutes, `a` thirty, the union's reading), under-crediting otherwise
+(`Replay.an_ending_a_later_break_overlaps_is_not_reached`: two late breaks 08:30 and 08:40 both ended at 09:10, lines
+at 08:30 and 08:40 for ten each — `a` thirty where the two lines' spans leave forty).  Typed verbs alone can produce it:
+`tm break --now 09:30 10m`, then `tm break --now 09:20 30m` (a `break_start` before the first, which D129 also ends at
+the next start), then any `tm break --now` inside the first.  4. *Clears it.*  A transfer rule — a later ending's
+netting takes over the stretch an earlier take holds — with the later break's segment and record re-read when the
+earlier shrinks; or the host refusing the second `break_start` inside an ended break's span (the parent's call).
+
+**Gap 5742 — a pruned ending's takes outlive it.**  1. *What.*  `pushEnded` drops an ending whose break `pruneBrks`
+dropped; the take it left in a held block's `Closed.held` stays until `pruneClosed` drops that block.  2. *Why.*  The
+take is read only through its ending's key, and no ending holds the key any more.  3. *Cost.*  Bytes in the
+checkpoint: at most one take per ending per held block, both bounded by D94's 31 days; no answer moves.  4. *Clears
+it.*  A sweep of `held` against `ended` wherever `pushEnded` runs.
+
+**Gap 5743 — a late `start`'s cut reads the takes D129 endings hold.**  1. *What.*  `startEnd` reads
+`drawn ++ ran ++ held`, so a late `start` stamped inside a block whose pieces a D129 ending took cuts it to the end of
+those pieces too (D115).  2. *Why.*  Without it the cut of a held take could begin at the span's end, an instant no
+machine holds (the cut rule's `machineInstants`), and it is what the W-51 repair already reads for `ran`.  3. *Cost.*
+On a log with an ending held and a late `start` inside the block it netted, the cut reaches over the taken stretch; no
+log the binary writes holds both, and no frozen comparand moved.  4. *Clears it.*  Nothing owed; recorded because the
+reading moved.
+
+**Gap 5744 — the line matches the newest ending at its stamp, and `src` is the kernel's alone.**  1. *What.*  Two
+endings begun at one stamp (B2's log) are told apart by their keys, but a `break` line carries no key, so `findEnded`
+answers the newest; and the host reads no `src`.  2. *Why.*  A `break` line's shape is the fork's (D105).  3. *Cost.*
+On B2's log the line ends the covered one, which is the union's reading (`Replay.b2_two_breaks_at_one_stamp_end_by_identity`);
+the host half (its second section) refuses a second break at an ended break's own start, so the binary writes no new such log.  4. *Clears
+it.*  Nothing owed.
+
+### 4. Mutations (check 9), and the line-neutral edits
+
+Every definition this half adds or changes — 43 of them: `Replay.Ending.hb`, `endingOf`, `pushEnded`, `findEnded`,
+`stash`, `dropTake`, `unstash`, `newerMeets`, `d141Ok`, `endable`, `d141Machine`, `letGo`, `reNetTake`, `netOne`,
+`runOne`, `startEnd`, `netTake`, `takeFx`, `endRecs`, `endBrkFx`, `d141Arm`, `arm`, `brkRecsC`, `brkRecs`, `dayArm`,
+`DayOp.apply`, `cut`, `doneClosed`, `startedMachine`, `State.init`, `finish`, `factsView`; `Seal.cBreakRec`, `cEnded`,
+`cMachine`, `answer`, `askAnswer`, `Ckpt.empty`, `stepQueries`, `resumedAnswer`, `resumedAnswerFast`, `blankAnswer`;
+`emitAnswer` — was audited by `mutate.py --write --only`, each constant watched to fail where its row says; the gate
+reads **940 new or changed since `86c4dc6`, 940 rostered, 0 owed**.  Pinned by nothing, as they were before this step
+(the codecs and the answer builders have no constant of their type): `cBreakRec` (first rostered here), `cEnded`,
+`cMachine`, `netOne`, `State.init`, `finish`, `factsView`, `blankAnswer`.  The run was split over this worktree and
+three scratch clones of this tree, each with its own `.lake`, each capped at 16 GB; the clones' rows were copied into
+this `mutations.txt` by key (the rows the tool wrote, for byte-identical sources — compared file by file), and the gate
+then re-read every row against the bodies here.  The 26 rows the clones wrote were NOT re-run here by
+`--verify` (the same mutations again, ~2 h at this machine's load); check 9's gate over them is the acceptance, by the
+orchestrator's call — recorded, so an auditor can re-run them with `mutate.py --verify --only <name>`.
+
+Pin sites: the first edit moved 410 rows' recorded pin sites (every declaration after the new `Take`/`Ending`
+structures shifted).  The edits were then made line-neutral — new helpers compressed, new lemmas moved to the module's
+end, docstrings of the declarations right after each insertion joined onto fewer lines (text unchanged) — until 12
+rows of 6 definitions remained, and those were re-verified by `mutate.py --verify --write --only` (`endMachine`,
+`lateWarnList`, `Seal.brkEndAt?`, `Seal.giveReads`, `Seal.foldQueries`, `Seal.machineInstants`), never re-anchored by
+hand.  P36's anchor (`Replay.lean`) is back at the line it had.
+
+**Gap 5745 — a fresh proptest seed in the fork-point grammar (a finding, D46).**  1. *What.*  The workspace run on this
+tree drew a new failing case in `tm-core/tests/grammar_proptest.rs`'s `set_state_and_tag_and_priority`:
+`FlagNeedsBoundary { flag: "open" }`, minimal input `("- 0 ci:0 open", false)`; its seed is appended to
+`tm-core/tests/grammar_proptest.proptest-regressions` and kept (D46), so the case now runs every time.  2. *Why.*  This
+half touched no `tm-core` source; the case is the fork-point Rust grammar's, drawn by a fresh seed.  3. *Cost.*  The
+workspace suite fails on that test until the grammar or the property is fixed — a known failure, named.  4. *Clears it.*
+The host half (or a later track) owning `tm-core`'s grammar.
+
+### 5. Measured acceptance (this half's tree, every command capped)
+
+* `kernel/check.sh`: **17/17 `ok`, rc 0** (axiom audit 7,029 theorems; FFI target 97 tests; corpus 29/37 files and 4/5
+  whole plans; stage goals 1; check 9: 940 new or changed since `86c4dc6`, 940 rostered, 0 owed; check 12: 1,677 reachable,
+  1,096 exempt; check 14: 97 modules replayed).
+* `kernel/tm-kernel-ffi`, `cargo test --test kernel --test stack --test corpus`: **105 passed** (90 + 7 + 8).
+* `cargo test --workspace --no-fail-fast`, ONE run (the orchestrator takes the other two after the host half): **3,073
+  passed / 2 failed / 53 ignored over 179 result lines** — the two being `cli_latency`'s three-year stalled-day row
+  (`tm drop ^z15` past 1 s at load ~6; README gap 5541's known noise) and gap 5745's new proptest seed above.
+* The witnesses of §2 were probed under `MemoryMax=8G`, `timeout 120` (`Seal.lean` elaborates in ~6 s, ~1 GB); cheats
+  711-715 each fail as `decide` proving the claim false.
+* No §5.13 drive in this half: the binary's verbs reach D141 through the host's gate, which is the second section's.

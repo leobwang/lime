@@ -9157,7 +9157,7 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_break_line_at_or_after_its_d129_end_is_the_breaks_own
 #print axioms Tm.Replay.a_break_line_ending_at_its_d129_end_is_the_breaks_own
 #print axioms Tm.Replay.a_break_line_ending_a_covered_break_leaves_two_records
-#print axioms Tm.Replay.a_break_line_for_an_older_ended_break_is_a_covered_break
+#print axioms Tm.Replay.a_break_line_for_an_older_ended_break_a_newer_one_overlaps_is_its_own
 #print axioms Tm.Replay.forgetIdle_clears_a_take_only_with_no_break_running
 #print axioms Tm.Seal.takeFx_congr
 #print axioms Tm.Seal.mi_of_sub
@@ -9169,3 +9169,45 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.BreakFold.undo141_seg
 #print axioms Tm.BreakFold.stepWith_brkHeld_d141
 #print axioms Tm.Replay.a_d129_ending_covered_in_part_is_recorded_by_its_drawn_minutes
+
+/- ============================================================================================
+   APPENDED — stage 6 W-52 repair track R (kernel half): D141 for every break D129 ended — the
+   endings held as a list keyed by the line that made them (`Replay.Ending`, `Machine.ended`), each
+   ending's take kept under its key (`Closed.held`), its record by its key (`BreakRec.src`), and
+   the fact the host reads (`Replay.endable`, `open.ended`).  README gaps 5711-5714, 5730, 5740-5749.
+   ============================================================================================ -/
+#print axioms Tm.Replay.stash_keeps
+#print axioms Tm.Replay.dropTake_keeps
+#print axioms Tm.Replay.unstash_keeps
+#print axioms Tm.Replay.held_map_keeps
+#print axioms Tm.Replay.headOk_map_keeps
+#print axioms Tm.Replay.reNet_startEnd_starts_of
+#print axioms Tm.Replay.startEnd_past_all
+#print axioms Tm.Replay.reNetTake_startEnd_starts
+#print axioms Tm.Replay.reNetTake_starts
+#print axioms Tm.Replay.netOne_held
+#print axioms Tm.Replay.d141_reads_iff_endable
+#print axioms Tm.Replay.arm_brk_of_endable
+#print axioms Tm.Replay.giveOne_minutes
+#print axioms Tm.Replay.the_d141_give_back_credits_exactly_its_endings_take
+#print axioms Tm.Replay.the_d141_give_back_restores_the_endings_minutes
+#print axioms Tm.Replay.no_give_back_twice
+#print axioms Tm.Replay.d141Machine_ended
+#print axioms Tm.Replay.scenario_c_holds_two_endable_breaks
+#print axioms Tm.Replay.scenario_c_older_line_first_ends_both_breaks
+#print axioms Tm.Replay.scenario_c_newer_line_first_ends_both_breaks
+#print axioms Tm.Replay.j2_an_ordinary_break_after_the_ending_leaves_it_endable
+#print axioms Tm.Replay.b2_two_breaks_at_one_stamp_end_by_identity
+#print axioms Tm.Replay.a_running_break_a_start_ended_gives_back_on_its_line
+#print axioms Tm.Replay.an_ending_a_later_break_overlaps_is_not_reached
+#print axioms Tm.Replay.a_checkpoint_holding_two_endings_round_trips
+#print axioms Tm.Seal.netOne_held_starts
+#print axioms Tm.Seal.netOne_held_startEnd
+#print axioms Tm.Seal.pcs_stash
+#print axioms Tm.Seal.pcs_dropTake
+#print axioms Tm.Seal.pcs_unstash
+#print axioms Tm.Seal.d141Machine_mi
+#print axioms Tm.Seal.letGo_mi
+#print axioms Tm.Seal.openEnded_reads_state
+#print axioms Tm.Seal.answer_openEnded
+#print axioms Tm.BreakFold.fm_erase_le

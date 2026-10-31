@@ -2092,7 +2092,10 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 breaks: d_arr(g(22, "breaks")?, "breaks")?
                     .iter()
                     .map(|r| {
-                        let r = d_tuple(r, 5, "a break")?;
+                        // `[t, day, planned, actual?, where?, src?]` (`Seal.cBreakRec`): the sixth is the key of
+                        // the D129 ending that wrote the record (`Replay.BreakRec.src`, W-52 repair track R, README
+                        // gap 5713), which only the kernel reads.
+                        let r = d_tuple(r, 6, "a break")?;
                         Ok(BreakRecord {
                             t: d_when(d_at(r, 0, "a break's t")?, "a break's t")?,
                             day: d_date(d_at(r, 1, "a break's day")?, "a break's day")?,

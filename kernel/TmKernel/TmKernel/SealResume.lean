@@ -119,7 +119,7 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
     | .start id pred rep hsw sleptMin loc _ _ =>
       match Replay.endsBrk m (e.t.val, e.off.val) with
       | some o =>
-        startQueries dy (Replay.endMachine m o (e.t.val, e.off.val)) e.line (e.t.val, e.off.val) (dy e.t.val) id pred
+        startQueries dy (Replay.endMachine m o (e.t.val, e.off.val) e.line) e.line (e.t.val, e.off.val) (dy e.t.val) id pred
           rep hsw sleptMin loc
       | none => startQueries dy m e.line (e.t.val, e.off.val) (dy e.t.val) id pred rep hsw sleptMin loc
     | .pause id =>
@@ -160,16 +160,17 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
         closed := Replay.doneClosed dy m e.line (e.t.val, e.off.val) id actual.val ci }
     | .brkStart planned where_ =>
       match Replay.firstStart (e.t.val, e.off.val) (dy e.t.val) m with
-      | some t0 => brkFxReads { Replay.forget m with brkEnded := some (e.t.val, e.off.val) } (e.t.val, e.off.val) t0 (dy e.t.val)
+      | some t0 => brkFxReads { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ t0 e.line) m } (e.t.val, e.off.val) t0 (dy e.t.val)
       | none =>
         settleReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
           runReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
     | .brk planned actual _ =>
-      match m.brkEnded with
-      | some s =>
-        if Replay.atEq s (e.t.val, e.off.val) then giveReads m ++ brkFxReads (Replay.giveBack dy { m with brks := m.brks.tail, brkEnded := none }).1 (e.t.val, e.off.val) (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
-        else giveReads (Replay.forgetIdle m) ++ brkFxReads (Replay.giveBack dy (Replay.forgetIdle m)).1 (e.t.val, e.off.val)
-          (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
+      match Replay.findEnded m (e.t.val, e.off.val) with
+      | some x =>
+        if Replay.d141Ok m x (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val) then
+          giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1 (e.t.val, e.off.val)
+            (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
+        else []
       | none =>
         giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (e.t.val, e.off.val)
           (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
@@ -375,7 +376,7 @@ theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e :
     split
     · split
       · rw [brkFxReads_giveBack dy₁ dy₂]
-      · rw [brkFxReads_giveBack dy₁ dy₂]
+      · rfl
     · rw [brkFxReads_giveBack dy₁ dy₂]
 
 /-- **The tail without its settled undos** (§7.4): a settled undo cancels nothing after the cut. -/
@@ -527,7 +528,7 @@ def resumedAnswer (K : Ckpt) (st : State) (hs : List (Nat × HeaderRec)) (entrie
    (daysFrom st hs K.ledgerDay).map (OpenDay.finish st.machine),
    Replay.openOf st.machine,
    st.machine.interrupt.map (fun i => ⟨0, some i.1, none, i.2.1, i.2.2, 0, []⟩),
-   st.machine.brkOpen,
+   st.machine.brkOpen, Replay.endable st.machine,
    maxOpt K.lastDay (Replay.maxDay? (st.days.pairs.map Prod.fst)),
    st.global.lastEffective, K.entryCount + entries, st.unknown, st.longestLeak, st.rwarns.reverse,
    (K.warnings ++ ws).take maxWarnings, K.warnings.length + K.warnOverflow + ws.length - maxWarnings⟩

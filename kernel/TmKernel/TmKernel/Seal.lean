@@ -377,13 +377,13 @@ def cInterruption : Codec Interruption :=
     (fun r => (r.line, r.start, r.stop, r.day, r.id, r.lostMin, r.dropped, ()))
     (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)
 
+/-- A break record: `[t, day, planned, actual?, where?, src?]` — `src` the key of the D129 ending that wrote it (`Replay.BreakRec.src`, the owner's D141, README gap 5713), `null` on every other record. -/
 def cBreakRec : Codec BreakRec :=
-  cIso (cTuple <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cOptNat <| tCons cOptStr <| tNil)
-    (fun r => (r.t, r.day, r.plannedMin, r.actualMin, r.where_, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1⟩) (fun _ => rfl)
+  cIso (cTuple <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cOptNat <| tCons cOptStr <| tCons cOptNat <| tNil)
+    (fun r => (r.t, r.day, r.plannedMin, r.actualMin, r.where_, r.src, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1⟩) (fun _ => rfl)
 
-/-- **The running break** (the owner's D105, parity P100; `Replay.OpenBrk`): `null`, or `[start, planned, where?, day]`
-— what the checkpoint's machine carries across a cut (`cMachine`'s fifth element) and what the `log` answer's
+/-- **The running break** (the owner's D105, parity P100; `Replay.OpenBrk`): `null`, or `[start, planned, where?, day]` — what the checkpoint's machine carries across a cut (`cMachine`'s fifth element) and what the `log` answer's
 `open.break` says (`emitAnswer`): ONE codec for both, so the bytes a resume reads back and the bytes the host rebuilds
 `.tm/state.json`'s `break` from have one definition (AGENTS §5.3).  It is written as the optional codec whole, the
 tuple inside it, and not as a tuple codec beside a `cOpt` of it as `cOpenBlock` is: a codec only `cMachine`'s hoisted
@@ -542,16 +542,17 @@ def cOpenInt : Codec (At × Nat × Option Log.Id) :=
     (fun i => (i.1, i.2.1, i.2.2, ())) (fun p => (p.1, p.2.1, p.2.2.1)) (fun _ => rfl)
 theorem cOpenInt_nonnull : cOpenInt.NonNull := fun _ => nofun
 
-/-! A held closed block (the owner's D100, `Replay.Closed`, README gap 4520b) is written in place in `cMachine`, as the
-open block's pieces are in `cBlock`: a separate codec was folded by the compiler into the machine's and called by
-nothing, so check 12 found it emitted and unreached (W-47 track K, README "Stage 6 — W-47 track K" §11.6). -/
+/-- **The endings** (the owner's D129 and D141, `Replay.Ending`, W-52 repair track R): each `[start, end, planned, where?, day,
+key]` — what the checkpoint's machine carries across a cut (`cMachine`'s seventh element) and what the `log` answer's
+`open.ended` says (`emitAnswer`, of the endings a `break` line would end now, `Replay.endable`): ONE codec for both, as
+`cOptOpenBrk` is (AGENTS §5.3). -/
+def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cOptStr <| tCons cNat <| tCons cNat <| tNil)
+    (fun (x : Replay.Ending) => (x.s, x.e, x.planned, x.where_, x.day, x.key, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.1, p.2.2.2.1⟩) (fun _ => rfl))
 
+/-! A held closed block (the owner's D100, `Replay.Closed`, README gap 4520b) is written in place in `cMachine`, as the open block's pieces are in `cBlock`: a separate codec was folded by the compiler into the machine's and called by nothing, so check 12 found it emitted and unreached (W-47 track K, README "Stage 6 — W-47 track K" §11.6). -/
 
-/-- The machine (fork `Machine`): the open block, **the last cut** (carried note 2: no Rust field reads it, so the
-view omits it, and only the checkpoint carries it), the open interruption, and — since the owner's D94 (README gaps
-4361 and 4506; D92's last span before it) — every break it holds (`Replay.Machine.brks`, at most `maxKeepDays + 1`
-ledger days of them, each `[start, end, ledger day]`), which a later step's clock reads (`Replay.settle`,
-`Replay.cut`), so a resumed fold nets a break where a whole replay does. -/
+/-- The machine (fork `Machine`): the open block, **the last cut** (carried note 2: no Rust field reads it, so the view omits it, and only the checkpoint carries it), the open interruption, and — since the owner's D94 (README gaps 4361 and 4506; D92's last span before it) — every break it holds (`Replay.Machine.brks`, at most `maxKeepDays + 1` ledger days of them, each `[start, end, ledger day]`), which a later step's clock reads (`Replay.settle`, `Replay.cut`), so a resumed fold nets a break where a whole replay does. -/
 def cMachine : Codec Machine :=
   cIso (cTuple <| tCons (cOpt cBlock cBlock_nonnull) <| tCons (cOpt cCut cCut_nonnull)
       <| tCons (cOpt cOpenInt cOpenInt_nonnull)
@@ -564,13 +565,19 @@ def cMachine : Codec Machine :=
           <| tCons cOptNat <| tCons cAt
           <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
               (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
-          <| tCons cNat <| tNil)
-        (fun (c : Replay.Closed) => (c.id, c.day, c.credDay, c.ci, c.min, c.drawn, c.durLine, c.started, c.ran, c.ranMin, ()))
+          <| tCons cNat
+          <| tCons (cList maxList (cIso (cTuple <| tCons cNat
+              <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
+                  (fun (p : Replay.Piece) => (p.s, p.e, p.day, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
+              <| tCons cNat <| tNil)
+            (fun (T : Replay.Take) => (T.key, T.ran, T.min, ())) (fun q => ⟨q.1, q.2.1, q.2.2.1⟩) (fun _ => rfl)))
+          <| tNil)
+        (fun (c : Replay.Closed) => (c.id, c.day, c.credDay, c.ci, c.min, c.drawn, c.durLine, c.started, c.ran, c.ranMin, c.held, ()))
         (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1,
-          p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
-      <| tCons cOptAt
+          p.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
+      <| tCons cEnded
       <| tNil)
-    (fun m => (m.block, m.lastCut, m.interrupt, m.brks, m.brkOpen, m.closed, m.brkEnded, ()))
+    (fun m => (m.block, m.lastCut, m.interrupt, m.brks, m.brkOpen, m.closed, m.ended, ()))
     (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)
 
 def cHeaderRec : Codec HeaderRec :=
@@ -721,14 +728,10 @@ def cLWarn : Codec Log.LWarn where
 
 /-! ## The checkpoint and the sealed records (§9.2) -/
 
-/-- **A header**: Replay's `HeaderRec` (C6), which keeps the written stamp; the display text is rendered at emission
-(`LogStamp.displayStamp`), so a sealed header can be read back. -/
+/-- **A header**: Replay's `HeaderRec` (C6), which keeps the written stamp; the display text is rendered at emission (`LogStamp.displayStamp`), so a sealed header can be read back. -/
 abbrev Header := HeaderRec
 
-/-- **One day's readings, finished**: exactly what `Replay.ask` answers for the day's eight readings (§8.4's O): the
-fork's record (if the day has one), its seam, and its observations, interruptions, demotions, closes and headers, each
-list in file order.  A day `< L` is stored by Rust once, as this (§11.3); D14's ported fields are the record's and the
-lists'. -/
+/-- **One day's readings, finished**: exactly what `Replay.ask` answers for the day's eight readings (§8.4's O): the fork's record (if the day has one), its seam, and its observations, interruptions, demotions, closes and headers, each list in file order.  A day `< L` is stored by Rust once, as this (§11.3); D14's ported fields are the record's and the lists'. -/
 structure DayRecord where
   day : Nat
   record : Option DayAcc
@@ -741,10 +744,7 @@ structure DayRecord where
   headers : List Header
 deriving DecidableEq, Repr
 
-/-- **One open day in the checkpoint**: the same readings as the fold leaves them.  `acc` and `seam` are the
-accumulators (their lists newest first, the segments unsorted: what `DayAcc.finish` and the seam's reverse finish);
-the six lists are in file order.  `energy` holds the emitted observations only: a pending start observation lives in
-the machine's block until it is emitted. -/
+/-- **One open day in the checkpoint**: the same readings as the fold leaves them.  `acc` and `seam` are the accumulators (their lists newest first, the segments unsorted: what `DayAcc.finish` and the seam's reverse finish); the six lists are in file order.  `energy` holds the emitted observations only: a pending start observation lives in the machine's block until it is emitted. -/
 structure OpenDay where
   day : Nat
   acc : Option DayAcc
@@ -757,8 +757,7 @@ structure OpenDay where
   headers : List Header
 deriving DecidableEq, Repr
 
-/-- **One date's window facts** (§8.4's W): the item minutes on the date, the ids done on it, and the instances whose
-`inst` names it, each sorted by its key. -/
+/-- **One date's window facts** (§8.4's W): the item minutes on the date, the ids done on it, and the instances whose `inst` names it, each sorted by its key. -/
 structure WindowRecord where
   day : Nat
   itemMin : List (Log.Id × Nat)
@@ -907,6 +906,8 @@ structure Answer where
   openInterrupt : Option Interruption
   /-- the running break (D105, `Replay.Machine.brkOpen`) -/
   openBreak : Option Replay.OpenBrk
+  /-- the breaks a `break` line would end now (D141, `Replay.endable`, W-52 repair track R) -/
+  openEnded : List Replay.Ending
   lastDay : Option Nat
   lastEffective : Option At
   entryCount : Nat
@@ -922,8 +923,7 @@ deriving DecidableEq, Repr
 /-- `AUTO_CLOSE_CATCHUP`: the oldest date `auto_close` can close is `T − 16`. -/
 def autoCloseCatchup : Nat := 16
 
-/-- **The window horizon of a ledger day** (§9.1): window facts are kept for dates `≥ H`, which covers every day, week
-and month period containing `L` and every date `auto_close` can close at `L`. -/
+/-- **The window horizon of a ledger day** (§9.1): window facts are kept for dates `≥ H`, which covers every day, week and month period containing `L` and every date `auto_close` can close at `L`. -/
 def horizonOf (L : Nat) : Nat := min (min (Cal.monthStart L) (Cal.isoMonday L)) (L - autoCloseCatchup)
 
 /-! ## The codecs (§9.2): positional records, a keyed checkpoint, and every bound of §10.4 -/
@@ -1060,8 +1060,7 @@ theorem readDayFields_emit (r : DayRecord) :
   simp only [readDayFields, pos_enc, ok_bind]
   rfl
 
-/-- **Law 10, day records: a record the kernel emits reads back as itself** — for every record within §10.4's
-bounds. -/
+/-- **Law 10, day records: a record the kernel emits reads back as itself** — for every record within §10.4's bounds. -/
 theorem readDayRecord_emitDayRecord (d : DayRecord) (h : d.wf = true) : readDayRecord (emitDayRecord d) = .ok d := by
   have hf : d.fault = none := by simpa [DayRecord.wf] using h
   simp only [readDayRecord, emitDayRecord, readDayFields_emit, hf]
@@ -1595,7 +1594,7 @@ def answer (k : Ckpt) : Seal.Answer :=
    k.openDays.map (OpenDay.finish k.machine),
    Replay.openOf k.machine,
    k.machine.interrupt.map (fun i => ⟨0, some i.1, none, i.2.1, i.2.2, 0, []⟩),
-   k.machine.brkOpen,
+   k.machine.brkOpen, Replay.endable k.machine,
    k.lastDay, k.lastEff, k.entryCount, k.unknown, k.longestLeak, k.rwarns, k.warnings, k.warnOverflow⟩
 
 /-- The answer's observations (law 11): each open day's, energy then durations. -/
@@ -1640,6 +1639,7 @@ def askAnswer (v : Seal.Answer) : Q → Option Replay.Answer
   | .openBlock => some (.openBlock v.openBlock)
   | .openInterrupt => some (.openInterrupt v.openInterrupt)
   | .openBreak => some (.openBreak v.openBreak)
+  | .openEnded => some (.openEnded v.openEnded)
   | .lastDay => some (.date v.lastDay)
   | .lastEffective => some (.stamp v.lastEffective)
   | .unknown => some (.count v.unknown)
@@ -1671,8 +1671,7 @@ def keyAtOrAbove (L H : Nat) : Replay.Key → Bool
   | .itemDay _ d | .doneDate _ d | .instDate _ _ d => decide (H ≤ d)
   | _ => true
 
-/-- The days the machine can still write (§9.4's `L'` rule): the pending observation's, the last cut's and the open
-interruption's — and, since the owner's D105, the running break's: the `break` line that ends it is stamped at its
+/-- The days the machine can still write (§9.4's `L'` rule): the pending observation's, the last cut's and the open interruption's — and, since the owner's D105, the running break's: the `break` line that ends it is stamped at its
 start, so it writes the day the `break_start` was stepped on, and the ledger day may not pass it. -/
 def machineDays (m : Machine) : List Nat :=
   ((m.block.bind (·.obs)).map (·.day)).toList ++ (m.lastCut.map (·.day)).toList ++ (m.interrupt.map (·.2.1)).toList
@@ -1715,7 +1714,7 @@ def sealable (z : Cal.Tz) (T₀ L : Nat) (ls r : List Log.Line) : Bool :=
 
 /-- **The empty checkpoint** (§9.2): nothing folded, cut 0, ledger day 0. -/
 def Ckpt.empty (z : Cal.Tz) : Ckpt :=
-  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, [], [], [], false, [], ⟨none, none, none, [], none, [], none⟩, [], [], [], [], [], none,
+  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, [], [], [], false, [], ⟨none, none, none, [], none, [], []⟩, [], [], [], [], [], none,
    none, 0, 0, none, [], [], 0⟩
 
 /-- The meta the host reads beside a checkpoint. -/
@@ -1837,7 +1836,7 @@ theorem the_empty_checkpoint_is_wf (z : Cal.Tz) : (Ckpt.empty z).wf = true := by
   have hz : z.val.key.length ≤ maxTzKey := by
     have := z.property; simp only [Cal.TzTable.wf, Bool.and_eq_true, decide_eq_true_eq] at this
     exact this.1.1.1
-  simp [Ckpt.empty, Ckpt.wf, Ckpt.fault, check, hz, cList, ascending, cOpt, cMachine, cOptOpenBrk, cIso, cTuple, tCons,
+  simp [Ckpt.empty, Ckpt.wf, Ckpt.fault, check, hz, cList, ascending, cOpt, cMachine, cOptOpenBrk, cEnded, cIso, cTuple, tCons,
     tNil, ckptVersion]
 
 /-! ## Witnesses (W1)
@@ -1942,4 +1941,136 @@ theorem the_round_trips_are_not_vacuous :
 end Witnesses
 
 end Seal
+
+namespace Replay
+
+section EndAll141Witnesses
+
+/-! Scenario C's three blocks are `a` 08:00–09:00, `b` 09:10–10:10 and `c` 10:20–11:00, each done, on 2026-09-07 in UTC;
+the J logs hold `a` and `b`. -/
+
+set_option maxRecDepth 8000 in
+/-- **Scenario C, before the lines: two breaks D129 ended, both endable** (README gap 5711): late `break_start`s 08:30 and
+09:30, ended by D129 at `b`'s 09:10 and `c`'s 10:20 `start`s — `a` thirty, `b` twenty, the day ninety, records forty and
+fifty, and the fact the host reads (`open.ended`, `Facts.openEnded`) holds both, newest first, each with the end D129 gave
+it and the line that made it. -/
+theorem scenario_c_holds_two_endable_breaks :
+    let f := replay utcZone ([bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false),
+      bE 5 63924373200 (bStart ['c']), bE 6 63924375600 (bDone ['c'] 40 false)] ++ [bE 7 63924366600 (.brkStart 10 none), bE 8 63924370200 (.brkStart 10 none)])
+    (f.days.get 739865).map (·.blockMin) = some 90 ∧
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin, r.src)))
+      = some [(63924366600, some 40, some 7), (63924370200, some 50, some 8)] ∧
+    f.openEnded.map (fun x => (x.s.1.sec, x.e.1.sec, x.key)) = [(63924370200, 63924373200, 8), (63924366600, 63924369000, 7)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **Scenario C, the older line first: each line ends its own break** (the owner's **D141**, README gap 5711, W-52 repair
+track R): the 08:30 line for ten minutes ends the OLDER ending — not the newest — and gives back what it took from `a`;
+then the 09:30 line ends the other.  `a` fifty, `b` fifty, `c` forty, the day a hundred and forty; two records of ten,
+two breaks drawn `[08:30, 08:40)` and `[09:30, 09:40)`.  Until this repair the first line was read as a covered break of
+its own and the day stayed at ninety (cheat 711). -/
+theorem scenario_c_older_line_first_ends_both_breaks :
+    let f := replay utcZone ([bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false),
+      bE 5 63924373200 (bStart ['c']), bE 6 63924375600 (bDone ['c'] 40 false)] ++ [bE 7 63924366600 (.brkStart 10 none), bE 8 63924370200 (.brkStart 10 none),
+      bE 9 63924366600 (.brk 10 (some 10) none), bE 10 63924370200 (.brk 10 (some 10) none)])
+    (f.items.get ['a']).map (·.minutes) = some 50 ∧ (f.items.get ['b']).map (·.minutes) = some 50 ∧
+    (f.days.get 739865).map (·.blockMin) = some 140 ∧
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))
+      = some [(63924366600, some 10), (63924370200, some 10)] ∧
+    (f.days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map
+      (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924366600, 63924367200), (63924370200, 63924370800)] ∧
+    f.openEnded = [] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **Scenario C, the newer line first** (D141): the same day, a hundred and forty, whatever order the two lines come in. -/
+theorem scenario_c_newer_line_first_ends_both_breaks :
+    let f := replay utcZone ([bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false),
+      bE 5 63924373200 (bStart ['c']), bE 6 63924375600 (bDone ['c'] 40 false)] ++ [bE 7 63924366600 (.brkStart 10 none), bE 8 63924370200 (.brkStart 10 none),
+      bE 9 63924370200 (.brk 10 (some 10) none), bE 10 63924366600 (.brk 10 (some 10) none)])
+    (f.items.get ['a']).map (·.minutes) = some 50 ∧ (f.items.get ['b']).map (·.minutes) = some 50 ∧
+    (f.days.get 739865).map (·.blockMin) = some 140 ∧
+    (f.days.get 739865).map (fun a => (a.breaks.map (·.actualMin))) = some [some 10, some 10] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **J2: an ordinary break logged after the ending does not close D141's window** (the W-52 auditor's J2, README gap 5711):
+`a` and `b`, a late `break_start` 08:30 that D129 ends at 09:10, then an ordinary break 10:20–10:30 (its `break_start` and
+its line), then the 08:30 break's own line for ten minutes: `a` fifty, the day a hundred and ten, two records of ten.
+Until this repair the ordinary `break_start` forgot the ending's take (`forgetIdle`) and the line was skipped: ninety
+(cheat 712). -/
+theorem j2_an_ordinary_break_after_the_ending_leaves_it_endable :
+    let f := replay utcZone ([bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false)] ++ [bE 5 63924366600 (.brkStart 10 none), bE 6 63924373200 (.brkStart 10 none),
+      bE 7 63924373200 (.brk 10 (some 10) none), bE 8 63924366600 (.brk 10 (some 10) none)])
+    (f.items.get ['a']).map (·.minutes) = some 50 ∧ (f.days.get 739865).map (·.blockMin) = some 110 ∧
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))
+      = some [(63924373200, some 10), (63924366600, some 10)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **B2's log: two breaks begun at one stamp, both ended at one start** (the W-52 critic's B2): `break_start`s 08:30 for
+ten and for twenty — the second covered whole by the first (D142) and recorded at zero — then a line at 08:30 for ten.
+The line ends the newest ending at that stamp (`findEnded`), the covered one: its zero record is undone BY ITS KEY
+(`BreakRec.src`, README gap 5713), not by stamp and minutes; the first keeps its forty, and the line, covered as wholly,
+records zero — `a` thirty, the forty minutes the union holds. -/
+theorem b2_two_breaks_at_one_stamp_end_by_identity :
+    let f := replay utcZone ([bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false)] ++ [bE 5 63924366600 (.brkStart 10 none), bE 6 63924366600 (.brkStart 20 none),
+      bE 7 63924366600 (.brk 10 (some 10) none)])
+    (f.items.get ['a']).map (·.minutes) = some 30 ∧
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.plannedMin, r.actualMin, r.src)))
+      = some [(63924366600, 10, some 40, some 5), (63924366600, 10, some 0, none)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **A running break a `start` ended gives back on its own line** (the owner's **D141**, README gap 5712, W-52 repair
+track R): `a` 08:00–09:00 done, then a `break_start` 08:30 logged after it — running, netting `a` from 08:30 (`runNet`,
+thirty) — then `b`'s 09:10 `start`, which ends the break there (D129, `endMachine`): the running take is kept under the
+start's key (`stash`), so the break's own line, 08:30 for ten, gives it back — `a` fifty.  Until this repair `endMachine`
+forgot the take and `a` stayed at thirty (cheat 713). -/
+theorem a_running_break_a_start_ended_gives_back_on_its_line :
+    let f := replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924366600 (.brkStart 10 none), bE 4 63924369000 (bStart ['b']), bE 5 63924366600 (.brk 10 (some 10) none),
+      bE 6 63924372600 (bDone ['b'] 60 false)]
+    (f.items.get ['a']).map (·.minutes) = some 50 ∧ (f.days.get 739865).map (·.blockMin) = some 110 ∧
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin))) = some [(63924366600, some 10)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **What D141 does not reach: an ending a later-held break overlaps** (README gap 5741, W-52 repair track R): late
+`break_start`s 08:30 and 08:40, both ended at `b`'s 09:10 `start`, then a line at 08:30 for ten and one at 08:40 for ten.
+The 08:40 break, held after the 08:30 one, overlaps it (`newerMeets`), so the first line is that break's own (P127); the
+second ends the 08:40 break, whose take is empty (the 08:30 ending had taken the stretch first).  `a` reads thirty and the
+records forty — where the two lines' own spans would leave `a` forty. -/
+theorem an_ending_a_later_break_overlaps_is_not_reached :
+    let f := replay utcZone ([bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false)] ++ [bE 5 63924366600 (.brkStart 10 none), bE 6 63924367200 (.brkStart 10 none),
+      bE 7 63924366600 (.brk 10 (some 10) none), bE 8 63924367200 (.brk 10 (some 10) none)])
+    (f.items.get ['a']).map (·.minutes) = some 30 ∧
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))
+      = some [(63924366600, some 40), (63924367200, some 0)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **A checkpoint taken while two endings are held carries both, and their takes** (the owner's D141, W-52 repair track R,
+the codec change D113 prices): the machine scenario C's first eight entries leave — two endings, keyed by their
+`break_start`s' lines, and each held block's take under its ending's key — is within the checkpoint's bounds and reads
+back from its bytes as itself (`Seal.cMachine`), so a resume cut there holds what the whole replay holds (law 2,
+`SealLaw2D`). -/
+theorem a_checkpoint_holding_two_endings_round_trips :
+    let M := (Seal.foldedState utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false),
+      bE 5 63924373200 (bStart ['c']), bE 6 63924375600 (bDone ['c'] 40 false),
+      bE 7 63924366600 (.brkStart 10 none), bE 8 63924370200 (.brkStart 10 none)] []).machine
+    M.ended.map (·.key) = [8, 7] ∧ M.closed.map (fun C => C.held.map (fun T => (T.key, T.min))) = [[], [(8, 40)], [(7, 30)]] ∧
+    Seal.cMachine.ok M = true ∧ Seal.cMachine.dec (Seal.cMachine.enc M) = some M := by
+  decide
+
+end EndAll141Witnesses
+
+end Replay
 end Tm
