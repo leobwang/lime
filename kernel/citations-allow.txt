@@ -1791,3 +1791,6 @@ with_minute
 5 Machine.brkEnded
 2 Replay.Machine.brkEnded
 1 Replay.a_break_line_for_an_older_ended_break_is_a_covered_break
+# W-52 repair track R (host half): the test that pinned `tm break` at a D129-ended break's own start beginning a second
+# break is REPLACED by the P139 refusal's row (README §7); the counted citations are W-52 track H's block and this repair's naming it as it stood.
+4 a_break_typed_at_the_breaks_own_start_begins_a_break

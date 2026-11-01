@@ -103357,3 +103357,167 @@ The host half (or a later track) owning `tm-core`'s grammar.
 * The witnesses of §2 were probed under `MemoryMax=8G`, `timeout 120` (`Seal.lean` elaborates in ~6 s, ~1 GB); cheats
   711-715 each fail as `decide` proving the claim false.
 * No §5.13 drive in this half: the binary's verbs reach D141 through the host's gate, which is the second section's.
+
+## Stage 6 — W-52 repair track R: one reader of "endable", the refusal at a break's own start, and the records (the host half)
+
+### 6. The host reads the kernel's fact (gaps 5714 and 5730 closed; the verifiers' finding 1)
+
+* **The D141 gate** (`tm/src/cli/ctx.rs`, `Ctx::break_a_start_ended_at`) is now a filter over `Replay::ended_breaks`, the
+  decoded `open.ended` (`tm/src/cli/kernel_log.rs`; `tm_core::log::EndedBreak`: `started`, `ended` — the end D129 gave
+  the break —, `planned_min`, `where`, `day`, `key`): a break with `started < at < ended`, the latest-begun.  By
+  `Replay.d141_reads_iff_endable` that is exactly the set of breaks the replay reads a `break` line as ending, so the verb
+  never says "ends here" for a line the replay will not read as an end (on 413f769's binary the critic's scenario C and
+  the auditor's J2 both said it, and nothing moved).  It no longer reads a `BreakRecord`'s span as D129's end, nor the
+  log's rows as "no line yet" — a second reader the replay did not share (§5.3).
+* **The guard on `open_break`/`state.break_` is deleted** (auditor note 2): `take_break` asks only after its ending arm
+  ended nothing, and the fact is `[]` while a break runs (`Replay.endable`), so it could not fire.  Its doc comment, which
+  said the record's span is D129's end, is rewritten.  **Gap 5683 is closed**: the reader whose condition it named is gone.
+* **The D129 notice** (`Ctx::drop_break_a_start_ended`, gap 5730) still finds the break this verb just began by its
+  record (`ended_cached_break`), and prints the END from the same fact; when the fact does not offer the break (one a
+  later-held break overlaps, gap 5741) it says "was ended by a `start` the log already holds" with no clock, rather
+  than a span's end.
+
+**Hand mutations of the host readers** (check 9 mutates Lean only; each change run against `cli_w52r_break_ends` and
+`cli_d141_break_end`): the gate's end bound made true — `a_break_typed_at_or_after_the_end_d129_gave_begins_a_break`
+fails; the gate answering nothing — five of `cli_d141_break_end`'s tests fail; the P139 refusal removed —
+`a_break_typed_at_an_ended_breaks_own_start_is_refused_p139` fails; the notice reading the record's span —
+`the_d129_notice_names_the_end_d129_gave_the_break` fails.  One mutant is equivalent, gap 5752.
+
+### 7. At the ended break's own start, `tm break` is refused (the campaign's call, revisable by the owner; brief item 3)
+
+**Parity P139 taken**: with no break running, `tm break --now <t>` at the very instant a logged break that a later block's `start` ended (D129) began is refused by name — nothing written; the message names the break, its start and the end D129 gave it, and says to give a later instant before that end to end it there (D141) — where this binary until the W-52 repair (and since D105; fork 4748911 logged no `break_start`) logged a second `break_start` wholly inside the first, and the next `tm break` named the first break while the kernel ended the second (stage 6 W-52 repair track R, the critic's B2; a campaign call, revisable by the owner)
+
+`take_break` asks `Ctx::ended_break_starting_at` (the same fact) before the undo recorder starts, so a refusal leaves
+the log, the day file and `.tm/state.json` byte-identical (`a_break_typed_at_an_ended_breaks_own_start_is_refused_p139`
+compares all three).  The test `a_break_typed_at_the_breaks_own_start_begins_a_break` (`cli_d141_break_end.rs`), which
+pinned the old behaviour, is replaced by that row — a deliberate behaviour change, never a silent re-bless.  **Why a
+refusal and not an end:** an end AT the start is a break of zero minutes, and a new break there is the second break
+inside the first that D141 forbids; D20's shape (refuse, name, write nothing) is the smallest change.  **The campaign's
+call**: the owner may prefer the instant to begin a break that REPLACES the ended one.
+
+**P138's row, to its true reach.**  P138 said "strictly inside a logged break a later block's `start` ended (D129) and no
+`break` line has ended yet"; since this repair the breaks it ends are the kernel's fact, which leaves out a break a
+later-held break overlaps (gap 5741: the verb then begins a break as before D141), and at the break's own start it is
+refused (P139).  `kernel/parity.txt`'s row says so.
+
+**Behaviour rows** (`tm/tests/cli_w52r_break_ends.rs`, through the binary): `every_break_d129_ended_is_ended_where_typed_in_either_order_p137`
+(scenario C, both orders: 140, `[10, 10]`, no third `break_start`), `an_ordinary_break_in_between_does_not_close_d141_p137`
+(J2: 110, `[10, 10]`), `a_break_typed_at_an_ended_breaks_own_start_is_refused_p139`, and
+`the_d129_notice_names_the_end_d129_gave_the_break` (gap 5730: 10:10, not 10:05).
+
+### 8. Brief item 4 — the tie, investigated and recorded (gap 5750; no parity number)
+
+**Gap 5750 — `tm now` does not read a running break, so past its planned end it says "nothing running" while `tm plan`
+draws it running.**  1. *What.*  The critic's note 6: `^t4` started 10:10, then `tm break --now 10:10` (a `break_start`
+at the start's own stamp).  D129's tie rule is the settled one (W-50 repair track R, gap 5500: a `start` at a
+`break_start`'s stamp is earlier in the file and ends nothing — the strict `firstStep`), so the break RUNS: the kernel
+holds it (`open.break`), `.tm/state.json` holds it, the running break nets `^t4` (block_min 60, D94/D100), and `tm plan`
+draws `10:10 · break 1h5m` at 11:15.  `tm now` prints `nothing running` and `— nothing running (11:15)`.  **The split is
+not the tie's**: the same tree with no `^t4` (a plain `tm break --now 10:10` left running) prints the same two lines at
+11:15, and `nothing running` as its header at 10:20, inside the break's planned twenty.  `tm now`'s header reads only the
+running BLOCK (`planning.rs`, `out.active`), and `emit::now_window` (also the TUI's current row) looks for a segment
+containing `now`, while the planner draws an overrunning break up to `now` exactly (`[10:10, 11:15)`, half-open).
+2. *Why it is not built.*  D57 (1) settles that a running break must not be invisible in `tm now`, but what `tm now`
+prints for one — the header's words, a `--json` key, and whether the TUI's current row takes the break's segment at its
+end — is a display design the owner has not chosen, and it moves every running break's `tm now`, not this edge.
+3. *Cost.*  While a break runs `tm now`'s header says `nothing running`, and once the break passes its planned end the
+current row says `— nothing running` too; `tm plan`, the review and the TUI's day bar read the break.  4. *Clears it.*
+The owner's call on `tm now`'s break line (then a parity number and a behaviour row); the host reads `open.break`, the
+fact the plan already reads.  The drive (413f769's binary, `drive/tie.sh` and the control):
+
+```
+$ tm --now 10:10 break                      (^t4 started 10:10, done 11:10)
+break 20m
+  block_min 60 | breaks []
+{"t":"2026-09-08T10:10:00-05:00","ev":"start","id":"t4",…}
+{"t":"2026-09-08T10:10:00-05:00","ev":"break_start","planned_min":20}
+state.json break: {'started': '10:10', 'planned_min': 20, 'where': None}
+$ tm --now 11:15 now                        $ tm --now 11:15 plan
+nothing running                             10:10  ·      break 1h5m
+— nothing running (11:15)                   11:30  ·      lunch 30m
+control (no ^t4), tm now at 10:20:  nothing running / 10:10 · break 20m / 10:10–10:30 · elapsed 10m · left 10m
+control at 11:15:                   nothing running / — nothing running (11:15)   (plan: 10:10 · break 1h5m)
+```
+
+### 9. The records
+
+* **Gaps 5711, 5712, 5713** — closed by the kernel half (§1), 5711 save gap 5741's overlapped ending.
+* **Gaps 5714 and 5730** — closed: both host readers take the end D129 gave a break from `open.ended` (§6).
+* **Gap 5683** — closed (§6).  **Gap 5633** (D141) stands closed with the reach P137's and P138's rows now state;
+  what it does not reach is gap 5741.  **Gap 5684** stands closed.
+* **Gap 5661's cost, restated** (the critic's note 5): on its out-of-order log `tm review week` prints the heat grid's
+  `break 45m` beside `breaks … actual 1h` — the overlap counted twice in the breaks total and once in the grid — as
+  `796d09f` does; the drawn day and `tm review day` count it twice, as the gap says.
+* **P137** restated by the kernel half (§1); **P138** restated here (§7); **P139** taken (§7).  No `hole` lines.
+
+**Gap 5751 — the D129 notice names no clock for a break the fact leaves out.**  1. *What.*  When the break `tm break`
+just began is ended by D129 but overlapped by a later-held break (gap 5741), `open.ended` does not offer it and the
+notice says "was ended by a `start` the log already holds after it" with no time.  2. *Why.*  The end is the kernel's;
+the host prints only what the fact carries (§5.3), and a span's end is the defect gap 5730 named.  3. *Cost.*  A notice
+without a clock on that log.  4. *Clears it.*  Gap 5741 (the fact then offers every ending), or a separate fact of every
+held ending.
+
+**Gap 5752 — the gate's start bound is equivalent.**  1. *What.*  Mutating `x.started < at` to `x.started <= at` in
+`Ctx::break_a_start_ended_at` changes no answer: an instant equal to a break's start is refused first (P139).  2. *Why.*
+The refusal is a separate, named arm, read off the same fact.  3. *Cost.*  None today; the bound stands as the D141
+rule's statement.  4. *Clears it.*  Nothing owed.
+
+**Gap 5753 — gap 5745's seed fails every workspace run.**  1. *What.*  The proptest seed the kernel half kept
+(`("- 0 ci:0 open", false)`: `set_state_with_ci` refuses with `FlagNeedsBoundary { flag: "open" }` where the property
+expects success or a duration refusal) now runs first, every run, so `cargo test --workspace` reads one failure on this
+tree, deterministically.  2. *Why.*  D46: the seed is a finding, kept; the grammar is the fork point's (`tm-core`), and
+neither the edit's behaviour (refuse, or move `open` behind a boundary) nor the property's is settled here.  3. *Cost.*
+The workspace acceptance below is "1 known failure" until it is fixed.  4. *Clears it.*  A track owning `tm-core`'s
+edit grammar: `ItemLine::set_state_with_ci` removing a `ci:` key that separated the title from a flag word.
+
+**brief_corrections (this half).**  (1) The brief's "drive B2's sequence (now refused)": the refusal is at the break's
+own start only; `tm break --now 09:40` afterwards still ends it there (110, `[10]`).  (2) Item 4's "§5.3 split" is not
+the tie's: the control with no tie reproduces it (gap 5750).  (3) The preamble's acceptance "every line ok" for the
+workspace cannot hold on this tree while gap 5745's seed is kept (gap 5753).
+
+### 10. The §5.13 drive (`TZ=America/Chicago`, every command capped at 8 GB; scripts in the track's scratchpad `r/drive/`)
+
+The base binary is 413f769's (the W-52b land's `target/debug/tm`); this tree's is the host half's build.  The tree:
+`init --example`, `wake 07:00`, `arrive home`, `^t1` 09:00–10:00, `^t4` 10:10–11:10 (and, for C, `^t5` 11:20–12:00) done;
+review at 12:30 (`block_min | breaks`).
+
+```
+                                      413f769                          this tree
+C, old-first  after both endings      90  [40, 50]                     90  [40, 50]
+  tm break --now 09:40 ("ends here")  90  [40, 50, 0]                  110 [50, 10]
+  tm break --now 10:40 ("ends here")  90  [40, 50, 0]                  140 [10, 10]
+C, new-first  10:40 then 09:40        120 [40, 10] → 120 [40, 10, 0]   120 [40, 10] → 140 [10, 10]
+J2 (one ending, an 11:20-11:30 break, then tm break --now 09:40 --json → "ended", superseded_end "10:10")
+                                      90  [40, 10]  (line written, nothing read)   110 [10, 10]
+J3 (a block 11:20-11:30 instead)      120 [10]                         120 [10]
+J log                                 110 [10]                         110 [10]
+B2: tm break --now 09:30 at the ended break's own start
+  413f769: "break 20m", rc 0, a second break_start (log 10 → 11 lines); then --now 09:40 ends the 20m one: 90 [40, 0]
+  this tree: rc 1, "tm: a break began at 09:30 and the `start` the log holds at 10:10 ended it (D129) — `tm break` at
+             its own start would begin a second break inside it; give a later instant, before 10:10, to end it there
+             (D141)"; log 10 → 10 lines; then --now 09:40: "ends here", 110 [10]
+gap 5730 (after J's D141 line, tm break --now 09:35): 413f769 "ended at 10:05"; this tree "ended at 10:10"
+```
+
+**D42, at every step** (`drive/d42.sh`: scenario C, B2's refusal, the two ends, gap 5730's break; each step's review and
+the plan's morning rows with and without `.tm/state.json`): **SAME at all seven** — `160 []`, `130 [40]`, `90 [40, 50]`,
+`90 [40, 50]` (the refusal), `110 [50, 10]`, `140 [10, 10]`, `120 [10, 10, 30]`.
+
+**A checkpoint with two endings held across a seal** (`drive/ck2.sh`: C's day, then fourteen days of `wake`/`arrive`/
+`start ^a1`/`stop`, so `.tm/cache/replay` holds `ckpt.json` and `sealed/`; warm is the tree as left, cold the same tree
+with `.tm/cache` removed): with both endings held, **warm = cold** (`90 [40, 50]`); then `tm break --now 09:40` and
+`--now 10:40` on 2026-09-08 typed two weeks later — each "ends here" — and **warm = cold** at `140 [10, 10]` (413f769:
+warm = cold at `90 [40, 50, 0]`).
+
+**`tm check`**: `no problems` on every tree above.  What the drive did not cover: the TUI.
+
+### 11. Measured acceptance (the final tree, every command capped)
+
+* `kernel/check.sh`: **17/17 `ok`, rc 0** (1 m 4 s warm): axiom audit 7,029, FFI target 97, corpus 29/37 and 4/5, stage
+  goals 1, check 9 940 / 940 / 0 owed (this half adds no Lean), parity P1-P139 (next free P140), check 12 1,677 reachable.
+* `cargo test --workspace --no-fail-fast`, three runs (load 3.2-4.9): run 1 **3,076 passed / 2 failed / 53 ignored over
+  180 result lines** (17 m 6 s); run 2 **3,077 / 1 / 53 over 180** (15 m 30 s); run 3 **3,076 / 2 / 53 over 180**
+  (15 m 29 s).  The one failure in every run is gap 5745's kept proptest seed (`set_state_and_tag_and_priority`, gap
+  5753); the second in runs 1 and 3 is `cli_latency`'s three-year stalled-day row (`tm drop ^z15` still running after
+  1 s), gap 5541's known noise, which run 2 passed.  No `.proptest-regressions` file moved in these runs.
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed** over 5 result lines.
