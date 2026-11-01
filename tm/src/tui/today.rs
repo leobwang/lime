@@ -27,7 +27,7 @@ use ratatui::Frame;
 
 use tm_core::emit;
 use tm_core::model::Id;
-use tm_core::dayplan::Segment;
+use tm_core::dayplan::{SegKind, Segment};
 use tm_core::review;
 
 use super::app::{App, Mode, Screen};
@@ -244,11 +244,27 @@ pub fn now_lines(app: &App, width: usize) -> Vec<Line<'static>> {
                 }
                 _ => clock(),
             };
+            // **The running break's row reads the BREAK** (the owner's D144, parity P141): its planned minutes
+            // behind the bar, and `(overrun 45m)` past them — `tm now`'s line under the same row
+            // (`emit::OnBreak`, read off the replay's open break, never `.tm/state.json`'s copy, D42).
+            let on_break = app
+                .replay
+                .open_break
+                .as_ref()
+                .filter(|_| seg.kind == SegKind::Break)
+                .map(|b| emit::OnBreak { started: b.started.with_timezone(&app.now.timezone()), planned_min: b.planned_min });
+            let (elapsed, planned) = match &on_break {
+                Some(b) => (b.elapsed_min(app.now), b.planned_min.max(1)),
+                None => (elapsed, planned),
+            };
             let mut second = format!(
                 "elapsed {} {}",
                 review::fmt_hm(elapsed),
                 elapsed_bar(elapsed, planned, 15)
             );
+            if let Some(over) = on_break.map(|b| b.overrun_min(app.now)).filter(|m| *m > 0) {
+                second.push_str(&format!(" (overrun {})", review::fmt_hm(over)));
+            }
             if let Some(mult) = seg.flags.multiplier {
                 // The estimate as written (§4.3's `2b×1.6`), not what is
                 // left of it: the multiplier is quoted against the original.

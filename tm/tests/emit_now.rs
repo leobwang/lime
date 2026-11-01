@@ -252,3 +252,48 @@ fn a_malformed_palette_entry_is_reportable() {
     assert_eq!(emit::palette_rgb(&bad, 1), (0x88, 0x88, 0x88));
     assert_eq!(emit::palette_rgb(&bad, 0), (0x3c, 0xb4, 0x4b));
 }
+
+/// **The owner's D144 (README gap 5750, parity P141): a running break past its planned end stays
+/// current.** The kernel draws it as an OPEN Break row up to `now` exactly, so its half-open span
+/// no longer contains `now`; `now_window` keeps it current — ahead of a row that starts at `now` —
+/// and the line under it reads the break (`emit::OnBreak`): `elapsed`, `left` and `(overrun 45m)`.
+/// Both directions: a Break row that is not open (a break that ended at `now`) is not current, and
+/// inside its planned minutes the line reads `left` with no overrun.
+#[test]
+fn a_running_break_past_its_planned_end_stays_current() {
+    use tm_core::dayplan::{SegFlags, Segment};
+    let mut day = plan();
+    let now = at(11, 15);
+    let open = SegFlags { open: true, ..SegFlags::default() };
+    day.segments = vec![
+        Segment { start: at(10, 10), end: now, kind: SegKind::Break, energy: None, item: None, instance: None, flags: open },
+        Segment {
+            start: now,
+            end: at(11, 45),
+            kind: SegKind::Routine,
+            energy: None,
+            item: Some(Id::new("laundry")),
+            instance: None,
+            flags: SegFlags::default(),
+        },
+    ];
+    let (current, next) = emit::now_window(&day, now);
+    assert_eq!(current, Some(0), "the open break is current");
+    assert_eq!(next, vec![1], "the routine at `now` is next");
+    let b = emit::OnBreak { started: at(10, 10), planned_min: 20 };
+    assert_eq!(
+        emit::now_annotation(&day.segments[0], now, None, Some(&b)),
+        "  10:10–11:15 · elapsed 1h5m · left 0m (overrun 45m)\n"
+    );
+    assert_eq!(b.overrun_min(now), 45);
+    assert_eq!(b.elapsed_min(now), 65);
+    // A Break row that is NOT open ended at `now`: the routine is current.
+    day.segments[0].flags.open = false;
+    assert_eq!(emit::now_window(&day, now).0, Some(1), "a closed break that ended at `now` is not current");
+    // Inside its planned minutes: no overrun, `left` the break's.
+    day.segments[0].end = at(10, 30);
+    assert_eq!(
+        emit::now_annotation(&day.segments[0], at(10, 20), None, Some(&b)),
+        "  10:10–10:30 · elapsed 10m · left 10m\n"
+    );
+}

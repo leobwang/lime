@@ -12,6 +12,7 @@ expression: schema(&json)
     "title": "string"
   },
   "blocks_done": "integer",
+  "break": "null",
   "budget_blocks": "integer",
   "current": {
     "end": "string",

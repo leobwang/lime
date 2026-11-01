@@ -1527,8 +1527,47 @@ impl Running<'_> {
     }
 }
 
+/// **The running break as `tm now` reads it** — the owner's **D144** (README gap 5750, stage 6 W-53
+/// track H, parity **P141**): when it began (the `break_start` the kernel's replay holds open, D105,
+/// D133 — never `.tm/state.json`'s copy, D42) and its planned minutes. `tm now`'s header prints
+/// `on break since 10:10 · 65m of 20m`; the line under the break's row reads the same numbers, with
+/// `(overrun 45m)` once it has run past them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OnBreak {
+    /// When the break began.
+    pub started: DateTime<Tz>,
+    /// Its planned minutes.
+    pub planned_min: u32,
+}
+
+impl OnBreak {
+    /// The wall-clock minutes since the break began, never negative.
+    pub fn elapsed_min(&self, now: DateTime<Tz>) -> u32 {
+        minutes_between(&self.started, &now)
+    }
+
+    /// What is left of the planned minutes, never negative.
+    pub fn minutes_left(&self, now: DateTime<Tz>) -> u32 {
+        self.planned_min.saturating_sub(self.elapsed_min(now))
+    }
+
+    /// The minutes the break has run past its planned end; `0` within it.
+    pub fn overrun_min(&self, now: DateTime<Tz>) -> u32 {
+        self.elapsed_min(now).saturating_sub(self.planned_min)
+    }
+
+    /// Is `seg` the running break's row — a Break row reaching `now`?
+    fn is_the_row_of(&self, seg: &Segment, now: DateTime<Tz>) -> bool {
+        seg.kind == SegKind::Break && seg.start <= now && now <= seg.end
+    }
+}
+
 /// **The line under `tm now`'s current row** — indented two spaces, so it cannot be mistaken for
 /// one: the segment's span, then `elapsed` and `left`.
+///
+/// **Under the running break's row they read the BREAK** (the owner's **D144**, parity **P141**):
+/// `elapsed` the minutes since it began and `left` its planned minutes less them — the header's two
+/// numbers — and, past its planned end, `(overrun 45m)`.
 ///
 /// **Under the running block's row they read the BLOCK** (the owner's **D109**, README gap 4894,
 /// parity **P111**): `elapsed` the minutes worked and `left` the estimate less them, as the header
@@ -1538,17 +1577,24 @@ impl Running<'_> {
 /// overtime P46's reservation to the end of its block made it `left 45m` under a row whose note
 /// said `running · 0m left`. Under any other row — a wall, a routine, a planned block that is not
 /// running — there is no block to read, and the segment's span is what elapses.
-pub fn now_annotation(seg: &Segment, now: DateTime<Tz>, running: Option<&Running<'_>>) -> String {
-    let (elapsed, left) = match running {
-        Some(r) if r.is_the_row_of(seg) => (r.worked_min, r.minutes_left()),
-        _ => (minutes_between(&seg.start, &now), minutes_between(&now, &seg.end)),
+pub fn now_annotation(
+    seg: &Segment,
+    now: DateTime<Tz>,
+    running: Option<&Running<'_>>,
+    on_break: Option<&OnBreak>,
+) -> String {
+    let (elapsed, left, overrun) = match (running, on_break) {
+        (Some(r), _) if r.is_the_row_of(seg) => (r.worked_min, r.minutes_left(), 0),
+        (_, Some(b)) if b.is_the_row_of(seg, now) => (b.elapsed_min(now), b.minutes_left(now), b.overrun_min(now)),
+        _ => (minutes_between(&seg.start, &now), minutes_between(&now, &seg.end), 0),
     };
     format!(
-        "  {}–{} · elapsed {} · left {}\n",
+        "  {}–{} · elapsed {} · left {}{}\n",
         fmt_clock(seg.start),
         fmt_clock(seg.end),
         fmt_dur(elapsed),
-        fmt_dur(left)
+        fmt_dur(left),
+        if overrun > 0 { format!(" (overrun {})", fmt_dur(overrun)) } else { String::new() }
     )
 }
 
@@ -1589,11 +1635,23 @@ pub fn resumes_at(plan: &DayPlan, now: DateTime<Tz>, id: &Id) -> Option<DateTime
 /// would have a hole. The planner does not emit overlapping rows and
 /// `one_renderer.rs` asserts the run is whole on the fixture it drives; nothing
 /// here forces it.
+///
+/// **A running break past its planned end stays current** (the owner's **D144**, README gap 5750,
+/// parity **P141**): the kernel draws it as an OPEN Break row up to `now` exactly (`Planner.breakRows`,
+/// `isOpen` once it overruns), so its half-open span no longer contains `now`, and `tm now` and the
+/// TUI said `— nothing running` while `tm plan` drew the break. That row is current — ahead of a
+/// row that starts at `now`, since the user is still on the break. An open row is the running
+/// thing's by definition (`SegFlags::open`), and a Break row is open only while its break runs.
 pub fn now_window(plan: &DayPlan, now: DateTime<Tz>) -> (Option<usize>, Vec<usize>) {
     let current = plan
         .segments
         .iter()
         .position(|s| s.flags.current && s.start <= now && now < s.end)
+        .or_else(|| {
+            plan.segments
+                .iter()
+                .position(|s| s.kind == SegKind::Break && s.flags.open && s.start <= now && now <= s.end)
+        })
         .or_else(|| {
             plan.segments
                 .iter()
@@ -1637,6 +1695,17 @@ pub fn now_window(plan: &DayPlan, now: DateTime<Tz>) -> (Option<usize>, Vec<usiz
 /// `running` — the block `tm now`'s header reads, D109 — under its row; indented
 /// two spaces, so it cannot be mistaken for one) and `— nothing running (HH:MM)`.
 pub fn render_now_with(plan: &DayPlan, now: DateTime<Tz>, running: Option<&Running<'_>>) -> String {
+    render_now_on(plan, now, running, None)
+}
+
+/// [`render_now_with`], reading the running break too (the owner's **D144**, parity **P141**): the
+/// line under the break's row reads `on_break`'s numbers ([`now_annotation`]).
+pub fn render_now_on(
+    plan: &DayPlan,
+    now: DateTime<Tz>,
+    running: Option<&Running<'_>>,
+    on_break: Option<&OnBreak>,
+) -> String {
     let rows = plan_rows(plan, &Layout::default());
     let (current, next) = now_window(plan, now);
     let mut out = String::new();
@@ -1644,7 +1713,7 @@ pub fn render_now_with(plan: &DayPlan, now: DateTime<Tz>, running: Option<&Runni
         Some(i) => {
             out.push_str(&rows[i]);
             out.push('\n');
-            out.push_str(&now_annotation(&plan.segments[i], now, running));
+            out.push_str(&now_annotation(&plan.segments[i], now, running, on_break));
         }
         None => {
             out.push_str(&format!("— nothing running ({})\n", fmt_clock(now)));

@@ -463,6 +463,21 @@ pub struct ActiveOut {
     pub resumes: Option<String>,
 }
 
+/// **The running break, for `tm now --json`** — the owner's **D144** (README gap 5750, stage 6 W-53
+/// track H, parity **P141**): read off the kernel's replay (`Replay::open_break`, the `break_start` it
+/// holds open, D105 and D133), never `.tm/state.json`'s copy (D42).
+#[derive(Clone, Debug, Serialize)]
+pub struct BreakNowOut {
+    /// When it began (`HH:MM`).
+    pub start: String,
+    /// Its planned minutes.
+    pub planned_min: u32,
+    /// The wall-clock minutes since it began.
+    pub elapsed_min: u32,
+    /// The place its `break_start` logged, if any.
+    pub place: Option<String>,
+}
+
 /// `tm now --json`.
 #[derive(Clone, Debug, Serialize)]
 pub struct NowOut {
@@ -476,6 +491,9 @@ pub struct NowOut {
     pub budget_blocks: u32,
     /// The running block, from `state.json`.
     pub active: Option<ActiveOut>,
+    /// **The running break** (the owner's D144, parity P141); `null` when none runs.
+    #[serde(rename = "break")]
+    pub break_: Option<BreakNowOut>,
     /// The segment `now` is inside.
     pub current: Option<SegOut>,
     /// The next three segments (§13).
@@ -538,12 +556,25 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
             },
         }
     });
+    // **The running break** — the owner's **D144** (README gap 5750, parity **P141**): the replay's open
+    // break, one reading of it with `tm plan`'s row (`Planner.breakRows` reads the same replay, D133).
+    let on_break = ctx.replay.open_break.as_ref().map(|b| tm_core::emit::OnBreak {
+        started: b.started.with_timezone(&ctx.cfg.tz),
+        planned_min: b.planned_min,
+    });
+    let break_ = ctx.replay.open_break.as_ref().zip(on_break.as_ref()).map(|(b, ob)| BreakNowOut {
+        start: hhmm(ob.started),
+        planned_min: b.planned_min,
+        elapsed_min: ob.elapsed_min(ctx.now_tz),
+        place: b.r#where.clone(),
+    });
     let out = NowOut {
         now: hhmm(ctx.now_tz),
         date: ctx.today.to_string(),
         blocks_done: ctx.replay.blocks_done(ctx.today),
         budget_blocks: plan.budget_blocks,
         active,
+        break_,
         current,
         next,
     };
@@ -562,7 +593,19 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
                     if a.paused { " · paused" } else { "" },
                     a.resumes.as_deref().map(|t| format!(" · resumes {t}")).unwrap_or_default()
                 )),
+                None if out.break_.is_some() => {}
                 None => s.push_str("nothing running\n"),
+            }
+            // D144: the running break's header — under the block's when a break pauses it (D114: the
+            // block's own line unchanged, `· paused`), in place of `nothing running` otherwise.
+            if let Some(b) = &out.break_ {
+                s.push_str(&format!(
+                    "on break since {}{} · {}m of {}m\n",
+                    b.start,
+                    b.place.as_deref().map(|p| format!(" ({p})")).unwrap_or_default(),
+                    b.elapsed_min,
+                    b.planned_min
+                ));
             }
             // §13: the current block and the next three, rendered by the
             // §4.3 renderer so `tm now` and the day file agree — and the line
@@ -574,7 +617,7 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
                 worked_min: a.elapsed_min,
                 est_min: a.est_min,
             });
-            s.push_str(&tm_core::emit::render_now_with(&plan, ctx.now_tz, running.as_ref()));
+            s.push_str(&tm_core::emit::render_now_on(&plan, ctx.now_tz, running.as_ref(), on_break.as_ref()));
             if !s.ends_with('\n') {
                 s.push('\n');
             }
