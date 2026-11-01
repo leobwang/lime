@@ -6,6 +6,11 @@
 //! D129 gave it. Until the repair the gate read a `BreakRecord`'s span and the log's rows, and the replay read only the
 //! newest ending and forgot it at the next `break_start` — so on the critic's scenario C and the auditor's J2 the verb
 //! said "ends here" and nothing moved.
+//!
+//! **Since the owner's D143** (stage 6 W-53 track H, parity P140) every late break below that a later `start` ends is
+//! typed with NO length: typed with one (`tm break --now 09:30 10m`, as these rows read until W-53), it is logged
+//! finished at once and is no break D129 ended. Each changed line is named in README "Stage 6 — W-53 track H"; the
+//! readings asserted are unchanged, D129's ending being the span to the later start whatever was planned.
 
 mod cli_common;
 
@@ -58,8 +63,8 @@ fn every_break_d129_ended_is_ended_where_typed_in_either_order_p137() {
         let tm = j_tree();
         tm.ok_at(&at("11:20"), &["start", "^t5"]);
         tm.ok_at(&at("12:00"), &["done"]);
-        tm.ok_at(&at("09:30"), &["break", "10m"]);
-        tm.ok_at(&at("10:30"), &["break", "10m"]);
+        tm.ok_at(&at("09:30"), &["break"]);
+        tm.ok_at(&at("10:30"), &["break"]);
         assert_eq!(review(&tm), (90, vec![40, 50]), "the two endings (D129)");
         let order = if first_new { ["10:40", "09:40"] } else { ["09:40", "10:40"] };
         for hm in order {
@@ -80,7 +85,7 @@ fn every_break_d129_ended_is_ended_where_typed_in_either_order_p137() {
 #[test]
 fn an_ordinary_break_in_between_does_not_close_d141_p137() {
     let tm = j_tree();
-    tm.ok_at(&at("09:30"), &["break", "10m"]);
+    tm.ok_at(&at("09:30"), &["break"]);
     tm.ok_at(&at("11:20"), &["break", "10m"]);
     tm.ok_at(&at("11:30"), &["break"]);
     assert_eq!(review(&tm), (90, vec![40, 10]));
@@ -100,7 +105,7 @@ fn an_ordinary_break_in_between_does_not_close_d141_p137() {
 #[test]
 fn a_break_typed_at_an_ended_breaks_own_start_is_refused_p139() {
     let tm = j_tree();
-    tm.ok_at(&at("09:30"), &["break", "10m"]);
+    tm.ok_at(&at("09:30"), &["break"]);
     let (log0, day0, state0) = (tm.read(".tm/log.jsonl"), tm.read(&format!("day/{TUE}.md")), tm.read(".tm/state.json"));
     let out = tm.run_at(&at("09:30"), &["break"]);
     assert_ne!(out.code, 0, "refused: {}", out.stdout);
@@ -124,7 +129,7 @@ fn a_break_typed_at_an_ended_breaks_own_start_is_refused_p139() {
 #[test]
 fn the_d129_notice_names_the_end_d129_gave_the_break() {
     let tm = j_tree();
-    tm.ok_at(&at("09:30"), &["break", "10m"]);
+    tm.ok_at(&at("09:30"), &["break"]);
     tm.ok_at(&at("09:40"), &["break"]);
     let out = tm.ok_at(&at("09:35"), &["break"]);
     assert!(out.stderr.contains("began at 09:35 ended at 10:10"), "{}", out.stderr);
