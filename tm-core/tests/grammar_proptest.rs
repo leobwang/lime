@@ -100,7 +100,15 @@ proptest! {
                         prop_assert_eq!(after.state, State::Done);
                     }
                     Err(e) => {
-                        prop_assert!(is_dur, "{:?}", e);
+                        // A leading duration is never representable; and pinning
+                        // the ci removes the `ci:` key that ended the title, so a
+                        // flag behind it with no `^id` to bound the title is
+                        // refused by its own name (EditError::FlagNeedsBoundary, as
+                        // add_flag, set_priority and set_title refuse it).
+                        // A fresh seed drew `("- 0 ci:0 open", false)` (README
+                        // gap 5745, owner D46); it stays pinned.
+                        let unbounded = matches!(e, EditError::FlagNeedsBoundary { .. });
+                        prop_assert!(is_dur || unbounded, "{:?}", e);
                         prop_assert_eq!(line.to_string(), text.clone(), "a refused edit changes nothing");
                     }
                 }

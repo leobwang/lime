@@ -1044,6 +1044,28 @@ pub struct OpenBreak {
     pub day: NaiveDate,
 }
 
+/// **A logged break a later `start` ended (D129) that a `break` line may still end earlier** — the
+/// owner's **D141** (stage 6 W-52 repair track R, README gaps 5714 and 5730): one entry of the kernel's
+/// `open.ended` (`Replay.endable`), exactly the breaks a `break` line stamped at [`EndedBreak::started`]
+/// and ending strictly before [`EndedBreak::ended`] is read as ending (`Replay.d141_reads_iff_endable`).
+/// Read off the kernel, never re-derived: the host's D141 gate and its D129 notice read this, not a
+/// [`BreakRecord`]'s span, which since gap 5662 carries the DRAWN minutes and so can end early.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EndedBreak {
+    /// Its `break_start`'s `t`.
+    pub started: DateTime<FixedOffset>,
+    /// **The end D129 gave it**: the `start` that ended it.
+    pub ended: DateTime<FixedOffset>,
+    /// Planned minutes.
+    pub planned_min: u32,
+    /// Where.
+    pub r#where: Option<String>,
+    /// The ledger day it was stepped on.
+    pub day: NaiveDate,
+    /// The log line that made the ending (the kernel's identity for it, `Replay.Ending.key`).
+    pub key: u64,
+}
+
 /// A block that was started and never closed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct OpenBlock {
@@ -1599,6 +1621,11 @@ pub struct Replay {
     /// so a replay with no running break serialises exactly as it did before D105.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_break: Option<OpenBreak>,
+    /// **The logged breaks a D141 line would end now** (stage 6 W-52 repair track R; the kernel's
+    /// `open.ended`, [`EndedBreak`]): empty while a break runs, and on every log fork 4748911 wrote (it
+    /// logged no `break_start`), so an empty list is not written and such a replay serialises as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ended_breaks: Vec<EndedBreak>,
     /// Number of unknown events seen.
     pub unknown: u32,
     /// Inconsistencies noticed while replaying (a `done` for an item that was
@@ -1685,6 +1712,7 @@ impl PartialEq for Replay {
             open_block,
             open_interrupt,
             open_break,
+            ended_breaks,
             unknown,
             warnings,
             late_marks,
@@ -1714,6 +1742,7 @@ impl PartialEq for Replay {
             && *open_block == other.open_block
             && *open_interrupt == other.open_interrupt
             && *open_break == other.open_break
+            && *ended_breaks == other.ended_breaks
             && *unknown == other.unknown
             && *warnings == other.warnings
             && *late_marks == other.late_marks

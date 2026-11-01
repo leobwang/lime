@@ -2283,6 +2283,23 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         }
         None => None,
     };
+    // **At the very start of a break a later start ended, `tm break` is refused by name** — stage 6 W-52
+    // repair track R, the campaign's call (revisable by the owner), parity **P139**. With no break running
+    // (the fact is empty while one runs), `tm break --now <t>` at the instant a logged break D129 ended
+    // began would log a second `break_start` wholly inside it — the critic's B2: the next `tm break` then
+    // named the first break and the kernel ended the second. D141 forbids a second break inside the first,
+    // and an end AT the start is no break at all, so the verb says which break this is and how to end it,
+    // and writes nothing (D20's shape).
+    if let Some(x) = ctx.ended_break_starting_at(ctx.now) {
+        let tz = ctx.cfg.tz;
+        return Err(CliError::msg(format!(
+            "a break began at {} and the `start` the log holds at {} ended it (D129) — `tm break` at its own \
+             start would begin a second break inside it; give a later instant, before {}, to end it there (D141)",
+            x.started.with_timezone(&tz).format("%H:%M"),
+            x.ended.with_timezone(&tz).format("%H:%M"),
+            x.ended.with_timezone(&tz).format("%H:%M"),
+        )));
+    }
     super::kernel_bridge::gate(&ctx, "break")?;
     let rec = Recorder::start(&ctx, "break")?;
     let replay_before = ctx.replay.clone();
@@ -2309,9 +2326,9 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         ctx.save_state()?;
         ended
     } else if let Some(b) = superseded {
-        let actual = (ctx.now - b.t).num_minutes().max(0) as u32;
+        let actual = (ctx.now - b.started).num_minutes().max(0) as u32;
         let entry = log::LogEntry::new(
-            b.t,
+            b.started,
             Event::Break {
                 planned_min: b.planned_min,
                 actual_min: Some(actual),
@@ -2320,8 +2337,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         );
         ctx.append_entry(&entry)?;
         let tz = ctx.cfg.tz;
-        let (from, until) = b.span();
-        let (from, until) = (from.with_timezone(&tz), until.with_timezone(&tz));
+        let (from, until) = (b.started.with_timezone(&tz), b.ended.with_timezone(&tz));
         eprintln!(
             "tm: the break that began at {} ends here, at {} — the `start` the log holds at {} had ended it \
              (D129); typed inside it, `tm break` ends it (D141)",
@@ -2376,12 +2392,20 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     if out.actual_min.is_none() {
         if let Some((from, until)) = ctx.drop_break_a_start_ended() {
             ctx.save_state()?;
-            eprintln!(
-                "tm: the break that began at {} ended at {}, at the `start` the log already holds after it \
-                 (D129) — it is not running",
-                from.format("%H:%M"),
-                until.format("%H:%M")
-            );
+            let tz = ctx.cfg.tz;
+            match until {
+                Some(until) => eprintln!(
+                    "tm: the break that began at {} ended at {}, at the `start` the log already holds after it \
+                     (D129) — it is not running",
+                    from.with_timezone(&tz).format("%H:%M"),
+                    until.with_timezone(&tz).format("%H:%M")
+                ),
+                None => eprintln!(
+                    "tm: the break that began at {} was ended by a `start` the log already holds after it \
+                     (D129) — it is not running",
+                    from.with_timezone(&tz).format("%H:%M")
+                ),
+            }
         }
     }
     match out.actual_min {

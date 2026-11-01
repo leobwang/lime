@@ -131,16 +131,10 @@ fn a_break_typed_at_or_after_the_end_d129_gave_begins_a_break() {
     }
 }
 
-/// **At the break's own start the instant is not inside it** (the span is half-open at its end and the typed instant
-/// must lie strictly after its start): `tm break --now 09:30` again begins a break, as before D141, and writes no
-/// `break` line of zero minutes.
-#[test]
-fn a_break_typed_at_the_breaks_own_start_begins_a_break() {
-    let tm = j_tree_with_the_late_break();
-    let out = tm.ok_at(&at("09:30"), &["break"]);
-    assert!(!out.stderr.contains("(D141)"), "{}", out.stderr);
-    assert_eq!(evs(&breaks(&tm)), ["break_start", "break_start"]);
-}
+// `a_break_typed_at_the_breaks_own_start_begins_a_break` pinned the behaviour before stage 6 W-52 repair track R:
+// `tm break --now 09:30` at the D129-ended break's own start began a second break wholly inside it (the critic's B2).
+// It is refused by name since (parity P139); the behaviour row is `cli_w52r_break_ends.rs`'s
+// `a_break_typed_at_an_ended_breaks_own_start_is_refused_p139`.
 
 /// **A break its own line already ended keeps the behaviour before D141**, twice over. After D141 ended the J break at
 /// 09:40, a `tm break --now 09:35` begins a break (the break has its line); and a break that ended while it ran —

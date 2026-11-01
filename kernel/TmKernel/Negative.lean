@@ -3182,7 +3182,7 @@ theorem aBlockPausedOnAnEarlierDayIsPausedAgainAtAMeeting :
     (match WallTimer.answer (.obj [("walls".toList, .obj [("at".toList, .str "2026-09-07T13:20:00-05:00".toList),
         ("break".toList, .null)])]) (some Replay.utcZone)
         (some ⟨0, 0, [], [], [], [], [⟨5, none, some ⟨none, [.pause ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At)], none⟩,
-          [], [], [], [], [], []⟩], some ⟨['t','4'], ((⟨500, 0⟩, Cal.Offset.utc) : Replay.At), 0, none, true, 5⟩, none, none,
+          [], [], [], [], [], []⟩], some ⟨['t','4'], ((⟨500, 0⟩, Cal.Offset.utc) : Replay.At), 0, none, true, 5⟩, none, none, [],
           none, none, 0, 0, none, [], [], 0⟩)
         (fun _ _ => [⟨['g','1'], 7, 7, 1000, 1000, 2000⟩]) 0 (some 7) (some 60) with
       | .ok v => v == .obj [("marks".toList, .arr []), ("pausedFor".toList, .null)]
@@ -3527,7 +3527,7 @@ theorem aBreakFromTheDayBeforeStillRuns :
 
 /- CHEAT 494 — the break's own `break` line, logged after a start ended it,
    claimed to be a second break: two records on the day.  The line is the
-   break's own (`Replay.Machine.brkEnded`): `decide` computes one. -/
+   break's own (`Replay.Machine.ended`): `decide` computes one. -/
 theorem aBreaksOwnLineIsASecondBreak :
     ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (.brkStart 20 none),
       Replay.bE 2 63924366600 (Replay.bStart ['a']), Replay.bE 3 63924370200 (Replay.bDone ['a'] 60 false),
@@ -3730,6 +3730,69 @@ theorem aD129EndingCoveredInPartIsRecordedWhole :
     ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (.brk 30 (some 30) none),
       Replay.bE 2 63924365400 (.brkStart 20 none), Replay.bE 3 63924367200 (Replay.bStart ['a'])]).days.get 739865).map
         (fun a => a.breaks.map (·.actualMin)) = some [some 30, some 30] := by
+  decide
+
+/- ============================================================================================
+   W-52 repair track R (kernel half): D141 for every break D129 ended.  Cheats 711-720 are this
+   block's (711-715 taken).  Each claims a reading this repair replaced; each fails because
+   `decide` computes the new one.
+   ============================================================================================ -/
+
+/- CHEAT 711 — D141 reaching only the NEWEST ending (README gap 5711): scenario C, late `break_start`s 08:30 and 09:30
+   ended at 09:10 and 10:20, then the 08:30 line and the 09:30 line, ten minutes each.  Claimed the day ninety — the older
+   line read as a covered break of its own.  Every ending is reached since this repair; `decide` computes a hundred and
+   forty (`Replay.scenario_c_older_line_first_ends_both_breaks`). -/
+theorem d141ReachesOnlyTheNewestEnding :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924373200 (Replay.bStart ['c']),
+      Replay.bE 6 63924375600 (Replay.bDone ['c'] 40 false), Replay.bE 7 63924366600 (.brkStart 10 none),
+      Replay.bE 8 63924370200 (.brkStart 10 none), Replay.bE 9 63924366600 (.brk 10 (some 10) none),
+      Replay.bE 10 63924370200 (.brk 10 (some 10) none)]).days.get 739865).map (·.blockMin) = some 90 := by
+  decide
+
+/- CHEAT 712 — an ordinary `break_start` forgetting a D129 ending's take (`forgetIdle`, README gap 5711; the W-52 auditor's
+   J2): one ending, an ordinary break 10:20-10:30, then the ending's line.  Claimed the day ninety, the line skipped.
+   Since this repair an ending's take is kept under its key (`Closed.held`); `decide` computes a hundred and ten
+   (`Replay.j2_an_ordinary_break_after_the_ending_leaves_it_endable`). -/
+theorem anOrdinaryBreakForgetsTheEndingsTake :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924373200 (.brkStart 10 none), Replay.bE 7 63924373200 (.brk 10 (some 10) none),
+      Replay.bE 8 63924366600 (.brk 10 (some 10) none)]).days.get 739865).map (·.blockMin) = some 90 := by
+  decide
+
+/- CHEAT 713 — `endMachine` forgetting the running break's take (README gap 5712): `a` done, a late `break_start` 08:30
+   netting it while it runs, `b`'s 09:10 `start` ending the break, then the break's line for ten.  Claimed `a` thirty.
+   The take is stashed under the start's key since this repair; `decide` computes fifty
+   (`Replay.a_running_break_a_start_ended_gives_back_on_its_line`). -/
+theorem endMachineForgetsTheRunningTake :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924366600 (.brkStart 10 none),
+      Replay.bE 4 63924369000 (Replay.bStart ['b']), Replay.bE 5 63924366600 (.brk 10 (some 10) none),
+      Replay.bE 6 63924372600 (Replay.bDone ['b'] 60 false)]).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+/- CHEAT 714 — the fact naming a break while one runs (README gap 5714): a running `break_start` with an ending held.
+   Claimed the fact non-empty.  A line read while a break runs is that break's end, never D141's (`d141Ok`), and the fact
+   says what the arm reads (`Replay.d141_reads_iff_endable`); `decide` computes `[]`. -/
+theorem theFactNamesABreakWhileOneRuns :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924373200 (.brkStart 10 none)]).openEnded ≠ [] := by
+  decide
+
+/- CHEAT 715 — an ending a later-held break overlaps read as endable (README gap 5741): late `break_start`s 08:30 and
+   08:40, both ended at 09:10.  Claimed the fact holds the 08:30 break.  The 08:40 break overlaps it (`newerMeets`), so
+   the fact holds the 08:40 one alone; `decide` computes one entry
+   (`Replay.an_ending_a_later_break_overlaps_is_not_reached`). -/
+theorem anOverlappedEndingIsEndable :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924367200 (.brkStart 10 none)]).openEnded.map (fun x => x.s.1.sec)) = [63924367200, 63924366600] := by
   decide
 
 end Tm

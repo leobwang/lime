@@ -58,7 +58,7 @@ use tm_core::config::Config;
 use tm_core::energy::{self, Model};
 use tm_core::grammar::ItemLine;
 use tm_core::horizon;
-use tm_core::log::{BreakRecord, DayReplay, Event, LogEntry, Replay};
+use tm_core::log::{BreakRecord, DayReplay, EndedBreak, Event, LogEntry, Replay};
 use tm_core::model::{Id, Item, Loc, State};
 use tm_core::store::{
     self, ActiveBlock, BreakState, Closed, FsStore, InterruptState, PlanFiles, RuntimeState, Store, StoreExt,
@@ -1434,11 +1434,17 @@ impl Ctx {
     /// ended at that start in stamp order, so the kernel's replay holds no running break and the
     /// break's record instead. The cache this verb wrote a moment ago is then dropped, as the next
     /// verb's reconcile would drop it ([`Ctx::log_ended`]), and the block's pause is the log's again.
-    /// Answers the break's span, or `None` when the break still runs.
+    /// Answers the break's start and **the end D129 gave it** — read off the kernel's own fact,
+    /// [`Replay::ended_breaks`] (stage 6 W-52 repair track R, README gap 5730), never off the record's
+    /// span, which since gap 5662 carries the minutes DRAWN and so ends early when an earlier break covers
+    /// a head of it. `None` for the end when the fact does not offer the break (one a later-held break
+    /// overlaps, README gap 5741: the kernel holds the ending, but no `break` line can end it there);
+    /// `None` altogether when the break still runs.
     pub(crate) fn drop_break_a_start_ended(
         &mut self,
-    ) -> Option<(DateTime<FixedOffset>, DateTime<FixedOffset>)> {
-        let span = self.ended_cached_break()?.span();
+    ) -> Option<(DateTime<FixedOffset>, Option<DateTime<FixedOffset>>)> {
+        let from = self.ended_cached_break()?.t;
+        let until = self.replay.ended_breaks.iter().find(|x| x.started == from).map(|x| x.ended);
         self.state.break_ = None;
         let fresh = derived_state(&self.replay, self.cfg.tz, self.today, false);
         if let (Some(a), Some(f)) = (self.state.active.as_mut(), fresh.active.as_ref()) {
@@ -1446,45 +1452,41 @@ impl Ctx {
                 a.paused = f.paused;
             }
         }
-        Some(span)
+        Some((from, until))
     }
 
-    /// **The logged break a later block's `start` ended (D129) that `at` lies inside, and that no `break`
-    /// line has ended yet** — the owner's **D141** (README gap 5633, stage 6 W-52 track H, parity **P138**):
-    /// the break `tm break --now <at>` ends at `at` instead of opening a second break inside it.
+    /// **The logged break a later block's `start` ended (D129) that `at` lies inside, and that a `break`
+    /// line may still end there** — the owner's **D141** (README gap 5633, stage 6 W-52 track H, parity
+    /// **P138**): the break `tm break --now <at>` ends at `at` instead of opening a second break inside it.
     ///
-    /// Read off the replay's own facts, never re-derived (§5.3): the break is a record of the replay's days
-    /// ([`BreakRecord`], the one the kernel writes when a start ends a running break: stamped at its
-    /// `break_start`, its minutes up to that start), and its span ([`BreakRecord::span`]) is the end D129 gave
-    /// it — the instant `tm break`'s D129 notice prints. What tells a break D129 ended from one its own line
-    /// ended is the log's rows ([`Replay::rows`]): a surviving `break_start` row at the record's stamp and no
-    /// surviving `break` row there, for the line that ends a break is stamped at the break's start (the fork's
-    /// shape, D105). `at` must lie STRICTLY inside the span: at or after D129's end, or at the break's own
-    /// start, the verb keeps its behaviour before D141. With several such breaks around `at` (a log D142 reads
-    /// as a union), the latest-begun is answered. `None` while a break runs — the ending arm ends that one —
-    /// and when the replay's scope does not hold the break's day (a sealed month; README gap 5681).
-    pub(crate) fn break_a_start_ended_at(&self, at: DateTime<FixedOffset>) -> Option<BreakRecord> {
-        if self.replay.open_break.is_some() || self.state.break_.is_some() {
-            return None;
-        }
-        // The tags are asked of `Event` rather than spelled a second time (§5.3).
-        let start = Event::BreakStart { planned_min: 0, r#where: None };
-        let end = Event::Break { planned_min: 0, actual_min: None, r#where: None };
-        let (start, end) = (start.name(), end.name());
-        let row = |tag: &str, t: DateTime<FixedOffset>| {
-            self.replay.rows.iter().any(|r| !r.cancelled && r.tag == tag && r.t == t)
-        };
+    /// **One reader of "endable"** (stage 6 W-52 repair track R, README gaps 5714 and 5730): the kernel's
+    /// own fact, [`Replay::ended_breaks`] (`Replay.endable`), which `Replay.d141_reads_iff_endable` proves is
+    /// exactly what its replay reads as D141 — a `break` line stamped at an entry's `started` and ending
+    /// strictly before its `ended` ends that break. So this verb never says "ends here" for a line the
+    /// replay would not read as an end. Until the repair this read a [`BreakRecord`]'s span as D129's end
+    /// and the log's rows as "no line yet" — a second reading the replay did not share (the critic's
+    /// scenario C and the auditor's J2: "ends here", and nothing moved). `at` must lie STRICTLY inside
+    /// `(started, ended)`; AT `started` the verb refuses by name (P139, [`Ctx::ended_break_starting_at`]).
+    /// With several around `at`, the latest-begun is answered. The fact is empty while a break runs
+    /// (`Replay.endable`), so this answers `None` then with no guard of its own — the guard on
+    /// `open_break`/`state.break_` it carried until the repair could not fire (`take_break` asks only after
+    /// its ending arm ended nothing). `None` too when the replay's scope does not hold the break (README gap
+    /// 5681).
+    pub(crate) fn break_a_start_ended_at(&self, at: DateTime<FixedOffset>) -> Option<EndedBreak> {
         self.replay
-            .days
-            .values()
-            .flat_map(|d| d.breaks.iter())
-            .filter(|b| {
-                let (from, until) = b.span();
-                from < at && at < until
-            })
-            .filter(|b| row(start, b.t) && !row(end, b.t))
-            .max_by_key(|b| b.t)
+            .ended_breaks
+            .iter()
+            .filter(|x| x.started < at && at < x.ended)
+            .max_by_key(|x| x.started)
             .cloned()
+    }
+
+    /// **The logged break D129 ended whose own start is `at`** (stage 6 W-52 repair track R, the campaign's
+    /// call, parity **P139**): `tm break --now <that start>` would open a second break wholly inside it,
+    /// which D141 forbids, so the verb refuses it by name. Read off the same fact as
+    /// [`Ctx::break_a_start_ended_at`].
+    pub(crate) fn ended_break_starting_at(&self, at: DateTime<FixedOffset>) -> Option<EndedBreak> {
+        self.replay.ended_breaks.iter().find(|x| x.started == at).cloned()
     }
 
     /// **Whether the log ENDED the running break `.tm/state.json` holds** (the W-46 audit, README gap

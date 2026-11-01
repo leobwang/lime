@@ -138,20 +138,18 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
       rw [(Replay.giveBack_keeps dy M).1, hM] at h
       exact h
     split at hm
-    · split at hm
-      · -- D141: the ending's segment and record undone write no machine; then a `break` line's arm over the machine
-        -- with that break let go, whose block is the old one's
-        unfold Replay.d141Arm at hm; split at hm <;> (try split at hm)
-        · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
-          exact Or.inl (hbk _ (by rfl) hm)
-        all_goals simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl (congrArg (·.bind (·.obs)) (Replay.forgetIdle_keeps m).1)
-      · exact Or.inl (hbk _ (Replay.forgetIdle_keeps m).1 hm)
+    · -- D141: the ending's segment and record undone write no machine; then a `break` line's arm over the machine
+      -- with that break let go, whose block is the old one's
+      unfold Replay.d141Arm at hm; split at hm
+      · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
+        exact Or.inl (hbk _ (by rfl) hm)
+      · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
     · exact Or.inl (hbk m rfl hm)
   case brkStart pl w =>
     split at hm
     · rename_i t0 _
-      have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 m' hm
-      exact Or.inl (Replay.takeFx_machine dy { Replay.forget m with brkEnded := some t } t t0 d m' hm').2.2
+      have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
+      exact Or.inl (Replay.takeFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } e.line t t0 d m' hm').2.2
     unfold Replay.brkStartArm at hm
     -- D105: the running break is set and the block, with its pending observation, untouched — settled over the
     -- running break and the held closed blocks netted by it since README gap 5180, neither of which moves it.

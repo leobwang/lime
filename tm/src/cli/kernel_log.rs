@@ -1770,7 +1770,7 @@ mod tests {
 // §11.1: the kernel's facts, decoded into Rust's `Replay`.
 
 use tm_core::log::{
-    fmt_timestamp, BreakRecord, CloseRecord, DayReplay, DaySeam, Demotion, DurationObs, EnergyObs, IdleMark, IdleRecord, InstanceRecord, Interruption,
+    fmt_timestamp, BreakRecord, CloseRecord, EndedBreak, DayReplay, DaySeam, Demotion, DurationObs, EnergyObs, IdleMark, IdleRecord, InstanceRecord, Interruption,
     ItemReplay, LeakRecord, LogSegment, LogWarning, NamedLatest, NamedRecord, OpenBlock, OpenBreak, Replay, SegmentKind, StartRecord, ViewRow,
 };
 use tm_core::model::InstanceStatus;
@@ -2092,7 +2092,10 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 breaks: d_arr(g(22, "breaks")?, "breaks")?
                     .iter()
                     .map(|r| {
-                        let r = d_tuple(r, 5, "a break")?;
+                        // `[t, day, planned, actual?, where?, src?]` (`Seal.cBreakRec`): the sixth is the key of
+                        // the D129 ending that wrote the record (`Replay.BreakRec.src`, W-52 repair track R, README
+                        // gap 5713), which only the kernel reads.
+                        let r = d_tuple(r, 6, "a break")?;
                         Ok(BreakRecord {
                             t: d_when(d_at(r, 0, "a break's t")?, "a break's t")?,
                             day: d_date(d_at(r, 1, "a break's day")?, "a break's day")?,
@@ -2393,6 +2396,22 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
             day: d_date(d_at(o, 3, "the running break's day")?, "the running break's day")?,
         })
     })?;
+    // **The breaks a D141 line would end** — stage 6 W-52 repair track R, README gaps 5714 and 5730:
+    // `[start, end, planned, where?, day, key]` (`Seal.cEnded`, `Replay.endable`), the kernel's own reading.
+    let ended_breaks = d_arr(open.get("ended").unwrap_or(&Value::Null), "open.ended")?
+        .iter()
+        .map(|o| {
+            let o = d_tuple(o, 6, "an ended break")?;
+            Ok(EndedBreak {
+                started: d_when(d_at(o, 0, "an ended break's start")?, "an ended break's start")?,
+                ended: d_when(d_at(o, 1, "an ended break's end")?, "an ended break's end")?,
+                planned_min: d_u32(d_at(o, 2, "an ended break's planned minutes")?, "an ended break's planned minutes")?,
+                r#where: d_opt(d_at(o, 3, "an ended break's place")?, |x| d_str(x, "an ended break's place"))?,
+                day: d_date(d_at(o, 4, "an ended break's day")?, "an ended break's day")?,
+                key: d_u64(d_at(o, 5, "an ended break's key")?, "an ended break's key")?,
+            })
+        })
+        .collect::<D<Vec<_>>>()?;
     let longest_leak = d_opt(v.get("longestLeak").unwrap_or(&Value::Null), |x| {
         let x = d_tuple(x, 3, "the longest leak")?;
         Ok(LeakRecord {
@@ -2428,6 +2447,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         open_block,
         open_interrupt,
         open_break,
+        ended_breaks,
         unknown: d_u32(v.get("unknown").unwrap_or(&Value::Null), "facts.unknown")?,
         warnings,
         late_marks,
