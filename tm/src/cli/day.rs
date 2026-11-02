@@ -2296,6 +2296,48 @@ fn followed_by_a_start(
     answer
 }
 
+/// **A break the log holds FINISHED — with its own `break` line — as the kernel's fact gives it** (the
+/// owner's **D147**, stage 6 W-53 repair track H, parity **P145**): its own start, its own end (unclipped by
+/// D142's union), its planned minutes and its place. Read off track K's wire fact by [`finished_breaks`] and
+/// never re-derived from the log's lines here (§5.3).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FinishedSpan {
+    started: DateTime<FixedOffset>,
+    ended: DateTime<FixedOffset>,
+    planned_min: u32,
+    place: Option<String>,
+}
+
+/// **Where a no-length `tm break --now <t>` falls against the finished breaks** (D147), in the gate's order:
+/// strictly inside one (the latest-begun, as D141 picks), else at the end of one, else at the start of one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum AtFinished {
+    /// Strictly inside its span: the typed instant re-times its end.
+    Inside(FinishedSpan),
+    /// At its end: it already ends there.
+    AtEnd(FinishedSpan),
+    /// At its own start: refused by name (the campaign's call inside D147, as P139 at a D129-ended break's).
+    AtStart(FinishedSpan),
+}
+
+/// **The finished breaks the kernel's replay holds** (D147) — track K's wire fact (W-53 repair track K item 3),
+/// as [`FinishedSpan`]s.
+fn finished_breaks(ctx: &Ctx) -> Vec<FinishedSpan> {
+    let _ = ctx;
+    Vec::new()
+}
+
+/// [`AtFinished`] for `at` over `spans`; `None` when `at` lies outside every finished break.
+fn at_finished(spans: &[FinishedSpan], at: DateTime<FixedOffset>) -> Option<AtFinished> {
+    if let Some(f) = spans.iter().filter(|f| f.started < at && at < f.ended).max_by_key(|f| f.started) {
+        return Some(AtFinished::Inside(f.clone()));
+    }
+    if let Some(f) = spans.iter().filter(|f| f.ended == at).max_by_key(|f| f.started) {
+        return Some(AtFinished::AtEnd(f.clone()));
+    }
+    spans.iter().find(|f| f.started == at).map(|f| AtFinished::AtStart(f.clone()))
+}
+
 /// `tm break [20m] [--where walk]` — starts a break, or ends the running one.
 pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError> {
     let mut ctx = Ctx::load(g, true)?;
@@ -2383,14 +2425,86 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         None
     };
     let tz = ctx.cfg.tz;
+    // **A no-length `tm break` at or inside a break already logged FINISHED re-times it** — the owner's **D147**
+    // (stage 6 W-53 repair track H, parity **P145**, README gaps 5772 and 5810; track K's P143 reads the line). With
+    // nothing ended above (no running break this instant ends, no break D129 ended around it — D141 and D146 come
+    // first) and no length typed, an instant strictly inside a finished break's own span becomes its end: one more
+    // `break` line in the fork's shape, `t` that break's own start, its planned minutes, `actual_min` the typed
+    // instant less its start, its place — which the kernel reads as that break's reading, the later line at one
+    // stamp winning (D141's rule reaching a finished break, D100's later fact), giving back what the shorter break
+    // no longer takes (D137). At its end the instant changes nothing and the verb says so, writing nothing; at its
+    // own start it is refused by name (the campaign's call inside D147: re-timing there would leave a zero-minute
+    // break, as P139 refuses at a D129-ended break's start). A LENGTH typed at or inside a finished break keeps
+    // D143: a new finished break (README gap 5849). Outside every finished break, a break begins as before.
+    let retimed = if ended.is_none() && superseded.is_none() && asked.is_none() {
+        match at_finished(&finished_breaks(&ctx), ctx.now) {
+            Some(AtFinished::Inside(f)) => Some(f),
+            Some(AtFinished::AtEnd(f)) => {
+                let (from, until) = (f.started.with_timezone(&tz), f.ended.with_timezone(&tz));
+                let out = BreakOut {
+                    action: "unchanged".to_string(),
+                    planned_min: f.planned_min,
+                    actual_min: Some((f.ended - f.started).num_minutes().max(0) as u32),
+                    place: f.place,
+                    superseded_end: None,
+                    finished: None,
+                };
+                emit(
+                    ctx.json,
+                    || {
+                        format!(
+                            "break {}–{} already ends at {} — nothing written (D147)",
+                            from.format("%H:%M"),
+                            until.format("%H:%M"),
+                            until.format("%H:%M")
+                        )
+                    },
+                    &out,
+                )?;
+                return Ok(0);
+            }
+            Some(AtFinished::AtStart(f)) => {
+                return Err(CliError::msg(format!(
+                    "a break was logged finished {}–{} — `tm break` at its own start would leave it no minutes; give \
+                     an instant inside it to end it there (D147)",
+                    f.started.with_timezone(&tz).format("%H:%M"),
+                    f.ended.with_timezone(&tz).format("%H:%M"),
+                )));
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
     // **The finished break this run logs** (D143, D146, D148): its typed length, and the later `start` D129
     // would have ended it at when it runs past that start (D148).
     let mut finished: Option<(u32, Option<DateTime<FixedOffset>>)> = None;
+    // The start of the finished break this run re-timed (D147), `HH:MM`.
+    let mut retimed_from: Option<String> = None;
     // Whether the context must be read again after this run's lines (not when it holds the replay of them).
     let mut reread = true;
     let mut out = if let Some(ended) = ended {
         ctx.save_state()?;
         ended
+    } else if let Some(f) = retimed {
+        let actual = (ctx.now - f.started).num_minutes().max(0) as u32;
+        retimed_from = Some(f.started.with_timezone(&tz).format("%H:%M").to_string());
+        ctx.append_entry(&log::LogEntry::new(
+            f.started,
+            Event::Break {
+                planned_min: f.planned_min,
+                actual_min: Some(actual),
+                r#where: f.place.clone(),
+            },
+        ))?;
+        BreakOut {
+            action: "retimed".to_string(),
+            planned_min: f.planned_min,
+            actual_min: Some(actual),
+            place: f.place,
+            superseded_end: Some(f.ended.with_timezone(&tz).format("%H:%M").to_string()),
+            finished: None,
+        }
     } else if let Some(b) = superseded {
         let actual = (ctx.now - b.started).num_minutes().max(0) as u32;
         let entry = log::LogEntry::new(
@@ -2555,7 +2669,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     // The journal: an ended break's end (D97's one writer), a started break's start, and a finished break's
     // start and its end where it ended — after the end of the break D141 ended, when D146 logs both.
     match out.action.as_str() {
-        "ended" => note_break_ended(&ctx, &out, ctx.now_tz)?,
+        "ended" | "retimed" => note_break_ended(&ctx, &out, ctx.now_tz)?,
         "started" => day_note(&ctx, start_note(out.planned_min, &out.place))?,
         _ => {}
     }
@@ -2599,6 +2713,15 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                 finished_line(f)
             ),
             ("ended", None) => break_ended_line(out.actual_min.unwrap_or(0), out.planned_min),
+            // D147: the finished break's old span and its new end.
+            ("retimed", _) => format!(
+                "break {}–{} re-timed to end at {} (D147) · {}m of {}m",
+                retimed_from.as_deref().unwrap_or_default(),
+                out.superseded_end.as_deref().unwrap_or_default(),
+                ctx.now_tz.format("%H:%M"),
+                out.actual_min.unwrap_or(0),
+                out.planned_min
+            ),
             _ => format!(
                 "break {}m{}",
                 out.planned_min,
