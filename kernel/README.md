@@ -104470,8 +104470,8 @@ On the final tree, every command capped at 40 GB (8 GB for the drives); Lean unc
 * `kernel/check.sh`: **17/17 `ok`, rc 0** (1 m 31 s): axiom audit 7,082, FFI target 97, corpus 29/37 files and 4/5 whole
   plans, stage goals 1, prose citations 69,422 (0 unresolved), check 9 951 rostered, 0 owed, parity P1-P146 with 2
   declared holes (next free **P147**), check 12 1,686 reachable, 97 modules replayed.  (Taken before the last host
-  commit, which adds `spans_of` and a unit test and touches no Lean, README or register; checks 8 and 10 re-run on the
-  final tree: 0 unresolved, P1-P146.)
+  commit, which adds `spans_of` and a unit test and touches no Lean; re-run on that commit, `cd905c4`: **17/17 `ok`**,
+  rc 0.)
 * `cargo test --workspace --no-fail-fast`, three runs (before the same last commit): run 1 (load 9.4 → 8.3, 53 m)
   **3,097 passed / 1 failed / 62 ignored over 183 result lines** — gap 5541's row (`tm drop ^z15` still running after
   1 s); run 2 (load 6.3 → 10.5, 100 m) **3,094 / 4 / 62 over 183** — four `cli_latency` timing rows (`tm plan` 3.09 s);
