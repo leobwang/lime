@@ -1470,7 +1470,7 @@ theorem arm_mi (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine
     have hbk : ∀ M : Machine, (∀ q, q ∈ machineInstants M → q ∈ machineInstants m) → m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? →
         q ∈ machineInstants m ∨ q = t.1 ∨ q ∈ (brkEndAt? e t.1).toList := fun M hM hm => by
       unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
+      rw [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
       rcases brkFx_mi dy _ t _ d m' hm q hq with h | h
       · exact Or.inl (hM q (giveBack_mi dy M q h))
@@ -1482,7 +1482,7 @@ theorem arm_mi (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine
     simp only [hev] at hm
     split at hm
     · unfold Replay.d141Arm at hm; split at hm
-      · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
+      · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
         exact hbk _ (d141Machine_mi m _) hm
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl (letGo_mi m _ q hq)
     · exact hbk m (fun _ h => h) hm
@@ -1662,7 +1662,7 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
   case brk p a w =>
     have hbk : ∀ M : Machine, m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → ∃ k, m'.brks = Replay.pruneBrks (k :: M.brks) := fun M hm => by
       unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
+      rw [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
       have h := Replay.brkFx_brk dy _ t _ d m' hm
       rw [(Replay.giveBack_keeps dy M).2.2.1] at h
@@ -1671,7 +1671,7 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
     · rename_i x hK
       unfold Replay.d141Arm at hm; split at hm
       · rename_i hg
-        simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
+        simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
         obtain ⟨k', h⟩ := hbk _ hm; exact Or.inr (Or.inr ⟨k', x, ⟨p, a, w, rfl, hK, hg⟩, h⟩)
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
     · obtain ⟨k', h⟩ := hbk _ hm; exact Or.inr (Or.inl ⟨k', h⟩)

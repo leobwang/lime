@@ -3305,10 +3305,9 @@ inductive DayOp
   | brk (r : BreakRec)
   /-- **D141 (README gaps 5633 and 5660, W-52b track K2): the Break segments the held break `k` witnesses and no break of `rest` does, un-drawn** — of a break kind, begun at or after `k.s`, ending at `k.e` (`BreakFold.BrkHeld`'s witness on `k.day`, the day `d141Arm` writes it on): what a D129 ending drew, which the break's own `break` line ending it earlier takes back (`d141Arm`). -/
   | unsegBrks (k : HeldBrk) (rest : List HeldBrk)
-  /-- **D141: a break record undone, by identity** (README gap 5713, W-52 repair track R): the record the D129 ending keyed
-  `key` wrote (`endRecs`, `BreakRec.src`) is removed, taken back by that break's own line (`d141Arm`) — until this repair
-  the first stamped as it with its minutes, which two breaks at one stamp shared. -/
+  /-- **D141: a break record undone, by identity** (README gap 5713, W-52 repair track R): the record the D129 ending keyed `key` wrote (`endRecs`, `BreakRec.src`) is removed, taken back by that break's own line (`d141Arm`) — until this repair the first stamped as it with its minutes, which two breaks at one stamp shared. -/
   | unbrkAt (key : Nat)
+  /-- **D142 in any logging order** (W-53 track K, README gap 5661): the held break `k`'s drawing — its `Break` segment and its record — moved from the start `c` to the start `c'` (`DayAcc.redrawBrk`), when a break logged later and stamped earlier comes to cover it (`reachFx`), or one that covered it is let go (`growFx`). -/ | redraw (k : HeldBrk) (c c' : At)
   /-- C5: an `IdleRecord`, and a `leak`'s minutes and the day's longest -/
   | idle (r : IdleRec)
   /-- C5: `routine_min += m` -/
@@ -3331,32 +3330,38 @@ def DayAcc.netCredit (id : Id) (ci : Option U8) (k : Nat) (a : DayAcc) : DayAcc 
                | some v => if v - min k v = 0 then none else some (v - min k v)
                | none => none) }
 
-/-- **The calendar date a stamp is on**, by its own offset (README gap 5300): the date its local clock reads — what the
-host's `with_timezone(&tz).date_naive()` reads of a line it wrote in its zone. -/
+/-- **The calendar date a stamp is on**, by its own offset (README gap 5300): the date its local clock reads — what the host's `with_timezone(&tz).date_naive()` reads of a line it wrote in its zone. -/
 def stampDate (t : At) : Nat := Cal.localSecAt t.2 t.1 / 86400
 
-/-- **A stamp no earlier in calendar date than a slot's** (README gap 5300, W-49 track L): an empty slot takes any
-line, and a filled one is moved by a line of its date or a later one — never by a line of an earlier date, so a clock
-behind the log across midnight moves no later date's answer. -/
+/-- **A stamp no earlier in calendar date than a slot's** (README gap 5300, W-49 track L): an empty slot takes any line, and a filled one is moved by a line of its date or a later one — never by a line of an earlier date, so a clock behind the log across midnight moves no later date's answer. -/
 def notBefore (o : Option At) (t : At) : Bool :=
   match o with
   | none => true
   | some u => decide (stampDate u ≤ stampDate t)
 
-/-- **D100's duration half** (`DayOp.net`): `k` more minutes netted from the duration observation of the `done` at
-`line`, when it pushed one. -/
+/-- **D100's duration half** (`DayOp.net`): `k` more minutes netted from the duration observation of the `done` at `line`, when it pushed one. -/
 def DayAcc.netDurOf (line : Option Nat) (k : Nat) (a : DayAcc) : DayAcc :=
   match line with
   | some l => { a with durNet := a.durNet.alter l (fun o => some (o.getD 0 + k)) }
   | none => a
 
-/-- **D137's duration half** (`DayOp.undur`): `k` of the minutes netted from the duration observation of the `done` at
-`line` given back, when it pushed one. -/
+/-- **D137's duration half** (`DayOp.undur`): `k` of the minutes netted from the duration observation of the `done` at `line` given back, when it pushed one. -/
 def DayAcc.undurOf (line : Option Nat) (k : Nat) (a : DayAcc) : DayAcc :=
   match line with
   | some l => { a with durNet := a.durNet.alter l (fun o => some (o.getD 0 - k)) }
   | none => a
 
+/-- **The `Break` segment a held break `k` drawn from `c` writes** (D142, W-53 track K, README gap 5661): `brkRecsC`'s — whole when nothing covers its head (`c` not after `k.s`), from `c` when an earlier break covers a head of it, none when one covers it whole — of the place `w`. -/
+def drawSeg (k : HeldBrk) (c : At) (w : Option (List Char)) : Option Segment := if decide (c.1 ≤ k.s.1) then some ⟨k.s, k.e, .brk w⟩ else if decide (c.1 < k.e.1) then some ⟨c, k.e, .brk w⟩ else none
+/-- **The record a held break `k` drawn from `c` writes, from the one it wrote** (W-53 track K): `brkRecsC`'s stamp and minutes — at `k.s` with its whole minutes when nothing covers it; the drawn minutes, stamped `c` for a `break` line and `k.s` for a D129 ending (`src`), when an earlier break covers a head of it; at `k.s` with none when one covers it whole — its planned minutes, place and source kept. -/
+def drawRec (k : HeldBrk) (c : At) (r : BreakRec) : BreakRec := if decide (c.1 ≤ k.s.1) then { r with t := k.s, actualMin := some (Cal.minutesBetween k.s.1 k.e.1) } else if decide (c.1 < k.e.1) then { r with t := if r.src.isSome then k.s else c, actualMin := some (Cal.minutesBetween c.1 k.e.1) } else { r with t := k.s, actualMin := some 0 }
+/-- **Whether `r` is the record the held break `k` drawn from `c` wrote** (W-53 track K): on `k`'s day, with `drawRec`'s stamp and minutes — the minutes read as `actual_or_planned` when nothing covers it, as a `break` line logs them. -/
+def recFor (k : HeldBrk) (c : At) (r : BreakRec) : Bool := decide (r.day = k.day) && (if decide (c.1 ≤ k.s.1) then decide (r.t = k.s) && decide (r.actualMin.getD r.plannedMin = Cal.minutesBetween k.s.1 k.e.1) else decide (drawRec k c r = r))
+/-- **A held break's drawing moved from the start `c` to `c'`** (`DayOp.redraw`, W-53 track K, README gap 5661): its record found (`recFor`), its segment (`drawSeg`, of the record's place) and record taken out, and both drawn again from `c'`; nothing when no record is found. -/
+def DayAcc.redrawBrk (k : HeldBrk) (c c' : At) (a : DayAcc) : DayAcc :=
+  match a.breaks.find? (recFor k c) with
+  | none => a
+  | some r => { a with segments := (drawSeg k c' r.where_).toList ++ (match drawSeg k c r.where_ with | some g => a.segments.erase g | none => a.segments), breaks := drawRec k c' r :: a.breaks.erase r }
 def DayOp.apply : DayOp → DayAcc → DayAcc
   | .start r, a => { a with firstStart := a.firstStart.or (some r.t), starts := r :: a.starts }
   | .credit id min ci, a =>
@@ -3395,6 +3400,7 @@ def DayOp.apply : DayOp → DayAcc → DayAcc
   | .brk r, a => { a with breaks := r :: a.breaks }
   | .unsegBrks k rest, a => { a with segments := a.segments.filter (fun g => !((match g.kind with | .brk _ => true | _ => false) && decide (k.s.1 ≤ g.start.1) && decide (g.stop = k.e) && !rest.any (fun k' => decide (k'.s.1 ≤ g.start.1) && decide (k'.e = g.stop) && decide (k'.day = k.day)))) }
   | .unbrkAt key, a => { a with breaks := a.breaks.eraseP (fun r => decide (r.src = some key)) }
+  | .redraw k c c', a => DayAcc.redrawBrk k c c' a
   | .idle r, a =>
     if r.attributed = "leak".toList then
       { a with idle := r :: a.idle, leakMin := a.leakMin + r.min, longestLeak := Nat.max a.longestLeak r.min }
@@ -3495,9 +3501,7 @@ inductive Effect
   | seam (d : Nat) (op : SeamOp)
 deriving DecidableEq, Repr
 
-/-- **The keys** (§8.2's block-family and completion keys; C5 adds the record keys).  An instance is
-keyed by the date its `inst` names (`instDate`, a window fact) or, when `inst` is not a date, by
-`instOther` (an all-time fact). -/
+/-- **The keys** (§8.2's block-family and completion keys; C5 adds the record keys).  An instance is keyed by the date its `inst` names (`instDate`, a window fact) or, when `inst` is not a date, by `instOther` (an all-time fact). -/
 inductive Key
   | day (d : Nat)
   | itemDay (i : Id) (d : Nat)
@@ -3540,8 +3544,7 @@ def Effect.isHeader : Effect → Bool
   | .header _ _ => true
   | _ => false
 
-/-- What a day key holds: its record, and the observations, interruptions, headers, (C5) demotions and
-closes dated to it. -/
+/-- What a day key holds: its record, and the observations, interruptions, headers, (C5) demotions and closes dated to it. -/
 structure DayView where
   acc : Option DayAcc
   /-- C6 -/
@@ -3620,9 +3623,7 @@ def applyEffects (st : State) (fx : List Effect) : State := fx.foldl applyEffect
 /-- **The earlier of two instants**, the first on a tie. -/
 def minAt (a b : At) : At := if a.1 ≤ b.1 then a else b
 
-/-- **Where the open block's clock stopped and has not restarted** (the owner's **D99**, README gap 4520a, W-47 track
-K, parity P104): the earlier of its open pause (`pausedAt` while `paused`) and the open interruption's start — `none`
-while its clock runs. -/
+/-- **Where the open block's clock stopped and has not restarted** (the owner's **D99**, README gap 4520a, W-47 track K, parity P104): the earlier of its open pause (`pausedAt` while `paused`) and the open interruption's start — `none` while its clock runs. -/
 def openStop (b : Block) (m : Machine) : Option At :=
   match (if b.paused then b.pausedAt else none), m.interrupt with
   | some p, some i => some (minAt p i.1)
@@ -3672,8 +3673,7 @@ def cutPieces (b : Block) (m : Machine) (t : At) : List (At × At) :=
      | some q => minAt q t
      | none => t)
 
-/-- **Pieces' worked minutes** — site R8 (quirk Q6c, gap 83): each piece's own seconds over 60
-(`Cal.minutesBetween`, `num_minutes().max(0)`), summed, as fork `close_sub` truncated each sub-segment. -/
+/-- **Pieces' worked minutes** — site R8 (quirk Q6c, gap 83): each piece's own seconds over 60 (`Cal.minutesBetween`, `num_minutes().max(0)`), summed, as fork `close_sub` truncated each sub-segment. -/
 def minutesOf (P : List (At × At)) : Nat := (P.map (fun p => Cal.minutesBetween p.1.1 p.2.1)).sum
 
 /-- Two stamps are one: the same instant at the same offset, compared field by field. -/
@@ -4540,8 +4540,25 @@ theorem brkDay_cases (m : Machine) (e : Entry) (t : At) (d planned : Nat) (actua
   · rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with ⟨g, h1, h2, -, h3⟩ | h
     all_goals first | exact Or.inl ⟨g, h1, h2, h3⟩ | exact Or.inr h
   · simp at hx
-
-
+/-- **The start a held break `j` is drawn from** (the owner's **D142** in any logging order, W-53 track K, README gap 5661): `coverFrom` over the breaks earlier than it — those logged after it (`nw`) begun strictly before it, and every one logged before it (`old`). -/
+def startOf (nw old : List HeldBrk) (j : HeldBrk) : At := coverFrom (nw.filter (fun k => decide (k.s.1 < j.s.1)) ++ old) j.s j.day
+/-- **What a break `k` logged last re-draws of the breaks it reaches back to** (D142 in any logging order, W-53 track K, README gap 5661): every held break `j` stamped after it, filed on its ledger day or before, whose drawing begins before `k` ends — re-drawn from `k`'s end (`DayOp.redraw`); `nw` holds the breaks logged after `j`. -/
+def reachGo (k : HeldBrk) : List HeldBrk → List HeldBrk → List Effect | _, [] => [] | nw, j :: old => (if decide (k.s.1 < j.s.1) && decide (j.day ≤ k.day) && decide ((startOf nw old j).1 < k.e.1) then [.dayAdd j.day (.redraw j (startOf nw old j) k.e)] else []) ++ reachGo k (j :: nw) old
+/-- **D142 whatever the logging order** (W-53 track K, README gap 5661): the re-drawing a break `k` held on top of `H` reaches back to (`reachGo`) — a break logged after one stamped later than it covers the head of that one too. -/
+def reachFx (H : List HeldBrk) (k : HeldBrk) : List Effect := reachGo k [] H
+/-- **Every held break with the start it is drawn from** (W-53 track K): `startOf` at each place of the list, newest first. -/
+def startsGo : List HeldBrk → List HeldBrk → List (HeldBrk × At) | _, [] => [] | nw, j :: old => (j, startOf nw old j) :: startsGo (j :: nw) old
+/-- **What letting the held break `x` go re-draws** (the owner's **D141** with D142 in any logging order, W-53 track K, README gap 5741): every other held break whose start moves once `x` no longer covers it, re-drawn from the start it has without `x`. -/
+def growFx (H : List HeldBrk) (x : HeldBrk) : List Effect := List.filterMap (fun p => if p.1.2 = p.2.2 then none else some (Effect.dayAdd p.2.1.day (.redraw p.2.1 p.1.2 p.2.2))) (((startsGo [] H).eraseIdx (H.idxOf x)).zip (startsGo [] (H.erase x)))
+/-- **A re-drawing writes only re-drawings** (W-53 track K): every effect of `fx` moves the drawing of a break of `H` on its own day. -/
+def RedrawOnly (H : List HeldBrk) (fx : List Effect) : Prop := ∀ x ∈ fx, ∃ j ∈ H, ∃ c c', x = .dayAdd j.day (.redraw j c c')
+theorem reachGo_redraw (k : HeldBrk) : ∀ (nw H : List HeldBrk), RedrawOnly H (reachGo k nw H)
+  | _, [] => fun x h => by simp [reachGo] at h
+  | nw, j :: H => fun x h => by unfold reachGo at h; rcases List.mem_append.1 h with h | h; (split at h <;> simp only [List.mem_singleton, List.not_mem_nil] at h; exact ⟨j, List.mem_cons_self, _, _, h⟩); (obtain ⟨j', hj, c, c', rfl⟩ := reachGo_redraw k _ H x h; exact ⟨j', List.mem_cons_of_mem _ hj, c, c', rfl⟩)
+theorem startsGo_mem : ∀ (nw H : List HeldBrk) (p : HeldBrk × At), p ∈ startsGo nw H → p.1 ∈ H
+  | _, [], p, h => by simp [startsGo] at h
+  | nw, j :: H, p, h => by unfold startsGo at h; rcases List.mem_cons.1 h with rfl | h; exact List.mem_cons_self; exact List.mem_cons_of_mem _ (startsGo_mem _ H p h)
+theorem growFx_redraw (H : List HeldBrk) (x0 : HeldBrk) : RedrawOnly (H.erase x0) (growFx H x0) := fun x h => by unfold growFx at h; obtain ⟨p, hp, hx⟩ := List.mem_filterMap.1 h; split at hx; (cases hx); (simp only [Option.some.injEq] at hx; exact ⟨p.2.1, startsGo_mem _ _ _ (List.of_mem_zip hp).2, _, _, hx.symm⟩)
 /-- **The ending a break `o` ended at `t` is** (the owner's **D129**, W-52 repair track R): its span `[o.s, t)`, its day, its planned minutes and place, and `key`, the line of the entry that ended it. -/
 def endingOf (o : OpenBrk) (t : At) (key : Nat) : Ending := ⟨o.s, t, o.day, key, o.planned, o.where_⟩
 /-- **The endings held once `x` is** (W-52 repair track R, README gap 5711): `x` first, and every ending whose break the machine still holds once `x`'s is held (`pruneBrks`) — D94's bound, so an ending is held as long as its break is. -/
@@ -4573,39 +4590,24 @@ def netTake (dy : Cal.Instant → Nat) (key : Nat) (s e : At) (d : Nat) (m : Mac
 /-- **A D129 ending's netting, what it took remembered** (D141): `brkFx` — the break held as `[s, e)` on ledger day `d`, the open block settled over it, every held closed block it lies across netted — each held closed block remembering what the netting took (`netTake`), so the break's own `break` line ending it earlier can give back what lies after that end (`d141Arm`). -/
 def takeFx (dy : Cal.Instant → Nat) (m : Machine) (key : Nat) (s e : At) (d : Nat) : List Effect := (settle dy { m with brks := pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none }).2 ++ (netTake dy key s e d (settle dy { m with brks := pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none }).1).2 ++ [.machine (netTake dy key s e d (settle dy { m with brks := pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none }).1).1]
 /-- **The segment and record a break ended at `t` writes** (the owner's **D129**): what the `break` line `tm start` logs on one machine writes on the break's own ledger day (D97, D105: stamped at the break's start, its minutes the elapsed ones, `dayArm`'s `break` arm) — the break's `Break` segment `[o.s, t)` and its record.  The span ends at `t` itself, the start's instant; the record's minutes are `t − o.s` in whole minutes, as `tm start` writes them — or, since W-52b track K2 (README gap 5662), the minutes drawn when an earlier break covers a head of it, stamped at `o.s` still (D142's union, `brkRecsC`). -/
-def endRecs (H : List HeldBrk) (o : OpenBrk) (t : At) (key : Nat) : List Effect :=
-  brkRecsC (coverFrom H o.s o.day) o.s t o.day o.planned (some (Cal.minutesBetween o.s.1 t.1)) o.where_ o.s (some key)
-
+def endRecs (H : List HeldBrk) (o : OpenBrk) (t : At) (key : Nat) : List Effect := brkRecsC (coverFrom H o.s o.day) o.s t o.day o.planned (some (Cal.minutesBetween o.s.1 t.1)) o.where_ o.s (some key) ++ reachFx H ⟨o.s, t, o.day⟩
 /-- **The machine a `start` ending the running break `o` at `t` starts from** (the owner's **D129**): the break held as `[o.s, t)` on its own ledger day, as its `break` line would hold it (`brkFx`), no break running, and the break's start remembered (`Machine.ended`), so that break's own `break` line, when the machine that took it logs it later, is not read as a second break.  Every clock the running break lay across was netted while it ran (README gap 5180: `runNet` for the held closed blocks, `runSpan` for the open block's drawing), and the start's cut reads the held span (`cutPieces`), so nothing is settled here — and nothing here reads the day index.  What the running break took from the held closed blocks is kept for the ending, under its key (`stash`, `Closed.held`; the owner's D137 and D141, README gap 5712, W-52 repair track R — it was forgotten until then): its own `break` line, ending the break earlier, gives it back. -/
-def endMachine (m : Machine) (o : OpenBrk) (t : At) (key : Nat) : Machine :=
-  { m with brks := pruneBrks (⟨o.s, t, o.day⟩ :: m.brks), brkOpen := none, ended := pushEnded (endingOf o t key) m,
-           closed := m.closed.map (stash key) }
-
+def endMachine (m : Machine) (o : OpenBrk) (t : At) (key : Nat) : Machine := { m with brks := pruneBrks (⟨o.s, t, o.day⟩ :: m.brks), brkOpen := none, ended := pushEnded (endingOf o t key) m, closed := m.closed.map (stash key) }
 /-- **What a `break_start` a held start ends writes** (the owner's **D129**, read in stamp order): a break logged after a block and stamped before its start ends at the first such start (`firstStart`) — held as `[o.s, t)` with every clock it lies across netted (`brkFx`, D87, D94, D100: nothing netted it while it ran, for it never ran), its segment and record (`endRecs`), and its start remembered (`Machine.ended`). -/
-def endBrkFx (dy : Cal.Instant → Nat) (m : Machine) (o : OpenBrk) (t : At) (key : Nat) : List Effect :=
-  takeFx dy { forget m with ended := pushEnded (endingOf o t key) m } key o.s t o.day ++ endRecs m.brks o t key
-
+def endBrkFx (dy : Cal.Instant → Nat) (m : Machine) (o : OpenBrk) (t : At) (key : Nat) : List Effect := takeFx dy { forget m with ended := pushEnded (endingOf o t key) m } key o.s t o.day ++ endRecs m.brks o t key
 /-- **Fork `step`'s `Start` arm** (C3), over the machine it starts from: a late start's cut of the held closed blocks (`netStart`, D115), the open block's cut (`cut`), the running break's netting (`runNet`), the day's `StartRecord`, and the block opened (`startedMachine`) and settled.  Since the owner's D129 `arm` runs it over the machine ending the running break leaves (`endMachine`) when the start ends one. -/
 def startArm (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : At) (d : Nat) (id : Id) (pred : U8) (rep : Option U8) (hsw : Num) (sleptMin : U32) (loc : List Char) : List Effect :=
   let n := netStart dy t d m
   let s := settle dy (startedMachine (runNet dy (cut dy n.1 t).1).1 id t d (rep.map (fun rp => ⟨line, t, d, pred, rp, hsw, loc, some sleptMin.val, none, some id, true⟩)))
   n.2 ++ (cut dy n.1 t).2 ++ (runNet dy (cut dy n.1 t).1).2 ++ [.dayAdd d (.start ⟨t, id, pred, rep⟩)] ++ s.2 ++ [.machine s.1]
-
 /-- **Fork `step`'s `break_start` arm, as D105 has it** (parity P100): the running break opened at `t`, the open block settled over it, and every held closed block it lies across netted (`runNet`). -/
 def brkStartArm (dy : Cal.Instant → Nat) (m : Machine) (t : At) (d : Nat) (planned : Nat) (where_ : Option (List Char)) : List Effect :=
   let st := settle dy { forgetIdle m with brkOpen := some ⟨t, planned, where_, d⟩ }
   st.2 ++ (runNet dy st.1).2 ++ [.machine (runNet dy st.1).1]
-
 /-- **Fork `step`'s `break` arm** (D87, D92, D94, D99, D105, D116, D137): what the running break took from the held closed blocks given back (`giveBack`, the owner's D137), then the break held and netted (`brkFx`) — so a block a running break netted from its start is netted by the break's own span, as D100 nets any late break inside a block — and its `Break` segment and record on its day (`dayArm`, its place read at its `break_start`'s). -/
-def brkArm (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (t : At) (d : Nat) (planned : Nat) (actual : Option Nat) : List Effect :=
-  (giveBack dy m).2 ++ brkFx dy (giveBack dy m).1 t (brkEnd t planned actual) d ++ brkDay m e t d planned actual
-
+def brkArm (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) (t : At) (d : Nat) (planned : Nat) (actual : Option Nat) : List Effect := (giveBack dy m).2 ++ brkFx dy (giveBack dy m).1 t (brkEnd t planned actual) d ++ brkDay m e t d planned actual ++ reachFx m.brks ⟨t, brkEnd t planned actual, d⟩
 /-- **A `break` line stamped at the start of a break D129 already ended** (the owner's **D141**, README gaps 5633 and 5660, W-52b track K2, parity **P137**): when the newest held break `k` is that ending's span `[k.s, k.e)` with the line's stamp, no break runs, the line's end (`t + actual_or_planned`) falls strictly before `k.e` and `k.day ≤ d`, the line ends the break there — what the ending drew undone on its day (`DayOp.unsegBrks`; its record, `DayOp.unbrkAt`, with the minutes `endRecs` gave it), `k` let go, and the line read as the `break` line of a break running since `k.s` (`brkArm`): what the ending took given back (`giveBack`, D137), the break held and netted by its own span (`brkFx`, D100), drawn and recorded there (`brkDay`, D142) — the later explicit fact (D100, D115).  Otherwise the line is the break's own and nothing else (P127), and what the ending took is forgotten (`forgetIdle`). -/
-def d141Arm (dy : Cal.Instant → Nat) (m : Machine) (x : Ending) (e : Entry) (t : At) (d planned : Nat) (actual : Option Nat) : List Effect :=
-  if d141Ok m x (brkEnd t planned actual) d then
-    [.dayAdd x.day (.unsegBrks x.hb (m.brks.erase x.hb)), .dayAdd x.day (.unbrkAt x.key)] ++ brkArm dy (d141Machine m x) e t d planned actual
-  else [.machine (letGo x m)]
-
+def d141Arm (dy : Cal.Instant → Nat) (m : Machine) (x : Ending) (e : Entry) (t : At) (d planned : Nat) (actual : Option Nat) : List Effect := if d141Ok m x (brkEnd t planned actual) d then [.dayAdd x.day (.unsegBrks x.hb (m.brks.erase x.hb)), .dayAdd x.day (.unbrkAt x.key)] ++ growFx m.brks x.hb ++ brkArm dy (d141Machine m x) e t d planned actual else [.machine (letGo x m)]
 /-- **The machine's arms of fork `Machine::step`**, one per event: the block family's (C3) here, every other event's the day family's (`dayArm`, C5); the completion family's are `completionArm`'s.  `dy` is the day index's `day_of`, `sl` fork `slept_by_day`, `t` the entry's stamp and `d` its day.  **Since the owner's D105** (parity P100) a `break_start` opens the running break (`Machine.brkOpen`, its stamp, planned minutes, place and day) and writes nothing else, and a `break` line's arm ends whatever break is open (`brkFx` writes no running break) — so the pair is matched in file order, whatever the `break` line's stamp (the binary writes the start's). -/
 def arm (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine) (e : Entry) (t : At) (d : Nat) : List Effect :=
   match e.ev with
@@ -4656,7 +4658,6 @@ def arm (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine) (e : 
     | some t0 => endBrkFx dy m ⟨t, planned.val, where_, d⟩ t0 e.line
     | none => brkStartArm dy m t d planned.val where_
   | _ => dayArm dy sl e t d
-
 /-- **What a late mark names** (stage 6 W-48 track K): the replay warnings the machine meets as it steps an entry — a `break` line whose word is not its `break_start`'s (the owner's **D116**, `brkPlace`), and a `break`, a `start` or an interruption's `resume` stepped more than 31 ledger days behind the newest block the machine holds closed (the owner's **D119**, `pastBound`: the `resume` read at its interruption's ledger day, the day its span is netted on).  Nothing else warns here. -/
 def lateWarnList (m : Machine) (e : Entry) (d : Nat) : List RWarn :=
   match e.ev with
@@ -4671,7 +4672,6 @@ def lateWarnList (m : Machine) (e : Entry) (d : Nat) : List RWarn :=
     | some (_, sd, _) => ((pastBound sd m.closed).map (fun hi => RWarn.pastBound e.line sd hi)).toList
     | none => []
   | _ => []
-
 /-- **A late mark's warnings are only replay warnings.** -/
 theorem lateWarns_rwarn (m : Machine) (e : Entry) (d : Nat) (x : Effect)
     (h : x ∈ (lateWarnList m e d).map Effect.rwarn) : ∃ w, x = .rwarn w := by
@@ -4698,6 +4698,17 @@ theorem lateWarnList_not_status (m : Machine) (e : Entry) (d : Nat) :
     (lateWarnList m e d).filter (fun w => match w with | RWarn.unknownInstanceStatus .. => true | _ => false) = [] := by
   unfold lateWarnList pastBound
   split <;> (repeat' split) <;> simp
+/-- **A re-drawing reads as nothing to a reading of the observations, the machine or the late marks** (W-53 track K): `f` of a day record is none. -/ theorem redrawOnly_filterMap {α : Type} {H : List HeldBrk} {fx : List Effect} (h : RedrawOnly H fx) (f : Effect → Option α) (hf : ∀ d op, f (.dayAdd d op) = none) : fx.filterMap f = [] := List.filterMap_eq_nil_iff.2 fun x hx => by obtain ⟨j, -, c, c', rfl⟩ := h x hx; exact hf _ _
+/-- **A re-drawing passes every check a day record passes** (W-53 track K). -/ theorem redrawOnly_all {H : List HeldBrk} {fx : List Effect} (h : RedrawOnly H fx) (P : Effect → Bool) (hP : ∀ d op, P (.dayAdd d op) = true) : fx.all P = true := List.all_eq_true.2 fun x hx => by obtain ⟨j, -, c, c', rfl⟩ := h x hx; exact hP _ _
+/-- **What a D129 ending writes** (W-53 track K): `brkRecsC`'s segment and record on the break's day (`brkRecsC_cases`), and the re-drawings it reaches back to (`reachFx`). -/
+theorem endRecs_cases (H : List HeldBrk) (o : OpenBrk) (t : At) (key : Nat) (x : Effect) (hx : x ∈ endRecs H o t key) : (∃ g, x = .dayAdd o.day (.segment g) ∧ g.stop = t ∧ g.kind = .brk o.where_ ∧ o.s.1 ≤ g.start.1) ∨ (∃ r, x = .dayAdd o.day (.brk r)) ∨ ∃ j ∈ H, ∃ c c', x = .dayAdd j.day (.redraw j c c') := by
+  rcases List.mem_append.1 hx with hx | hx; (rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with h | h; exact Or.inl h; exact Or.inr (Or.inl h)); exact Or.inr (Or.inr (reachGo_redraw _ _ _ x hx))
+/-- **What a `break` line's arm writes** (W-53 track K): the give-back, the break's machine half, its day half, and the re-drawings it reaches back to. -/
+theorem brkArm_mem {dy : Cal.Instant → Nat} {m : Machine} {e : Entry} {t : At} {d planned : Nat} {actual : Option Nat} {x : Effect} (hx : x ∈ brkArm dy m e t d planned actual) : x ∈ (giveBack dy m).2 ∨ x ∈ brkFx dy (giveBack dy m).1 t (brkEnd t planned actual) d ∨ x ∈ brkDay m e t d planned actual ∨ ∃ j ∈ m.brks, ∃ c c', x = .dayAdd j.day (.redraw j c c') := by
+  unfold brkArm at hx; simp only [List.mem_append] at hx; rcases hx with ((h | h) | h) | h; exact Or.inl h; exact Or.inr (Or.inl h); exact Or.inr (Or.inr (Or.inl h)); exact Or.inr (Or.inr (Or.inr (reachGo_redraw _ _ _ x h)))
+theorem reachFx_filterMap {α : Type} (f : Effect → Option α) (hf : ∀ d op, f (.dayAdd d op) = none) (H : List HeldBrk) (k : HeldBrk) : (reachFx H k).filterMap f = [] := redrawOnly_filterMap (reachGo_redraw k [] H) f hf
+theorem growFx_filterMap {α : Type} (f : Effect → Option α) (hf : ∀ d op, f (.dayAdd d op) = none) (H : List HeldBrk) (x : HeldBrk) : (growFx H x).filterMap f = [] := redrawOnly_filterMap (growFx_redraw H x) f hf
+theorem reachFx_redraw (H : List HeldBrk) (k : HeldBrk) : RedrawOnly H (reachFx H k) := reachGo_redraw k [] H
 
 /-- **C4: the completion family's arms of fork `Machine::step`** (`done`'s `mark_done`, `routine`, `skip`, `event`), one per event; they read no state and write none of the block family's. * a non-partial `done` marks its id done on its day (fork `mark_done(id, t, day)`); * a `routine` warns when its status is unknown (read as `Pending`, fork `parse_instance_status`), records the instance (**the last in file order wins**), and, when the status reads `done`, marks the item done on the date its `inst` names, else on its day (fork `parse_date(inst).unwrap_or(day)`). Its `Routine` segment and `routine_min` are day fields, C5's; * a `skip` records the instance as `Skipped`, logged `"skipped"`; * an `event` folds its occurrence into its `(name, id?)` key's `LatestNamed`, with its local date in the zone. -/
 def completionCore (z : Cal.Tz) (e : Entry) (t : At) (d : Nat) : List Effect :=
@@ -4713,11 +4724,9 @@ def completionCore (z : Cal.Tz) (e : Entry) (t : At) (d : Nat) : List Effect :=
   | .skip item inst => [.inst item inst ⟨t, .skipped, "skipped".toList, none⟩]
   | .named name id => [.named name id e.line t (Cal.localDate z t.1)]
   | _ => []
-
 /-- **C4's completion family, with the late marks the machine names first** (stage 6 W-48 track K, the owner's D116 and D119): `lateWarnList`'s replay warnings, then the completion family's own arms (`completionCore`, C4's whole arm until W-48).  The machine is the step's, read for the warnings alone. -/
 def completionArm (z : Cal.Tz) (m : Machine) (e : Entry) (t : At) (d : Nat) : List Effect :=
   (lateWarnList m e d).map Effect.rwarn ++ completionCore z e t d
-
 /-- **`effects` over a day function and a sleep lookup**: every entry's header (on its day, not cancelled: C6's second pass heads the cancelled lines) and its bookkeeping, then its machine arm (the block or the day family's) and its completion family's.  `sl` is fork `slept_by_day`, which the `energy` arm reads (C5). -/
 def effectsWith (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry) :
     List Effect :=
@@ -4725,18 +4734,14 @@ def effectsWith (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat
     .seam (dy e.t.val) ⟨(e.t.val, e.off.val), seamKindOf e.ev⟩ ::
     (arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) ++
       completionArm z st.machine e (e.t.val, e.off.val) (dy e.t.val))
-
 /-- **Fork `Machine::step` as effects** (§8.2), over the day index `kw` and fork `slept_by_day` as the list `slept` of `(day, slept_min)`, read by its first pair of a day. -/
 def effects (z : Cal.Tz) (kw : List Cal.Instant) (slept : List (Nat × Nat)) (st : State) (e : Entry) :
     List Effect :=
   effectsWith z (dayOf z kw) (KMap.get slept) st e
-
 def stepWith (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry) : State :=
   applyEffects st (effectsWith z dy sl st e)
-
 def step (z : Cal.Tz) (kw : List Cal.Instant) (slept : List (Nat × Nat)) (st : State) (e : Entry) : State :=
   applyEffects st (effects z kw slept st e)
-
 /-- Fork `OpenBlock`, and — the owner's D99, README gap 4616 — `day`, its `start`'s ledger day (`Block.day`): the first of the days the host and D61's wall rule (`WallTimer.answer`) read its marks from, which fork `OpenBlock` had no field for. -/
 structure OpenBlock where
   id : Id
@@ -4748,7 +4753,6 @@ structure OpenBlock where
   /-- D108: the minutes its `extend`s have added since its `start` (`Block.ext`) — what `tm extend` added to its planned minutes, which D42's rebuild of `active.est_min` reads.  Fork `OpenBlock` had no such field. -/
   ext : Nat
 deriving DecidableEq, Repr
-
 /-- **The facts**: the state's maps, the observations in file order, the open block and interruption, (C4) the completion family and (C5) the day family's records. -/
 structure Facts where
   days : HMap Nat DayAcc
@@ -4789,16 +4793,12 @@ structure Facts where
   /-- C6: fork `seams`, each day's idle marks in file order -/
   seams : HMap Nat SeamAcc
 deriving DecidableEq, Repr
-
 /-- Fork `Replay::last_done(id)`. -/
 def Facts.lastDone (f : Facts) (i : Id) : Option At := f.lastDoneMap.get i
-
 /-- Fork `Replay::instance(item, inst)`. -/
 def Facts.instance (f : Facts) (item inst : List Char) : Option InstRec := f.instances.get (item, inst)
-
 /-- The `LatestNamed` of one `(name, id?)` key. -/
 def Facts.namedAt (f : Facts) (name : List Char) (id : Option Id) : Option NamedRec := f.named.get (name, id)
-
 /-- Whether `(d, i)` is one of fork `done_dates`. -/
 def Facts.doneOn (f : Facts) (i : Id) (d : Nat) : Bool := (f.doneDates.get (d, i)).isSome
 
@@ -5933,13 +5933,13 @@ theorem endBrkFx_blockOnly (dy : Cal.Instant → Nat) (m : Machine) (o : OpenBrk
   rcases List.mem_append.1 hx with hx | hx
   · unfold takeFx netTake at hx; simp only [List.mem_append, List.mem_singleton] at hx
     rcases hx with (hx | hx) | rfl <;> first | exact blockOnly_of_plain x (settle_plain dy _ x hx) | exact netClosed_blockOnly dy _ _ _ _ x hx | rfl
-  · rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl
+  · rcases endRecs_cases _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ | ⟨j, -, c, c', rfl⟩ <;> rfl
 
 /-- **A break ended at a start writes block family effects** (D129): a segment and a record. -/
 theorem endRecs_blockOnly (H : List HeldBrk) (o : OpenBrk) (t : At) (key : Nat) : ∀ x ∈ endRecs H o t key, x.blockOnly = true := by
   intro x hx
   -- since the owner's D142 a segment and a record, or a record alone (`brkRecsC_cases`)
-  rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩
+  rcases endRecs_cases _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ | ⟨j, -, c, c', rfl⟩
   all_goals rfl
 
 /-- **A start's arm is block family effects** (C3). -/
@@ -6128,7 +6128,7 @@ theorem arm_split (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Mach
   by_cases hb : ∃ p a w, e.ev = .brk p a w
   · obtain ⟨p, a, w, h⟩ := hb
     have hbf : ∀ M, ∀ x ∈ brkArm dy M e t d p.val (a.map (·.val)), x.blockOnly = true := fun M x hx => by
-      unfold brkArm at hx; simp only [List.mem_append] at hx; rcases hx with (hx | hx) | hx
+      rcases brkArm_mem hx with hx | hx | hx | ⟨j, -, c, c', rfl⟩; rotate_right; rfl
       · exact blockOnly_of_plain x (giveBack_plain dy M x hx)
       · exact brkFx_blockOnly dy _ t _ d x hx
       · rcases brkDay_cases M e t d _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl
@@ -6136,7 +6136,7 @@ theorem arm_split (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Mach
     unfold arm at hx; simp only [h] at hx; rcases hE : findEnded m t with _ | x0 <;> simp only [hE] at hx
     · exact hbf m x hx
     · unfold d141Arm at hx; split at hx
-      · simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with (rfl | rfl) | hx; rfl; rfl; exact hbf _ x hx
+      · simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with ((rfl | rfl) | hx) | hx; rfl; rfl; (obtain ⟨j, -, c, c', rfl⟩ := growFx_redraw _ _ x hx; rfl); exact hbf _ x hx
       · simp only [List.mem_singleton] at hx; subst hx; rfl
   · rw [placed_of_not_brk m e (fun p a w h => hb ⟨p, a, w, h⟩)]
     rcases arm_split_of_not_brk dy sl m e t d (fun p a w h => hb ⟨p, a, w, h⟩) with h | ⟨h, h0⟩
@@ -6362,7 +6362,7 @@ theorem DayOp.bal_apply (op : DayOp) (hop : ∀ i m, op ≠ .uncredit i m) (hnet
   | net i c k l => exact absurd rfl (hnet i c k l)
   | undur l k => simp only [DayOp.apply]; unfold DayAcc.undurOf; split <;> exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
   | unsegBrks k rest => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
-  | unbrkAt k => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
+  | unbrkAt k => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩ | redraw k c c' => (simp only [DayOp.apply]; unfold DayAcc.redrawBrk; split <;> exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩)
   | blockDone => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
   | done id => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
   | segment s => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
@@ -8067,7 +8067,7 @@ theorem conserves_doneFx (dy : Cal.Instant → Nat) (st : State) (line : Nat) (t
 
 /-- **A break ended at a start writes safe effects** (D129): a segment and a record. -/
 theorem endRecs_safe (H : List HeldBrk) (o : OpenBrk) (t : At) (key : Nat) : ∀ x ∈ endRecs H o t key, x.safe = true := by
-  intro x hx; rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl
+  intro x hx; rcases endRecs_cases _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ | ⟨j, -, c, c', rfl⟩ <;> rfl
 
 /-- **A `break`'s block family half keeps the invariant** (D87, D100), over any machine holding the state's closed blocks and a last cut that is its first held. -/
 theorem conserves_brkFx (dy : Cal.Instant → Nat) (st : State) (m : Machine) (hc : m.closed = st.machine.closed)
@@ -8245,16 +8245,16 @@ theorem conserves_arm (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st :
   case brk planned actual where_ =>
     have hb : ∀ (st0 : State) (M : Machine), Balanced st0 → (∀ d i, ((M.closed.filter (fun C => decide (C.ci = none ∧ C.credDay = d ∧ C.id = i))).map (·.min)).sum ≤ unk st0 d i) → HeadOk M → Conserves (applyEffects st0 (brkArm dy M e t d planned.val (actual.map (·.val)))) := by
       intro st0 M hb0 hh ho; unfold brkArm; rw [applyEffects_append]
-      refine conserves_safe _ _ (fun x hx => by rcases brkDay_cases _ e t d _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl) ?_; rw [applyEffects_append]; obtain ⟨g1, g2⟩ := giveBack_conserves dy st0 M hb0 hh; exact conserves_brkFx_of dy _ _ g1 g2 (giveBack_headOk dy _ ho) t _ d
+      refine conserves_safe _ _ (fun x hx => by obtain ⟨j, -, c, c', rfl⟩ := reachGo_redraw _ _ _ x hx; rfl) ?_; rw [applyEffects_append]; refine conserves_safe _ _ (fun x hx => by rcases brkDay_cases _ e t d _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl) ?_; rw [applyEffects_append]; obtain ⟨g1, g2⟩ := giveBack_conserves dy st0 M hb0 hh; exact conserves_brkFx_of dy _ _ g1 g2 (giveBack_headOk dy _ ho) t _ d
     split
     · rename_i x0 _
       unfold d141Arm; split
       · rw [applyEffects_append]; apply hb
-        · exact (safe_list _ (fun x hx => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl) st h.1).1
+        · exact (safe_list _ (fun x hx => by rcases List.mem_append.1 hx with hx | hx; (simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl); (obtain ⟨j, -, c, c', rfl⟩ := growFx_redraw _ _ x hx; rfl)) st h.1).1
         · exact fun d' i' => by
             show (((st.machine.closed.map (unstash x0.key)).filter _).map _).sum ≤ _
             rw [held_map_keeps _ (unstash_keeps x0.key)]
-            exact Nat.le_trans (h.2.1 d' i') ((safe_list _ (fun x hx => by simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl) st h.1).2.1 d' i')
+            exact Nat.le_trans (h.2.1 d' i') ((safe_list _ (fun x hx => by rcases List.mem_append.1 hx with hx | hx; (simp only [List.mem_cons, List.not_mem_nil, or_false] at hx; rcases hx with rfl | rfl <;> rfl); (obtain ⟨j, -, c, c', rfl⟩ := growFx_redraw _ _ x hx; rfl)) st h.1).2.1 d' i')
         · exact headOk_map_keeps _ (unstash_keeps x0.key) st.machine _ rfl rfl h.2.2
       · exact ⟨h.1, fun d i => by show (((st.machine.closed.map (dropTake x0.key)).filter _).map _).sum ≤ _; rw [held_map_keeps _ (dropTake_keeps x0.key)]; exact h.2.1 d i, headOk_map_keeps _ (dropTake_keeps x0.key) st.machine _ rfl rfl h.2.2⟩
     · exact hb st _ h.1 h.2.1 h.2.2
@@ -8412,7 +8412,7 @@ theorem DayOp.fifths_apply (op : DayOp) (a : DayAcc) (ha : a.Fifths) : (op.apply
       omega
     | none => exact ha
   | undur line k => simp only [DayOp.apply]; unfold DayAcc.undurOf; split <;> exact ha
-  | _ => exact ha
+  | _ => first | exact ha | (simp only [DayOp.apply]; unfold DayAcc.redrawBrk; split <;> exact ha)
 
 theorem DayOp.fifths_alterFn (op : DayOp) (o : Option DayAcc) (ho : ∀ a, o = some a → a.Fifths) :
     ∀ a, op.alterFn o = some a → a.Fifths := by
@@ -9531,7 +9531,7 @@ theorem brkFx_sleptOk (sl : Nat → Option Nat) (dy : Cal.Instant → Nat) (m : 
 
 /-- **A break ended at a start keeps late binding** (D129): a segment and a record. -/
 theorem endRecs_sleptOk (sl : Nat → Option Nat) (H : List HeldBrk) (o : OpenBrk) (t : At) (key : Nat) : (endRecs H o t key).all (Effect.sleptOk sl) = true :=
-  List.all_eq_true.2 fun x hx => by rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl
+  List.all_eq_true.2 fun x hx => by rcases endRecs_cases _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ | ⟨j, -, c, c', rfl⟩ <;> rfl
 
 /-- **Ending a running break keeps late binding** (D129). -/
 theorem endBrkFx_sleptOk (sl : Nat → Option Nat) (dy : Cal.Instant → Nat) (m : Machine) (o : OpenBrk) (t : At) (key : Nat)
@@ -9635,11 +9635,11 @@ theorem arm_sleptOk (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   case done => exact doneFx_sleptOk sl dy m _ t d _ _ _ _ _ _ _ hm
   case brk planned actual where_ =>
     have hb : ∀ M : Machine, M.block = m.block → (brkArm dy M e t d planned.val (actual.map (·.val))).all (Effect.sleptOk sl) = true := by
-      intro M hM; unfold brkArm; rw [List.all_append, List.all_append, giveBack_sleptOk sl dy M, brkFx_sleptOk sl dy _ t _ d (by rw [(giveBack_keeps dy M).1, hM]; exact hm), List.all_eq_true.2 fun x hx => by rcases brkDay_cases M e t d _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl]; rfl
+      intro M hM; unfold brkArm; rw [List.all_append, List.all_append, List.all_append, giveBack_sleptOk sl dy M, brkFx_sleptOk sl dy _ t _ d (by rw [(giveBack_keeps dy M).1, hM]; exact hm), List.all_eq_true.2 fun x hx => by rcases brkDay_cases M e t d _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl, redrawOnly_all (reachFx_redraw _ _) _ (fun _ _ => rfl)]; rfl
     split
     · rename_i x0 _
       unfold d141Arm; split
-      · rw [List.all_append, hb _ (by rfl)]; rfl
+      · rw [List.all_append, List.all_append, hb _ (by rfl), redrawOnly_all (growFx_redraw _ _) _ (fun _ _ => rfl)]; rfl
       · simp only [List.all_cons, List.all_nil, Bool.and_true]; exact machine_sleptOk sl _ m (by rfl) hm
     · exact hb m rfl
   case brkStart planned where_ =>
@@ -10596,7 +10596,7 @@ theorem netStart_pendLines (dy : Cal.Instant → Nat) (t : At) (dd : Nat) (m : M
 /-- **A break ended at a start observes nothing and writes no machine** (D129). -/
 theorem endRecs_obs (H : List HeldBrk) (o : OpenBrk) (t : At) (key : Nat) :
     (endRecs H o t key).filterMap Effect.energyOf? = [] ∧ (endRecs H o t key).filterMap Effect.durationOf? = [] ∧
-    (endRecs H o t key).filterMap Effect.machineOf? = [] := by refine ⟨?_, ?_, ?_⟩ <;> exact List.filterMap_eq_nil_iff.2 fun x hx => by rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> rfl
+    (endRecs H o t key).filterMap Effect.machineOf? = [] := by refine ⟨?_, ?_, ?_⟩ <;> exact List.filterMap_eq_nil_iff.2 fun x hx => by rcases endRecs_cases _ _ _ _ x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ | ⟨j, -, c, c', rfl⟩ <;> rfl
 
 /-- **A `break_start` a held start ends observes nothing and writes one machine** (D129, the one `brkFx` writes). -/
 theorem endBrkFx_obs (dy : Cal.Instant → Nat) (m : Machine) (o : OpenBrk) (t : At) (key : Nat) :
@@ -10809,13 +10809,13 @@ theorem arm_obs (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machin
         simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.machineOf?,
           settle_energy, settle_machines, g1, List.nil_append, List.append_nil, List.getLast?_singleton,
           Option.getD_some, (netClosed_obs dy _ _ _ _).1, (netClosed_obs dy _ _ _ _).2.2, netClosed_pendLines,
-          settle_pendLines, (giveBack_obs dy _).1, (giveBack_obs dy _).2.2]
+          settle_pendLines, (giveBack_obs dy _).1, (giveBack_obs dy _).2.2, reachFx_filterMap Effect.energyOf? (fun _ _ => rfl), reachFx_filterMap Effect.machineOf? (fun _ _ => rfl)]
         unfold pendLines
         simp only [(giveBack_keeps dy M).1, hM]
         first | exact List.perm_append_comm | exact List.Perm.refl _ | simp
       · unfold brkArm brkFx
         simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, settle_duration,
-          (netClosed_obs dy _ _ _ _).2.1, g2, List.append_nil, List.map_nil, (giveBack_obs dy _).2.1]
+          (netClosed_obs dy _ _ _ _).2.1, g2, List.append_nil, List.map_nil, (giveBack_obs dy _).2.1, reachFx_filterMap Effect.durationOf? (fun _ _ => rfl)]
         exact List.nil_sublist _
     split
     · rename_i x0 _
@@ -10823,7 +10823,7 @@ theorem arm_obs (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machin
         refine ⟨[], List.nil_sublist _, ?_, by simp [Effect.durationOf?]⟩; unfold pendLines
         simp only [List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.machineOf?, List.map_nil, List.nil_append, List.getLast?_singleton, Option.getD_some, List.append_nil]; exact List.Perm.refl _
       unfold d141Arm; split
-      · simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.machineOf?, Effect.durationOf?, List.nil_append]; exact hb _ rfl
+      · simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, Effect.energyOf?, Effect.machineOf?, Effect.durationOf?, List.nil_append, growFx_filterMap Effect.energyOf? (fun _ _ => rfl), growFx_filterMap Effect.machineOf? (fun _ _ => rfl), growFx_filterMap Effect.durationOf? (fun _ _ => rfl)]; exact hb _ rfl
       · exact hk
     · exact hb m rfl
   all_goals
@@ -14359,7 +14359,7 @@ theorem arm_brk_of_endable (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) 
     {p : Log.U32} {a : Option Log.U32} {w : Option (List Char)} (hev : e.ev = .brk p a w) :
     (∀ x, findEnded m t = some x → d141Ok m x (brkEnd t p.val (a.map (·.val))) d = true →
       arm dy sl m e t d = [.dayAdd x.day (.unsegBrks x.hb (m.brks.erase x.hb)), .dayAdd x.day (.unbrkAt x.key)] ++
-        brkArm dy (d141Machine m x) e t d p.val (a.map (·.val))) ∧
+        growFx m.brks x.hb ++ brkArm dy (d141Machine m x) e t d p.val (a.map (·.val))) ∧
     (∀ x, findEnded m t = some x → d141Ok m x (brkEnd t p.val (a.map (·.val))) d = false →
       arm dy sl m e t d = [.machine (letGo x m)]) ∧
     (findEnded m t = none → arm dy sl m e t d = brkArm dy m e t d p.val (a.map (·.val))) := by
@@ -14406,6 +14406,328 @@ theorem d141Machine_ended (m : Machine) (x : Ending) : (d141Machine m x).ended =
 
 end EndAll141
 
+/-! ## W-53 track K: D142 in any logging order (README gap 5661) — where a re-drawing comes from
+
+A break's drawing moves (`DayOp.redraw`) only when a break is held on top of the others (`reachFx`, inside `brkArm` and
+`endRecs`) or let go by its own line ending it earlier (`growFx`, inside `d141Arm`); every other effect of the fold moves
+none.  `BreakFold.BrkHeld` reads this: a Break segment a re-drawing writes is witnessed by the break it re-draws. -/
+
+/-- **No effect of `fx` moves a break's drawing** (W-53 track K). -/
+def NoRedraw (fx : List Effect) : Prop := ∀ x ∈ fx, ∀ d k c c', x ≠ .dayAdd d (.redraw k c c')
+
+theorem noRedraw_nil : NoRedraw [] := fun _ h => by cases h
+
+theorem noRedraw_append {a b : List Effect} (ha : NoRedraw a) (hb : NoRedraw b) : NoRedraw (a ++ b) :=
+  fun x hx => (List.mem_append.1 hx).elim (ha x) (hb x)
+
+theorem noRedraw_flatten (L : List (List Effect)) (h : ∀ l ∈ L, NoRedraw l) : NoRedraw L.flatten := by
+  intro x hx; obtain ⟨l, hl, hxl⟩ := List.mem_flatten.1 hx; exact h l hl x hxl
+
+theorem redraw_noRedraw (dy : Cal.Instant → Nat) (id : Log.Id) (old : List Piece) (P : List (At × At)) :
+    NoRedraw (redraw dy id old P).2 := fun x hx d k c c' h => by
+  subst h; unfold redraw at hx; simp only [List.mem_append, List.mem_map] at hx
+  rcases hx with ⟨p, -, hp⟩ | ⟨q, -, hp⟩ <;> simp at hp
+
+theorem settle_noRedraw (dy : Cal.Instant → Nat) (m : Machine) : NoRedraw (settle dy m).2 := by
+  unfold settle; split
+  · exact redraw_noRedraw dy _ _ _
+  · exact noRedraw_nil
+
+theorem closePause_noRedraw (dy : Cal.Instant → Nat) (m : Machine) (t : At) : NoRedraw (closePause dy m t).2 :=
+  fun x hx d k c c' h => by subst h; unfold closePause at hx; simp only at hx; repeat' split at hx
+                            all_goals simp at hx
+
+theorem creditFx_noRedraw (dy : Cal.Instant → Nat) (id : Log.Id) (t : At) (min : Nat) (ci : Option Log.U8) :
+    NoRedraw (creditFx dy id t min ci) := fun x hx d k c c' h => by subst h; simp [creditFx] at hx
+
+theorem uncreditFx_noRedraw (cu : Cut) : NoRedraw (uncreditFx cu) := fun x hx d k c c' h => by
+  subst h; unfold uncreditFx at hx; split at hx <;> simp at hx
+
+theorem obsFx_noRedraw (o : Option EnergyObs) : NoRedraw (obsFx o) := fun x hx d k c c' h => by
+  subst h; unfold obsFx at hx; split at hx <;> simp at hx
+
+theorem cut_noRedraw (dy : Cal.Instant → Nat) (m : Machine) (t : At) : NoRedraw (cut dy m t).2 := by
+  unfold cut; split
+  · exact noRedraw_append (noRedraw_append (noRedraw_append (redraw_noRedraw dy _ _ _) (closePause_noRedraw dy m t))
+      (creditFx_noRedraw dy _ _ _ _)) (obsFx_noRedraw _)
+  · exact noRedraw_nil
+
+theorem netOne_noRedraw (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Closed) : NoRedraw (netOne dy s e d C).2.1 := by
+  unfold netOne; split
+  · exact noRedraw_nil
+  · refine noRedraw_append (redraw_noRedraw dy _ _ _) ?_
+    intro x hx d' k c c' h; subst h; split at hx <;> simp at hx
+
+theorem netClosed_noRedraw (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (m : Machine) : NoRedraw (netClosed dy s e d m).2 := by
+  unfold netClosed; apply noRedraw_flatten
+  intro l hl; obtain ⟨C, -, rfl⟩ := List.mem_map.1 hl; exact netOne_noRedraw dy _ _ _ C
+
+theorem giveBack_noRedraw (dy : Cal.Instant → Nat) (m : Machine) : NoRedraw (giveBack dy m).2 := fun x hx d k c c' h => by
+  obtain ⟨C, hC⟩ := giveBack_mem dy m x hx
+  rcases giveOne_mem dy C x hC with h' | rfl | rfl | rfl | rfl
+  · exact redraw_noRedraw dy _ _ _ x h' d k c c' h
+  all_goals simp at h
+
+theorem netStart_noRedraw (dy : Cal.Instant → Nat) (t : At) (d : Nat) (m : Machine) : NoRedraw (netStart dy t d m).2 := by
+  unfold netStart; apply noRedraw_flatten
+  intro l hl; obtain ⟨C, -, rfl⟩ := List.mem_map.1 hl; exact netOne_noRedraw dy _ _ _ C
+
+theorem runNet_noRedraw (dy : Cal.Instant → Nat) (m : Machine) : NoRedraw (runNet dy m).2 := by
+  rcases runNet_cases dy m with h | ⟨o, -, h⟩
+  · rw [h]; exact noRedraw_nil
+  · rw [h]; exact netClosed_noRedraw dy _ _ _ m
+
+theorem doneClose_noRedraw (dy : Cal.Instant → Nat) (m : Machine) (t : At) (id : Log.Id) (actual : Nat) (went : Option Log.U8) :
+    NoRedraw (doneClose dy m t id actual went).2 := by
+  unfold doneClose
+  repeat' split
+  all_goals first
+    | exact noRedraw_nil
+    | exact uncreditFx_noRedraw _
+    | exact noRedraw_append (noRedraw_append (redraw_noRedraw dy _ _ _) (closePause_noRedraw dy m t)) (obsFx_noRedraw _)
+
+theorem machineList_noRedraw (M : Machine) : NoRedraw [.machine M] := fun x hx d k c c' h => by subst h; simp at hx
+
+theorem brkFx_noRedraw (dy : Cal.Instant → Nat) (m : Machine) (t e : At) (d : Nat) : NoRedraw (brkFx dy m t e d) := by
+  unfold brkFx
+  exact noRedraw_append (noRedraw_append (settle_noRedraw dy _) (netClosed_noRedraw dy _ _ _ _)) (machineList_noRedraw _)
+
+theorem takeFx_noRedraw (dy : Cal.Instant → Nat) (m : Machine) (key : Nat) (t e : At) (d : Nat) : NoRedraw (takeFx dy m key t e d) := by
+  unfold takeFx netTake
+  exact noRedraw_append (noRedraw_append (settle_noRedraw dy _) (netClosed_noRedraw dy _ _ _ _)) (machineList_noRedraw _)
+
+theorem doneFx_noRedraw (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : At) (d : Nat) (id : Log.Id)
+    (est actual : Nat) (went : Option Log.U8) (tags : List (List Char)) (ci : Log.U8) (isPartial : Bool) :
+    NoRedraw (doneFx dy m line t d id est actual went tags ci isPartial) := by
+  unfold doneFx
+  intro x hx d' k c c' hxg
+  simp only [List.cons_append, List.mem_cons, List.mem_append] at hx
+  rcases hx with rfl | (((hx | hx) | hx) | hx) | hx
+  · cases hxg
+  · exact doneClose_noRedraw dy m t id actual went x hx d' k c c' hxg
+  · exact creditFx_noRedraw dy id t actual (some ci) x hx d' k c c' hxg
+  · subst hxg; split at hx <;> simp at hx
+  · subst hxg; split at hx <;> simp at hx
+  · exact runNet_noRedraw dy _ x hx d' k c c' hxg
+
+theorem extendFx_noRedraw (m : Machine) (id : Log.Id) (by_ : Nat) : NoRedraw (extendFx m id by_) := fun x hx d k c c' h => by
+  subst h; unfold extendFx at hx; repeat' split at hx
+  all_goals simp at hx
+
+theorem dayArm_noRedraw (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (e : Entry) (t : At) (d : Nat) :
+    NoRedraw (dayArm dy sl e t d) := fun x hx d' k c c' h => by
+  subst h; unfold dayArm at hx
+  cases hev : e.ev <;> simp only [hev] at hx <;> (repeat' split at hx) <;> simp at hx
+
+theorem completionArm_noRedraw (z : Cal.Tz) (m : Machine) (e : Entry) (t : At) (d : Nat) :
+    NoRedraw (completionArm z m e t d) := fun x hx d' k c c' h => by
+  subst h; unfold completionArm at hx
+  rcases List.mem_append.1 hx with hx | hx
+  · obtain ⟨y, -, hy⟩ := List.mem_map.1 hx; cases hy
+  · unfold completionCore at hx
+    cases hev : e.ev <;> simp only [hev] at hx <;> (repeat' split at hx) <;> simp at hx
+
+theorem startArm_noRedraw (dy : Cal.Instant → Nat) (M : Machine) (line : Nat) (t : At) (d : Nat) (id : Log.Id)
+    (pred : Log.U8) (rep : Option Log.U8) (hsw : Log.Num) (sleptMin : Log.U32) (loc : List Char) :
+    NoRedraw (startArm dy M line t d id pred rep hsw sleptMin loc) := by
+  unfold startArm
+  refine noRedraw_append (noRedraw_append (noRedraw_append (noRedraw_append (noRedraw_append
+    (netStart_noRedraw dy _ _ _) (cut_noRedraw dy _ _)) (runNet_noRedraw dy _)) ?_) (settle_noRedraw dy _)) (machineList_noRedraw _)
+  intro x hx d' k c c' h; subst h; simp at hx
+
+theorem brkStartArm_noRedraw (dy : Cal.Instant → Nat) (M : Machine) (t : At) (d : Nat) (planned : Nat)
+    (where_ : Option (List Char)) : NoRedraw (brkStartArm dy M t d planned where_) := by
+  unfold brkStartArm
+  exact noRedraw_append (noRedraw_append (settle_noRedraw dy _) (runNet_noRedraw dy _)) (machineList_noRedraw _)
+
+/-- **An arm moves a break's drawing only for a `break` line or for a break a start ends** (W-53 track K): every other
+entry's arm moves none — `BreakFold.arm_noBrkSeg`'s hypotheses, for a re-drawing. -/
+theorem arm_noRedraw (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machine) (e : Entry) (t : At) (d : Nat)
+    (h : ∀ p a w, e.ev ≠ .brk p a w)
+    (hs : ∀ id pred rep hsw sleptMin loc b1 b2, e.ev = .start id pred rep hsw sleptMin loc b1 b2 → endsBrk m t = none)
+    (hb : ∀ p w, e.ev = .brkStart p w → firstStart t d m = none) : NoRedraw (arm dy sl m e t d) := by
+  have hd := dayArm_noRedraw dy sl e t d
+  unfold arm
+  cases hev : e.ev
+  case brk p a w => exact absurd hev (h p a w)
+  case start id pred rep hsw sleptMin loc b1 b2 =>
+    simp only [hs id pred rep hsw sleptMin loc b1 b2 hev]
+    exact startArm_noRedraw dy m _ t d _ _ _ _ _ _
+  case pause id =>
+    simp only; split
+    · split
+      · exact noRedraw_append (settle_noRedraw dy _) (machineList_noRedraw _)
+      · exact noRedraw_nil
+    · exact noRedraw_nil
+  case unpause id =>
+    simp only; split
+    · split
+      · exact noRedraw_append (noRedraw_append (closePause_noRedraw dy m t) (settle_noRedraw dy _)) (machineList_noRedraw _)
+      · exact noRedraw_nil
+    · exact noRedraw_nil
+  case interrupt id =>
+    simp only
+    exact noRedraw_append (noRedraw_append (closePause_noRedraw dy m t) (settle_noRedraw dy _)) (machineList_noRedraw _)
+  case resume lost dropped =>
+    simp only; split
+    · refine noRedraw_append (noRedraw_append (noRedraw_append ?_ (settle_noRedraw dy _)) (netClosed_noRedraw dy _ _ _ _))
+        (machineList_noRedraw _)
+      intro x hx d' k c c' h; subst h; simp at hx
+    · refine noRedraw_append (noRedraw_append ?_ (settle_noRedraw dy _)) (machineList_noRedraw _)
+      intro x hx d' k c c' h; subst h; simp at hx
+  case stop id rem =>
+    simp only; split
+    · split
+      · refine noRedraw_append (noRedraw_append (cut_noRedraw dy m t) (runNet_noRedraw dy _)) ?_
+        intro x hx d' k c c' h; subst h; simp at hx
+      · exact noRedraw_nil
+    · exact noRedraw_nil
+  case extend id by_ =>
+    simp only
+    intro x hx; rcases List.mem_cons.1 hx with rfl | hx
+    · intro d' k c c' h; cases h
+    · exact extendFx_noRedraw m id by_.val x hx
+  case done id est actual went tags ci isPartial =>
+    exact doneFx_noRedraw dy m e.line t d id est.val actual.val went tags ci isPartial
+  case brkStart pl w =>
+    simp only [hb pl w hev]
+    exact brkStartArm_noRedraw dy m t d _ _
+  all_goals (simp only; exact hd)
+
+/-- **What a `break` line's day half writes is no re-drawing** (D142): a segment and a record (`brkDay_cases`). -/
+theorem brkDay_noRedraw (m : Machine) (e : Entry) (t : At) (d planned : Nat) (actual : Option Nat) :
+    NoRedraw (brkDay m e t d planned actual) := fun x hx d' k c c' h => by
+  rcases brkDay_cases m e t d planned actual x hx with ⟨g, rfl, -⟩ | ⟨r, rfl⟩ <;> cases h
+
+/-- **The segment a re-drawing writes is witnessed by the break it re-draws** (W-53 track K): begun at or after its
+start, ending where it ends, of the record's place. -/
+theorem drawSeg_mem {k : HeldBrk} {c : At} {w : Option (List Char)} {g : Segment} (h : g ∈ (drawSeg k c w).toList) :
+    k.s.1 ≤ g.start.1 ∧ g.stop = k.e ∧ g.kind = .brk w := by
+  unfold drawSeg at h; split at h
+  · simp only [Option.toList_some, List.mem_singleton] at h; subst h; exact ⟨by show k.s.1 ≤ k.s.1; rw [Cal.Instant.le_iff]; omega, rfl, rfl⟩
+  · rename_i h1; split at h
+    · simp only [Option.toList_some, List.mem_singleton] at h; subst h; refine ⟨?_, rfl, rfl⟩
+      show k.s.1 ≤ c.1; simp only [decide_eq_true_eq] at h1; rw [Cal.Instant.le_iff] at h1 ⊢; omega
+    · simp at h
+
+
+/-! ### W-53 track K's witnesses (README gaps 5661 and 5741): three overlapping breaks in all six logging orders, and a
+break an ending covered drawn again when its line lets the ending go -/
+
+/-- **Three overlapping `break` lines are one drawn day in every logging order** (the owner's **D142** whatever the
+order, W-53 track K, README gap 5661): `A` 08:00 for thirty, `B` 08:10 for forty, `C` 08:20 for twenty.  Logged `A`, `B`,
+`C` — and in each of the five other orders below — the day draws `[08:00, 08:30)` and `[08:30, 08:50)`, fifty minutes of
+wall time, and records `A` whole, `B` from 08:30 (twenty) and `C` zero: the log read as a set, each minute drawn and
+recorded once.  W-52's union read a break as covered only by the breaks held when it was stepped, so a break logged
+after one stamped later than it left that one whole and drew the overlap twice (CHEAT 751). -/
+theorem three_overlapping_breaks_logged_a_b_c_are_one_day :
+    ((replay utcZone [bE 1 63924364800 (.brk 30 (some 30) none), bE 2 63924365400 (.brk 40 (some 40) none), bE 3 63924366000 (.brk 20 (some 20) none)]).days.get 739865).map (fun a =>
+      ((a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)),
+        a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))) = some ([(63924364800, 63924366600), (63924366600, 63924367800)], [(63924364800, some 30), (63924366600, some 20), (63924366000, some 0)]) := by
+  decide
+
+/-- **The same three breaks logged `A`, `C`, `B`** (D142 in any logging order, W-53 track K): the same day and the same records. -/
+theorem three_overlapping_breaks_logged_a_c_b_are_one_day :
+    ((replay utcZone [bE 1 63924364800 (.brk 30 (some 30) none), bE 2 63924366000 (.brk 20 (some 20) none), bE 3 63924365400 (.brk 40 (some 40) none)]).days.get 739865).map (fun a =>
+      ((a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)),
+        a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))) = some ([(63924364800, 63924366600), (63924366600, 63924367800)], [(63924364800, some 30), (63924366600, some 20), (63924366000, some 0)]) := by
+  decide
+
+/-- **The same three breaks logged `B`, `A`, `C`** (D142 in any logging order, W-53 track K): the same day and the same records. -/
+theorem three_overlapping_breaks_logged_b_a_c_are_one_day :
+    ((replay utcZone [bE 1 63924365400 (.brk 40 (some 40) none), bE 2 63924364800 (.brk 30 (some 30) none), bE 3 63924366000 (.brk 20 (some 20) none)]).days.get 739865).map (fun a =>
+      ((a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)),
+        a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))) = some ([(63924364800, 63924366600), (63924366600, 63924367800)], [(63924364800, some 30), (63924366600, some 20), (63924366000, some 0)]) := by
+  decide
+
+/-- **The same three breaks logged `B`, `C`, `A`** (D142 in any logging order, W-53 track K): the same day and the same records, in another order. -/
+theorem three_overlapping_breaks_logged_b_c_a_are_one_day :
+    ((replay utcZone [bE 1 63924365400 (.brk 40 (some 40) none), bE 2 63924366000 (.brk 20 (some 20) none), bE 3 63924364800 (.brk 30 (some 30) none)]).days.get 739865).map (fun a =>
+      ((a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)),
+        a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))) = some ([(63924364800, 63924366600), (63924366600, 63924367800)], [(63924366000, some 0), (63924364800, some 30), (63924366600, some 20)]) := by
+  decide
+
+/-- **The same three breaks logged `C`, `A`, `B`** (D142 in any logging order, W-53 track K): the same day and the same records. -/
+theorem three_overlapping_breaks_logged_c_a_b_are_one_day :
+    ((replay utcZone [bE 1 63924366000 (.brk 20 (some 20) none), bE 2 63924364800 (.brk 30 (some 30) none), bE 3 63924365400 (.brk 40 (some 40) none)]).days.get 739865).map (fun a =>
+      ((a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)),
+        a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))) = some ([(63924364800, 63924366600), (63924366600, 63924367800)], [(63924364800, some 30), (63924366600, some 20), (63924366000, some 0)]) := by
+  decide
+
+/-- **The same three breaks logged `C`, `B`, `A`** (D142 in any logging order, W-53 track K): the same day and the same records, in another order. -/
+theorem three_overlapping_breaks_logged_c_b_a_are_one_day :
+    ((replay utcZone [bE 1 63924366000 (.brk 20 (some 20) none), bE 2 63924365400 (.brk 40 (some 40) none), bE 3 63924364800 (.brk 30 (some 30) none)]).days.get 739865).map (fun a =>
+      ((a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)),
+        a.breaks.map (fun r => (r.t.1.sec, r.actualMin)))) = some ([(63924364800, 63924366600), (63924366600, 63924367800)], [(63924366000, some 0), (63924364800, some 30), (63924366600, some 20)]) := by
+  decide
+
+/-- **A break a later-logged ending covers whole draws nothing** (D142 in any logging order with D129's ending, W-53
+track K): `a` 08:00–09:00 and `b` 09:10–10:10 done, a late `break` line 08:40 for ten inside `a`, then a late
+`break_start` 08:30 that `b`'s start ends at 09:10 — the ending covers the 08:40 break whole, so the day draws
+`[08:30, 09:10)` once. -/
+theorem a_break_a_later_logged_ending_covers_is_drawn_from_its_end :
+    ((replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false), bE 5 63924367200 (.brk 10 (some 10) none),
+      bE 6 63924366600 (.brkStart 10 none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map
+      (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924366600, 63924369000)] := by
+  decide
+
+/-- **…and records it zero, the ending forty** (W-53 track K): its record is stamped at its start, as D142 records a break covered whole. -/
+theorem a_break_a_later_logged_ending_covers_is_recorded_zero :
+    ((replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false), bE 5 63924367200 (.brk 10 (some 10) none),
+      bE 6 63924366600 (.brkStart 10 none)]).days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin))) = some [(63924366600, some 40), (63924367200, some 0)] := by
+  decide
+
+/-- **…and `a` is credited thirty**: sixty less the thirty the two breaks cover together (D94, unchanged by the drawing). -/
+theorem a_block_two_overlapping_late_breaks_cover_is_netted_by_their_union :
+    ((replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924372600 (bDone ['b'] 60 false), bE 5 63924367200 (.brk 10 (some 10) none),
+      bE 6 63924366600 (.brkStart 10 none)]).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+/-- **…and `a` is credited forty-five**: sixty less the five and the ten the two breaks still cover (D141, D94). -/
+theorem a_block_is_netted_by_the_union_once_the_line_lets_the_ending_go :
+    ((replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924367200 (.brk 10 (some 10) none), bE 5 63924366600 (.brkStart 10 none),
+      bE 6 63924366600 (.brk 10 (some 5) none)]).items.get ['a']).map (·.minutes) = some 45 := by
+  decide
+
+/-! ### W-53 track K: the re-drawing's parts, on data (AGENTS §5.8: each bites where it should, and only there) -/
+
+/-- **A break logged last reaches back to a later-stamped one it overlaps** (`reachFx`, W-53 track K): `k` 08:40–08:50
+held, `x` 08:30–09:10 held on top — `k` is re-drawn from where it was drawn (08:40) to `x`'s end; a break begun after `k`
+ends reaches nothing. -/
+theorem reachFx_reaches_a_later_stamped_break :
+    let k : HeldBrk := ⟨(⟨63924367200, 0⟩, ⟨false, 0⟩), (⟨63924367800, 0⟩, ⟨false, 0⟩), 739865⟩
+    let x : HeldBrk := ⟨(⟨63924366600, 0⟩, ⟨false, 0⟩), (⟨63924369000, 0⟩, ⟨false, 0⟩), 739865⟩
+    let y : HeldBrk := ⟨(⟨63924369000, 0⟩, ⟨false, 0⟩), (⟨63924369600, 0⟩, ⟨false, 0⟩), 739865⟩
+    reachFx [k] x = [.dayAdd 739865 (.redraw k k.s x.e)] ∧ reachFx [k] y = [] ∧ startOf [x] [] k = x.e ∧ startOf [] [x] k = x.e ∧
+      startOf [] [] k = k.s := by
+  decide
+
+/-- **Letting `x` go re-draws the break it covered from its own start** (`growFx`, `startsGo`, W-53 track K). -/
+theorem growFx_re_draws_the_break_the_ending_covered :
+    let k : HeldBrk := ⟨(⟨63924367200, 0⟩, ⟨false, 0⟩), (⟨63924367800, 0⟩, ⟨false, 0⟩), 739865⟩
+    let x : HeldBrk := ⟨(⟨63924366600, 0⟩, ⟨false, 0⟩), (⟨63924369000, 0⟩, ⟨false, 0⟩), 739865⟩
+    startsGo [] [x, k] = [(x, x.s), (k, x.e)] ∧ growFx [x, k] x = [.dayAdd 739865 (.redraw k x.e k.s)] ∧ growFx [k, x] k = [] := by
+  decide
+
+/-- **A held break's drawing, on data** (`drawSeg`, `drawRec`, `recFor`, `DayAcc.redrawBrk`, W-53 track K): `k` 08:40–08:50
+drawn whole, then from 08:45, then not at all — and the record a `break` line wrote whole found and moved to 08:45
+(stamped there, five minutes), a D129 ending's kept at its start. -/
+theorem a_held_breaks_drawing_moves_on_data :
+    let k : HeldBrk := ⟨(⟨63924367200, 0⟩, ⟨false, 0⟩), (⟨63924367800, 0⟩, ⟨false, 0⟩), 739865⟩
+    let c : At := (⟨63924367500, 0⟩, ⟨false, 0⟩)
+    let r : BreakRec := ⟨k.s, 739865, 10, some 10, none, none⟩
+    let a : DayAcc := { DayAcc.empty with segments := [⟨k.s, k.e, .brk none⟩], breaks := [r] }
+    drawSeg k k.s none = some ⟨k.s, k.e, .brk none⟩ ∧ drawSeg k c none = some ⟨c, k.e, .brk none⟩ ∧ drawSeg k k.e none = none ∧
+      drawRec k c r = ⟨c, 739865, 10, some 5, none, none⟩ ∧ drawRec k c { r with src := some 6 } = ⟨k.s, 739865, 10, some 5, none, some 6⟩ ∧
+      drawRec k k.e r = ⟨k.s, 739865, 10, some 0, none, none⟩ ∧ drawRec k k.s r = r ∧
+      recFor k k.s r = true ∧ recFor k c r = false ∧
+      (DayAcc.redrawBrk k k.s c a).segments = [⟨c, k.e, .brk none⟩] ∧ (DayAcc.redrawBrk k k.s c a).breaks = [⟨c, 739865, 10, some 5, none, none⟩] ∧
+      (DayAcc.redrawBrk k c k.s a).breaks = [r] ∧ (DayOp.redraw k k.s k.e).apply a = { a with segments := [], breaks := [⟨k.s, 739865, 10, some 0, none, none⟩] } := by
+  decide
 
 end Replay
 end Tm

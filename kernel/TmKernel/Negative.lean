@@ -3795,4 +3795,47 @@ theorem anOverlappedEndingIsEndable :
       Replay.bE 6 63924367200 (.brkStart 10 none)]).openEnded.map (fun x => x.s.1.sec)) = [63924367200, 63924366600] := by
   decide
 
+/- ============================================================================================
+   APPENDED — stage 6 W-53 track K (`w53-k`): D142 in any logging order (README gap 5661) — a
+   break logged after one stamped later than it reaches back and covers that one's head
+   (`Replay.reachFx`, `DayOp.redraw`), and a break an ending covered is drawn again when the
+   ending's own line lets it go (`Replay.growFx`).  Cheats 751-770 are this track's (751-753 taken).
+   ============================================================================================ -/
+
+/- CHEAT 751 — W-52's union read in log order (README gap 5661): `C` 08:20 for twenty, `B` 08:10 for forty, `A` 08:00 for
+   thirty, logged in that order.  Claimed the day draws all three whole, as each was drawn against the breaks held when it
+   was stepped.  `A` and `B`, logged after `C` and stamped before it, reach back to it; `decide` computes
+   `[08:00, 08:30)` and `[08:30, 08:50)` (`Replay.three_overlapping_breaks_logged_c_b_a_are_one_day`). -/
+theorem threeBreaksLoggedBackwardsDrawnWhole :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924366000 (.brk 20 (some 20) none),
+      Replay.bE 2 63924365400 (.brk 40 (some 40) none), Replay.bE 3 63924364800 (.brk 30 (some 30) none)]).days.get 739865).map
+      (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)))
+      = some [(63924364800, 63924366600), (63924365400, 63924367800), (63924366000, 63924367200)] := by
+  decide
+
+/- CHEAT 752 — a break a later-logged D129 ending covers drawn whole (README gap 5661): `a` 08:00–09:00, `b` 09:10–10:10,
+   a late `break` line 08:40 for ten, then a late `break_start` 08:30 ended at 09:10.  Claimed the 08:40 break still drawn
+   beside the ending.  The ending covers it whole; `decide` computes the one segment `[08:30, 09:10)`
+   (`Replay.a_break_a_later_logged_ending_covers_is_drawn_from_its_end`). -/
+theorem aBreakALaterEndingCoversIsDrawnWhole :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924372600 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924367200 (.brk 10 (some 10) none),
+      Replay.bE 6 63924366600 (.brkStart 10 none)]).days.get 739865).map
+      (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)))
+      = some [(63924366600, 63924369000), (63924367200, 63924367800)] := by
+  decide
+
+/- CHEAT 753 — the covered break left undrawn when the ending is let go (a reach-back with no `growFx`): the log above with
+   `b` running, then the ending's own line stamped 08:30 for five.  Claimed only the line's `[08:30, 08:35)` drawn.  The
+   08:40 break is no longer covered and is drawn again; `decide` computes both (`Replay.a_break_an_ending_covered_is_drawn_again_when_its_line_lets_it_go`). -/
+theorem aCoveredBreakStaysUndrawn :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924364800 (Replay.bStart ['a']),
+      Replay.bE 2 63924368400 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924369000 (Replay.bStart ['b']),
+      Replay.bE 4 63924367200 (.brk 10 (some 10) none), Replay.bE 5 63924366600 (.brkStart 10 none),
+      Replay.bE 6 63924366600 (.brk 10 (some 5) none)]).days.get 739865).map
+      (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)))
+      = some [(63924366600, 63924366900)] := by
+  decide
+
 end Tm

@@ -2070,6 +2070,25 @@ theorem a_checkpoint_holding_two_endings_round_trips :
     Seal.cMachine.ok M = true ∧ Seal.cMachine.dec (Seal.cMachine.enc M) = some M := by
   decide
 
+set_option maxRecDepth 8000 in
+/-- **The ending's own line lets it go, and the break it covered is drawn again** (the owner's **D141** with D142 in any
+logging order, W-53 track K, README gap 5741's drawing half): the log above with `b` still running, then the ending's own `break` line
+stamped 08:30 for five — the ending ends at 08:35 and the 08:40 break it covered is drawn again, `[08:40, 08:50)` (`growFx`). -/
+theorem a_break_an_ending_covered_is_drawn_again_when_its_line_lets_it_go :
+    ((replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924367200 (.brk 10 (some 10) none), bE 5 63924366600 (.brkStart 10 none),
+      bE 6 63924366600 (.brk 10 (some 5) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map
+      (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924366600, 63924366900), (63924367200, 63924367800)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **…and recorded ten, the line five** (W-53 track K). -/
+theorem a_break_an_ending_covered_is_recorded_again_when_its_line_lets_it_go :
+    ((replay utcZone [bE 1 63924364800 (bStart ['a']), bE 2 63924368400 (bDone ['a'] 60 false),
+      bE 3 63924369000 (bStart ['b']), bE 4 63924367200 (.brk 10 (some 10) none), bE 5 63924366600 (.brkStart 10 none),
+      bE 6 63924366600 (.brk 10 (some 5) none)]).days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin))) = some [(63924367200, some 10), (63924366600, some 5)] := by
+  decide
+
 end EndAll141Witnesses
 
 end Replay
