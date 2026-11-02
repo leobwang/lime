@@ -13791,5 +13791,48 @@ theorem the_host_and_yd_break_requests_are_not_refused :
     PlanWire.planReqRefusal theBreakAfterDoneRequest = none ∧ PlanWire.planReqRefusal theYdBreakRequest = none :=
   ⟨by decide, by decide⟩
 
+
+/-! ### W-53 repair track K: the running break drawn from where the logged breaks stop (the W-53 critic's F3, D142) -/
+
+/-- **The walk of `theBreakRequest`, begun at 14:00 for thirty, with a break 13:50–14:10 already logged in today's record**
+(a hand-written `break` line, or one a sync brought): D142's union, so the running walk is drawn from 14:10, where the
+logged break stops, never over it. -/
+def theCoveredBreakRequest : PlanReq :=
+  { theBreakRequest with run := { theBreakRequest.run with answer := { theBreakRequest.run.answer with days :=
+      ⟨theBreakRequest.today, some { Replay.DayAcc.empty with segments := [⟨(⟨(Cal.instantOf Cal.chicago 739867 830).sec, 0⟩, Cal.Offset.utc), (⟨(Cal.instantOf Cal.chicago 739867 850).sec, 0⟩, Cal.Offset.utc), .brk none⟩] }, none, [], [], [], [], [], []⟩ :: theBreakRequest.run.answer.days } } }
+
+set_option maxRecDepth 400000 in
+/-- **The running break is drawn from where the logged breaks stop** (the W-53 critic's F3, `Planner.brkCover`): the walk
+of `theCoveredBreakRequest` is drawn 14:10–14:30; with nothing logged under its start it is drawn from 14:00
+(`the_running_break_is_drawn_and_nothing_is_scheduled_over_it`). -/
+theorem a_running_break_is_drawn_from_where_the_logged_breaks_stop :
+    (breakRows theCoveredBreakRequest).map (fun s => (s.start, s.stop)) =
+      [((Cal.instantOf Cal.chicago 739867 850).sec, (Cal.instantOf Cal.chicago 739867 870).sec)] ∧
+    Planner.brkCover theCoveredBreakRequest (Cal.instantOf Cal.chicago 739867 840).sec = (Cal.instantOf Cal.chicago 739867 850).sec ∧
+    Planner.brkCover theBreakRequest (Cal.instantOf Cal.chicago 739867 840).sec = (Cal.instantOf Cal.chicago 739867 840).sec := by
+  refine ⟨by decide, by decide, by decide⟩
+
+set_option maxRecDepth 400000 in
+/-- **`the_running_break_row_starts_where_it_started` as W-35 stated it, refuted by the W-53 critic's F3** (D142): on
+`theCoveredBreakRequest` the walk started at 14:00 and is drawn from 14:10, where the logged break covering its start
+stops — not from `max start dayStart`.  The law restated beside it reads `brkCover`. -/
+theorem the_running_break_row_starts_where_it_started_as_w35_stated_it_is_refuted :
+    ¬ ∀ {r : PlanReq} {u : Seg}, u ∈ breakRows r →
+      ∃ bs tb, r.runningBreak = some bs ∧ bs.started = some tb ∧ u.start = max tb.sec r.dayStart := by
+  intro h
+  have hw := a_running_break_is_drawn_from_where_the_logged_breaks_stop.1
+  cases hb : breakRows theCoveredBreakRequest with
+  | nil => rw [hb] at hw; cases hw
+  | cons u us =>
+    rw [hb] at hw
+    simp only [List.map_cons, List.cons.injEq, Prod.mk.injEq] at hw
+    obtain ⟨bs, tb, hbs, htb, hst⟩ := h (r := theCoveredBreakRequest) (u := u) (by rw [hb]; simp)
+    have hrb : (theCoveredBreakRequest.runningBreak.bind (·.started)).map (·.sec) =
+        some (Cal.instantOf Cal.chicago 739867 840).sec := by decide
+    rw [hbs] at hrb; simp only [Option.bind_some, htb, Option.map_some, Option.some.injEq] at hrb
+    have hd : theCoveredBreakRequest.dayStart ≤ (Cal.instantOf Cal.chicago 739867 840).sec := by decide
+    have hne : (Cal.instantOf Cal.chicago 739867 840).sec < (Cal.instantOf Cal.chicago 739867 850).sec := by decide
+    omega
+
 end PlannerWit
 end Tm

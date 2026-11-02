@@ -1050,19 +1050,29 @@ pub struct OpenBreak {
 /// and ending strictly before [`EndedBreak::ended`] is read as ending (`Replay.d141_reads_iff_endable`).
 /// Read off the kernel, never re-derived: the host's D141 gate and its D129 notice read this, not a
 /// [`BreakRecord`]'s span, which since gap 5662 carries the DRAWN minutes and so can end early.
+///
+/// **The same shape carries `open.finished`** (stage 6 W-53 repair track K, [`Replay::finished_breaks`]):
+/// a break with its own `break` line.  The fields then read as that break's OWN: `started` its line's `t`
+/// (or its `break_start`'s), `ended` its own end — `started` plus the line's actual-or-planned minutes,
+/// never clipped by D142's union — and `key` the line that holds it.  Which list an entry came from is
+/// what says which reading `ended` has; each field's doc names both.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EndedBreak {
-    /// Its `break_start`'s `t`.
+    /// Its `break_start`'s `t` (`ended_breaks`); its own `break` line's `t`, or the `break_start`'s it ended
+    /// (`finished_breaks`).
     pub started: DateTime<FixedOffset>,
-    /// **The end D129 gave it**: the `start` that ended it.
+    /// **In `ended_breaks`, the end D129 gave it**: the `start` that ended it.  **In `finished_breaks`, its
+    /// OWN end**: `started` plus its line's actual-or-planned minutes (or the end D129 gave a break whose own
+    /// line came at or after it, P127), never clipped by D142's union.
     pub ended: DateTime<FixedOffset>,
-    /// Planned minutes.
+    /// Planned minutes (the `break_start`'s, or the `break` line's for a plain line).
     pub planned_min: u32,
     /// Where.
     pub r#where: Option<String>,
     /// The ledger day it was stepped on.
     pub day: NaiveDate,
-    /// The log line that made the ending (the kernel's identity for it, `Replay.Ending.key`).
+    /// The log line that holds it (the kernel's identity, `Replay.Ending.key` / `Replay.HeldBrk.key`): the
+    /// ending's line, or a finished break's own `break` line.
     pub key: u64,
 }
 
@@ -1626,6 +1636,15 @@ pub struct Replay {
     /// logged no `break_start`), so an empty list is not written and such a replay serialises as before.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ended_breaks: Vec<EndedBreak>,
+    /// **The logged breaks that have their own `break` line** (stage 6 W-53 repair track K; the kernel's
+    /// `open.finished`, `Replay.finished`): every break the kernel's machine holds — within D94's 32 ledger
+    /// days of the newest — that is not a D129 ending still waiting for its line, each with its own start
+    /// ([`EndedBreak::started`], its `break` line's `t`), its OWN end ([`EndedBreak::ended`], `t` plus its
+    /// actual-or-planned minutes, never clipped by D142's union), planned minutes, place, ledger day and the
+    /// log line that holds it ([`EndedBreak::key`]). D147's gate reads this. Newest first, as the kernel holds
+    /// them; an empty list is not written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub finished_breaks: Vec<EndedBreak>,
     /// Number of unknown events seen.
     pub unknown: u32,
     /// Inconsistencies noticed while replaying (a `done` for an item that was
@@ -1713,6 +1732,7 @@ impl PartialEq for Replay {
             open_interrupt,
             open_break,
             ended_breaks,
+            finished_breaks,
             unknown,
             warnings,
             late_marks,
@@ -1743,6 +1763,7 @@ impl PartialEq for Replay {
             && *open_interrupt == other.open_interrupt
             && *open_break == other.open_break
             && *ended_breaks == other.ended_breaks
+            && *finished_breaks == other.finished_breaks
             && *unknown == other.unknown
             && *warnings == other.warnings
             && *late_marks == other.late_marks

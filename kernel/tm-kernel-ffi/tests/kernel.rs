@@ -1441,7 +1441,8 @@ fn the_log_op_answers_by_line() {
 /// the answer.  Since the owner's D105 (parity P100) `open` carries the running break
 /// after the interruption, `"break":null` in every answer here: none of these logs
 /// holds a `break_start` line; and since W-52 repair track R (the owner's D141) the breaks
-/// a `break` line would end now, `"ended":[]` here, for no break D129 ended.
+/// a `break` line would end now, `"ended":[]` here, for no break D129 ended; and since W-53 repair track K the
+/// breaks with their own `break` line (D147's fact), `"finished":[]` here, for no `break` line.
 #[test]
 fn the_log_op_answers_the_cancelled_lines() {
     let utc = r#"{"key":"UTC","base":"+00:00:00","then":[]}"#;
@@ -1449,7 +1450,7 @@ fn the_log_op_answers_the_cancelled_lines() {
     let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
     assert_eq!(
         out,
-        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":4,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,null,[null,[],[63924368400,0,false,0]],[],[],[],[],[],[[1,"note",null,true,[63924368400,0],[false,0]],[2,"undo",null,true,[63924368460,0],[false,0]],[4,"note",null,false,[63924368400,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null,"ended":[]},"lastDay":null,"lastEffective":[63924368400,0,false,0],"entryCount":3,"unknown":0,"longestLeak":null,"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
+        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":4,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,null,[null,[],[63924368400,0,false,0]],[],[],[],[],[],[[1,"note",null,true,[63924368400,0],[false,0]],[2,"undo",null,true,[63924368460,0],[false,0]],[4,"note",null,false,[63924368400,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[]},"lastDay":null,"lastEffective":[63924368400,0,false,0],"entryCount":3,"unknown":0,"longestLeak":null,"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
     );
     let out = call(&format!(r#"{{"docs":[],"tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":false}}}}}}"#)).unwrap();
     assert!(out.contains(r#""warnings":[],"facts":null,"headers":[]"#), "{out}");
@@ -1471,7 +1472,7 @@ fn the_log_op_answers_the_completion_facts() {
     let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
     assert_eq!(
         out,
-        r##"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[[["s","#1"],[[63924368460,0,false,0],4,"skipped",null]]],"named":[[["x",null],[[3,[63924368520,0,false,0]],[739865,[3,[63924368520,0,false,0]]]]]],"days":[[739865,null,[null,[],[63924368520,0,false,0]],[],[],[],[],[],[[1,"routine","s",false,[63924368400,0],[false,0]],[2,"skip","s",false,[63924368460,0],[false,0]],[3,"event",null,false,[63924368520,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null,"ended":[]},"lastDay":null,"lastEffective":[63924368520,0,false,0],"entryCount":3,"unknown":0,"longestLeak":null,"replayWarnings":[[1,"maybe"]],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"##
+        r##"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[[["s","#1"],[[63924368460,0,false,0],4,"skipped",null]]],"named":[[["x",null],[[3,[63924368520,0,false,0]],[739865,[3,[63924368520,0,false,0]]]]]],"days":[[739865,null,[null,[],[63924368520,0,false,0]],[],[],[],[],[],[[1,"routine","s",false,[63924368400,0],[false,0]],[2,"skip","s",false,[63924368460,0],[false,0]],[3,"event",null,false,[63924368520,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[]},"lastDay":null,"lastEffective":[63924368520,0,false,0],"entryCount":3,"unknown":0,"longestLeak":null,"replayWarnings":[[1,"maybe"]],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"##
     );
 }
 
@@ -1495,7 +1496,7 @@ fn the_log_op_answers_the_day_facts() {
     let out = call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":{lines},"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap();
     assert_eq!(
         out,
-        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null,[],null,null,null,null,null,[]],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null,"ended":[]},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
+        r#"{"ok":{"docs":[],"report":{"closes":[]},"log":{"lines":3,"warnings":[],"facts":{"ledgerDay":0,"horizon":0,"items":[],"window":[],"instOther":[],"named":[],"days":[[739865,[null,[],0,0,0,[0,0,0,0,0,0],[],[],0,[],[[[63924369000,0,false,0],[63924370200,0,false,0],[5,"leak"]]],[63924357600,0,false,0],420,null,null,null,null,null,[],20,20,[[[63924370200,0,false,0],739865,"leak",20]],[],0,0,0,0,null,[],null,null,null,null,null,[]],[null,[],[63924370200,0,false,0]],[[1,[63924368400,0,false,0],739865,3,4,0.0,"h",420,null,null,false]],[],[],[],[],[[1,"energy",null,false,[63924368400,0],[false,0]],[2,"wake",null,false,[63924357600,0],[false,0]],[3,"idle",null,false,[63924370200,0],[false,0]]]]],"open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[]},"lastDay":739865,"lastEffective":[63924370200,0,false,0],"entryCount":3,"unknown":0,"longestLeak":[[63924370200,0,false,0],739865,20],"replayWarnings":[],"warnings":{"first":[],"overflow":0}},"headers":[],"render":[],"reseal":null}}}"#
     );
 }
 
@@ -1554,19 +1555,21 @@ fn the_log_op_answers_a_running_break() {
     };
     let running = ask(start);
     assert!(
-        running.contains(r#""open":{"block":null,"interrupt":null,"break":[[63924368400,0,false,0],20,"walk",739865],"ended":[]},"#),
+        running.contains(r#""open":{"block":null,"interrupt":null,"break":[[63924368400,0,false,0],20,"walk",739865],"ended":[],"finished":[]},"#),
         "{running}"
     );
     assert!(running.contains(r#""entryCount":1,"unknown":0,"#), "{running}");
     // D111: `cafe` is no place, so the line is malformed by name and no break runs.
     let malformed = ask(off_the_table);
-    assert!(malformed.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[]},"#), "{malformed}");
+    assert!(malformed.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[]},"#), "{malformed}");
     assert!(malformed.contains(r#""entryCount":0,"unknown":0,"#), "{malformed}");
     assert!(malformed.contains(r#""warnings":[{"line":1,"w":"badField","key":"where"}]"#), "{malformed}");
     let over = ask(&format!("{start},{ended}"));
-    assert!(over.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[]},"#), "{over}");
+    // since W-53 repair track K the `break` line's break is a finished one (D147's fact): held as the kernel holds it,
+    // from the line's `t` for its minutes, with the `break_start`'s place (D116) and the line's own line as its key
+    assert!(over.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[[[63924369600,0,false,0],[63924370800,0,false,0],20,"walk",739865,2]]},"#), "{over}");
     let cancelled = ask(&format!("{start},{undone}"));
-    assert!(cancelled.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[]},"#), "{cancelled}");
+    assert!(cancelled.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[]},"#), "{cancelled}");
 }
 
 /// **The section's refusals, by name**, and a request without `tz` or `log`

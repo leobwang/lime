@@ -2205,6 +2205,7 @@ mod tests {
             open_interrupt: None,
             open_break: None,
             ended_breaks: Vec::new(),
+            finished_breaks: Vec::new(),
             unknown: 0,
             warnings: Vec::new(),
             late_marks: Vec::new(),

@@ -1304,7 +1304,7 @@ theorem the_day_befores_marks_are_read :
     (match answer (.obj [("walls".toList, .obj [("at".toList, .str "2026-09-07T13:20:00-05:00".toList),
         ("break".toList, .null)])]) (some Replay.utcZone)
         (some ⟨0, 0, [], [], [], [], [⟨7, none, some ⟨none, [.pause ((⟨1000, 0⟩, Cal.Offset.utc) : Replay.At), .unpause ((⟨2000, 0⟩, Cal.Offset.utc) : Replay.At)], none⟩,
-          [], [], [], [], [], []⟩], some ⟨['t','4'], ((⟨500, 0⟩, Cal.Offset.utc) : Replay.At), 0, none, false, 7, 0⟩, none, none, [], none, none, 0,
+          [], [], [], [], [], []⟩], some ⟨['t','4'], ((⟨500, 0⟩, Cal.Offset.utc) : Replay.At), 0, none, false, 7, 0⟩, none, none, [], [], none, none, 0,
           0, none, [], [], 0⟩)
         (fun _ _ => [⟨['g','1'], 8, 8, 1000, 1000, 2000⟩]) 0 (some 8) (some 60) with
       | .ok v => v == .obj [("marks".toList, .arr []), ("pausedFor".toList, .null)]
@@ -1355,7 +1355,7 @@ theorem a_block_open_since_an_earlier_day_reads_its_own_pause :
     (match answer (.obj [("walls".toList, .obj [("at".toList, .str "2026-09-07T13:20:00-05:00".toList),
         ("break".toList, .null)])]) (some Replay.utcZone)
         (some ⟨0, 0, [], [], [], [], [⟨5, none, some ⟨none, [.pause ((⟨900, 0⟩, Cal.Offset.utc) : Replay.At)], none⟩,
-          [], [], [], [], [], []⟩], some ⟨['t','4'], ((⟨500, 0⟩, Cal.Offset.utc) : Replay.At), 0, none, true, 5, 0⟩, none, none, [],
+          [], [], [], [], [], []⟩], some ⟨['t','4'], ((⟨500, 0⟩, Cal.Offset.utc) : Replay.At), 0, none, true, 5, 0⟩, none, none, [], [],
           none, none, 0, 0, none, [], [], 0⟩)
         (fun _ _ => [⟨['g','1'], 7, 7, 1000, 1000, 2000⟩]) 0 (some 7) (some 60) with
       | .ok v => v == .obj [("marks".toList, .arr []), ("pausedFor".toList, .null)]
@@ -1370,7 +1370,7 @@ theorem an_interruption_open_since_before_the_block_holds_it_at_a_wall :
     (match answer (.obj [("walls".toList, .obj [("at".toList, .str "2026-09-07T13:20:00-05:00".toList),
         ("break".toList, .null)])]) (some Replay.utcZone)
         (some ⟨0, 0, [], [], [], [], [], some ⟨['t','4'], ((⟨500, 0⟩, Cal.Offset.utc) : Replay.At), 0, none, false, 6, 0⟩,
-          some ⟨0, some ((⟨300, 0⟩, Cal.Offset.utc) : Replay.At), none, 5, none, 0, []⟩, none, [], none, none, 0, 0, none, [],
+          some ⟨0, some ((⟨300, 0⟩, Cal.Offset.utc) : Replay.At), none, 5, none, 0, []⟩, none, [], [], none, none, 0, 0, none, [],
           [], 0⟩)
         (fun _ _ => [⟨['g','1'], 6, 6, 1000, 1000, 2000⟩]) 0 (some 6) (some 60) with
       | .ok v => v == .obj [("marks".toList, .arr []), ("pausedFor".toList, .null)]

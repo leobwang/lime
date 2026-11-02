@@ -9272,3 +9272,27 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.reachFx_reaches_a_later_stamped_break
 #print axioms Tm.Replay.growFx_re_draws_the_break_the_ending_covered
 #print axioms Tm.Replay.a_held_breaks_drawing_moves_on_data
+
+/- ======================================================================
+   APPENDED — stage 6 W-53 repair track K (`w53r-k`): a held break's identity (README gap 5791) and the breaks
+   with their own `break` line on the wire (D147's fact, `open.finished`).
+   ====================================================================== -/
+#print axioms Tm.Replay.col3_is_one_day_in_either_logging_order
+#print axioms Tm.Replay.col2_draws_each_minute_once
+#print axioms Tm.Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line
+#print axioms Tm.Seal.openFinished_reads_state
+#print axioms Tm.Seal.answer_openFinished
+#print axioms Tm.Replay.arm_brk_eq
+#print axioms Tm.Replay.arm_brk_of_endable_as_w52r_stated_it_is_refuted
+#print axioms Tm.Replay.brkLine_machines
+#print axioms Tm.Replay.brkLine_mem
+#print axioms Tm.Replay.brkOwn_machines
+#print axioms Tm.Replay.brkOwn_mem
+#print axioms Tm.Replay.netTake_pendLines
+#print axioms Tm.Replay.netTake_snd
+#print axioms Tm.Replay.a_later_longer_line_reads_as_the_union
+#print axioms Tm.Replay.a_later_shorter_line_at_a_finished_breaks_stamp_re_times_it
+#print axioms Tm.PlanCheck.brkCover_ge
+#print axioms Tm.PlannerWit.a_running_break_is_drawn_from_where_the_logged_breaks_stop
+#print axioms Tm.PlannerWit.the_running_break_row_starts_where_it_started_as_w35_stated_it_is_refuted
+#print axioms Tm.Replay.two_finished_breaks_at_one_stamp_stay_two
