@@ -174,12 +174,12 @@ theorem arm_openAfter (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
         (settle_openAfter dy _)
     have hA : ∀ M : Machine, m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → OpenAfter m' := fun M hm => by
       unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
+      rw [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm; exact hF _ _ _ _ m' hm
     -- D141: a line ending a break D129 ended undoes that ending's records, which write no machine, then is a `break` line
     split at hm
     · unfold Replay.d141Arm at hm; split at hm
-      · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm; exact hA _ hm
+      · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm; exact hA _ hm
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact openAfter_congr rfl rfl h
     · exact hA _ hm
   case brkStart pl w =>
@@ -224,22 +224,18 @@ theorem noBrkSeg_append {a b : List Effect} (ha : NoBrkSeg a) (hb : NoBrkSeg b) 
   intro x hx; rcases List.mem_append.1 hx with hx | hx
   · exact ha x hx
   · exact hb x hx
-
 /-- An effect list that writes no segment at all draws no Break segment. -/
 theorem noBrkSeg_of_no_segment {fx : List Effect} (h : ∀ x ∈ fx, ∀ d g, x ≠ .dayAdd d (.segment g)) : NoBrkSeg fx :=
   fun x hx d g hxg => absurd hxg (h x hx d g)
-
 theorem redraw_noBrkSeg (dy : Cal.Instant → Nat) (id : Id) (old : List Piece) (P : List (At × At)) :
     NoBrkSeg (redraw dy id old P).2 := by
   intro x hx d g hxg w hk
   rw [(Replay.redraw_draws_its_spans dy id old P x hx d g hxg).2] at hk
   cases hk
-
 theorem settle_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) : NoBrkSeg (settle dy m).2 := by
   unfold settle; split
   · exact redraw_noBrkSeg dy _ _ _
   · exact noBrkSeg_nil
-
 theorem closePause_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (t : At) : NoBrkSeg (closePause dy m t).2 := by
   intro x hx d g hxg w hk
   unfold closePause at hx
@@ -250,7 +246,6 @@ theorem closePause_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (t : At) : 
   subst hx
   simp only [Effect.dayAdd.injEq, DayOp.segment.injEq] at hxg
   rw [← hxg.2] at hk; cases hk
-
 theorem creditFx_noBrkSeg (dy : Cal.Instant → Nat) (id : Log.Id) (t : At) (min : Nat) (ci : Option Log.U8) :
     NoBrkSeg (creditFx dy id t min ci) := by
   apply noBrkSeg_of_no_segment; intro x hx d g; simp only [creditFx, List.mem_cons, List.not_mem_nil] at hx
@@ -259,7 +254,6 @@ theorem creditFx_noBrkSeg (dy : Cal.Instant → Nat) (id : Log.Id) (t : At) (min
   · simp
   · simp
   · exact h.elim
-
 theorem uncreditFx_noBrkSeg (c : Cut) : NoBrkSeg (uncreditFx c) := by
   apply noBrkSeg_of_no_segment; intro x hx d g; unfold uncreditFx at hx; split at hx
   · cases hx
@@ -269,18 +263,15 @@ theorem uncreditFx_noBrkSeg (c : Cut) : NoBrkSeg (uncreditFx c) := by
     · simp
     · simp
     · exact h.elim
-
 theorem obsFx_noBrkSeg (o : Option EnergyObs) : NoBrkSeg (obsFx o) := by
   apply noBrkSeg_of_no_segment; intro x hx d g; unfold obsFx at hx; split at hx
   · simp only [List.mem_singleton] at hx; subst hx; simp
   · cases hx
-
 theorem cut_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (t : At) : NoBrkSeg (cut dy m t).2 := by
   unfold cut; split
   · exact noBrkSeg_append (noBrkSeg_append (noBrkSeg_append (redraw_noBrkSeg dy _ _ _) (closePause_noBrkSeg dy m t))
       (creditFx_noBrkSeg dy _ _ _ _)) (obsFx_noBrkSeg _)
   · exact noBrkSeg_nil
-
 theorem netOne_noBrkSeg (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Replay.Closed) :
     NoBrkSeg (netOne dy s e d C).2.1 := by
   unfold netOne; split
@@ -295,16 +286,13 @@ theorem netOne_noBrkSeg (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (C : Rep
       · simp
       · exact h.elim
     · exact noBrkSeg_nil
-
 theorem flatten_noBrkSeg (L : List (List Effect)) (h : ∀ l ∈ L, NoBrkSeg l) : NoBrkSeg L.flatten := by
   intro x hx; obtain ⟨l, hl, hxl⟩ := List.mem_flatten.1 hx; exact h l hl x hxl
-
 theorem netClosed_noBrkSeg (dy : Cal.Instant → Nat) (s e : At) (d : Nat) (m : Machine) :
     NoBrkSeg (netClosed dy s e d m).2 := by
   unfold netClosed
   apply flatten_noBrkSeg
   intro l hl; obtain ⟨C, -, rfl⟩ := List.mem_map.1 hl; exact netOne_noBrkSeg dy _ _ _ C
-
 /-- **A give-back draws no break** (the owner's D137): it re-draws a block's pieces and credits it. -/
 theorem giveBack_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) : NoBrkSeg (giveBack dy m).2 := by
   unfold giveBack
@@ -323,18 +311,15 @@ theorem giveBack_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) : NoBrkSeg (g
       · simp
       · exact h.elim
     · exact noBrkSeg_nil
-
 theorem netStart_noBrkSeg (dy : Cal.Instant → Nat) (t : At) (d : Nat) (m : Machine) :
     NoBrkSeg (netStart dy t d m).2 := by
   unfold netStart
   apply flatten_noBrkSeg
   intro l hl; obtain ⟨C, -, rfl⟩ := List.mem_map.1 hl; exact netOne_noBrkSeg dy _ _ _ C
-
 theorem runNet_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) : NoBrkSeg (runNet dy m).2 := by
   rcases Replay.runNet_cases dy m with h | ⟨o, -, h⟩
   · rw [h]; exact noBrkSeg_nil
   · rw [h]; exact netClosed_noBrkSeg dy _ _ _ m
-
 theorem doneClose_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (t : At) (id : Log.Id) (actual : Nat)
     (went : Option Log.U8) : NoBrkSeg (doneClose dy m t id actual went).2 := by
   unfold doneClose
@@ -343,18 +328,15 @@ theorem doneClose_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (t : At) (id
     | exact noBrkSeg_nil
     | exact uncreditFx_noBrkSeg _
     | exact noBrkSeg_append (noBrkSeg_append (redraw_noBrkSeg dy _ _ _) (closePause_noBrkSeg dy m t)) (obsFx_noBrkSeg _)
-
 theorem brkFx_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (t e : At) (d : Nat) : NoBrkSeg (brkFx dy m t e d) := by
   unfold brkFx
   refine noBrkSeg_append (noBrkSeg_append (settle_noBrkSeg dy _) (netClosed_noBrkSeg dy _ _ _ _)) ?_
   apply noBrkSeg_of_no_segment; intro x hx d g; simp only [List.mem_singleton] at hx; subst hx; simp
-
 /-- **A D129 ending's netting draws no Break segment** (the owner's D141): `brkFx_noBrkSeg`'s, the netting remembering what it took. -/
 theorem takeFx_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (key : Nat) (t e : At) (d : Nat) : NoBrkSeg (takeFx dy m key t e d) := by
   unfold takeFx netTake
   refine noBrkSeg_append (noBrkSeg_append (settle_noBrkSeg dy _) (netClosed_noBrkSeg dy _ _ _ _)) ?_
   apply noBrkSeg_of_no_segment; intro x hx d g; simp only [List.mem_singleton] at hx; subst hx; simp
-
 theorem doneFx_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : At) (d : Nat) (id : Log.Id)
     (est actual : Nat) (went : Option Log.U8) (tags : List (List Char)) (ci : Log.U8) (isPartial : Bool) :
     NoBrkSeg (doneFx dy m line t d id est actual went tags ci isPartial) := by
@@ -471,8 +453,8 @@ theorem brkStartArm_noBrkSeg (dy : Cal.Instant → Nat) (M : Machine) (t : At) (
 /-- **The one Break segment a break ended at a start draws** (D129): on the break's own ledger day, ending at `t` — *restated at the owner's D142* (README gap 5634): begun at or after `o.s`, drawn only where no earlier break covers it (`brkRecs`); D129 drew `[o.s, t)` whole. -/
 theorem endRecs_seg (H : List HeldBrk) (o : Replay.OpenBrk) (t : At) (key : Nat) (x : Effect) (hx : x ∈ endRecs H o t key) (d : Nat) (g : Segment)
     (hxg : x = .dayAdd d (.segment g)) : d = o.day ∧ o.s.1 ≤ g.start.1 ∧ g.stop = t := by
-  unfold endRecs at hx
-  rcases brkRecsC_cases _ _ _ _ _ _ _ _ _ x hx with ⟨g', h1, h2, -, h3⟩ | ⟨r, h1⟩
+  rcases Replay.endRecs_cases _ _ _ _ x hx with ⟨g', h1, h2, -, h3⟩ | ⟨r, h1⟩ | ⟨j, -, c, c', h1⟩; rotate_right; (rw [hxg] at h1; simp at h1)
+  -- (W-53 track K: an ending also re-draws the breaks it reaches back to, `reachFx`, which draw no segment op)
   · rw [hxg] at h1
     simp only [Effect.dayAdd.injEq, DayOp.segment.injEq] at h1
     obtain ⟨rfl, rfl⟩ := h1
@@ -629,16 +611,16 @@ theorem hi_grows (k0 : HeldBrk) (l : List HeldBrk) :
 
 /-- **Every op but a drawing or an un-drawing keeps a day's segments.** -/
 theorem DayOp.apply_segments (op : DayOp) (a : DayAcc) :
-    ∀ g ∈ (op.apply a).segments, g ∈ a.segments ∨ op = .segment g := by
+    ∀ g ∈ (op.apply a).segments, g ∈ a.segments ∨ op = .segment g ∨ ∃ k c c', op = .redraw k c c' ∧ k.s.1 ≤ g.start.1 ∧ g.stop = k.e := by
   intro g hg
   cases op with
   | segment s =>
     simp only [DayOp.apply, List.mem_cons] at hg
     rcases hg with rfl | hg
-    · exact Or.inr rfl
+    · exact Or.inr (Or.inl rfl)
     · exact Or.inl hg
   | unsegment s => exact Or.inl (List.mem_of_mem_erase hg)
-  | unsegBrks k rest => exact Or.inl (List.mem_filter.1 hg).1
+  | unsegBrks k rest => exact Or.inl (List.mem_filter.1 hg).1 | redraw k c c' => (simp only [DayOp.apply] at hg; unfold DayAcc.redrawBrk at hg; split at hg; exact Or.inl hg; (simp only [List.mem_append] at hg; rcases hg with hg | hg; exact Or.inr (Or.inr ⟨k, c, c', rfl, (Replay.drawSeg_mem hg).1, (Replay.drawSeg_mem hg).2.1⟩); (split at hg; exact Or.inl (List.mem_of_mem_erase hg); exact Or.inl hg)))
   | credit id min ci =>
     left; simp only [DayOp.apply] at hg; repeat' split at hg
     all_goals exact hg
@@ -660,7 +642,7 @@ theorem DayOp.apply_segments (op : DayOp) (a : DayAcc) :
   | _ => left; exact hg
 
 theorem DayOp.alterFn_segments (op : DayOp) (o : Option DayAcc) (a' : DayAcc) (h : op.alterFn o = some a') :
-    ∀ g ∈ a'.segments, (∃ a, o = some a ∧ g ∈ a.segments) ∨ op = .segment g := by
+    ∀ g ∈ a'.segments, (∃ a, o = some a ∧ g ∈ a.segments) ∨ op = .segment g ∨ ∃ k c c', op = .redraw k c c' ∧ k.s.1 ≤ g.start.1 ∧ g.stop = k.e := by
   intro g hg
   cases o with
   | some a =>
@@ -688,7 +670,7 @@ theorem applyEffect_days (st : State) (x : Effect) (h : ∀ d op, x ≠ .dayAdd 
 /-- **A segment of a day after some effects was there before, or one of them drew it.** -/
 theorem applyEffects_seg_src : ∀ (fx : List Effect) (st : State) (d : Nat) (a' : DayAcc),
     (applyEffects st fx).days.get d = some a' →
-      ∀ g ∈ a'.segments, (∃ a, st.days.get d = some a ∧ g ∈ a.segments) ∨ Effect.dayAdd d (.segment g) ∈ fx
+      ∀ g ∈ a'.segments, (∃ a, st.days.get d = some a ∧ g ∈ a.segments) ∨ Effect.dayAdd d (.segment g) ∈ fx ∨ ∃ k c c', Effect.dayAdd d (.redraw k c c') ∈ fx ∧ k.s.1 ≤ g.start.1 ∧ g.stop = k.e
   | [], st, d, a', h, g, hg => Or.inl ⟨a', h, hg⟩
   | x :: fx, st, d, a', h, g, hg => by
     rcases applyEffects_seg_src fx (applyEffect st x) d a' h g hg with ⟨a, ha, hga⟩ | hx
@@ -698,14 +680,14 @@ theorem applyEffects_seg_src : ∀ (fx : List Effect) (st : State) (d : Nat) (a'
         split at ha
         · rename_i hdd
           subst hdd
-          rcases DayOp.alterFn_segments op _ a ha g hga with h1 | h1
+          rcases DayOp.alterFn_segments op _ a ha g hga with h1 | h1 | ⟨k, c, c', rfl, h2, h3⟩; rotate_right; exact Or.inr (Or.inr ⟨k, c, c', List.mem_cons_self, h2, h3⟩)
           · exact Or.inl h1
-          · subst h1; exact Or.inr List.mem_cons_self
+          · subst h1; exact Or.inr (Or.inl List.mem_cons_self)
         · exact Or.inl ⟨a, ha, hga⟩
       · have := applyEffect_days st x (fun d' op hx => hd ⟨d', op, hx⟩)
         rw [this] at ha
         exact Or.inl ⟨a, ha, hga⟩
-    · exact Or.inr (List.mem_cons_of_mem _ hx)
+    · rcases hx with hx | ⟨k, c, c', hx, h2, h3⟩; exact Or.inr (Or.inl (List.mem_cons_of_mem _ hx)); exact Or.inr (Or.inr ⟨k, c, c', List.mem_cons_of_mem _ hx, h2, h3⟩)
 
 /-! ### The invariant, and its step -/
 
@@ -742,10 +724,10 @@ theorem stepWith_brks_of_brk (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat �
   obtain ⟨M, hMb, harm⟩ : ∃ M : Machine, M.brks = st.machine.brks ∧ arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
       (giveBack dy M).2 ++ brkFx dy (giveBack dy M).1 (e.t.val, e.off.val)
         (brkEnd (e.t.val, e.off.val) p.val (a.map (·.val))) (dy e.t.val) ++
-        brkDay M e (e.t.val, e.off.val) (dy e.t.val) p.val (a.map (·.val)) := by
+        brkDay M e (e.t.val, e.off.val) (dy e.t.val) p.val (a.map (·.val)) ++ reachFx M.brks ⟨(e.t.val, e.off.val), brkEnd (e.t.val, e.off.val) p.val (a.map (·.val)), dy e.t.val⟩ := by
     unfold Replay.arm; simp only [hev, hown]
     exact ⟨st.machine, rfl, rfl⟩
-  rw [harm, List.filterMap_append, (Replay.brkDay_obs3 _ _ _ _ _ _).1, List.append_nil, List.filterMap_append,
+  rw [harm, List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 _ _ _ _ _ _).1, List.append_nil, List.filterMap_append,
     (Replay.giveBack_obs dy _).2.2, List.nil_append, ← hMb, ← (Replay.giveBack_keeps dy M).2.2.1]
   have hm := Replay.brkFx_brk dy (giveBack dy M).1 (e.t.val, e.off.val)
     (brkEnd (e.t.val, e.off.val) p.val (a.map (·.val))) (dy e.t.val)
@@ -849,17 +831,17 @@ theorem stepWith_brkHeld_d141 (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat 
     (hg : d141Ok st.machine x (brkEnd (e.t.val, e.off.val) p.val (a0.map (·.val))) (dy e.t.val) = true) :
     BrkHeld (stepWith z dy sl st e) := by
   have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
-      [.dayAdd x.day (.unsegBrks x.hb (st.machine.brks.erase x.hb)), .dayAdd x.day (.unbrkAt x.key)] ++
+      [.dayAdd x.day (.unsegBrks x.hb (st.machine.brks.erase x.hb)), .dayAdd x.day (.unbrkAt x.key)] ++ growFx st.machine.brks x.hb ++
         brkArm dy (d141Machine st.machine x) e (e.t.val, e.off.val) (dy e.t.val) p.val (a0.map (·.val)) := by
     unfold Replay.arm; simp only [hev, hK]; unfold Replay.d141Arm; simp only [hg, if_true]
   have hday : x.day ≤ dy e.t.val := by unfold d141Ok at hg; simp only [Bool.and_eq_true, decide_eq_true_eq] at hg; exact hg.1.1.2
   have hmem : x.hb ∈ st.machine.brks := by unfold d141Ok at hg; simp only [Bool.and_eq_true, decide_eq_true_eq] at hg; exact hg.1.2
   have hB : (stepWith z dy sl st e).machine.brks =
       pruneBrks (⟨(e.t.val, e.off.val), brkEnd (e.t.val, e.off.val) p.val (a0.map (·.val)), dy e.t.val⟩ :: st.machine.brks.erase x.hb) := by
-    rw [Seal.stepWith_machine_eq, harm, List.filterMap_append]
+    rw [Seal.stepWith_machine_eq, harm, List.filterMap_append, List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil]
     simp only [List.filterMap_cons, List.filterMap_nil, Effect.machineOf?, List.nil_append]
     unfold brkArm
-    rw [List.filterMap_append, (Replay.brkDay_obs3 _ _ _ _ _ _).1, List.append_nil, List.filterMap_append,
+    rw [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 _ _ _ _ _ _).1, List.append_nil, List.filterMap_append,
       (Replay.giveBack_obs dy _).2.2, List.nil_append]
     have hm := Replay.brkFx_brk dy (giveBack dy (d141Machine st.machine x)).1 (e.t.val, e.off.val)
       (brkEnd (e.t.val, e.off.val) p.val (a0.map (·.val))) (dy e.t.val)
@@ -870,10 +852,17 @@ theorem stepWith_brkHeld_d141 (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat 
       List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton, forall_eq,
       List.getLast?_singleton, Option.getD_some]
     exact id
+  -- a break of `rest` (the held breaks with the ending's let go) is held after the step, or behind the bound
+  have hR : ∀ k ∈ st.machine.brks.erase x.hb, ∀ g : Segment, k.s.1 ≤ g.start.1 → g.stop = k.e →
+      (∃ k' ∈ (stepWith z dy sl st e).machine.brks, k'.s.1 ≤ g.start.1 ∧ k'.e = g.stop ∧ k'.day = k.day) ∨
+        k.day + 31 < (stepWith z dy sl st e).machine.brks.foldl (fun a k => max a k.day) 0 := fun k hk g h1 h2 => by
+    rw [hB]; rcases prune_keeps _ _ k (List.mem_cons_of_mem _ hk) with hk' | hk'
+    · exact Or.inl ⟨k, hk', h1, h2.symm, rfl⟩
+    · exact Or.inr hk'
   have hfx : effectsWith z dy sl st e =
       [Effect.header (dy e.t.val) (HeaderRec.of e false), .global (e.t.val, e.off.val),
         .seam (dy e.t.val) ⟨(e.t.val, e.off.val), seamKindOf e.ev⟩] ++
-      [.dayAdd x.day (.unsegBrks x.hb (st.machine.brks.erase x.hb)), .dayAdd x.day (.unbrkAt x.key)] ++
+      ([.dayAdd x.day (.unsegBrks x.hb (st.machine.brks.erase x.hb)), .dayAdd x.day (.unbrkAt x.key)] ++ growFx st.machine.brks x.hb) ++
       (brkArm dy (d141Machine st.machine x) e (e.t.val, e.off.val) (dy e.t.val) p.val (a0.map (·.val)) ++
         completionArm z st.machine e (e.t.val, e.off.val) (dy e.t.val)) := by
     unfold effectsWith; rw [harm]; simp
@@ -883,30 +872,32 @@ theorem stepWith_brkHeld_d141 (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat 
   intro d a' hget g hg' w hk
   change (applyEffects st (effectsWith z dy sl st e)).days.get d = some a' at hget
   rw [hfx, applyEffects_append, applyEffects_append st] at hget
-  rcases applyEffects_seg_src _ _ d a' hget g hg' with ⟨a2, ha2, hga2⟩ | hx
-  · obtain ⟨a, ha, hga, hsurv⟩ := undo141_seg _ x.day x.hb (st.machine.brks.erase x.hb) x.key d a2 ha2 g hga2
-    rw [hH] at ha
-    rcases h d a ha g hga w hk with ⟨k1, hk1, h1, h2, h3⟩ | hd
-    · by_cases hk1x : k1 = x.hb
-      · subst hk1x
-        obtain ⟨k', hk', c1, c2, c3⟩ := hsurv h3.symm w hk h1 h2.symm
-        rw [hB]
-        rcases prune_keeps _ _ k' (List.mem_cons_of_mem _ hk') with hk'' | hk''
-        · exact Or.inl ⟨k', hk'', c1, c2, c3.trans h3⟩
-        · exact Or.inr (by rw [← c3.trans h3]; exact hk'')
-      · rw [hB]
-        rcases prune_keeps _ _ k1 (List.mem_cons_of_mem _ ((List.mem_erase_of_ne hk1x).2 hk1)) with hk'' | hk''
-        · exact Or.inl ⟨k1, hk'', h1, h2, h3⟩
-        · exact Or.inr (h3 ▸ hk'')
-    · rw [hB]; refine Or.inr (Nat.lt_of_lt_of_le hd ?_)
-      rw [hi_pruneBrks]
-      exact fm_erase_le _ _ _ hmem hday
+  rcases applyEffects_seg_src _ _ d a' hget g hg' with ⟨a2, ha2, hga2⟩ | hx | ⟨kr, cr, cr', hxr, hr1, hr2⟩
+  · rw [applyEffects_append] at ha2
+    rcases applyEffects_seg_src _ _ d a2 ha2 g hga2 with ⟨a3, ha3, hga3⟩ | hx | ⟨kr, cr, cr', hxr, hr1, hr2⟩
+    · obtain ⟨a, ha, hga, hsurv⟩ := undo141_seg _ x.day x.hb (st.machine.brks.erase x.hb) x.key d a3 ha3 g hga3
+      rw [hH] at ha
+      rcases h d a ha g hga w hk with ⟨k1, hk1, h1, h2, h3⟩ | hd
+      · by_cases hk1x : k1 = x.hb
+        · subst hk1x
+          obtain ⟨k', hk', c1, c2, c3⟩ := hsurv h3.symm w hk h1 h2.symm
+          rcases hR k' hk' g c1 c2.symm with ⟨k'', hk'', c4, c5, c6⟩ | hb
+          · exact Or.inl ⟨k'', hk'', c4, c5, c6.trans (c3.trans h3)⟩
+          · exact Or.inr (by rw [← c3.trans h3]; exact hb)
+        · rcases hR k1 ((List.mem_erase_of_ne hk1x).2 hk1) g h1 h2.symm with ⟨k'', hk'', c4, c5, c6⟩ | hb
+          · exact Or.inl ⟨k'', hk'', c4, c5, c6.trans h3⟩
+          · exact Or.inr (h3 ▸ hb)
+      · rw [hB]; refine Or.inr (Nat.lt_of_lt_of_le hd ?_)
+        rw [hi_pruneBrks]
+        exact fm_erase_le _ _ _ hmem hday
+    · obtain ⟨j, -, c, c', hj⟩ := Replay.growFx_redraw _ _ _ hx; cases hj
+    · obtain ⟨j, hj, c, c', hjx⟩ := Replay.growFx_redraw _ _ _ hxr
+      simp only [Effect.dayAdd.injEq, DayOp.redraw.injEq] at hjx; obtain ⟨rfl, rfl, -, -⟩ := hjx
+      exact hR _ hj g hr1 hr2
   · rcases List.mem_append.1 hx with hx | hx
-    · unfold brkArm at hx
-      rcases List.mem_append.1 hx with hx | hx
-      · rcases List.mem_append.1 hx with hx | hx
-        · exact absurd hk (giveBack_noBrkSeg dy _ _ hx d g rfl w)
-        · exact absurd hk (brkFx_noBrkSeg dy _ _ _ _ _ hx d g rfl w)
+    · rcases Replay.brkArm_mem hx with hx | hx | hx | ⟨j, -, c, c', hj⟩
+      · exact absurd hk (giveBack_noBrkSeg dy _ _ hx d g rfl w)
+      · exact absurd hk (brkFx_noBrkSeg dy _ _ _ _ _ hx d g rfl w)
       · rcases brkDay_cases _ _ _ _ _ _ _ hx with ⟨g', h1, h2, h3⟩ | ⟨r, h1⟩
         · simp only [Effect.dayAdd.injEq, DayOp.segment.injEq] at h1
           obtain ⟨rfl, rfl⟩ := h1
@@ -916,7 +907,16 @@ theorem stepWith_brkHeld_d141 (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat 
           · exact Or.inl ⟨_, hk', h3, h2.symm, rfl⟩
           · exact Or.inr hk'
         · simp at h1
+      · cases hj
     · exact absurd hk (completionArm_noBrkSeg z _ e _ _ _ hx d g rfl w)
+  · rcases List.mem_append.1 hxr with hxr | hxr
+    · rcases Replay.brkArm_mem hxr with hxr | hxr | hxr | ⟨j, hj, c, c', hjx⟩
+      · exact absurd rfl (Replay.giveBack_noRedraw dy _ _ hxr d kr cr cr')
+      · exact absurd rfl (Replay.brkFx_noRedraw dy _ _ _ _ _ hxr d kr cr cr')
+      · exact absurd rfl (Replay.brkDay_noRedraw _ _ _ _ _ _ _ hxr d kr cr cr')
+      · simp only [Effect.dayAdd.injEq, DayOp.redraw.injEq] at hjx; obtain ⟨rfl, rfl, -, -⟩ := hjx
+        exact hR _ hj g hr1 hr2
+    · exact absurd rfl (Replay.completionArm_noRedraw z _ e _ _ _ hxr d kr cr cr')
 
 /-- **The step**: a Break segment is drawn by a `break` line's own day half alone (`arm_noBrkSeg`, `completionArm_noBrkSeg`), beside the held break `brkFx` pushes with its span and day; every other segment and every other held break moves only by `pruneBrks`, which drops a break only when the newest day it keeps is more than 31 ahead (`prune_keeps`), and that day never falls (`hi_grows`). -/
 theorem stepWith_brkHeld (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry)
@@ -927,7 +927,7 @@ theorem stepWith_brkHeld (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → O
     exact stepWith_brkHeld_d141 z dy sl st e h hev hK hg
   intro d a' hget g hg w hk
   have hsrc := applyEffects_seg_src (effectsWith z dy sl st e) st d a' hget g hg
-  rcases hsrc with ⟨a, ha, hga⟩ | hx
+  rcases hsrc with ⟨a, ha, hga⟩ | hx | ⟨kr, cr, cr', hxr, hr1, hr2⟩
   · rcases h d a ha g hga w hk with ⟨k, hkB, h1, h2, h3⟩ | hd
     · rcases stepWith_brks z dy sl st e with hB | ⟨k0, hB⟩ | ⟨k0, x0, hG, -⟩
       · exact Or.inl ⟨k, hB ▸ hkB, h1, h2, h3⟩
@@ -959,10 +959,11 @@ theorem stepWith_brkHeld (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → O
         obtain ⟨M, -, harm⟩ : ∃ M : Machine, M.brks = st.machine.brks ∧ arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
             (giveBack dy M).2 ++ brkFx dy (giveBack dy M).1 (e.t.val, e.off.val)
               (brkEnd (e.t.val, e.off.val) p.val (a0.map (·.val)))
-              (dy e.t.val) ++ brkDay M e (e.t.val, e.off.val) (dy e.t.val) p.val (a0.map (·.val)) := by
+              (dy e.t.val) ++ brkDay M e (e.t.val, e.off.val) (dy e.t.val) p.val (a0.map (·.val)) ++ reachFx M.brks ⟨(e.t.val, e.off.val), brkEnd (e.t.val, e.off.val) p.val (a0.map (·.val)), dy e.t.val⟩ := by
           unfold Replay.arm; simp only [hev, hown']
           exact ⟨st.machine, rfl, rfl⟩
         rw [harm] at hx
+        rcases List.mem_append.1 hx with hx | hx; rotate_right; (obtain ⟨j, -, c, c', hj⟩ := Replay.reachFx_redraw _ _ _ hx; cases hj)
         rcases List.mem_append.1 hx with hx | hx
         · rcases List.mem_append.1 hx with hx | hx
           · exact absurd hk (giveBack_noBrkSeg dy _ _ hx d g rfl w)
@@ -1012,6 +1013,78 @@ theorem stepWith_brkHeld (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → O
                 | none => rfl
                 | some t0 => exact absurd ⟨p, w0, hev, t0, hF⟩ hbs) _ hx d g rfl w)
     · exact absurd hk (completionArm_noBrkSeg z _ e _ _ _ hx d g rfl w)
+  · -- W-53 track K (README gap 5661): a re-drawing's segment is witnessed by the break it re-draws, which the machine
+    -- held before the step — a break the `break` line's arm, or the ending's records, reach back to (`reachFx`)
+    unfold effectsWith at hxr
+    simp only [List.mem_cons, List.mem_append] at hxr
+    rcases hxr with hxr | hxr | hxr | hxr | hxr
+    · cases hxr
+    · cases hxr
+    · cases hxr
+    · have hw : ∀ (k0 : HeldBrk) (old : List HeldBrk), (stepWith z dy sl st e).machine.brks = pruneBrks (k0 :: old) →
+          ∀ j ∈ old, ∀ c c', Effect.dayAdd d (.redraw kr cr cr') = .dayAdd j.day (.redraw j c c') →
+          (∃ k ∈ (stepWith z dy sl st e).machine.brks, k.s.1 ≤ g.start.1 ∧ k.e = g.stop ∧ k.day = d) ∨
+            d + 31 < (stepWith z dy sl st e).machine.brks.foldl (fun a k => max a k.day) 0 := by
+        intro k0 old hB j hj c c' hjx
+        simp only [Effect.dayAdd.injEq, DayOp.redraw.injEq] at hjx; obtain ⟨rfl, rfl, -, -⟩ := hjx
+        rw [hB]; rcases prune_keeps k0 old kr (List.mem_cons_of_mem _ hj) with hk' | hk'
+        · exact Or.inl ⟨kr, hk', hr1, hr2.symm, rfl⟩
+        · exact Or.inr hk'
+      by_cases hb : ∃ p a w, e.ev = .brk p a w
+      · obtain ⟨p, a0, w0, hev⟩ := hb
+        cases hown' : findEnded st.machine (e.t.val, e.off.val) with
+        | some x =>
+          have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) = [.machine (letGo x st.machine)] := by
+            unfold Replay.arm; simp only [hev, hown']; unfold Replay.d141Arm
+            rw [if_neg (fun hg => h141 ⟨p, a0, w0, x, hev, hown', hg⟩)]
+          rw [harm] at hxr; simp at hxr
+        | none =>
+          have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
+              brkArm dy st.machine e (e.t.val, e.off.val) (dy e.t.val) p.val (a0.map (·.val)) := by
+            unfold Replay.arm; simp only [hev, hown']
+          rw [harm] at hxr
+          rcases Replay.brkArm_mem hxr with hxr | hxr | hxr | ⟨j, hj, c, c', hjx⟩
+          · exact absurd rfl (Replay.giveBack_noRedraw dy _ _ hxr d kr cr cr')
+          · exact absurd rfl (Replay.brkFx_noRedraw dy _ _ _ _ _ hxr d kr cr cr')
+          · exact absurd rfl (Replay.brkDay_noRedraw _ _ _ _ _ _ _ hxr d kr cr cr')
+          · exact hw _ _ (stepWith_brks_of_brk z dy sl st e hev hown') j hj c c' hjx
+      · by_cases hs : ∃ id pred rep hsw sleptMin loc b1 b2,
+            e.ev = .start id pred rep hsw sleptMin loc b1 b2 ∧ ∃ o, endsBrk st.machine (e.t.val, e.off.val) = some o
+        · obtain ⟨id, pred, rep, hsw, sleptMin, loc, b1, b2, hev, o, hE⟩ := hs
+          have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
+              endRecs st.machine.brks o (e.t.val, e.off.val) e.line ++ startArm dy (endMachine st.machine o (e.t.val, e.off.val) e.line) e.line
+                (e.t.val, e.off.val) (dy e.t.val) id pred rep hsw sleptMin loc := by
+            unfold Replay.arm; simp only [hev, hE]
+          rw [harm] at hxr
+          rcases List.mem_append.1 hxr with hxr | hxr
+          · rcases Replay.endRecs_cases _ _ _ _ _ hxr with ⟨g', h1, -⟩ | ⟨r, h1⟩ | ⟨j, hj, c, c', hjx⟩
+            · cases h1
+            · cases h1
+            · exact hw _ _ (stepWith_brks_of_start z dy sl st e hev hE) j hj c c' hjx
+          · exact absurd rfl (Replay.startArm_noRedraw dy _ _ _ _ _ _ _ _ _ _ _ hxr d kr cr cr')
+        · by_cases hbs : ∃ p w0, e.ev = .brkStart p w0 ∧ ∃ t0, firstStart (e.t.val, e.off.val) (dy e.t.val) st.machine = some t0
+          · obtain ⟨p, w0, hev, t0, hF⟩ := hbs
+            have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
+                endBrkFx dy st.machine ⟨(e.t.val, e.off.val), p.val, w0, dy e.t.val⟩ t0 e.line := by
+              unfold Replay.arm; simp only [hev, hF]
+            rw [harm] at hxr
+            unfold Replay.endBrkFx at hxr
+            rcases List.mem_append.1 hxr with hxr | hxr
+            · exact absurd rfl (Replay.takeFx_noRedraw dy _ _ _ _ _ _ hxr d kr cr cr')
+            · rcases Replay.endRecs_cases _ _ _ _ _ hxr with ⟨g', h1, -⟩ | ⟨r, h1⟩ | ⟨j, hj, c, c', hjx⟩
+              · cases h1
+              · cases h1
+              · exact hw _ _ (stepWith_brks_of_brkStart z dy sl st e hev hF) j hj c c' hjx
+          · exact absurd rfl (Replay.arm_noRedraw dy sl _ e _ _ (fun p a w h => hb ⟨p, a, w, h⟩)
+              (fun id pred rep hsw sleptMin loc b1 b2 hev => by
+                cases hE : endsBrk st.machine (e.t.val, e.off.val) with
+                | none => rfl
+                | some o => exact absurd ⟨id, pred, rep, hsw, sleptMin, loc, b1, b2, hev, o, hE⟩ hs)
+              (fun p w0 hev => by
+                cases hF : firstStart (e.t.val, e.off.val) (dy e.t.val) st.machine with
+                | none => rfl
+                | some t0 => exact absurd ⟨p, w0, hev, t0, hF⟩ hbs) _ hxr d kr cr cr')
+    · exact absurd rfl (Replay.completionArm_noRedraw z _ e _ _ _ hxr d kr cr cr')
 
 
 

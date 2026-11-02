@@ -9211,3 +9211,64 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Seal.openEnded_reads_state
 #print axioms Tm.Seal.answer_openEnded
 #print axioms Tm.BreakFold.fm_erase_le
+
+/- ============================================================================================
+   APPENDED — stage 6 W-53 track K (`w53-k`): D142 in any logging order (README gap 5661) — a
+   break held on top of the others re-draws every held break it reaches back to (`Replay.reachFx`,
+   `DayOp.redraw`, `DayAcc.redrawBrk`), the ending a D141 line lets go re-draws the breaks it
+   covered (`Replay.growFx`), and where a re-drawing comes from (`Replay.NoRedraw`), which
+   `BreakFold.BrkHeld` reads.  README gaps 5790-5809.
+   ============================================================================================ -/
+#print axioms Tm.Replay.reachGo_redraw
+#print axioms Tm.Replay.startsGo_mem
+#print axioms Tm.Replay.growFx_redraw
+#print axioms Tm.Replay.redrawOnly_filterMap
+#print axioms Tm.Replay.redrawOnly_all
+#print axioms Tm.Replay.endRecs_cases
+#print axioms Tm.Replay.brkArm_mem
+#print axioms Tm.Replay.reachFx_filterMap
+#print axioms Tm.Replay.growFx_filterMap
+#print axioms Tm.Replay.reachFx_redraw
+#print axioms Tm.Replay.noRedraw_nil
+#print axioms Tm.Replay.noRedraw_append
+#print axioms Tm.Replay.noRedraw_flatten
+#print axioms Tm.Replay.redraw_noRedraw
+#print axioms Tm.Replay.settle_noRedraw
+#print axioms Tm.Replay.closePause_noRedraw
+#print axioms Tm.Replay.creditFx_noRedraw
+#print axioms Tm.Replay.uncreditFx_noRedraw
+#print axioms Tm.Replay.obsFx_noRedraw
+#print axioms Tm.Replay.cut_noRedraw
+#print axioms Tm.Replay.netOne_noRedraw
+#print axioms Tm.Replay.netClosed_noRedraw
+#print axioms Tm.Replay.giveBack_noRedraw
+#print axioms Tm.Replay.netStart_noRedraw
+#print axioms Tm.Replay.runNet_noRedraw
+#print axioms Tm.Replay.doneClose_noRedraw
+#print axioms Tm.Replay.machineList_noRedraw
+#print axioms Tm.Replay.brkFx_noRedraw
+#print axioms Tm.Replay.takeFx_noRedraw
+#print axioms Tm.Replay.doneFx_noRedraw
+#print axioms Tm.Replay.extendFx_noRedraw
+#print axioms Tm.Replay.dayArm_noRedraw
+#print axioms Tm.Replay.completionArm_noRedraw
+#print axioms Tm.Replay.startArm_noRedraw
+#print axioms Tm.Replay.brkStartArm_noRedraw
+#print axioms Tm.Replay.arm_noRedraw
+#print axioms Tm.Replay.brkDay_noRedraw
+#print axioms Tm.Replay.drawSeg_mem
+#print axioms Tm.Replay.three_overlapping_breaks_logged_a_b_c_are_one_day
+#print axioms Tm.Replay.three_overlapping_breaks_logged_a_c_b_are_one_day
+#print axioms Tm.Replay.three_overlapping_breaks_logged_b_a_c_are_one_day
+#print axioms Tm.Replay.three_overlapping_breaks_logged_b_c_a_are_one_day
+#print axioms Tm.Replay.three_overlapping_breaks_logged_c_a_b_are_one_day
+#print axioms Tm.Replay.three_overlapping_breaks_logged_c_b_a_are_one_day
+#print axioms Tm.Replay.a_break_a_later_logged_ending_covers_is_drawn_from_its_end
+#print axioms Tm.Replay.a_break_a_later_logged_ending_covers_is_recorded_zero
+#print axioms Tm.Replay.a_block_two_overlapping_late_breaks_cover_is_netted_by_their_union
+#print axioms Tm.Replay.a_block_is_netted_by_the_union_once_the_line_lets_the_ending_go
+#print axioms Tm.Replay.a_break_an_ending_covered_is_drawn_again_when_its_line_lets_it_go
+#print axioms Tm.Replay.a_break_an_ending_covered_is_recorded_again_when_its_line_lets_it_go
+#print axioms Tm.Replay.reachFx_reaches_a_later_stamped_break
+#print axioms Tm.Replay.growFx_re_draws_the_break_the_ending_covered
+#print axioms Tm.Replay.a_held_breaks_drawing_moves_on_data

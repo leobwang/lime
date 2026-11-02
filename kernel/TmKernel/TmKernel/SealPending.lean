@@ -132,7 +132,7 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
   case brk p a w =>
     have hbk : ∀ M : Machine, M.block = m.block → m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → m'.block.bind (·.obs) = m.block.bind (·.obs) := fun M hM hm => by
       unfold Replay.brkArm at hm
-      rw [List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
+      rw [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
       have h := (Replay.brkFx_machine dy _ t _ d m' hm).2.2
       rw [(Replay.giveBack_keeps dy M).1, hM] at h
@@ -141,7 +141,7 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     · -- D141: the ending's segment and record undone write no machine; then a `break` line's arm over the machine
       -- with that break let go, whose block is the old one's
       unfold Replay.d141Arm at hm; split at hm
-      · simp only [List.filterMap_append, List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
+      · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
         exact Or.inl (hbk _ (by rfl) hm)
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
     · exact Or.inl (hbk m rfl hm)

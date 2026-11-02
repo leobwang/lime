@@ -71,7 +71,8 @@ fn block_day(tm: &Tm, prev: Option<&str>, day: &str) {
 fn a_late_break_written_after_a_block_ends_at_its_start() {
     let tm = Tm::empty();
     block_day(&tm, None, "2026-09-08");
-    let out = tm.ok_at("2026-09-08T06:30:00-05:00", &["break", "15m"]);
+    // No length: typed with one (`15m`, as this row read until W-53), D143 logs the break finished (P140).
+    let out = tm.ok_at("2026-09-08T06:30:00-05:00", &["break"]);
     assert!(
         out.stderr.contains("ended at 07:05") && out.stderr.contains("D129"),
         "the verb did not say the break ended at the start already logged: {}",
@@ -100,7 +101,8 @@ fn a_late_break_written_after_a_block_ends_at_its_start() {
 fn a_late_break_from_the_day_before_ends_at_the_next_start() {
     let tm = Tm::empty();
     block_day(&tm, Some("2026-09-08"), "2026-09-09");
-    tm.ok_at("2026-09-08T23:00:00-05:00", &["break", "15m"]);
+    // No length: typed with one (`15m`, as this row read until W-53), D143 logs the break finished (P140).
+    tm.ok_at("2026-09-08T23:00:00-05:00", &["break"]);
     let plan = tm.json_at("2026-09-09T09:00:00-05:00", &["plan"]);
     no_break_across_the_block(&plan);
     let review = tm.json_at("2026-09-09T09:00:00-05:00", &["review", "day"]);

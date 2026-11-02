@@ -1117,13 +1117,13 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
   case brk planned actual where_ =>
     have hb : ∀ M : Machine, (Replay.brkArm dy M e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := by
       intro M; unfold Replay.brkArm
-      rw [List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).2.1, List.append_nil,
+      rw [List.filterMap_append, Replay.reachFx_filterMap Effect.durationOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).2.1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.1, List.nil_append]
       exact (Replay.brkFx_obs dy _ t _ d).2
     split
     · -- D141: the ending's segment and record undone are day records; then a `break` line's arm
       unfold Replay.d141Arm; split
-      · simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _
+      · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _
       · rfl
     · exact hb _
   case brkStart planned where_ =>
