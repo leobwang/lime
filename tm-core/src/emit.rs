@@ -1532,28 +1532,63 @@ impl Running<'_> {
 /// D133 — never `.tm/state.json`'s copy, D42) and its planned minutes. `tm now`'s header prints
 /// `on break since 10:10 · 65m of 20m`; the line under the break's row reads the same numbers, with
 /// `(overrun 45m)` once it has run past them.
+///
+/// **Its minutes are the DRAWN row's** (stage 6 W-53 repair track H, README gap 5775's host half):
+/// `drawn_from` is the start of the Break row the planner draws for it at `now` — which, since the
+/// owner's D142 reached a running break, starts where no logged break covers it (a running break
+/// begun 10:30 over a logged one 10:20–10:40 is drawn from 10:40) and, across local midnight, at the
+/// day's first instant — so `tm now`'s header, its `--json` `elapsed_min`, the line under the row and
+/// the TUI's Now pane read the minutes `tm plan` draws, not the wall clock since `started` (two
+/// readings of one span, §5.3). With no such row it is `started`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OnBreak {
     /// When the break began.
     pub started: DateTime<Tz>,
     /// Its planned minutes.
     pub planned_min: u32,
+    /// Where its drawn row at `now` begins ([`OnBreak::new`]); `started` with none.
+    pub drawn_from: DateTime<Tz>,
 }
 
 impl OnBreak {
-    /// The wall-clock minutes since the break began, never negative.
+    /// **The running break begun at `started` with `planned_min` minutes, as `rows` draw it at `now`**:
+    /// `drawn_from` is the latest start of a Break row among `rows` that begins at or after `started`
+    /// and reaches `now` ([`OnBreak::is_the_row_of`]); `started` when none does.
+    pub fn new<'a>(
+        started: DateTime<Tz>,
+        planned_min: u32,
+        rows: impl IntoIterator<Item = &'a Segment>,
+        now: DateTime<Tz>,
+    ) -> Self {
+        let mut b = OnBreak { started, planned_min, drawn_from: started };
+        b.drawn_from = rows
+            .into_iter()
+            .filter(|s| s.start >= started && b.is_the_row_of(s, now))
+            .map(|s| s.start)
+            .max()
+            .unwrap_or(started);
+        b
+    }
+
+    /// The minutes its drawn row has run by `now` (from `drawn_from`), never negative.
     pub fn elapsed_min(&self, now: DateTime<Tz>) -> u32 {
-        minutes_between(&self.started, &now)
+        minutes_between(&self.drawn_from, &now)
     }
 
-    /// What is left of the planned minutes, never negative.
+    /// Its planned end: `started` plus its planned minutes.
+    fn planned_end(&self) -> DateTime<Tz> {
+        self.started + chrono::Duration::minutes(i64::from(self.planned_min))
+    }
+
+    /// The minutes until its planned end, never negative — where the planner's row for it ends while it is
+    /// inside them (`planned_min` less the elapsed when it is drawn from its start).
     pub fn minutes_left(&self, now: DateTime<Tz>) -> u32 {
-        self.planned_min.saturating_sub(self.elapsed_min(now))
+        minutes_between(&now, &self.planned_end())
     }
 
-    /// The minutes the break has run past its planned end; `0` within it.
+    /// The minutes the break has run past its planned end; `0` within it — the open row's overrun.
     pub fn overrun_min(&self, now: DateTime<Tz>) -> u32 {
-        self.elapsed_min(now).saturating_sub(self.planned_min)
+        minutes_between(&self.planned_end(), &now)
     }
 
     /// Is `seg` the running break's row — a Break row reaching `now`?

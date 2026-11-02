@@ -90,11 +90,14 @@ fn a_break_typed_inside_a_break_a_later_start_ended_ends_it_there_p138() {
     assert!(!journal.contains("09:40 break 20m"), "no journal line of a break begun at 09:40:\n{journal}");
 }
 
-/// **`--json`, and D20 in the D141 arm.** The report is a break end's (`action` `ended`, the minutes), with the end it
-/// replaced; a valid duration does to this break what it does to a running one — nothing: `tm break --now 09:40 25m`
-/// ends it after ten minutes and its planned minutes stay twenty. An invalid one is refused here as in both other arms.
+/// **`--json`, and a length in the D141 arm — the owner's D146 (parity P144, README gap 5682 superseded).** The report
+/// is a break end's (`action` `ended`, the minutes), with the end it replaced; and a valid duration typed here is no
+/// longer discarded: `tm break --now 09:40 25m` ends the 09:30 break after ten minutes (its planned minutes stay
+/// twenty — D141's line is the ended break's) AND logs a finished break of twenty-five from 09:40 in one plain `break`
+/// line (D143), reported as `finished`. Until D146 the twenty-five was discarded (the campaign's interim call, D20's
+/// reading of a valid argument in an ending arm). An invalid one is refused here as in both other arms.
 #[test]
-fn the_d141_arm_reports_a_break_end_and_does_not_retime_p138() {
+fn the_d141_arm_reports_a_break_end_and_logs_the_typed_length_p144() {
     let tm = j_tree_with_the_late_break();
     let refused = tm.run_at(&at("09:40"), &["break", "zzzz"]);
     assert_ne!(refused.code, 0, "an invalid duration is refused (D20): {}", refused.stdout);
@@ -104,11 +107,47 @@ fn the_d141_arm_reports_a_break_end_and_does_not_retime_p138() {
     let v = tm.json_at(&at("09:40"), &["break", "25m"]);
     assert_eq!(v["action"], "ended", "{v}");
     assert_eq!(v["actual_min"], 10, "{v}");
-    assert_eq!(v["planned_min"], 20, "not retimed (D20): {v}");
+    assert_eq!(v["planned_min"], 20, "the ended break's planned minutes: {v}");
     assert_eq!(v["superseded_end"], "10:10", "the end D129 had given it: {v}");
+    assert_eq!(v["finished"]["start"], "09:40", "{v}");
+    assert_eq!(v["finished"]["end"], "10:05", "{v}");
+    assert_eq!(v["finished"]["actual_min"], 25, "the typed length is kept (D146): {v}");
     let b = breaks(&tm);
-    assert_eq!(evs(&b), ["break_start", "break"], "{b:?}");
+    assert_eq!(evs(&b), ["break_start", "break", "break"], "{b:?}");
     assert_eq!(b[1]["planned_min"], 20, "{b:?}");
+    assert_eq!((b[2]["t"].as_str(), b[2]["actual_min"].as_u64()), (Some(at("09:40").as_str()), Some(25)), "{b:?}");
+}
+
+/// **D146 (P144): the critic's F2.** `^t1` 09:00–10:00 and `^t4` 10:10–11:10 done, `tm break --now 09:20` (D129 ends
+/// it at 10:10), then `tm break --now 09:40 5m --where walk`: the 09:20 break is ended at 09:40 (D141) and a finished
+/// break of five at the walk is logged from 09:40 (D143) — `^t1` at thirty-five, the day at ninety-five, the breaks
+/// twenty and five (walk); the reply says both; the journal holds the end and the finished break. Until D146: `^t1`
+/// at forty, one break of twenty, the five and the walk discarded.
+#[test]
+fn a_length_typed_inside_a_break_d129_ended_ends_it_and_logs_the_finished_break_p144() {
+    let tm = j_tree();
+    tm.ok_at(&at("09:20"), &["break"]);
+    let out = tm.ok_at(&at("09:40"), &["break", "5m", "--where", "walk"]);
+    assert!(out.stderr.contains("(D141)"), "{}", out.stderr);
+    assert_eq!(
+        out.stdout.trim(),
+        "break ended · 20m of 20m · break 5m (walk) · 09:40–09:45 · logged finished (typed with its length inside the \
+         break it ended, D146)",
+    );
+    let v = tm.json_at(&at("12:30"), &["review", "day"]);
+    let r = &v["review"];
+    assert_eq!(r["block_min"], 95, "{v}");
+    let got: Vec<(u64, Option<&str>)> = r["breaks"]["breaks"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{v}"))
+        .iter()
+        .map(|b| (b["actual_min"].as_u64().unwrap_or_default(), b["place"].as_str()))
+        .collect();
+    assert_eq!(got, [(20, None), (5, Some("walk"))], "{v}");
+    let journal = tm.read(&format!("day/{TUE}.md"));
+    for line in ["09:40 break ended 20m/20m", "09:40 break 5m where=walk", "09:45 break ended 5m/5m"] {
+        assert!(journal.contains(line), "the journal holds {line:?}:\n{journal}");
+    }
 }
 
 /// The JSON of the two arms D141 does not change carries no `superseded_end`.
