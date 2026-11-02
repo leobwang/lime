@@ -2320,11 +2320,27 @@ enum AtFinished {
     AtStart(FinishedSpan),
 }
 
-/// **The finished breaks the kernel's replay holds** (D147) — track K's wire fact (W-53 repair track K item 3),
-/// as [`FinishedSpan`]s.
+/// **The finished breaks the kernel's replay holds** (D147) — track K's wire fact (W-53 repair track K item 3:
+/// `open.finished`, decoded as `Replay::finished_breaks`, each an [`EndedBreak`] whose `ended` is the break's own
+/// end), as [`FinishedSpan`]s. **Not wired on this branch** (README gap 5845): the fact is track K's and had not
+/// landed, so this answers nothing and the gate never fires; the land replaces the body with
+/// `spans_of(&ctx.replay.finished_breaks)` and un-ignores `tm/tests/cli_d147_retime.rs`.
 fn finished_breaks(ctx: &Ctx) -> Vec<FinishedSpan> {
     let _ = ctx;
-    Vec::new()
+    spans_of(&[])
+}
+
+/// [`FinishedSpan`]s of the kernel's finished-break records: own start, own end, planned minutes, place — the
+/// fact's own fields, no reading of the host's (§5.3).
+fn spans_of(xs: &[tm_core::log::EndedBreak]) -> Vec<FinishedSpan> {
+    xs.iter()
+        .map(|x| FinishedSpan {
+            started: x.started,
+            ended: x.ended,
+            planned_min: x.planned_min,
+            place: x.r#where.clone(),
+        })
+        .collect()
 }
 
 /// [`AtFinished`] for `at` over `spans`; `None` when `at` lies outside every finished break.
@@ -3400,6 +3416,39 @@ pub fn idle(g: &Globals, args: &super::IdleArgs) -> Result<i32, CliError> {
 mod tests {
     use super::*;
     use tm_core::log::{LogSegment, SegmentKind};
+
+    /// **D147's gate, in its order** (parity P145): strictly inside a finished break → inside (the latest-begun
+    /// when two hold the instant, as D141 picks); else at a break's end → at its end; else at its own start → at
+    /// its start; outside every one → none. Over the kernel fact's own record shape ([`spans_of`]), so the
+    /// gate the verb runs is tested here before track K's fact reaches it (README gap 5845).
+    #[test]
+    fn d147s_gate_reads_inside_end_start_and_outside_in_that_order() {
+        let at = |s: &str| DateTime::parse_from_rfc3339(&format!("2026-09-08T{s}:00-05:00")).expect("a stamp");
+        let rec = |from: &str, to: &str, planned: u32| tm_core::log::EndedBreak {
+            started: at(from),
+            ended: at(to),
+            planned_min: planned,
+            r#where: None,
+            day: chrono::NaiveDate::from_ymd_opt(2026, 9, 8).expect("a day"),
+            key: 0,
+        };
+        let spans = spans_of(&[rec("09:20", "09:30", 10), rec("09:25", "09:28", 3), rec("10:30", "10:40", 10)]);
+        let start_of = |r: Option<AtFinished>| match r {
+            Some(AtFinished::Inside(f)) => format!("inside {}", f.started.format("%H:%M")),
+            Some(AtFinished::AtEnd(f)) => format!("end {}", f.started.format("%H:%M")),
+            Some(AtFinished::AtStart(f)) => format!("start {}", f.started.format("%H:%M")),
+            None => "none".to_string(),
+        };
+        assert_eq!(start_of(at_finished(&spans, at("09:24"))), "inside 09:20");
+        assert_eq!(start_of(at_finished(&spans, at("09:26"))), "inside 09:25", "the latest-begun");
+        assert_eq!(start_of(at_finished(&spans, at("09:28"))), "inside 09:20", "inside one beats the end of another");
+        assert_eq!(start_of(at_finished(&spans, at("09:30"))), "end 09:20");
+        assert_eq!(start_of(at_finished(&spans, at("10:40"))), "end 10:30");
+        assert_eq!(start_of(at_finished(&spans, at("09:20"))), "start 09:20");
+        assert_eq!(start_of(at_finished(&spans, at("10:30"))), "start 10:30");
+        assert_eq!(start_of(at_finished(&spans, at("09:45"))), "none");
+        assert_eq!(spans[0].planned_min, 10);
+    }
 
     /// The kernel's absolute second of an RFC 3339 stamp.
     fn sec(s: &str) -> i64 {

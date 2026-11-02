@@ -104273,11 +104273,16 @@ so they never duplicate `end_break_at`'s rule.
 **Parity P145 taken**: a `tm break` with no length typed, no break running and no break D129 ended around it, at an instant strictly inside a break already logged finished re-times it — one `break` line at that break's own start with `actual_min` the typed instant less it, said `re-timed to end at HH:MM (D147)`, `action` `retimed` with `superseded_end` — at its end writes nothing and says it already ends there, and at its own start is refused by name — where this binary until the W-53 repair began a second break there that D129 ran to the next start (scenario C 140 → 120; the owner's D147, stage 6 W-53 repair track H, README gaps 5772 and 5810; the at-start refusal the campaign's call inside D147)
 
 **The fact it gates on is track K's** (W-53 repair track K item 3: the finished breaks — own start, own end unclipped,
-planned minutes, place — beside `open.ended`).  It had not landed when this block was written: the gate reads it
-through one function, `finished_breaks` in `day.rs`, which answers nothing until the fact is wired, so on this branch
-the verb behaves as before (scenario C still `120` after its typed ends).  The seven behaviour rows
-(`tm/tests/cli_d147_retime.rs`) are `#[ignore]`d naming P145, for the land to un-ignore once `finished_breaks` reads the
-fact (one adapter; the gate and its rows need nothing else).  Owed by name: that adapter and the un-ignore (gap 5845).
+planned minutes, place — beside `open.ended`).  It had not been committed on `w53r-k` when this block was written (no
+commit on that branch past 014805f over the track's whole run; its worktree holds the decoder uncommitted, as
+`Replay::finished_breaks: Vec<EndedBreak>` from `open.finished`, `ended` the break's own end).  The gate reads it through
+one function, `finished_breaks` in `day.rs`, whose body is `spans_of(&[])` on this branch, so the verb behaves as before
+(scenario C still `120` after its typed ends).  `spans_of` maps the fact's own record type (`EndedBreak`: `started`,
+`ended`, `planned_min`, `where`) to the gate's spans and compiles today, so **the land's wiring is one line** —
+`spans_of(&ctx.replay.finished_breaks)` — and the un-ignore of the seven behaviour rows in
+`tm/tests/cli_d147_retime.rs` (each `#[ignore]`d naming P145).  The gate's own order is tested now, over that record
+shape: `cli::day::tests::d147s_gate_reads_inside_end_start_and_outside_in_that_order` (inside → the latest-begun; inside
+one beats the end of another; at an end; at a start; outside).  Owed by name: the one line and the un-ignore (gap 5845).
 
 ### 6. Gap 5775's host half and the critic's F7 — `tm now` reads the break's DRAWN row
 
@@ -104302,7 +104307,8 @@ Each change applied alone, the five files (`cli_d143_finished_break`, `cli_d141_
 `emit_now`, `kernel_call_counts`) run, the change reverted (script `h/mut.py` in the track's scratchpad): the probe
 never finding a start — 8 rows fail; `into_start` never set — 1; D146's length discarded — 2; `drawn_from` always the
 start — 1; `left` as planned less elapsed — 1; the held replay not reused — `kernel_call_counts` fails (4 `log` calls,
-expected 3); the finished arm writing the cache — 2.  None survives.  D147's gate is unmutated: its rows cannot run until the fact is wired (gap 5845).
+expected 3); the finished arm writing the cache — 2.  None survives.  D147's gate (`at_finished`), against its unit test: the inside bound `<` made `<=` — fails; the latest-begun pick made
+the earliest-begun — fails; the at-start arm removed — fails.  Its end-to-end rows cannot run until the fact is wired (gap 5845).
 
 ### Gaps (5840-5859)
 
@@ -104360,8 +104366,8 @@ break; the gate (`at_finished`) and its seven rows are built, the rows `#[ignore
 wire fact (W-53 repair track K item 3) had not landed on this branch; re-deriving the finished breaks from the log's
 lines in the host would be a second reader (§5.3), which the brief forbids.  3. *Cost.*  Until it is wired, D147 does
 nothing: a no-length `tm break` at or inside a finished break begins a break as before (scenario C 140 → 120, gaps 5772
-and 5810 open).  4. *Clears it.*  The land: map K's decoded fact to `FinishedSpan` in `finished_breaks`, un-ignore the
-rows, drive C.sh (140 → 140).
+and 5810 open).  4. *Clears it.*  The land: `finished_breaks`' body becomes `spans_of(&ctx.replay.finished_breaks)`,
+the seven rows are un-ignored, and C.sh is driven (expected 160 → 140 → 140 → 140).
 
 ### 9. The drive (§5.13), `TZ=America/Chicago`, every command capped at 8 GB; scripts in the track's scratchpad `h/drive/`
 
@@ -104450,7 +104456,31 @@ logged 09:20-then-09:40 `[(5, 5), (10, 10)]`; block 45 both.
    runs after every arm (measured: `5m` → `15m`, the `edit` logged).
 6. The preamble's "the W-53 blocks … track H's 5770-5775": gap 5771 needs no fact once the line is plain — it is closed
    by construction here (§Gaps), not by track K's gap 5741 as its paragraph says.
+7. The preamble's "the orchestrator will message you with K's wire-fact commit": no message arrived and `w53r-k` held
+   no commit past 014805f for the whole of this track's run (about five hours of watching); item 5 is built against
+   the fact's record type and its wiring is owed (gap 5845).
+8. Item 5's "the finished breaks come from track K's new wire fact (own start, own end unclipped, planned, place)":
+   K's decoder reuses `EndedBreak` (whose doc says `ended` is "the end D129 gave it") for those records, so in
+   `finished_breaks` `ended` is the break's OWN end — one type, two meanings of one field; recorded for the land.
 
 ### 11. Acceptance
 
-*Being measured; this paragraph is replaced at the end of the track.*
+On the final tree, every command capped at 40 GB (8 GB for the drives); Lean unchanged by this track.
+
+* `kernel/check.sh`: **17/17 `ok`, rc 0** (1 m 31 s): axiom audit 7,082, FFI target 97, corpus 29/37 files and 4/5 whole
+  plans, stage goals 1, prose citations 69,422 (0 unresolved), check 9 951 rostered, 0 owed, parity P1-P146 with 2
+  declared holes (next free **P147**), check 12 1,686 reachable, 97 modules replayed.  (Taken before the last host
+  commit, which adds `spans_of` and a unit test and touches no Lean, README or register; checks 8 and 10 re-run on the
+  final tree: 0 unresolved, P1-P146.)
+* `cargo test --workspace --no-fail-fast`, three runs (before the same last commit): run 1 (load 9.4 → 8.3, 53 m)
+  **3,097 passed / 1 failed / 62 ignored over 183 result lines** — gap 5541's row (`tm drop ^z15` still running after
+  1 s); run 2 (load 6.3 → 10.5, 100 m) **3,094 / 4 / 62 over 183** — four `cli_latency` timing rows (`tm plan` 3.09 s);
+  run 3 (load 8.1 → 11.2, 75 m) **3,092 / 6 / 62 over 183** — six `cli_latency` timing rows.  No other test failed in
+  any run; no `.proptest-regressions` file moved.
+* `cargo test -p tm --test cli_latency` alone: at load 2.5 **6 passed / 1 failed / 1 ignored** (gap 5541's row); that row
+  alone on the base build (`w53-land`'s test binary) at load 2.4 passed, and on this branch three times at load 2.0
+  passed 3/3 (11.1-11.4 s); the whole file again at load 1.75: **7 passed, 0 failed, 1 ignored** (34.2 s).
+* After the last commit: `cargo test -p tm --bin tm` 124 passed (the new gate test among them) and the six affected
+  test binaries green (`cli_d143_finished_break` 8, `cli_d141_break_end` 11 + 1 ignored, `cli_d144_now_break` 7 + 1
+  ignored, `cli_d147_retime` 7 ignored, `emit_now` 8, `kernel_call_counts` 4).
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**, 0 failed, over 5 result lines.
