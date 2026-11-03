@@ -3946,4 +3946,54 @@ theorem col3RetimeDrawsTwice :
     ((Replay.replay Replay.utcZone [Replay.bE 1 63924363600 (.brk 20 (some 20) none), Replay.bE 2 63924364800 (.brkStart 30 none), Replay.bE 3 63924366600 (Replay.bStart ['t']), Replay.bE 4 63924368400 (Replay.bDone ['t'] 30 false), Replay.bE 5 63924363000 (.brk 50 (some 50) none), Replay.bE 6 63924364200 (.brk 40 (some 40) none), Replay.bE 7 63924364200 (.brk 40 (some 5) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924363000, 63924366000), (63924366000, 63924366600), (63924366000, 63924366600)] := by
   decide
 
+
+/-! ======================================================================
+    APPENDED — stage 6 W-54 repair track K (`w54r-k`): the owner's D145 (a finished break's line ends only its own
+    break), D151 (the widest end is the break's own lines'), and the finished-break fact's overlap filter (README gaps
+    5920-5939).  Cheats 811-815.
+    ====================================================================== -/
+
+set_option maxRecDepth 8000 in
+/- CHEAT 811 — a finished break's line ends the running break (the owner's D145, parity P142, README gap 5820): the J day,
+   a break running since 11:30, then `tm break --now 09:20 5m`'s one plain line.  Claimed the W-54 reading: no break runs.
+   The line is a finished break's and ends only its own; `decide` computes the running break
+   (`Replay.a_finished_line_ends_only_its_own_break`). -/
+theorem aFinishedLineEndsTheRunningBreak :
+    (Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924378600 (.brkStart 20 none), Replay.bE 6 63924369600 (.brk 5 (some 5) none)])).openBreak = none := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 812 — a parked line read at the running break's place (the owner's D145, D116): a break running at `walk`, then a
+   finished line with no place.  Claimed its record reads `walk`, as the running break's own line would.  A parked line is
+   read at its own place; `decide` computes none (`Replay.a_parked_line_is_read_at_its_own_place`). -/
+theorem aParkedLineReadsTheRunningPlace :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924378600 (.brkStart 20 (some ['w','a','l','k'])), Replay.bE 2 63924369600 (.brk 5 (some 5) none)]).days.get 739865).map (fun a => a.breaks.map (·.where_)) = some [some ['w','a','l','k']] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 813 — the running break's own line missed by its seconds (the owner's D145): a `break_start` at 09:30:27 and the line
+   ending it stamped 09:30, as a binary of the D105 era wrote it.  Claimed the break still runs (the line parked).  The
+   running break's own line is the one in its start's minute; `decide` computes no break running
+   (`Replay.a_break_line_in_the_running_breaks_minute_ends_it`). -/
+theorem theOwnLineIsMissedBySeconds :
+    (Replay.replay Replay.utcZone [Replay.bE 1 (63924370200 + 27) (.brkStart 20 none), Replay.bE 2 63924370200 (.brk 20 (some 15) none)]).openBreak ≠ none := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 814 — D129's end inside the widest span (the owner's D151, README gap 5926): the critic's d6 — `a` 09:00–10:00, `b`
+   13:00–14:00, a `break_start` 09:30 the 13:00 start ends, its own line ending it at 09:40.  Claimed W-54's widest end,
+   13:00.  The widest end is the latest end the break's own lines gave it; `decide` computes 09:40
+   (`Replay.the_widest_end_is_the_breaks_own_lines`). -/
+theorem d129EndIsInTheWidestSpan :
+    (Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924382800 (Replay.bStart ['b']), Replay.bE 4 63924386400 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924370200 (.brkStart 20 none), Replay.bE 6 63924370200 (.brk 20 (some 10) none)]).openFinished.map (fun x => x.wide.1.sec) = [63924382800] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 815 — a nested finished break listed (the W-54 auditor's 1 and critic's 2, README gap 5925): the J day, `09:20 30m`
+   then `09:30 5m` inside it.  Claimed W-54's fact: the newer five-minute break listed for a re-time.  The fact omits a break
+   any other held break overlaps; `decide` computes none (`Replay.a_finished_break_another_overlaps_is_omitted`). -/
+theorem aNestedFinishedBreakIsListed :
+    (Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 30 (some 30) none), Replay.bE 6 63924370200 (.brk 5 (some 5) none)])).openFinished.length = 1 := by
+  decide
+
 end Tm
