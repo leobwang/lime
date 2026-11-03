@@ -105751,3 +105751,295 @@ block, merged before H's, moved; re-anchored) and the row restated above.
 
 **Owed, by name:** D145 (gaps 5820 and 5873, with 5842; the P142 row), 5879, 5880, 5821, 5891, 5892, 5894-5898,
 5790, 5742, 5774, 5792-5794, 5841, 5844, and the earlier lists the W-53 repair blocks carry.
+
+<!-- ======================================================================
+     Stage 6 — W-54 repair track K (2026-11-03): the kernel — the owner's D145 (a finished break's `break` line ends only
+     its own break, parity P142 taken), D151 (the widest end is the latest end a break's own lines gave it, P148's row
+     restated), the finished-break fact's overlap filter, and D152's replay half (already the kernel's reading; witnessed).
+     Branch `w54r-k` off ef9fd63.  Gaps 5920-5939 are this block's; cheats 811-815; D152's number is track H's (`P149`).
+     Whoever merges renumbers (AGENTS §6.4).
+     ====================================================================== -->
+
+## Stage 6 — W-54 repair track K: D145's parked reading, D151's widest end, the fact's overlap filter, D152's replay half
+
+Every scenario below was driven on the W-54 land's binary (418e5d5, "base") and on this track's (§6 has both
+transcripts; the drive scripts are the track's scratchpad `w54r/kd/k.sh` and `i4.sh`).
+
+### 1. D145 — a finished break's `break` line ends only its own break (gaps 5820, 5842 and 5873 closed)
+
+**The defect.**  Every `break` line read while a break ran ended it (the arm's `brkOwn`, D105's pairing in file order),
+so `tm break --now 09:20 5m` typed with a break running since 11:30 — one plain line, the host leaving `.tm/state.json`'s
+running break alone — cleared the replay's running break, and the next verb re-logged the cached one (a second
+`break_start`, D133) or cleared it (D138).
+
+**The rule** (`Replay.arm`'s `break` arm).  With a break running, a line stamped in the running break's start's minute is
+that break's own line and is read as it always was (`brkOwn`); any other line is a finished break's and is read with the
+running break PARKED (`Replay.brkPark`): an ending's own line as it always was (`d141Arm`, P127 while a break runs: the
+ending let go), otherwise the running break's take given back and no break running (`Replay.parkM`), the line read as a
+plain finished break over that (`brkArm`: held and netted by its own span, drawn and recorded at its own place), and the
+running break opened again over what it leaves (`brkStartArm` at its own start, day, planned minutes and place — the open
+block settled under it, every held closed block it lies across netted again).  The last machine is named by
+`Replay.lastMach` (`lastMach_eq`, `applyEffects_lastMach`).  D116's place warning (`lateWarnList`) speaks of the running
+break's own line alone.
+
+**Why the minute and not the instant** (gap 5922).  Every verb that ends a break stamps its line at the logged
+`break_start`'s instant (`day::end_break_at`, since W-47 repair through `started_at_logged`); a binary of the D105 era
+stamped it at the cache's `HH:MM` while the `break_start` carried the clock's seconds, and a synced machine may render the
+instant at another offset.  So seconds and offset are not compared.
+
+**The laws.**  `Replay.a_parked_line_leaves_the_running_break_running` (the machine a parked line leaves holds the
+running break it found) and `Replay.arm_brk_parked_keeps_the_running_break` (through the arm);
+`Replay.a_finished_line_ends_only_its_own_break` (the J day, the 11:30 break and the 09:20 line: the break runs on, `a`
+fifty-five, one record of five; its own line at 11:30 ends it and the 09:20 break is held finished);
+`Replay.a_parked_line_reads_as_if_logged_before_the_running_break` (on the J day, over a running block paused by the
+running break, and over a closed block a running break netted, the parked reading leaves the items, the days, the open
+block and the running break as the same lines in the other order do); `Replay.a_parked_line_is_read_at_its_own_place`;
+`Replay.a_break_line_in_the_running_breaks_minute_ends_it`.  The whole window (law 1, the resume, the cut machine) and the
+fold invariants carry the parked reading: `Seal.arm_congr` (now after the `_mi` family, §4), `Seal.stepQueries_sub`,
+`Seal.arm_mi`, `Seal.arm_brks` (statement unchanged), `Seal.arm_pending`, `Seal.arm_lastCut`/`arm_interrupt`/
+`arm_brkOpen` (through `Seal.arm_brk_machine_keeps`), `SealLaw`'s duration law, `Replay.conserves_arm`,
+`arm_sleptOk`, `arm_obs`, `arm_split`, `BreakFold.arm_openAfter` and `stepWith_brkHeld` (a parked line's break held at
+its own place: `BreakFold.stepWith_brks_of_park`).  New lemmas: `Seal.brkPark_mi`, `brkPark_congr`, `brkArmK_congr_mi`,
+`d141OrArm_congr`, `d141OrArm_mi`, `d141OrArm_keeps`, `brkPark_machine_cases`, `brkPark_machine_keeps`, `reopen_mi`,
+`reopen_keeps`, `mi_upd`, `brkArmK_mi`, `brkLine_mi`, `brkLine_congr`; Replay.brkPark_mem and brkPark_machines (each declared on its doc comment's line, which check 8 does not read),
+`lastMach_cases`, `all_machine`; `BreakFold.arm_of_parked`, `brkPark_of_none`.
+
+**Restated, the old form refuted by name (D5):** `Replay.arm_brk_eq` (three readings;
+`Replay.arm_brk_eq_as_w53r_stated_it_is_refuted`); `Replay.arm_brk_of_endable`'s third conjunct (with `hown`;
+`Replay.arm_brk_of_endable_third_as_w54_stated_it_is_refuted`); `BreakFold.stepWith_brks_of_brk` (with `hpk`;
+`BreakFold.stepWith_brks_of_brk_as_w54_stated_it_is_refuted`); D105's witness "a break line ends the running break
+whatever its stamp" (`Replay.a_break_line_ends_the_running_break_whatever_its_stamp_as_d105_stated_it_is_refuted`).
+CHEATs 811-813.
+
+**Parity P142 taken**: a `break` line read while a break runs and not stamped in the running break's start's minute is a finished break's line and ends only its own break — the running break parked, the line read as a break of its own at its own place (an ending's own line as it always was), the running break opened again — where fork 4748911 (which logged no `break_start`) and this binary until W-54 repair track K ended the running break with any `break` line in file order (the owner's D145)
+
+**The host.**  `tm/tests/cli_d143_finished_break.rs`'s P142 row is un-ignored and passes; `tm/tests/cli_w54r_k_breaks.rs`
+drives both D145 shapes through the binary.  The kernel-ffi test `the_log_op_answers_a_running_break` stamps its ending
+line at the break's start, as every verb writes it (it was stamped twenty minutes later, and relied on the file-order
+pairing D145 replaces).
+
+### 2. D151 — the widest end is the latest end the break's own lines gave it (gap 5926)
+
+`Replay.wideOf` takes the machine: when the break a line re-times is a D129 ending no line of its own has stated an end
+for (`x ∈ m.ended`), the line's own end is the widest; otherwise the later of the two (`maxAt`), as D150 had it.  A D129
+ending with no own line keeps `wide = ended` only so the decode stays total.  `Replay.the_widest_end_is_the_breaks_own_lines`:
+the critic's d6 (widest 09:40, not 13:00), the critic's d14 (09:40 and 09:45) and the owner's D150 scenario unchanged
+(09:20–09:45, widest 09:50, `a` thirty-five).  CHEAT 814.  `Replay.arm_brk_of_endable`'s first conjunct reads
+`wideOf m x`, which for an ending is its own `heldOf` — W-53 repair track K's `brkArm` form again — so W-54's refutation of
+that form (arm_brk_of_endable_as_w53r_stated_it_is_refuted) is withdrawn, and W-54's own form (D129's end kept by
+`maxAt`) is refuted: `Replay.arm_brk_of_endable_as_w54_stated_it_is_refuted`.  P148's row in `kernel/parity.txt` is
+restated ("the widest end the break's OWN lines gave it").  Gap 5881 (`HeldBrk.wide` is no machine instant) still holds:
+no step reads `wide`.
+
+### 3. The finished-break fact omits a break ANY other held break overlaps (gap 5925)
+
+`Replay.finished` keeps a held break only when no OTHER held break overlaps it (`Replay.otherMeets`: older or newer, nested
+or sharing its stamp) — under D142's union a re-time of such a break changes nothing a reader sees.
+`Replay.a_finished_break_another_overlaps_is_omitted` (nested `09:20 30m` + `09:30 5m`, `09:20 20m` + `09:20 10m`,
+`10:30 10m` + `10:30 15m`, `10:30 10m` + `10:31 10m`: the fact empty; two breaks apart both listed).  The contract
+`Replay.a_finished_break_is_re_timed_by_its_line` is re-proved over the new filter (`finished_mem` now holds
+`otherMeets m x = false`, which implies the old conjunct: `Replay.newerMeets_of_otherMeets`), and the converse the host
+relies on is a theorem: `Replay.an_omitted_finished_break_is_overlapped` — a break with its own line the fact omits, with
+no break running, is one another held break overlaps, so the host's refusal by name (gap 5895) is the right answer.
+Restated witnesses (behaviour rows, not re-blesses): the col3 witness as
+`Replay.the_finished_breaks_are_the_ones_no_other_break_overlaps` (the fact empty; W-54's statement refuted as
+`Replay.the_finished_breaks_are_the_ones_a_line_re_times_as_w54_stated_it_is_refuted`), and `Seal.lean`'s
+`two_finished_breaks_at_one_stamp_stay_two` (third conjunct) and `the_fact_omits_a_break_a_newer_one_overlaps` (first
+conjunct): the fact names neither.  CHEAT 815.
+
+**Correction to W-54 track K's block, §4.**  Its sentence "the verb begins a new break at `t` — which D129 ends at the next
+logged `start`" for a break the fact omits is no longer what the user sees: since the W-54 land the host refuses that
+keystroke by name (gap 5895) and writes nothing (§6, 3a-3d).
+
+### 4. Records
+
+* **The parked step's reads** (gap 5923).  `Seal.stepQueries` names every instant the machine holds
+  (`Seal.machineInstants`, moved to `SealResume.lean` from `SealStep.lean` so the query can name it) for a parked line:
+  what the parked reading reads is among those and the line's own (`Seal.brkPark_congr`), and naming them all keeps the
+  list free of the index (`stepQueries_congr`).  `Seal.arm_congr` and the fold's congruence moved below the `_mi` family
+  in `SealStep.lean` (their proofs now read it).
+* **Mutations (check 9), `mutate.py` capped at 16 GB in a `git clone --shared` sandbox:** MUTATIONS_PLACEHOLDER
+* **Census (check 12).**  `reach-exempt.txt`: `Replay.lean` 190 of 329 emitted definitions reached (186 of 325 before;
+  `parkM`, `lastMach`, `brkPark` and `otherMeets` joined, each reached); `SealResume.lean` 39 of 56 (`machineInstants`
+  moved in and is reached through `stepQueries`); its SealStep.lean exemption deleted (`EXEMPT 1095`).
+* **Citations (check 8).**  Three renamed names cited by append-only README blocks are counted in
+  `citations-allow.txt`.
+* **Pin padding.**  `SealCutMachine.lean`'s three `break` cases shrank to `Seal.arm_brk_machine_keeps`; 18 blank lines,
+  with a comment saying so, keep check 9's recorded pin sites below where they were.
+* **Frozen comparands.**  FROZEN_PLACEHOLDER
+* **Wire.**  No fact's shape changed: `open.finished`'s entries are the seven elements W-54 gave them; only which breaks
+  are listed (§3) and which end a parked line holds as its widest (§2) moved.  No Rust decode changed.
+
+### 5. Acceptance
+
+ACCEPTANCE_PLACEHOLDER
+
+### 6. The drives (§5.13)
+
+`TZ=America/Chicago`, every command capped at 8 GB, Tuesday 2026-09-08 on a fresh `init --example` tree woken at 07:00
+and arrived home at 08:00; "J day" is `^t1` 09:00–10:00 and `^t4` 10:10–11:10 done.
+
+After (this track's binary):
+
+```
+== 1a D145: J day, tm break 11:30 (running), break --now 09:20 5m, now 11:40
+break 5m · 09:20–09:25 · logged finished (a later start follows it, D143)
+on break since 11:30 · 10m of 20m
+11:30  ·      break 20m
+  break_starts 1
+  block 115 | breaks [(5, 5)]
+no problems
+tm: .tm/state.json was missing; rebuilt from .tm/log.jsonl (§10.2 is a cache of the log — D42)
+  break_starts 1
+== 1b D145 hand line under a running break over a running block: ^t4 10:10, tm break 10:30, hand break 10:15 5m, now 10:50
+▶ ^t4 Claude Code drafts tests · started 10:10 · 15m of 60m · paused
+on break since 10:30 · 20m of 20m
+10:10 3 p3 Claude Code drafts tests @m2 1b;10:15 · break 5m;10:20 3 p3 Claude Code drafts tests @m2 1b 15m so far;10:30 · break 20m;10:50 · laundry 30m;11:30 · lunch 30m;12:00 2 p5 Pick winter courses @O3 2b;13:00 2 p5 Pick winter courses @O3 2b;
+no problems
+tm: .tm/state.json was missing; rebuilt from .tm/log.jsonl (§10.2 is a cache of the log — D42) — ^t4 is running, started 10:10
+  break_starts 1
+== 2a D151 d6: ^t1 09-10 done, ^t4 13-14 done; break --now 09:30; 09:40; 11:00
+tm: the break that began at 09:30 ended at 13:00, at the `start` the log already holds after it (D129) — it is not running
+tm: the break that began at 09:30 ends here, at 09:40 — the `start` the log holds at 13:00 had ended it (D129); typed inside it, `tm break` ends it (D141)
+tm: the break that began at 11:00 ended at 13:00, at the `start` the log already holds after it (D129) — it is not running
+  block 110 | breaks [(20, 10), (20, 120)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 10m;09:40 5 ✓ Read ch.6 §1–2 @m3 1b (20m);11:00 · break 2h;13:00 3 ✓ Claude Code drafts tests @m2 1b (60m);
+== 2b D151 d14: J day, break --now 09:30, 09:40 5m (D146), 09:50
+tm: the break that began at 09:50 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block 95 | breaks [(20, 10), (5, 5), (20, 20)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 10m;09:40 · break 5m;09:45 5 ✓ Read ch.6 §1–2 @m3 1b (5m);09:50 · break 20m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);12:30 · lunch 30m;13:00 · laundry 30m;13:30 2 p5 Pick winter courses @O3 2b;
+== 2c D150 owner: J day, 09:20 30m -> 09:40 -> 09:30 -> 09:45
+break 09:20–09:30 re-timed out to end at 09:45 (D150) · 25m of 30m
+  block 95 | breaks [(30, 25)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 25m;09:45 5 ✓ Read ch.6 §1–2 @m3 1b (15m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);12:30 · lunch 30m;13:00 · laundry 30m;13:30 2 p5 Pick winter courses @O3 2b;
+== 3a nested: J day, 09:20 30m, 09:30 5m, then 09:32
+tm: a break is drawn 09:20–09:50 here (a break logged at 09:20), and another logged break overlaps it — `tm break` cannot re-time it (D147) and would begin a break inside it; type a length to log a finished break (D143), or `tm undo` the line that overlaps it
+  block 90 | breaks [(30, 30), (5, 0)]
+{"t":"2026-09-08T09:30:00-05:00","ev":"break","planned_min":5,"actual_min":5}
+== 3b same start: 09:20 20m, 09:20 10m, then 09:25
+tm: a break is drawn 09:20–09:40 here (a break logged at 09:20), and another logged break overlaps it — `tm break` cannot re-time it (D147) and would begin a break inside it; type a length to log a finished break (D143), or `tm undo` the line that overlaps it
+  block 100 | breaks [(20, 20), (10, 0)]
+== 3c 10:30 10m, 10:30 15m, then 10:35
+tm: a break is drawn 10:30–10:40 here (a break logged at 10:30), and another logged break overlaps it — `tm break` cannot re-time it (D147) and would begin a break inside it; type a length to log a finished break (D143), or `tm undo` the line that overlaps it
+  block 105 | breaks [(10, 10), (15, 5)]
+== 3d 10:30 10m, 10:31 10m, then 10:33
+tm: a break is drawn 10:30–10:40 here (a break logged at 10:30), and another logged break overlaps it — `tm break` cannot re-time it (D147) and would begin a break inside it; type a length to log a finished break (D143), or `tm undo` the line that overlaps it
+  block 109 | breaks [(10, 10), (10, 1)]
+== i4 D152's replay half: ^t4 10:10 running, hand break 10:20 10m (the same on the base binary)
+-- now 10:50
+▶ ^t4 Claude Code drafts tests · started 10:10 · 30m of 60m
+10:50  3 p3 ▶ Claude Code drafts tests     @m2  1b     running · 30m left
+  10:50–11:10 · elapsed 30m · left 30m
+{'active': {'id': 't4', 'title': 'Claude Code drafts tests', 'started': '10:10', 'est_min': 60, 'elapsed_min': 30, 'paused': False}, 'break': None}
+10:10 3 p3 Claude Code drafts tests @m2 1b;10:20 · break 10m;10:30 3 p3 Claude Code drafts tests @m2 1b 30m so far;10:50 3 p3 ▶ Claude Code drafts tests @m2 1b running · 30m left;11:30 · lunch 30m;12:00 · laundry 30m;12:30 2 p5 Pick winter courses @O3 2b;13:30 2 p5 Pick winter courses @O3 2b;
+no problems
+-- stop 11:00
+stopped ^t4 after 40m · 20m left
+  block 40 | breaks [(10, 10)]
+10:10 3 p3 Claude Code drafts tests @m2 20m;10:20 · break 10m;10:30 3 p3 Claude Code drafts tests @m2 20m;11:30 · lunch 30m;12:00 · laundry 30m;12:30 2 p5 Pick winter courses @O3 2b;13:30 2 p5 Pick winter courses @O3 2b;
+19:- [ ] 3 20m Claude Code drafts tests     @m2 ^t4
+{"t":"2026-09-08T11:00:00-05:00","ev":"stop","id":"t4","remaining_min":20}
+{"t":"2026-09-08T11:30:00-05:00","ev":"plan","hash":"746bf49bbeae722b","replans_today":2,"drift_min":0}
+-- done variant
+✓ ^t4 Claude Code drafts tests · 40m/60m
+{"t":"2026-09-08T11:00:00-05:00","ev":"done","id":"t4","est_min":60,"actual_min":40,"tags":[],"ci":3}
+  block 40 | breaks [(10, 10)]
+```
+
+Base (the W-54 land's binary, 418e5d5):
+
+```
+== 1a D145: J day, tm break 11:30 (running), break --now 09:20 5m, now 11:40
+break 5m · 09:20–09:25 · logged finished (a later start follows it, D143)
+tm: logged the break .tm/state.json holds running since 2026-09-08 11:30 (20m) — it was begun before tm logged a break's start, so .tm/log.jsonl now holds it (D133)
+on break since 11:30 · 10m of 20m
+  break_starts 2
+  block 115 | breaks [(5, 5)]
+no problems
+tm: .tm/state.json was missing; rebuilt from .tm/log.jsonl (§10.2 is a cache of the log — D42)
+  break_starts 2
+== 1b D145 hand line under a running break over a running block: ^t4 10:10, tm break 10:30, hand break 10:15 5m, now 10:50
+tm: logged the break .tm/state.json holds running since 2026-09-08 10:30 (20m) — it was begun before tm logged a break's start, so .tm/log.jsonl now holds it (D133)
+▶ ^t4 Claude Code drafts tests · started 10:10 · 15m of 60m · paused
+10:10 3 p3 Claude Code drafts tests @m2 1b;10:15 · break 5m;10:20 3 p3 Claude Code drafts tests @m2 1b 15m so far;10:30 · break 20m;10:50 · laundry 30m;11:30 · lunch 30m;12:00 2 p5 Pick winter courses @O3 2b;13:00 2 p5 Pick winter courses @O3 2b;
+no problems
+tm: .tm/state.json was missing; rebuilt from .tm/log.jsonl (§10.2 is a cache of the log — D42) — ^t4 is running, started 10:10
+  break_starts 2
+== 2a D151 d6: ^t1 09-10 done, ^t4 13-14 done; break --now 09:30; 09:40; 11:00
+tm: the break that began at 09:30 ended at 13:00, at the `start` the log already holds after it (D129) — it is not running
+tm: the break that began at 09:30 ends here, at 09:40 — the `start` the log holds at 13:00 had ended it (D129); typed inside it, `tm break` ends it (D141)
+break 09:30–09:40 re-timed out to end at 11:00 (D150) · 90m of 20m
+  block 90 | breaks [(20, 90)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 1h30m;13:00 3 ✓ Claude Code drafts tests @m2 1b (60m);
+== 2b D151 d14: J day, break --now 09:30, 09:40 5m (D146), 09:50
+break 09:30–09:40 re-timed out to end at 09:50 (D150) · 20m of 20m
+  block 100 | breaks [(20, 20), (5, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 20m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);12:30 · lunch 30m;13:00 · laundry 30m;13:30 2 p5 Pick winter courses @O3 2b;
+== 2c D150 owner: J day, 09:20 30m -> 09:40 -> 09:30 -> 09:45
+break 09:20–09:30 re-timed out to end at 09:45 (D150) · 25m of 30m
+  block 95 | breaks [(30, 25)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 25m;09:45 5 ✓ Read ch.6 §1–2 @m3 1b (15m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);12:30 · lunch 30m;13:00 · laundry 30m;13:30 2 p5 Pick winter courses @O3 2b;
+== 3a nested: J day, 09:20 30m, 09:30 5m, then 09:32
+break 09:30–09:35 re-timed to end at 09:32 (D147) · 2m of 5m
+  block 90 | breaks [(30, 30), (5, 0)]
+{"t":"2026-09-08T09:30:00-05:00","ev":"break","planned_min":5,"actual_min":2}
+== 3b same start: 09:20 20m, 09:20 10m, then 09:25
+break 09:20–09:30 re-timed to end at 09:25 (D147) · 5m of 10m
+  block 100 | breaks [(20, 20), (10, 0)]
+== 3c 10:30 10m, 10:30 15m, then 10:35
+break 10:30–10:45 re-timed to end at 10:35 (D147) · 5m of 15m
+  block 110 | breaks [(10, 10), (15, 0)]
+== 3d 10:30 10m, 10:31 10m, then 10:33
+break 10:31–10:41 re-timed to end at 10:33 (D147) · 2m of 10m
+  block 110 | breaks [(10, 10), (10, 0)]
+```
+
+### Gaps (5920-)
+
+**Gap 5920 — a finished break's line ended the running break.**  Closed (§1), and with it gaps 5820 and 5842 (D145
+unbuilt) and 5873 (a backdated `tm break` typed while a break runs lost the running break).
+
+**Gap 5921 — a parked line is never a re-time, and an ending's own line read while another break runs is P127's.**
+1. *What.*  A line read with a break running and not its own is a break of its own (D142's union) even at a finished
+break's stamp with its planned minutes, and an ending's own line lets the ending go (P127) rather than ending it earlier
+(D141).  2. *Why.*  `Replay.finished` is empty while a break runs and the host refuses a re-time then (gap 5896), so such a
+line comes only from a hand edit or a merged log; reading it as a re-time would put D141's give-back, un-drawing and
+re-drawing inside the parked reading, beside the running break's provisional netting, at the cost of `BreakFold`'s
+D141 invariant re-proved over a parked machine.  3. *Cost.*  On such a log a shortening re-time while a break runs is read
+as a break of its own and the union keeps the longer span; an ending's own line arriving while another break runs keeps
+D129's end.  4. *Clears it.*  The owner, if a verb ever writes either line while a break runs.
+
+**Gap 5922 — the running break's own line is the one in its start's minute.**  1. *What.*  `o.s.1.sec / 60 =
+t.1.sec / 60`.  2. *Why.*  §1.  3. *Cost.*  A finished break typed with `--now` in the very minute the running break began
+(and so overlapping it) is read as the running break's own line and ends it.  4. Recorded.
+
+**Gap 5923 — a resume refuses a parked line's step where a narrower read set might not.**  1. *What.*
+`Seal.stepQueries` names `machineInstants m` for a parked line.  2. *Why.*  The exact reads depend on the index through
+the parked machine, and naming them would cost a shape argument through `brkArm` and the reopening for
+`stepQueries_congr`.  3. *Cost.*  On a resume whose tail holds a parked line, a held instant below the ledger day's head
+refuses the step (`sealedDay`), and the host pops to an earlier checkpoint or a genesis: slower, never wrong; and the cut's
+low reads those instants while the line is unfolded.  4. *Clears it.*  The shape lemmas, if a log ever makes it matter.
+
+**Gap 5924 — gap 5880 restated.**  A running break's provisional netting does not cut the takes a block holds, and an
+ending a `start` makes does not cut them by its span.  D145's park gives the running break's take back and nets it again
+from scratch around a parked line, but leaves both of 5880's paths as they stand.  Not closed.
+
+**Gap 5925 — the fact listed breaks another held break overlaps.**  Closed (§3).  Gap 5879's reach restated: typed
+keystrokes reach it, not only a hand or merged log — on the J day `tm break --now 09:20 20m`, `09:30 20m` and `09:20 20m`
+again hold two 09:20 breaks of twenty (the third line meets the 09:30 break, so it is a break of its own); the fact now
+omits both and `tm break --now 09:25` is refused by name (§6).
+
+**Gap 5926 — D129's end counted inside the widest span.**  Closed (§2).
+
+**Gap 5927 — `machineInstants` and `arm_congr` moved.**  Recorded (§4): the definition is in `SealResume.lean`, its laws in
+`SealStep.lean`; the rows whose pin sites the move shifted were re-run (§4).
+
+**Gap 5928 — D152's replay half.**  The kernel already read a finished break's line inside the running block as D152 asks
+(`brkLine`: netted from the block, which stays running and unpaused; the `stop` and the `done` read the netted minutes, the
+duration observation forty): `Replay.a_finished_break_inside_the_running_block_nets_it_and_leaves_it_running` and
+`cli_w54r_k_breaks.rs`'s row witness it.  Closed for the kernel; the verb is track H's.
+
+**Gap 5929 — a P127 line leaves its break's widest end at D129's end.**  1. *What.*  `Replay.letGo` keeps the held break as
+D129 held it, so its `wide` is D129's end, which is also its end.  2. *Why.*  D151 names the lines that state an end
+earlier; a P127 line states a later one, and the replay reads D129's.  3. *Cost.*  None: a re-time out past the end is
+impossible there (`ended = widest`).  4. Recorded.

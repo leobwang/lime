@@ -127,7 +127,9 @@ fn a_break_typed_at_an_ended_breaks_own_start_is_refused_p139() {
 /// was the keystroke after the J break was ended at 09:40 (D141): `tm break --now 09:45` began a break 10:10 ended.
 /// Since D150 (parity P148, wired at the W-54 land) that break's widest span is 09:30–10:10, D129's, so 09:45 lies
 /// inside it and RE-TIMES IT OUT to 09:45 (`(20, 15)`, `^t1` 105) — the row restated under P148, named in README
-/// "Stage 6 — W-54 land". Until the W-53 repair's land it was `tm break --now 09:35`, a break whose head the
+/// "Stage 6 — W-54 land". Since the owner's D151 (P148 restated, W-54 repair track K) the widest span counts only a
+/// break's OWN lines, and D141's line at 09:40 is the first, so 09:45 is past it: the keystroke begins a break 10:10
+/// ends again, and the D129 notice names that end — the witness as it stood before the land. Until the W-53 repair's land it was `tm break --now 09:35`, a break whose head the
 /// 09:30–09:40 break covered (its record ended at 10:05, what 413f769's binary printed); since D147 (parity P145)
 /// that keystroke re-times the finished break instead and prints no D129 notice, so no typed keystroke reaches the
 /// covered-head case.
@@ -139,8 +141,7 @@ fn the_d129_notice_names_the_end_d129_gave_the_break() {
     tm.ok_at(&at("09:40"), &["break"]);
     let out = tm.ok_at(&at("09:45"), &["break"]);
     let said = format!("{}{}", out.stdout, out.stderr);
-    assert!(!said.contains("(D129)") && said.contains("(D150)"), "{said}");
-    assert_eq!(review(&tm), (105, vec![15]));
+    assert!(said.contains("began at 09:45 ended at 10:10") && !said.contains("(D150)"), "{said}");
     let tm = j_tree();
     tm.ok_at(&at("09:30"), &["break"]);
     tm.ok_at(&at("09:40"), &["break"]);

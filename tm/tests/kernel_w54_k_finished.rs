@@ -70,7 +70,8 @@ fn a_break_never_re_timed_is_its_own_widest() {
 }
 
 /// The W-53 repair auditor's finding 2: 09:20 for twenty and 09:30 for twenty — the fact names the 09:30 break
-/// alone, since a line at 09:20 meets it and is read as a break of its own.
+/// alone, since a line at 09:20 meets it and is read as a break of its own.  *Restated at W-54 repair track K* (README
+/// gap 5925): the fact omits a break any other held break overlaps, so it names neither.
 #[test]
 fn the_fact_omits_a_break_a_newer_one_overlaps() {
     let mut l = j_day();
@@ -78,7 +79,7 @@ fn the_fact_omits_a_break_a_newer_one_overlaps() {
     l.push(brk("09:30", 20, 20));
     let r = chokepoint::replay_of_text(&log(&l), TZ);
     let spans: Vec<_> = r.finished_breaks.iter().map(|b| (b.started, b.ended)).collect();
-    assert_eq!(spans, vec![(at("09:30"), at("09:50"))]);
+    assert_eq!(spans, vec![]);
 }
 
 /// The W-53 repair critic's finding 3: with a break running the fact is empty, as `open.ended` is.
