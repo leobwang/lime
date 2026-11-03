@@ -35,6 +35,17 @@ fn finished_tree() -> Tm {
     tm
 }
 
+/// `tm plan`'s rows at 12:30 from 09:00 to 09:59, each with its runs of spaces collapsed to one — what a reply that says
+/// "re-timed" must be borne out by (stage 6 W-54 track H, the W-53 repair auditor's second note).
+fn rows_09(tm: &Tm) -> Vec<String> {
+    tm.ok_at(&at("12:30"), &["plan"])
+        .stdout
+        .lines()
+        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|l| l.starts_with("09:"))
+        .collect()
+}
+
 fn breaks(tm: &Tm) -> Vec<Value> {
     tm.log().into_iter().filter(|e| e["ev"] == "break" || e["ev"] == "break_start").collect()
 }
@@ -66,6 +77,9 @@ fn a_no_length_break_inside_a_finished_break_retimes_it_p145() {
     assert_eq!((b[1]["ev"].as_str(), b[1]["t"].as_str()), (Some("break"), Some(at("09:20").as_str())), "{b:?}");
     assert_eq!((b[1]["planned_min"].as_u64(), b[1]["actual_min"].as_u64()), (Some(10), Some(4)), "{b:?}");
     assert_eq!(review(&tm), (116, vec![4]), "the break at four, ^t1 at fifty-six");
+    let rows = rows_09(&tm);
+    assert!(rows.iter().any(|r| r == "09:20 · break 4m"), "{rows:#?}");
+    assert!(rows.iter().any(|r| r == "09:24 5 ✓ Read ch.6 §1–2 @m3 1b (36m)"), "{rows:#?}");
     assert!(tm.read(&format!("day/{TUE}.md")).contains("09:24 break ended 4m/10m"));
     let v = tm.json_at(&at("09:26"), &["break"]);
     assert_eq!(v["action"], "started", "09:26 is outside the re-timed break: {v}");
@@ -80,6 +94,8 @@ fn a_retimed_break_reports_the_end_it_replaced_p145() {
     assert_eq!(v["actual_min"], 4, "{v}");
     assert_eq!(v["planned_min"], 10, "{v}");
     assert_eq!(v["superseded_end"], "09:30", "{v}");
+    assert_eq!(review(&tm), (116, vec![4]));
+    assert!(rows_09(&tm).iter().any(|r| r == "09:20 · break 4m"), "{:#?}", rows_09(&tm));
 }
 
 /// **At its end: nothing written**, and the verb says so; scenario C's typed ends (gap 5810) are this case.

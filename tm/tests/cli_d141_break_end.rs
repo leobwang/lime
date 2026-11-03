@@ -52,6 +52,23 @@ fn j_tree_with_the_late_break() -> Tm {
     tm
 }
 
+/// `tm review day`'s block minutes at 11:15 and the plan's break segments that start before 11:00 — what a reply that
+/// says "re-timed" must be borne out by (stage 6 W-54 track H, the W-53 repair auditor's second note).
+fn day_read(tm: &Tm) -> (u64, Vec<(String, String)>) {
+    let now = at("11:15");
+    let review = tm.json_at(&now, &["review", "day"]);
+    let plan = tm.json_at(&now, &["plan"]);
+    let drawn = plan["segments"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter(|s| s["kind"] == "break" && s["start"].as_str() < Some("11:00"))
+        .map(|s| (s["start"].as_str().unwrap_or_default().to_string(), s["end"].as_str().unwrap_or_default().to_string()))
+        .collect();
+    (review["review"]["block_min"].as_u64().unwrap_or_else(|| panic!("{review}")), drawn)
+}
+
 /// Every `break` and `break_start` line of the log, in file order.
 fn breaks(tm: &Tm) -> Vec<Value> {
     tm.log().into_iter().filter(|e| e["ev"] == "break" || e["ev"] == "break_start").collect()
@@ -198,6 +215,7 @@ fn a_break_its_own_line_ended_is_retimed_not_ended_again_p145() {
     let b = breaks(&tm);
     assert_eq!(evs(&b), ["break_start", "break", "break"], "{b:?}");
     assert_eq!((b[2]["t"].as_str(), b[2]["actual_min"].as_u64()), (Some(&*format!("{TUE}T09:30:00-05:00")), Some(5)), "{b:?}");
+    assert_eq!(day_read(&tm), (115, vec![("09:30".to_string(), "09:35".to_string())]), "^t1 fifty-five, the break five");
 
     let tm = Tm::empty();
     tm.ok_at(&at("06:00"), &["init", "--example"]);
@@ -205,7 +223,10 @@ fn a_break_its_own_line_ended_is_retimed_not_ended_again_p145() {
     tm.ok_at(&at("08:00"), &["arrive", "home"]);
     tm.ok_at(&at("09:00"), &["start", "^t1"]);
     tm.ok_at(&at("10:00"), &["done"]);
-    tm.ok_at(&at("09:30"), &["break", "10m"]);
+    // Typed with NO length since the owner's D149 (stage 6 W-54 track H, parity P147): `tm break --now 09:30 10m`
+    // inside `^t1`, which the `done` at 10:00 closed, is now logged finished in one plain line, so the break that RAN
+    // — this row's subject — is the no-length keystroke (planned the example's twenty). A behaviour row, not a re-bless.
+    tm.ok_at(&at("09:30"), &["break"]);
     let ended = tm.ok_at(&at("09:40"), &["break"]);
     assert!(!ended.stderr.contains("(D141)"), "a running break is ended by the ending arm: {}", ended.stderr);
     assert_eq!(evs(&breaks(&tm)), ["break_start", "break"]);
@@ -215,6 +236,7 @@ fn a_break_its_own_line_ended_is_retimed_not_ended_again_p145() {
     let b = breaks(&tm);
     assert_eq!(evs(&b), ["break_start", "break", "break"], "{b:?}");
     assert_eq!((b[2]["t"].as_str(), b[2]["actual_min"].as_u64()), (Some(&*format!("{TUE}T09:30:00-05:00")), Some(5)), "{b:?}");
+    assert_eq!(day_read(&tm), (55, vec![("09:30".to_string(), "09:35".to_string())]), "^t1 fifty-five, the break five");
 }
 
 /// **`tm undo` takes the line back**, and the journal line with it; the break is then again one D129 ended, and
