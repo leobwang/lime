@@ -9271,7 +9271,6 @@ seal laws re-proved over the instants they read. -/
    ====================================================================== -/
 #print axioms Tm.Replay.col3_is_one_day_in_either_logging_order
 #print axioms Tm.Replay.col2_draws_each_minute_once
-#print axioms Tm.Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line
 #print axioms Tm.Seal.openFinished_reads_state
 #print axioms Tm.Seal.answer_openFinished
 #print axioms Tm.Replay.arm_brk_eq

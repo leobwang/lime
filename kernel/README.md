@@ -104793,3 +104793,545 @@ typed after it is discarded under D20. (4) Owner's to rule on, if it matters.
 
 **Owed, by name:** D145 (gap 5820, with 5842), 5821, 5860, the netting half of gap 5741 (5790), 5742, 5774,
 5792-5794, 5841, 5844, and the earlier list carried by the W-52 repair block.
+
+<!-- ======================================================================
+     Stage 6 — W-54 track K (2026-11-03): the kernel — a re-time gives back what a break took from an open block
+     (gap 5870), keeps every later break's netting and un-draws exactly its own segment (5871), gives back a P127
+     break's take (5872); the finished-break fact lists exactly what a line re-times (5874); twins re-time as one
+     (5875); D150's widest end on the wire (5876); the W-53 repair's unrefuted laws refuted (5877) and takeFx's
+     duplicates deleted (5878).  Gaps 5870-5889 are this block's; cheats 791-797; no new parity number (P143's row
+     restated).  Whoever merges renumbers (AGENTS §6.4).
+     ====================================================================== -/
+
+## Stage 6 — W-54 track K: the re-time's give-back and drawing, the fact a line re-times, twins, D150's widest end
+
+Branch `w54-k` off `2e3c9d6`.  Every scenario below was driven on the W-53 repair land's build (`aedc250`, "base") and
+on this track's (the drive script is the track's scratchpad `k/drive/drive.sh`; §8 has the transcripts).
+
+### 1. A re-time gives back what the break took from a block that was OPEN when it netted (gap 5870, the auditor's blocker)
+
+**The defect.** `start ^t1` 09:00, `break 10m` 09:20, `done` 10:00, `^t4` 10:10–11:10, then `tm break --now 09:30`:
+the verb said "re-timed to end at 09:30" and the review kept `block_min` **80** (it should be **110**), `tm plan` drew
+a hole 09:30–10:10, `tm check` was silent, a cold replay the same.  With `stop` the block stayed at 20.  The give-back
+(`d141Machine` → `unstash x.key`) returns a take `netTake` stashed — and a break that netted an OPEN block nets it
+through `settle` (the open block's clock nets every held break), so nothing was stashed under its key.
+
+**The fix.** A block remembers, when it closes, what each held break took from it: `Replay.openTakes` — for every
+break `k` held on the block's ledger days whose span took minutes from it, a take under `k`'s key: the block's pieces
+with every other span it nets but `k`'s (`pieces`, to where it closes, `Replay.closeEnd`), those that meet `k`, whole,
+and the minutes `k` took (`cut` and `doneClosed` build the held block with them).  So a take now exists for every break
+that netted a block, open or closed when it netted; the D141 arm (a D129 ending's own line) shares the path, and a
+running break ended by a `start` (`endMachine`) while the block it paused was open is the same case (the block is cut
+with the ending held, and `openTakes` records its take under the ending's key).  `openTakes`' pieces carry the block's
+ledger day, not the day index's (`dy`), so a machine reads the day index at no new instant
+(`Seal.openTakes_mi`, `cut_mi`, `doneClosed_mi`).
+
+**Witnessed** (`decide`, `Seal.lean`): `Replay.a_retime_gives_back_what_the_break_took_from_an_open_block` — `^t1`
+fifty, drawn 09:00–09:20 and 09:30–10:00, with a `done`, with a `stop`, and with the break ended at 09:50 by the
+user's own `tm break` (a D105 pair); `Replay.a_retime_gives_back_only_what_a_paused_block_worked` — a block paused at
+09:50 and done at 10:00 gets back only what it worked before the pause (the take reaches `closeEnd`, not the `done`).
+Behaviour row: `tm/tests/cli_w54_k_retime.rs`.  CHEAT 791.
+
+**`stop`'s estimate.** On the `stop` scenario the kernel now reads `^t1` worked **50** minutes, and the host's D126
+correction — already wired, reading the kernel's minutes — rewrites the line at the re-time: `tm: ^t1's estimate is now
+10m (was 40m)`, the line `- [ ] 5 10m Read ch.6 §1–2 @m3 ^t1` (base: `40m`, kept).
+
+### 2. A re-time keeps every later break's netting, and un-draws exactly its own segment (gap 5871, the critic's blocker)
+
+**The block half.** J day, `break --now 09:20 5m`, `break --now 09:40 5m`, `break --now 09:22`: the minutes were right
+(113) and `tm plan` drew `09:22 ✓ Read ch.6 (38m)` through the 09:40 break, because a `break` line's netting stashed
+its own take but kept every other take as it stood (`runOne`'s `held := C.held`, written for a running break, whose
+span is provisional) — so re-timing 09:20 restored its take whole.  `Replay.netTake` now cuts every take the block
+holds by the line's span, as its drawn pieces are (`netOne`'s `reNetTake`); `runOne` itself is unchanged, so a running
+break still leaves the takes as they stand until its own line nets them.  Under that rule a take reads "the block with
+every other held break but this one" at every step, and a re-time's give-back restores exactly that.
+
+**The drawing half.** The auditor's col3 log in sync order (07:30 for fifty, then 07:50 for forty) re-timed at 07:55
+drew `07:30 break 50m; 08:20 break 10m; 08:20 break 10m`; "07:50, re-time, 07:30" drew `08:00 break 30m` over the
+07:30 break.  `DayOp.unsegBrks` un-drew every Break segment the re-timed break witnessed except those another held
+break also witnessed — and the D129 ending (08:00–08:30) witnessed the 07:50 break's 08:20–08:30, so it survived beside
+the ending's re-drawing (`growFx`).  `DayOp.unsegBrks` now takes the start the break was drawn from
+(`Replay.drawnFrom`: its `startsGo` start over the held breaks) and first erases exactly the segment it drew there
+(`drawSeg`, of its record's place); the witness filter then runs as before, so `BreakFold.undo141_seg` keeps its
+conclusion (restated with the start's argument).
+
+**Witnessed:** `Replay.a_retime_keeps_a_later_breaks_take` (`^t1` fifty-three, 09:00–09:20, 09:22–09:40, 09:45–10:00)
+and `Replay.col3_with_a_retime_is_one_day_in_every_logging_order` — the col3 lines and a re-time in each of the six
+orders draw `[07:30, 08:20)` and `[08:20, 08:30)`.  CHEATs 792 and 797.  The D148 (`09:50 30m` + re-time of 09:20) and
+D146+D147 shapes drive right (§8).
+
+### 3. A re-time of a P127 break gives back its take (gap 5872, the auditor's 3)
+
+`tm break --now 09:30` on the J day (D129 ends it at 10:10), a hand `break` 09:30 planned 20 actual 50 (P127: D129's end
+kept), then `tm break --now 09:50`: the record became 20 and `^t1` never resumed at 09:50 — `Replay.letGo` dropped the
+ending's take (`dropTake x.key`).  `letGo` now erases the ending alone and keeps its take under the key its held break
+still carries, so the later re-time (D147) finds it.  `Replay.a_retime_of_a_p127_break_gives_back_its_take`: `^t1`
+forty, as a plain forty-minute line leaves it; `Replay.a_p127_line_lets_its_ending_go` — after the P127 line
+`open.ended` is empty and the break is finished with D129's end.  CHEAT 793.
+
+### 4. The fact lists exactly the breaks a line re-times, and nothing while a break runs (gap 5874)
+
+**The defect.** `open.finished` listed every held break with its own line, but `finArm` re-times only under `d141Ok`,
+which refuses a break a later-held break overlaps (`newerMeets`): `09:20 20m`, `09:30 20m`, `--now 09:25` → the verb
+said "re-timed" and the kernel added a zero-minute break (each retry another); nested `09:20 30m` + `09:30 5m` +
+`--now 09:45` likewise.  And with a real-time break running the fact still listed breaks, so `tm break --now 09:25`
+inside one went through `brkOwn` and cleared the running break (gap 5820's damage).
+
+**The fix.** `Replay.finished` keeps a held break only when no break runs, no D129 ending begins at its stamp, a line
+at its stamp with its planned minutes finds it (`findFin`) and no break held after it overlaps it (`newerMeets`).
+**The contract the host relies on is a theorem**: `Replay.a_finished_break_is_re_timed_by_its_line` — for `x ∈
+finished m`, a `break` line stamped `x.s` carrying `x.planned`, stepped on a ledger day not before `x.day`, makes
+`d141Ok` hold and the arm `d141Arm` over `x`, wherever the line ends (the replay reads a later line at a finished
+break's stamp with its planned minutes as its end, shorter or longer — §6); `Seal.arm_brks` says only `x` is erased.
+`Replay.finished_mem` is what the fact holds, `Replay.finished_of_running` that it is empty while a break runs.
+Witnessed: `Replay.the_fact_omits_a_break_a_newer_one_overlaps`.  CHEAT 794.
+
+**What the user sees for a break the fact now omits** (H's reply): a no-length `tm break --now <t>` inside an
+overlapped finished break finds no finished break there, so the verb begins a new break at `t` — which D129 ends at the
+next logged `start` — instead of claiming a re-time that wrote a zero-minute break.  On `09:20 20m` + `09:30 20m`,
+`--now 09:25` is inside the 09:20 break only; the fact names the 09:30 break alone.
+
+### 5. Identical twin finished breaks re-time as one (gap 5875; the campaign's call, revisable)
+
+`break --now 09:20 10m` typed twice, then `--now 09:25`: "re-timed" but the review read 110 with records (10, 10) and
+(10, 0), the plan still `09:20 break 10m`.  **Call taken: a re-time line re-times every held break of that stamp and
+planned minutes** — one span of wall time read one way (D142).  It is built as "a later line at a finished break's
+stamp with its planned minutes is that break's reading, whatever its end" (`d141Ok` relaxed for a break no ending waits
+on): the second twin already re-times the first, so the twins are one held break and the next line re-times it.
+`Replay.twin_finished_breaks_are_re_timed_as_one`: `^t1` fifty-five, one record of five.  CHEAT 795.
+
+### 6. D150's fact — the widest end the log held for a finished break (gap 5876; for track H)
+
+**The field.** `Replay.HeldBrk.wide` and `Replay.Ending.wide` (`At`, the last field of each): the latest end any of
+the break's own lines gave it — its first line's (`heldOf`: its own end), raised by a re-time (`Replay.wideOf`: the later
+of the re-timed break's and the line's own; `d141Arm` holds the line's break through `Replay.brkArmK`, `brkArm` of a
+given held break).  For a D129 ending, the end D129 gave it.  On the wire it is the **seventh element** of every entry of
+`open.finished` and `open.ended` (`Seal.cEnded`: `[start, end, planned, where?, day, key, widest]`), and the machine
+codec carries it (`Seal.cMachine`'s held breaks; the kernel id moves, D113).
+
+**The decode, for track H:** `tm_core::log::EndedBreak::widest: DateTime<FixedOffset>`, an RFC 3339 instant like
+`ended`, on every entry of `Replay::finished_breaks` (and of `Replay::ended_breaks`, where it equals `ended`); decoded
+in `tm/src/cli/kernel_log.rs`; never earlier than `ended`.  D150's gate: a no-length `tm break` at `t` with
+`ended < t ≤ widest` re-times the break out to `t`.
+
+**The replay's reading.** A LONGER line (same stamp, same planned, end past the current end) is that break's new end —
+the same reading as D142's union for the line alone (`Replay.a_later_longer_line_reads_as_the_union` still holds), but
+held as ONE break, so a later shorter re-time still re-times it (the union kept the longer).  The replay does not bound a
+longer line at `widest`: the gate is the host's.  `Replay.a_finished_break_keeps_its_widest_end`: 09:20 30m → 09:40 →
+09:30 → out to 09:45 → back to 09:35: one break 09:20–09:35, record (30, 15), `^t1` 45, widest 09:50; and
+`Replay.a_longer_line_raises_the_widest_end` — out to 10:00, past the first line's end, then back to 09:35: widest
+10:00.  CHEAT 796.
+
+### 7. Records and gates
+
+* **CHEAT 771 failed for the wrong reason** (`bStart`/`bDone` unqualified, autoImplicit variables, "Function
+  expected"): qualified as `Replay.bStart`/`Replay.bDone`; it now fails on its `decide`.  Every cheat 791-797 was
+  checked to fail on its own `decide` (§9).
+* **D5, the W-53 repair's unrefuted old forms (gap 5877).** `BreakFold.stepWith_brks`, `Seal.arm_brks` and
+  `BreakFold.stepWith_brks_of_brk` as W-53 track K stated them are false on the W-53 repair's kernel, and none was
+  refuted by name: `BreakFold.stepWith_brks_as_w53_stated_it_is_refuted`, `Seal.arm_brks_as_w53_stated_it_is_refuted`,
+  `BreakFold.stepWith_brks_of_brk_as_w53_stated_it_is_refuted`, all on the P143 witness (09:30–09:40 re-timed to
+  09:34: held breaks `[09:30–09:34]`, no ending at 09:30; `Replay.pruneBrks_pair_ne` is the arithmetic).  **Correction
+  to the W-53 repair K block's §5**, which listed `stepWith_brks`, `arm_brks` and `stepWith_brkHeld_d141` under
+  "restated, the old form refuted by name" and then said they were "not refuted separately": the first two now are;
+  `stepWith_brkHeld_d141`'s old form is a `have`-shaped corollary with no statement of its own to refute.  And
+  `stepWith_brks_of_brk` gained the hypothesis `hfin` (no finished break re-timed) at the W-53 repair, unrecorded there;
+  recorded here.
+* **This step's restated laws.** `Replay.arm_brk_of_endable`'s first conjunct (the undoing's drawn start; `brkArmK` of
+  `wideOf`): the old form is `Replay.arm_brk_of_endable_as_w53r_stated_it_is_refuted` (restated with the new
+  `unsegBrks` arity, which the old statement no longer typechecks without).  `Replay.d141_reads_iff_endable` keeps its
+  statement (an ending is in `Machine.ended`, so `d141Ok`'s relaxed clause is idle there).  `BreakFold.undo141_seg`
+  gains the start's argument, conclusion unchanged.  The witness the_finished_breaks_are_the_held_breaks_with_their_own_line
+  is false on this kernel (`…_as_w53r_stated_it_is_refuted`) and restated as
+  `Replay.the_finished_breaks_are_the_ones_a_line_re_times`; `two_finished_breaks_at_one_stamp_stay_two`'s third conjunct
+  now names the newer break alone; `tm/tests/kernel_w53r_k_finished.rs`'s `a_partly_covered_break_keeps_its_own_end`
+  likewise (both behaviour rows of §4, not re-blesses).
+* **takeFx's laws (gap 5878).** takeFx_brk, takeFx_brkOpen, takeFx_machine, takeFx_noRedraw, Seal.takeFx_congr,
+  BreakFold.takeFx_noBrkSeg and conserves_takeFx were character restatements of `brkFx_*` laws under the name of a
+  deleted definition: **deleted** with their audit lines, their uses pointed at the `brkFx_*` twin.  Seal.takeFx_mi held
+  the proof `Seal.brkFx_mi` called: it is now `brkFx_mi` itself (the one-line `brkFx_mi` deleted).  takeFx_block, with no
+  twin, is renamed `brkFx_block`.  Deleted rather than renamed because a second name for one statement is check 11's class
+  for theorems.
+* **Laws re-proved over the new shapes (D5), statements unchanged:** law 1 and the resume mirror (`Seal.stepQueries`
+  reads the re-timed break's widest-end held break, `wideOf`), `Seal.arm_congr`, `Seal.arm_mi`, `Seal.arm_brks`,
+  `Seal.cut_mi`/`doneClosed_mi`/`letGo_mi`/`brkFx_mi`, `BreakFold.stepWith_brkHeld_d141`, `Replay.conserves_arm`,
+  the late-binding and energy-line laws, `SealLaw`'s duration law, `SealCutMachine`'s three, `SealPending`'s; the helpers
+  each reads a `brkArm` through now quantify over the held break (`brkArmK`), so the re-time's widened break is covered.
+
+**Mutations (check 9), `mutate.py --gate --write` capped at 16 GB:** 25 definitions new or changed, each run with `mutate.py --write --only` in a `git clone --shared` sandbox
+(four in parallel) and the rows merged: `closeEnd`, `openTakes`, `cut`, `doneClosed`, `netTake`, `letGo`, `d141Ok`,
+`d141Arm`, `brkArmK`, `brkArm`, `drawnFrom`, `maxAt`, `wideOf`, `finished`, `findFin`, `DayOp.apply`, `Ending.hb`,
+`heldOf`, `endingOf`, `endRecs`, `endMachine`, `endBrkFx` and `Seal.stepQueries` PINNED (by a synthesised constant or
+an identity: `maxAt`'s `fun a _ => a` by `Replay.a_longer_line_raises_the_widest_end`, `closeEnd`'s `fun _ _ t => t` by
+`Replay.a_retime_gives_back_only_what_a_paused_block_worked`, `letGo`'s identity by `Replay.a_p127_line_lets_its_ending_go`);
+`Seal.cEnded` and `Seal.cMachine` unfoldable and pinned by nothing, as at HEAD.  **The pin sites did not drift**: every
+line this step added or deleted above a recorded pin site in `Replay.lean`, `SealStep.lean`, `BreakFold.lean` and
+`Seal.lean` is matched by a blank line removed or added between the same two pins (the two runs of blank lines where
+takeFx's laws were deleted carry a comment saying so), so no row needed `--verify`; the two rows whose subjects
+changed under a moved site (`letGo`, `finished`) were re-run.  `mutate.py --gate`: 964 new or changed, 964 rostered, 0
+owed.
+
+**Census (check 12).** `reach-exempt.txt`'s `Replay.lean` section re-derived: **185 of 324** emitted definitions reached
+(179 of 318 before; `closeEnd`, `openTakes`, `drawnFrom`, `maxAt`, `wideOf` and `brkArmK` joined, each reached).
+`Seal.lean`'s is unchanged (`cEnded` and `cMachine` changed in place).
+
+**The register.** P143's row in `kernel/parity.txt` is restated (§4–§6: wherever the line ends, twins as one, the open
+block's take, the later nettings kept, the exact un-draw, the widest end, the fact exactly what it re-times); no new
+number.  P36's anchor re-pointed (`Replay.lean` moved under it).  P136's wording is unaffected; P142 stays a hole
+(D145, gap 5820).
+
+**Frozen comparands.** None moved: the fork-point fixtures under `tm/tests/fixtures/` compare the fork's `Replay` keys,
+and `finished_breaks` is the kernel's alone.  The one snapshot that moved, `tm/tests/snapshots/log_replay__three_days_replay.snap`,
+gains `widest` on each of its two finished breaks (each its own end) and nothing else — a decoded field, not a
+behaviour change.  The FFI crate's `the_log_op_answers_a_running_break` reads the seventh element of `open.finished`.
+
+**Acceptance.** [ACC]
+
+### 8. The drive (§5.13)
+
+`TZ=America/Chicago`, every command capped at 8 GB, Tuesday 2026-09-08 on a fresh `init --example` tree woken at
+07:00 and arrived home at 08:00; "J day" is `^t1` 09:00–10:00 and `^t4` 10:10–11:10 done; each pair of lines is the
+review's `block_min` and breaks at 12:30, then the plan's rows 07:00–11:59, then `tm check`.
+
+**Read.**  1a/1b/1c (gap 5870): the re-time gives `^t1` back 09:30–10:00 — **110** where the base read 80 (90 with the
+D105 pair) — and the plan draws `09:30 ✓ Read ch.6 (30m)`; a cold replay (the cache deleted) reads the same; with
+`stop` the host's D126 correction now fires and the line reads `10m` (base `40m`).  2a/2b (gap 5871): `09:22 ✓ … (18m)`
+up to the 09:40 break (base `(38m)` through it), `(28m)` up to the D148 break.  2c/2d: the col3 log re-timed draws
+`07:30 break 50m; 08:20 break 10m` in all six logging orders (base: a second `08:20 break 10m`, or `08:00 break 30m`
+over the 07:30 break).  3 (gap 5872): **100** (base 90).  4a/4b (gap 5874): the fact names only the newer break, so the
+verb no longer says "re-timed" and adds a zero-minute break; it begins a break at the typed instant, which D129 ends
+at 10:10 (track H's reply).  4c: the fact is empty while a break runs, and the verb's backdated break then loses the
+running one (gap 5873, H's and D145's).  5 (gap 5875): the twins read as one break, and the re-time gives **115**
+(base 110, a zero record beside the ten).  6: the replay's half of D150 is the witness
+`Replay.a_finished_break_keeps_its_widest_end`; through the binary the third step (`--now 09:45`, inside the widest
+span) still begins a new break, because D150's gate is track H's and reads `EndedBreak::widest`, which this track adds.
+
+**The checkpoint across a re-time of an open-block break** (the brief's resume drive; the track's scratchpad
+`k/drive/resume/resume.sh`): item 1's lines on 2026-09-08 (`^t1` 09:00, `tm break 10m` 09:20, `tm done` 10:00), a `wake`
+on each day to 2026-09-30 and a `tm log` there, so the replay cache seals — the checkpoint's cut is line 26 of 43, past
+the break and the `done`, so the closed block and its take ride in the checkpoint's machine — then the re-timing line
+appended (`break` 09:20 planned 10 actual 10), and the day read at 2026-09-08 12:30 on a copy of the tree: resumed from
+the checkpoint `block_min 50 [(10, 10)]`, cold (cache deleted) `block_min 50 [(10, 10)]`; base 20 and 20.
+
+After (this track's binary):
+
+```
+== 1a: ^t1 09:00, break 10m 09:20, done 10:00; ^t4 10:10-11:10; break --now 09:30
+  > break ended · 40m of 10m · ✓ ^t1 Read ch.6 §1–2 · 20m/60m
+  block_min 80 breaks [(10, 40)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–10:00 re-timed to end at 09:30 (D147) · 10m of 10m
+  block_min 110 breaks [(10, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  cold:
+  block_min 110 breaks [(10, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 1b: as 1a with stop
+  > break ended · 40m of 10m · stopped ^t1 after 20m · 40m left
+  block_min 80 breaks [(10, 40)]
+09:00 5 p3 Read ch.6 §1–2 @m3 40m;09:20 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: ^t1's estimate is now 10m (was 40m): this line changed the minutes the log counts for the block its `stop` closed, and the remainder reads them as the log now does (D126).
+  block_min 110 breaks [(10, 10)]
+09:00 5 p3 Read ch.6 §1–2 @m3 10m;09:20 · break 10m;09:30 5 p3 Read ch.6 §1–2 @m3 10m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+- [ ] 5 10m Read ch.6 §1–2               @m3 ^t1
+== 1c: ^t1 09:00, break 10m 09:20, tm break 09:50 (ends it), done 10:00; ^t4; break --now 09:30
+  > break ended · 30m of 10m
+  block_min 90 breaks [(10, 30)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 30m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:50 re-timed to end at 09:30 (D147) · 10m of 10m
+  block_min 110 breaks [(10, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 2a: J day, break --now 09:20 5m, 09:40 5m, then 09:22
+  block_min 110 breaks [(5, 5), (5, 5)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 5m;09:25 5 ✓ Read ch.6 §1–2 @m3 1b (15m);09:40 · break 5m;09:45 5 ✓ Read ch.6 §1–2 @m3 1b (15m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:25 re-timed to end at 09:22 (D147) · 2m of 5m
+  block_min 113 breaks [(5, 5), (5, 2)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 2m;09:22 5 ✓ Read ch.6 §1–2 @m3 1b (18m);09:40 · break 5m;09:45 5 ✓ Read ch.6 §1–2 @m3 1b (15m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 2b: J day, break --now 09:20 5m, 09:50 30m (D148), then 09:22
+  block_min 95 breaks [(5, 5), (30, 30)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 5m;09:25 5 ✓ Read ch.6 §1–2 @m3 1b (25m);09:50 · break 30m;10:20 3 ✓ Claude Code drafts tests @m2 1b (50m);
+no problems;
+  > break 09:20–09:25 re-timed to end at 09:22 (D147) · 2m of 5m
+  block_min 98 breaks [(30, 30), (5, 2)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 2m;09:22 5 ✓ Read ch.6 §1–2 @m3 1b (28m);09:50 · break 30m;10:20 3 ✓ Claude Code drafts tests @m2 1b (50m);
+no problems;
+== 2c: col3 sync order 07:30 then 07:50, then break --now 07:55
+  block_min 30 breaks [(50, 50), (20, 0), (40, 10), (30, 0)]
+07:30 · break 50m;08:20 · break 10m;08:30 5 p3 ✓ Read ch.6 §1–2 @m3 1b (30m);
+no problems;
+  > break 07:50–08:30 re-timed to end at 07:55 (D147) · 5m of 40m
+  block_min 30 breaks [(50, 50), (20, 0), (30, 10), (40, 0)]
+07:30 · break 50m;08:20 · break 10m;08:30 5 p3 ✓ Read ch.6 §1–2 @m3 1b (30m);
+no problems;
+== 3: J day, break --now 09:30 (D129 ends at 10:10), hand break 09:30 planned 20 actual 50, then break --now 09:50
+  > tm: the break that began at 09:30 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 90 breaks [(20, 40)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  block_min 90 breaks [(20, 40)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:30–10:10 re-timed to end at 09:50 (D147) · 20m of 20m
+  block_min 100 breaks [(20, 20)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 20m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 4a: J day, 09:20 20m, 09:30 20m, then --now 09:25
+  block_min 90 breaks [(20, 20), (20, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 · break 10m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: the break that began at 09:25 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 80 breaks [(20, 20), (20, 30), (20, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 · break 30m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: a break began at 09:25 and the `start` the log holds at 10:10 ended it (D129) — `tm break` at its own start would begin a second break inside it; give a later instant, before 10:10, to end it there (D141)
+  block_min 80 breaks [(20, 20), (20, 30), (20, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 · break 30m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 4b: J day, 09:20 30m, 09:30 5m, then --now 09:45
+  block_min 90 breaks [(30, 30), (5, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 30m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: the break that began at 09:45 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 80 breaks [(30, 30), (5, 0), (20, 20)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 30m;09:50 · break 20m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 4c: J day, 09:20 20m; tm break at 12:00 (running); then --now 09:25
+  > tm: the break that began at 09:25 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+nothing running
+  block_min 80 breaks [(20, 20), (20, 30)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 · break 30m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 5: J day, 09:20 10m twice, then --now 09:25
+  block_min 110 breaks [(10, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:30 re-timed to end at 09:25 (D147) · 5m of 10m
+  block_min 115 breaks [(10, 5)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 5m;09:25 5 ✓ Read ch.6 §1–2 @m3 1b (35m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 6: J day, 09:20 30m, re-time 09:40, 09:30, out to 09:45, back to 09:35
+  > break 09:20–09:50 re-timed to end at 09:40 (D147) · 20m of 30m
+  block_min 100 breaks [(30, 20)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 5 ✓ Read ch.6 §1–2 @m3 1b (20m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:40 re-timed to end at 09:30 (D147) · 10m of 30m
+  block_min 110 breaks [(30, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: the break that began at 09:45 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 95 breaks [(30, 10), (20, 25)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (15m);09:45 · break 25m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: the break that began at 09:35 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 85 breaks [(30, 10), (20, 35), (20, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (5m);09:35 · break 35m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 2d: col3 six orders of {07:50 line, 07:30 line, re-time 07:50->07:55}, drawn at 09:30
+  M J R: 07:30 · break 50m;08:20 · break 10m;
+  J M R: 07:30 · break 50m;08:20 · break 10m;
+  J R M: 07:30 · break 50m;08:20 · break 10m;
+  M R J: 07:30 · break 50m;08:20 · break 10m;
+  R M J: 07:30 · break 50m;08:20 · break 10m;
+  R J M: 07:30 · break 50m;08:20 · break 10m;
+```
+
+Base (the W-53 repair land's binary, `aedc250`):
+
+```
+== 1a: ^t1 09:00, break 10m 09:20, done 10:00; ^t4 10:10-11:10; break --now 09:30
+  > break ended · 40m of 10m · ✓ ^t1 Read ch.6 §1–2 · 20m/60m
+  block_min 80 breaks [(10, 40)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–10:00 re-timed to end at 09:30 (D147) · 10m of 10m
+  block_min 80 breaks [(10, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  cold:
+  block_min 80 breaks [(10, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 1b: as 1a with stop
+  > break ended · 40m of 10m · stopped ^t1 after 20m · 40m left
+  block_min 80 breaks [(10, 40)]
+09:00 5 p3 Read ch.6 §1–2 @m3 40m;09:20 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–10:00 re-timed to end at 09:30 (D147) · 10m of 10m
+  block_min 80 breaks [(10, 10)]
+09:00 5 p3 Read ch.6 §1–2 @m3 40m;09:20 · break 10m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+- [ ] 5 40m Read ch.6 §1–2               @m3 ^t1
+== 1c: ^t1 09:00, break 10m 09:20, tm break 09:50 (ends it), done 10:00; ^t4; break --now 09:30
+  > break ended · 30m of 10m
+  block_min 90 breaks [(10, 30)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 30m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:50 re-timed to end at 09:30 (D147) · 10m of 10m
+  block_min 90 breaks [(10, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 2a: J day, break --now 09:20 5m, 09:40 5m, then 09:22
+  block_min 110 breaks [(5, 5), (5, 5)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 5m;09:25 5 ✓ Read ch.6 §1–2 @m3 1b (15m);09:40 · break 5m;09:45 5 ✓ Read ch.6 §1–2 @m3 1b (15m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:25 re-timed to end at 09:22 (D147) · 2m of 5m
+  block_min 113 breaks [(5, 5), (5, 2)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 2m;09:22 5 ✓ Read ch.6 §1–2 @m3 1b (38m);09:40 · break 5m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 2b: J day, break --now 09:20 5m, 09:50 30m (D148), then 09:22
+  block_min 95 breaks [(5, 5), (30, 30)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 5m;09:25 5 ✓ Read ch.6 §1–2 @m3 1b (25m);09:50 · break 30m;10:20 3 ✓ Claude Code drafts tests @m2 1b (50m);
+no problems;
+  > break 09:20–09:25 re-timed to end at 09:22 (D147) · 2m of 5m
+  block_min 98 breaks [(30, 30), (5, 2)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 2m;09:22 5 ✓ Read ch.6 §1–2 @m3 1b (38m);09:50 · break 30m;10:20 3 ✓ Claude Code drafts tests @m2 1b (50m);
+no problems;
+== 2c: col3 sync order 07:30 then 07:50, then break --now 07:55
+  block_min 30 breaks [(50, 50), (20, 0), (40, 10), (30, 0)]
+07:30 · break 50m;08:20 · break 10m;08:30 5 p3 ✓ Read ch.6 §1–2 @m3 1b (30m);
+no problems;
+  > break 07:50–08:30 re-timed to end at 07:55 (D147) · 5m of 40m
+  block_min 30 breaks [(50, 50), (20, 0), (30, 10), (40, 0)]
+07:30 · break 50m;08:20 · break 10m;08:20 · break 10m;08:30 5 p3 ✓ Read ch.6 §1–2 @m3 1b (30m);
+no problems;
+== 3: J day, break --now 09:30 (D129 ends at 10:10), hand break 09:30 planned 20 actual 50, then break --now 09:50
+  > tm: the break that began at 09:30 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 90 breaks [(20, 40)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  block_min 90 breaks [(20, 40)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 40m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:30–10:10 re-timed to end at 09:50 (D147) · 20m of 20m
+  block_min 90 breaks [(20, 20)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (30m);09:30 · break 20m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 4a: J day, 09:20 20m, 09:30 20m, then --now 09:25
+  block_min 90 breaks [(20, 20), (20, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 · break 10m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:40 re-timed to end at 09:25 (D147) · 5m of 20m
+  block_min 90 breaks [(20, 20), (20, 10), (20, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 · break 10m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:40 re-timed to end at 09:25 (D147) · 5m of 20m
+  block_min 90 breaks [(20, 20), (20, 10), (20, 0), (20, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 · break 10m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 4b: J day, 09:20 30m, 09:30 5m, then --now 09:45
+  block_min 90 breaks [(30, 30), (5, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 30m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:50 re-timed to end at 09:45 (D147) · 25m of 30m
+  block_min 90 breaks [(30, 30), (5, 0), (30, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 30m;09:50 5 ✓ Read ch.6 §1–2 @m3 1b (10m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 4c: J day, 09:20 20m; tm break at 12:00 (running); then --now 09:25
+  > break 09:20–09:40 re-timed to end at 09:25 (D147) · 5m of 20m
+tm: logged the break .tm/state.json holds running since 2026-09-08 12:00 (20m) — it was begun before tm logged a break's start, so .tm/log.jsonl now holds it (D133)
+  block_min 100 breaks [(20, 20), (20, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 5 ✓ Read ch.6 §1–2 @m3 1b (20m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 5: J day, 09:20 10m twice, then --now 09:25
+  block_min 110 breaks [(10, 10), (10, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:30 re-timed to end at 09:25 (D147) · 5m of 10m
+  block_min 110 breaks [(10, 10), (10, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 6: J day, 09:20 30m, re-time 09:40, 09:30, out to 09:45, back to 09:35
+  > break 09:20–09:50 re-timed to end at 09:40 (D147) · 20m of 30m
+  block_min 100 breaks [(30, 20)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 20m;09:40 5 ✓ Read ch.6 §1–2 @m3 1b (20m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > break 09:20–09:40 re-timed to end at 09:30 (D147) · 10m of 30m
+  block_min 110 breaks [(30, 10)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (30m);10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: the break that began at 09:45 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 95 breaks [(30, 10), (20, 25)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (15m);09:45 · break 25m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+  > tm: the break that began at 09:35 ended at 10:10, at the `start` the log already holds after it (D129) — it is not running
+  block_min 85 breaks [(30, 10), (20, 35), (20, 0)]
+09:00 5 ✓ Read ch.6 §1–2 @m3 1b (20m);09:20 · break 10m;09:30 5 ✓ Read ch.6 §1–2 @m3 1b (5m);09:35 · break 35m;10:10 3 ✓ Claude Code drafts tests @m2 1b (60m);
+no problems;
+== 2d: col3 six orders of {07:50 line, 07:30 line, re-time 07:50->07:55}, drawn at 09:30
+  M J R: 07:30 · break 50m;08:20 · break 10m;08:20 · break 10m;
+  J M R: 07:30 · break 50m;08:20 · break 10m;
+  J R M: 07:30 · break 50m;08:00 · break 30m;08:20 · break 10m;
+  M R J: 07:30 · break 50m;08:20 · break 10m;
+  R M J: 07:30 · break 50m;08:20 · break 10m;
+  R J M: 07:30 · break 50m;08:20 · break 10m;
+```
+
+### Gaps (5870-)
+
+**Gap 5870 — a re-time gave an OPEN-netted block nothing back.** Closed (§1).
+
+**Gap 5871 — a re-time drew its block across a later break, and the col3 log re-timed drew a segment twice.** Closed (§2).
+
+**Gap 5872 — a re-time of a P127 break gave back nothing.** Closed (§3).
+
+**Gap 5873 — with a real-time break running, a backdated no-length `tm break` inside a finished break loses the
+running break.**  1. *What.* Driven (§8, 4c): the J day, `break --now 09:20 20m`, `tm break 20m` at 12:00 (running),
+then `tm break --now 09:25` — the fact is empty while a break runs (§4), so the verb no longer writes a re-time line;
+it begins a break at 09:25, which D129 ends at 10:10, and `tm now` at 12:10 says `nothing running` — the 12:00 break is
+gone (base: the line re-timed nothing, cleared the running break, and the next verb re-logged it from `.tm/state.json`,
+D133).  2. *Why.* The verb's arm with a break running is track H's, and the kernel's reading of a `break_start` logged
+while a break runs is D145's park (gap 5820), unbuilt.  3. *Cost.* A backdated `tm break` typed while a break runs
+ends the running break in every reader.  4. *Clears it.* Track H (refuse by name, or D145) — reported to it.
+
+**Gap 5874 — the finished-break fact named breaks no line re-times, and held breaks while a break ran.** Closed (§4).
+
+**Gap 5875 — identical twin finished breaks re-timed one at a time.** Closed by the campaign's call (§5), revisable.
+
+**Gap 5876 — D150's widest end had no kernel reading.** Closed for the kernel (§6): the fact carries it; D150's gate
+is track H's, against `EndedBreak::widest`.
+
+**Gap 5877 — the W-53 repair's three old law forms were unrefuted, and `hfin` unrecorded.** Closed (§7).
+
+**Gap 5878 — takeFx's laws were second names for `brkFx`'s.** Closed (§7).
+
+**Gap 5879 — two finished breaks of one stamp and planned minutes can still both be held, and a re-time then shortens
+only the newer.**  1. *What.* A later line at a finished break's stamp with its planned minutes is that break's
+reading (§5, §6) only when no break held after it overlaps it (`d141Ok`'s `newerMeets`); otherwise it is a break of its
+own and BOTH are held.  A later re-time line then finds the newer (`findFin`) and re-times it alone, and D142's union
+keeps the older's longer span — the "both held lines must shorten" the brief asked of D150, unmet on that log.  2. *Why.*
+A take reads "the block with every other held break but this one"; removing two overlapping breaks at once has no take
+to restore from (the minutes both covered are in neither take), so the replay cannot re-time a pair it holds without a
+second representation of a closed block (its raw pieces) — a re-architecture of `Closed` priced at the whole `Seal*`
+re-proof.  3. *Cost.* Reached only by a hand-written or merged log (a break overlapping the first line's span logged
+between two lines at one stamp with one planned figure); the fact then names the newer of the two (`findFin` finds it)
+and not the older, and a re-time of the newer leaves the older's span standing, so the block gets back nothing the
+older still covers.  4. *Clears it.* With D145's park, if the owner wants it.
+
+**Gap 5880 — a running break's provisional netting does not cut the takes a block holds, and an ending a `start` makes
+(`endMachine`) does not cut them by its span.**  1. *What.* `Replay.runOne` keeps a block's takes as they stand (a
+running break's span runs to the last drawn piece, `runTo`, and is replaced by the line's own when it comes, which
+then cuts them, §2); `Replay.endMachine` stashes the running break's take for the ending without cutting the takes
+already held by the ending's final span.  2. *Why.* Scope: a re-time of an earlier break whose take a LATER D129
+ending (made by a `start`) overlaps outside its own span.  3. *Cost.* On such a log the earlier break's re-time restores
+pieces the ending still covers (the gap-5871 shape, by the `start` route).  4. *Clears it.* With D145's park, which
+reworks how a running break and the held ones share the machine.
+
+**Gap 5881 — `HeldBrk.wide` is no machine instant.** 1. *What.* `Seal.machineInstants` lists a held break's end, not
+its widest end.  2. *Why.* No step reads `wide` (only the fact does), so the day index is never read there and no cut
+rule needs it.  3. *Cost.* None known; a step that read it would have to add it.  4. Recorded so the next reader of
+`wide` knows.
+
+**Gap 5882 — the replay reads a longer re-time line as the break's end with no bound at `widest`.** 1. *What.* D150
+bounds a re-time OUT by the widest span; the replay reads any later line at a finished break's stamp with its planned
+minutes as its end (§6).  2. *Why.* A line ending past `widest` at that stamp reads the same under D142's union (it covers
+the break), so bounding it would change nothing the user sees, and the bound is a verb's question (what a no-length
+`tm break` means), which track H's gate answers.  3. *Cost.* None found.  4. Recorded.
