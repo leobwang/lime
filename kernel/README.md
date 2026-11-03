@@ -104981,7 +104981,7 @@ an identity: `maxAt`'s `fun a _ => a` by `Replay.a_longer_line_raises_the_widest
 line this step added or deleted above a recorded pin site in `Replay.lean`, `SealStep.lean`, `BreakFold.lean` and
 `Seal.lean` is matched by a blank line removed or added between the same two pins (the two runs of blank lines where
 takeFx's laws were deleted carry a comment saying so), so no row needed `--verify`; the two rows whose subjects
-changed under a moved site (`letGo`, `finished`) were re-run.  `mutate.py --gate`: 964 new or changed, 964 rostered, 0
+changed under a moved site (`letGo`, `finished`) were re-run.  `mutate.py --gate`: 965 new or changed, 965 rostered, 0
 owed.
 
 **Census (check 12).** `reach-exempt.txt`'s `Replay.lean` section re-derived: **186 of 325** emitted definitions reached
