@@ -105807,7 +105807,7 @@ the verb re-reads the context after a finished line anyway.
 
 ### 3. The re-time gate's honesty (the W-54 auditor's first note, critic's second; gap 5941)
 
-Before acting on `AtFinished::Inside`, `AtEnd` or `Out`, `retime_in_the_way` reads the drawn Break pieces and the break
+Before acting on `AtFinished::Inside`, `AtFinished::AtEnd` or `AtFinished::Out`, `retime_in_the_way` reads the drawn Break pieces and the break
 records (`drawn_break_at`'s inputs) and the verb refuses by name, nothing written:
 
 * **Inside** a finished break `f`: a drawn piece holds the instant strictly inside and it is not `f`'s own piece.
