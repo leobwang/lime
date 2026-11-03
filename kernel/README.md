@@ -105962,4 +105962,18 @@ a break running since 10:30, --now 10:20 5m: both binaries refuse (gap 5896); th
 
 ### 11. Acceptance
 
-(filled below after the runs)
+On `7ade2b1` (this block's tree but for this section), every command capped at 40 GB (8 GB for the drives); Lean
+unchanged by this track.
+
+* `kernel/check.sh`: **17/17 `ok`** after one repair — the first pass failed check 8 on one unqualified enum-variant
+  citation in this block (the bare variant name, now `AtFinished::AtEnd`); re-run whole: axiom audit 7,115 theorems, FFI target 97,
+  corpus 29/37 files and 4/5 whole plans, stage goals 1, 965 new or changed definitions rostered and 0 owed, parity
+  P1-P149 with 1 declared hole (next free **P150**), check 12 1,699 reachable, 97 modules replayed.  After this
+  section: checks 8 and 10 re-run alone, both `ok`.
+* `cargo test --workspace --no-fail-fast`, **three runs** over 190 result lines: run 1 (load 1.6 → 3.2, 16 m 46 s)
+  **3,197 passed / 1 failed / 57 ignored**; run 2 (load 3.2 → 5.3, 15 m 33 s) **3,198 / 0 / 57**; run 3 (load 5.3 →
+  6.5, 15 m 56 s) **3,198 / 0 / 57**.  The one failure is gap 5541's row, `cli_latency`'s
+  `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second` (`tm drop ^z15` still running after 1 s), which
+  fails on the base too.  No `.proptest-regressions` file moved.  The 57 ignored are the land's 54 and this track's 3
+  (§5).
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**, 0 failed, over 5 result lines.
