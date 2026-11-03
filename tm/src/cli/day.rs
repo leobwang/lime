@@ -2851,9 +2851,13 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         // reaching a block no later line has closed yet. Asked only when neither D143 nor D149 took it
         // ([`inside_running_block`]: the kernel's open block and the log's last stamp, never the log's lines here).
         // `.tm/state.json` is untouched, so the block stays running and unpaused (the replay nets it by the break's
-        // minutes, D87, D100). A typed end the log has not reached stays a running break, as before.
+        // minutes, D87, D100). A typed end the log has not reached stays a running break, as before. **Not while a
+        // break runs** (README gap 5942): the kernel's `break` arm still clears the running break for any `break` line
+        // (D145 not built, gap 5820), so the finished line would lose or re-log it (gap 5910's damage, driven: D133
+        // re-logged the break the cache held); the keystroke keeps gap 5896's refusal below until D145 lands.
+        let break_runs = ctx.state.break_.as_ref().and_then(|_| ctx.running_break()).is_some();
         let running_in = match (&probed, &closed) {
-            (Some((None, _)), None) => {
+            (Some((None, _)), None) if !break_runs => {
                 inside_running_block(&ctx.replay, ctx.now, ctx.now + chrono::Duration::minutes(i64::from(planned)))
             }
             _ => None,

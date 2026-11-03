@@ -489,3 +489,17 @@ fn a_d146_break_is_not_swallowed_by_a_retime_out_p148() {
     assert!(said.contains("began at 09:50 ended at 10:10") && !said.contains("(D150)"), "{said}");
     assert_eq!(review(&tm), (95, vec![10, 5, 20]));
 }
+
+/// **Not while a break runs** (README gap 5942): with `^t4` running and a break running since 10:30, `tm break --now
+/// 10:20 5m` keeps gap 5896's refusal — the kernel's `break` arm still clears the running break for any `break` line
+/// (D145, track K, not on this branch), and logging it finished made the next verb re-log the cached break (D133).
+/// The land may lift this once D145 is in.
+#[test]
+fn a_d152_break_is_refused_while_a_break_runs() {
+    let tm = running_t4();
+    tm.ok_at(&at("10:30"), &["break"]);
+    let said = refused(&tm, "10:20", &["break", "5m"]);
+    assert!(said.contains("a break is running since 10:30") && said.contains("D145"), "{said}");
+    let now = now_at(&tm, "10:40");
+    assert!(now.contains("on break since 10:30 · 10m of 20m"), "{now}");
+}
