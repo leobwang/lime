@@ -160,7 +160,7 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
         closed := Replay.doneClosed dy m e.line (e.t.val, e.off.val) id actual.val ci }
     | .brkStart planned where_ =>
       match Replay.firstStart (e.t.val, e.off.val) (dy e.t.val) m with
-      | some t0 => brkFxReads { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ t0 e.line) m } ⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, planned.val, where_⟩
+      | some t0 => brkFxReads { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ t0 e.line) m } ⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, planned.val, where_, t0⟩
       | none =>
         settleReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
           runReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
@@ -169,11 +169,11 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       | some x =>
         if Replay.d141Ok m x (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val) then
           giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1
-            (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val)))
+            (Replay.wideOf x (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))))
         else []
       | none =>
         giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (Replay.heldOf m e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))) ++
-          (match Replay.findFin m (e.t.val, e.off.val) planned.val with | some x => giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1 (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))) | none => [])
+          (match Replay.findFin m (e.t.val, e.off.val) planned.val with | some x => giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1 (Replay.wideOf x (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val)))) | none => [])
     | _ => []
 
 /-! ### What a netting reads depends on the held blocks' days and spans alone (README gap 5180)

@@ -1813,3 +1813,25 @@ with_minute
 # the test as it stood (W-52 track H's and later blocks for the first, W-53 track H's for the second), this land's block among them.
 6 a_break_its_own_line_ended_is_not_ended_again
 3 a_tm_break_inside_a_finished_break_is_not_its_end
+# W-54 track K (README gap 5878): takeFx's laws were character restatements of `brkFx_*` laws under the name of a
+# deleted definition and are DELETED with their audit lines (takeFx_mi's proof is now `Seal.brkFx_mi`, and takeFx_block
+# is RENAMED `Replay.brkFx_block`); the counted citations are the W-52 repair to W-53 repair blocks naming them while
+# they stood.
+2 BreakFold.takeFx_noBrkSeg
+1 conserves_takeFx
+1 Replay.conserves_takeFx
+1 Replay.takeFx_block
+1 Replay.takeFx_brk
+1 Replay.takeFx_brkOpen
+1 Replay.takeFx_machine
+2 Seal.takeFx_congr
+2 Seal.takeFx_mi
+1 takeFx_block
+1 takeFx_brk
+1 takeFx_brkOpen
+1 takeFx_machine
+1 takeFx_noRedraw
+# W-54 track K (README gap 5874): the W-53 repair's witness of the finished-break fact is REFUTED as stated
+# (`Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line_as_w53r_stated_it_is_refuted`) and restated as
+# `Replay.the_finished_breaks_are_the_ones_a_line_re_times`; its one citation is the W-53 repair K block.
+1 Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line

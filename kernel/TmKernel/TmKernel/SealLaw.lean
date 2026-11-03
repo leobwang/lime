@@ -1121,15 +1121,15 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
     simp only [List.filterMap_cons, Effect.durationOf?]
     exact (Replay.extendFx_obs m id by_.val).2
   case brk planned actual where_ =>
-    have hb : ∀ M : Machine, (Replay.brkArm dy M e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := by
-      intro M; unfold Replay.brkArm
+    have hb : ∀ (M : Machine) (k : Replay.HeldBrk), (Replay.brkArmK dy M e t d planned.val (actual.map (·.val)) k).filterMap Effect.durationOf? = [] := by
+      intro M k; unfold Replay.brkArmK
       rw [List.filterMap_append, Replay.reachFx_filterMap Effect.durationOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).2.1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.1, List.nil_append]
       exact (Replay.brkFx_obs dy _ _).2
-    have hd : ∀ M x0, (Replay.d141Arm dy M x0 e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := fun M x0 => by unfold Replay.d141Arm; split; (simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _); rfl
+    have hd : ∀ M x0, (Replay.d141Arm dy M x0 e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := fun M x0 => by unfold Replay.d141Arm; split; (simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _ _); rfl
     split
-    · unfold Replay.brkOwn; split; exact hd _ _; exact hb _
-    · unfold Replay.brkLine Replay.finArm; split; exact hd _ _; split; split; exact hd _ _; exact hb _; exact hb _
+    · unfold Replay.brkOwn; split; exact hd _ _; exact hb _ _
+    · unfold Replay.brkLine Replay.finArm; split; exact hd _ _; split; split; exact hd _ _; exact hb _ _; exact hb _ _
     -- (D147: a finished break a later line re-times is `d141Arm`'s too)
     -- (D147)
   case brkStart planned where_ =>

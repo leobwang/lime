@@ -2398,11 +2398,12 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         })
     })?;
     // **The breaks a D141 line would end** — stage 6 W-52 repair track R, README gaps 5714 and 5730:
-    // `[start, end, planned, where?, day, key]` (`Seal.cEnded`, `Replay.endable`), the kernel's own reading.
+    // `[start, end, planned, where?, day, key, widest]` (`Seal.cEnded`, `Replay.endable`), the kernel's own reading
+    // (`widest` since W-54 track K, the owner's D150: for an ending, the end D129 gave it).
     let ended_breaks = d_arr(open.get("ended").unwrap_or(&Value::Null), "open.ended")?
         .iter()
         .map(|o| {
-            let o = d_tuple(o, 6, "an ended break")?;
+            let o = d_tuple(o, 7, "an ended break")?;
             Ok(EndedBreak {
                 started: d_when(d_at(o, 0, "an ended break's start")?, "an ended break's start")?,
                 ended: d_when(d_at(o, 1, "an ended break's end")?, "an ended break's end")?,
@@ -2410,15 +2411,19 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 r#where: d_opt(d_at(o, 3, "an ended break's place")?, |x| d_str(x, "an ended break's place"))?,
                 day: d_date(d_at(o, 4, "an ended break's day")?, "an ended break's day")?,
                 key: d_u64(d_at(o, 5, "an ended break's key")?, "an ended break's key")?,
+                widest: d_when(d_at(o, 6, "an ended break's widest end")?, "an ended break's widest end")?,
             })
         })
         .collect::<D<Vec<_>>>()?;
     // **The breaks with their own `break` line** — stage 6 W-53 repair track K (D147's fact): the same
-    // `[start, end, planned, where?, day, key]` shape (`Seal.cEnded`, `Replay.finished`), each break's own end.
+    // `[start, end, planned, where?, day, key, widest]` shape (`Seal.cEnded`, `Replay.finished`), each break's own
+    // end and, since W-54 track K (the owner's D150), the widest end any of its own lines gave it. Since W-54 the
+    // list holds only the breaks a `break` line at their stamp with their planned minutes re-times (README gap 5874),
+    // and nothing while a break runs.
     let finished_breaks = d_arr(open.get("finished").unwrap_or(&Value::Null), "open.finished")?
         .iter()
         .map(|o| {
-            let o = d_tuple(o, 6, "a finished break")?;
+            let o = d_tuple(o, 7, "a finished break")?;
             Ok(EndedBreak {
                 started: d_when(d_at(o, 0, "a finished break's start")?, "a finished break's start")?,
                 ended: d_when(d_at(o, 1, "a finished break's end")?, "a finished break's end")?,
@@ -2426,6 +2431,7 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 r#where: d_opt(d_at(o, 3, "a finished break's place")?, |x| d_str(x, "a finished break's place"))?,
                 day: d_date(d_at(o, 4, "a finished break's day")?, "a finished break's day")?,
                 key: d_u64(d_at(o, 5, "a finished break's key")?, "a finished break's key")?,
+                widest: d_when(d_at(o, 6, "a finished break's widest end")?, "a finished break's widest end")?,
             })
         })
         .collect::<D<Vec<_>>>()?;

@@ -543,12 +543,12 @@ def cOpenInt : Codec (At × Nat × Option Log.Id) :=
 theorem cOpenInt_nonnull : cOpenInt.NonNull := fun _ => nofun
 
 /-- **The endings** (the owner's D129 and D141, `Replay.Ending`, W-52 repair track R): each `[start, end, planned, where?, day,
-key]` — what the checkpoint's machine carries across a cut (`cMachine`'s seventh element) and what the `log` answer's
+key, widest]` (`widest` since W-54: the latest end any of the break's own lines gave it, the owner's D150) — what the checkpoint's machine carries across a cut (`cMachine`'s seventh element) and what the `log` answer's
 `open.ended` says (`emitAnswer`, of the endings a `break` line would end now, `Replay.endable`): ONE codec for both, as
 `cOptOpenBrk` is (AGENTS §5.3). -/
-def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cOptStr <| tCons cNat <| tCons cNat <| tNil)
-    (fun (x : Replay.Ending) => (x.s, x.e, x.planned, x.where_, x.day, x.key, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.1, p.2.2.2.1⟩) (fun _ => rfl))
+def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cOptStr <| tCons cNat <| tCons cNat <| tCons cAt <| tNil)
+    (fun (x : Replay.Ending) => (x.s, x.e, x.planned, x.where_, x.day, x.key, x.wide, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl))
 
 /-! A held closed block (the owner's D100, `Replay.Closed`, README gap 4520b) is written in place in `cMachine`, as the open block's pieces are in `cBlock`: a separate codec was folded by the compiler into the machine's and called by nothing, so check 12 found it emitted and unreached (W-47 track K, README "Stage 6 — W-47 track K" §11.6). -/
 
@@ -556,8 +556,8 @@ def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons 
 def cMachine : Codec Machine :=
   cIso (cTuple <| tCons (cOpt cBlock cBlock_nonnull) <| tCons (cOpt cCut cCut_nonnull)
       <| tCons (cOpt cOpenInt cOpenInt_nonnull)
-      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr <| tNil)
-          (fun (k : Replay.HeldBrk) => (k.s, k.e, k.day, k.key, k.planned, k.where_, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1⟩) (fun _ => rfl)))
+      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr <| tCons cAt <| tNil)
+          (fun (k : Replay.HeldBrk) => (k.s, k.e, k.day, k.key, k.planned, k.where_, k.wide, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
       <| tCons cOptOpenBrk
       <| tCons (cList maxList (cIso (cTuple <| tCons cStr <| tCons cNat <| tCons cNat <| tCons cOptU8 <| tCons cNat
           <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
@@ -2111,15 +2111,99 @@ set_option maxRecDepth 8000 in
 `tm break --now 09:50 30m` then `tm break --now 09:50 10m` log two plain lines at 09:50, planned 30 and planned 10 — the
 second is a new D143 break, not a re-timing (a re-timing line carries the break's own planned minutes, as
 `a_later_shorter_line_at_a_finished_breaks_stamp_re_times_it`'s does).  D142's union reads them: one segment 09:50–10:20,
-thirty recorded minutes over two records, and both held with their own ends. -/
+thirty recorded minutes over two records, and both held with their own ends — the fact naming, since W-54 (README gap
+5874), the newer alone: a line at 09:50 with thirty planned would re-time nothing the newer ten does not cover. -/
 theorem two_finished_breaks_at_one_stamp_stay_two :
     let f := replay utcZone [bE 1 63924371400 (.brk 30 (some 30) none), bE 2 63924371400 (.brk 10 (some 10) none)]
     (f.days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924371400, 63924373200)] ∧
     (f.days.get 739865).map (fun a => ((a.breaks.map (fun r => r.actualMin.getD 0)).foldl (· + ·) 0, a.breaks.length)) = some (30, 2) ∧
-    f.openFinished.map (fun x => (x.s.1.sec, x.e.1.sec, x.planned, x.key)) = [(63924371400, 63924372000, 10, 2), (63924371400, 63924373200, 30, 1)] := by
+    f.openFinished.map (fun x => (x.s.1.sec, x.e.1.sec, x.planned, x.key)) = [(63924371400, 63924372000, 10, 2)] := by
   decide
 
 end W53RepairKWitnesses
+
+section W54KWitnesses
+
+open Log (Id U8 U32 Num)
+
+/-! ## W-54 track K: the re-time's give-back, its drawing, the fact, twins and the widest end (README gaps 5870-5889) -/
+
+set_option maxRecDepth 8000 in
+/-- **A re-time gives back what the break took from a block that was OPEN when it netted** (the W-54 auditor's finding 1,
+README gap 5870): `a` started 09:00, a `break_start` 09:20 and the break's own line for forty (D105's pair, as `tm done`
+writes it), `a` done at 10:00 for twenty, `b` 10:10–11:10, then the line re-timing the break to 09:30 — `a` fifty, drawn
+09:00–09:20 and 09:30–10:00; the same with a `stop` closing `a`, and with the break ended at 09:50 by the user's own
+`tm break` (its line for thirty) before `a`'s `done`.  The block remembers each held break's take when it closes
+(`openTakes`); W-53 repair track K's kernel read twenty (CHEAT 791). -/
+theorem a_retime_gives_back_what_the_break_took_from_an_open_block :
+    ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369600 (.brkStart 10 none), bE 3 63924369600 (.brk 10 (some 40) none), bE 4 63924372000 (bDone ['a'] 20 false), bE 5 63924372600 (bStart ['b']), bE 6 63924376200 (bDone ['b'] 60 false), bE 7 63924369600 (.brk 10 (some 10) none)]).items.get ['a']).map (·.minutes) = some 50 ∧ ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369600 (.brkStart 10 none), bE 3 63924369600 (.brk 10 (some 40) none), bE 4 63924372000 (bDone ['a'] 20 false), bE 5 63924372600 (bStart ['b']), bE 6 63924376200 (bDone ['b'] 60 false), bE 7 63924369600 (.brk 10 (some 10) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .block ['a'])).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924368400, 63924369600), (63924370200, 63924372000)] ∧
+      ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369600 (.brkStart 10 none), bE 3 63924369600 (.brk 10 (some 40) none), bE 4 63924372000 (.stop ['a'] 40), bE 5 63924372600 (bStart ['b']), bE 6 63924376200 (bDone ['b'] 60 false), bE 7 63924369600 (.brk 10 (some 10) none)]).items.get ['a']).map (·.minutes) = some 50 ∧ ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369600 (.brkStart 10 none), bE 3 63924369600 (.brk 10 (some 30) none), bE 4 63924372000 (bDone ['a'] 30 false), bE 5 63924372600 (bStart ['b']), bE 6 63924376200 (bDone ['b'] 60 false), bE 7 63924369600 (.brk 10 (some 10) none)]).items.get ['a']).map (·.minutes) = some 50 := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **A re-time keeps a later break's netting** (the W-54 critic's finding 1, README gap 5871): `a` 09:00–10:00 and `b`
+10:10–11:10 done, breaks 09:20 and 09:40 for five, then 09:20 re-timed to 09:22 — `a` fifty-three, drawn 09:00–09:20,
+09:22–09:40 and 09:45–10:00: the later break's netting cut the earlier break's take (`netTake`), so giving that take back
+does not draw `a` through 09:40 (CHEAT 792). -/
+theorem a_retime_keeps_a_later_breaks_take :
+    ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 5 (some 5) none), bE 6 63924370800 (.brk 5 (some 5) none), bE 7 63924369600 (.brk 5 (some 2) none)]).items.get ['a']).map (·.minutes) = some 53 ∧ ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 5 (some 5) none), bE 6 63924370800 (.brk 5 (some 5) none), bE 7 63924369600 (.brk 5 (some 2) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .block ['a'])).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924368400, 63924369600), (63924369720, 63924370800), (63924371100, 63924372000)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **Every logging order of the col3 lines and a re-time draws one day** (the W-54 auditor's finding 5, README gap 5871):
+the auditor's col3 log — breaks 07:40 for twenty, a `break_start` 08:00 the 08:30 `start` ends — with 07:30 for fifty,
+07:50 for forty and a line re-timing 07:50 to 07:55, in each of the six orders the three can be logged in, draws
+`[07:30, 08:20)` and `[08:20, 08:30)`: sixty minutes of wall time, each once.  A re-time un-draws exactly the segment the
+break drew (`DayOp.unsegBrks` from `drawnFrom`), so the D129 ending's re-drawing no longer lands beside a leftover of it
+(CHEAT 797). -/
+theorem col3_with_a_retime_is_one_day_in_every_logging_order :
+    ((replay utcZone [bE 1 63924363600 (.brk 20 (some 20) none), bE 2 63924364800 (.brkStart 30 none), bE 3 63924366600 (bStart ['t']), bE 4 63924368400 (bDone ['t'] 30 false), bE 5 63924363000 (.brk 50 (some 50) none), bE 6 63924364200 (.brk 40 (some 40) none), bE 7 63924364200 (.brk 40 (some 5) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924363000, 63924366000), (63924366000, 63924366600)] ∧
+    ((replay utcZone [bE 1 63924363600 (.brk 20 (some 20) none), bE 2 63924364800 (.brkStart 30 none), bE 3 63924366600 (bStart ['t']), bE 4 63924368400 (bDone ['t'] 30 false), bE 5 63924364200 (.brk 40 (some 40) none), bE 6 63924363000 (.brk 50 (some 50) none), bE 7 63924364200 (.brk 40 (some 5) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924363000, 63924366000), (63924366000, 63924366600)] ∧
+    ((replay utcZone [bE 1 63924363600 (.brk 20 (some 20) none), bE 2 63924364800 (.brkStart 30 none), bE 3 63924366600 (bStart ['t']), bE 4 63924368400 (bDone ['t'] 30 false), bE 5 63924364200 (.brk 40 (some 40) none), bE 6 63924364200 (.brk 40 (some 5) none), bE 7 63924363000 (.brk 50 (some 50) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924363000, 63924366000), (63924366000, 63924366600)] ∧
+    ((replay utcZone [bE 1 63924363600 (.brk 20 (some 20) none), bE 2 63924364800 (.brkStart 30 none), bE 3 63924366600 (bStart ['t']), bE 4 63924368400 (bDone ['t'] 30 false), bE 5 63924363000 (.brk 50 (some 50) none), bE 6 63924364200 (.brk 40 (some 5) none), bE 7 63924364200 (.brk 40 (some 40) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924363000, 63924366000), (63924366000, 63924366600)] ∧
+    ((replay utcZone [bE 1 63924363600 (.brk 20 (some 20) none), bE 2 63924364800 (.brkStart 30 none), bE 3 63924366600 (bStart ['t']), bE 4 63924368400 (bDone ['t'] 30 false), bE 5 63924364200 (.brk 40 (some 5) none), bE 6 63924363000 (.brk 50 (some 50) none), bE 7 63924364200 (.brk 40 (some 40) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924363000, 63924366000), (63924366000, 63924366600)] ∧
+    ((replay utcZone [bE 1 63924363600 (.brk 20 (some 20) none), bE 2 63924364800 (.brkStart 30 none), bE 3 63924366600 (bStart ['t']), bE 4 63924368400 (bDone ['t'] 30 false), bE 5 63924364200 (.brk 40 (some 5) none), bE 6 63924364200 (.brk 40 (some 40) none), bE 7 63924363000 (.brk 50 (some 50) none)]).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924363000, 63924366000), (63924366000, 63924366600)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **A re-time of a P127 break gives back its take** (the W-54 auditor's finding 3, README gap 5872): the J day, a
+`break_start` 09:30 D129 ends at `b`'s 10:10 `start`, its own line 09:30 for fifty (P127: D129's end kept), then the line
+re-timing it to 09:50 — `a` forty: the ending's take was kept when its own line let it go (`letGo`), so the re-time gives
+`a` back 09:50–10:00 (CHEAT 793). -/
+theorem a_retime_of_a_p127_break_gives_back_its_take :
+    ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924370200 (.brkStart 20 none), bE 6 63924370200 (.brk 20 (some 50) none), bE 7 63924370200 (.brk 20 (some 20) none)]).items.get ['a']).map (·.minutes) = some 40 := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **The fact omits a break a newer one overlaps, and is empty while a break runs** (the W-54 auditor's finding 2 and
+critic's findings 2 and 3, README gap 5874): the J day with breaks 09:20 and 09:30 for twenty holds the 09:30 break alone
+— a line at 09:20 would meet it (`newerMeets`) and be a break of its own — and with a break running since 12:00 the fact
+is empty, as `open.ended` is (CHEAT 794). -/
+theorem the_fact_omits_a_break_a_newer_one_overlaps :
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 20 (some 20) none), bE 6 63924370200 (.brk 20 (some 20) none)]).openFinished.map (fun x => (x.s.1.sec, x.e.1.sec)) = [(63924370200, 63924371400)] ∧
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 20 (some 20) none), bE 6 63924379200 (.brkStart 20 none)]).openFinished = [] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **Identical twin finished breaks are re-timed as one** (the W-54 auditor's finding 4, README gap 5875; the campaign's
+call): `tm break --now 09:20 10m` logged twice, then the line re-timing 09:20 to 09:25 — `a` fifty-five and one record of
+five: a later line at a finished break's stamp with its planned minutes is that break's reading, the twin included (D142:
+one span of wall time read one way; CHEAT 795). -/
+theorem twin_finished_breaks_are_re_timed_as_one :
+    ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 10 (some 10) none), bE 6 63924369600 (.brk 10 (some 10) none), bE 7 63924369600 (.brk 10 (some 5) none)]).items.get ['a']).map (·.minutes) = some 55 ∧ ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 10 (some 10) none), bE 6 63924369600 (.brk 10 (some 10) none), bE 7 63924369600 (.brk 10 (some 5) none)]).days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin))) = some [(63924369600, some 5)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **A finished break keeps the widest span the log has held for it** (the owner's D150, README gap 5876): 09:20 for
+thirty re-timed to 09:40, then 09:30, out to 09:45 (a longer line is the break's reading too) and back to 09:35 — one
+break 09:20–09:35, one record of fifteen, `a` forty-five, and the fact's widest end 09:50, the first line's
+(`HeldBrk.wide`, `wideOf`; CHEAT 796). -/
+theorem a_finished_break_keeps_its_widest_end :
+    ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 30 (some 30) none), bE 6 63924369600 (.brk 30 (some 20) none), bE 7 63924369600 (.brk 30 (some 10) none), bE 8 63924369600 (.brk 30 (some 25) none), bE 9 63924369600 (.brk 30 (some 15) none)]).items.get ['a']).map (·.minutes) = some 45 ∧ ((replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 30 (some 30) none), bE 6 63924369600 (.brk 30 (some 20) none), bE 7 63924369600 (.brk 30 (some 10) none), bE 8 63924369600 (.brk 30 (some 25) none), bE 9 63924369600 (.brk 30 (some 15) none)]).days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin))) = some [(63924369600, some 15)] ∧
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 30 (some 30) none), bE 6 63924369600 (.brk 30 (some 20) none), bE 7 63924369600 (.brk 30 (some 10) none), bE 8 63924369600 (.brk 30 (some 25) none), bE 9 63924369600 (.brk 30 (some 15) none)]).openFinished.map (fun x => (x.e.1.sec, x.wide.1.sec)) = [(63924370500, 63924371400)] := by
+  decide
+
+end W54KWitnesses
 
 end Replay
 end Tm

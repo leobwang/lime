@@ -1074,6 +1074,11 @@ pub struct EndedBreak {
     /// The log line that holds it (the kernel's identity, `Replay.Ending.key` / `Replay.HeldBrk.key`): the
     /// ending's line, or a finished break's own `break` line.
     pub key: u64,
+    /// **The widest end the log has held for it** (`Replay.HeldBrk.wide`, the owner's D150, stage 6 W-54 track
+    /// K): the latest end any of its own lines gave it — its first line's, or a later re-timing line's that ran
+    /// longer — never less than [`EndedBreak::ended`]. For an ending (`ended_breaks`) the end D129 gave it.
+    /// D150's gate reads it: a no-length `tm break` past `ended` and at or before `widest` re-times the break out.
+    pub widest: DateTime<FixedOffset>,
 }
 
 /// A block that was started and never closed.
@@ -1642,7 +1647,10 @@ pub struct Replay {
     /// ([`EndedBreak::started`], its `break` line's `t`), its OWN end ([`EndedBreak::ended`], `t` plus its
     /// actual-or-planned minutes, never clipped by D142's union), planned minutes, place, ledger day and the
     /// log line that holds it ([`EndedBreak::key`]). D147's gate reads this. Newest first, as the kernel holds
-    /// them; an empty list is not written.
+    /// them; an empty list is not written. **Since W-54 track K** (README gap 5874) only the breaks a `break`
+    /// line stamped at their start with their planned minutes re-times (`Replay.a_finished_break_is_re_timed_by_its_line`):
+    /// none a break held after it overlaps, none at whose stamp a D129 ending begins, and nothing while a break
+    /// runs; each with the widest end the log held for it ([`EndedBreak::widest`], the owner's D150).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub finished_breaks: Vec<EndedBreak>,
     /// Number of unknown events seen.

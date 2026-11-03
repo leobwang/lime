@@ -3428,6 +3428,7 @@ mod tests {
             r#where: None,
             day: chrono::NaiveDate::from_ymd_opt(2026, 9, 8).expect("a day"),
             key: 0,
+            widest: at(to),
         };
         let spans = spans_of(&[rec("09:20", "09:30", 10), rec("09:25", "09:28", 3), rec("10:30", "10:40", 10)]);
         let start_of = |r: Option<AtFinished>| match r {
