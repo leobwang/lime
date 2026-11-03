@@ -839,7 +839,7 @@ theorem doneFx_machines (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t
   unfold Replay.doneFx
   simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_append,
     (Replay.doneClose_obs dy m t id actual went).2.2, Replay.runNet_machines]
-  by_cases ha : 0 < actual <;> by_cases hp : isPartial = true <;> simp [ha, hp, Replay.creditFx, Effect.machineOf?]
+  by_cases ha : 0 < actual <;> by_cases hp : isPartial = true <;> by_cases hq : 0 < Replay.preTake m t id <;> simp [ha, hp, hq, Replay.creditFx, Effect.machineOf?]
 
 /-- **Where a cut's pieces begin, the machine holds** (D99). -/
 theorem cutPieces_mi (b : Block) (m : Machine) (hb : m.block = some b) (t : Replay.At) (q : Replay.At × Replay.At)

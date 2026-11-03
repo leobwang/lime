@@ -343,12 +343,8 @@ theorem doneFx_noBrkSeg (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t
   · exact doneClose_noBrkSeg dy m t id actual went x hx d' g hxg w hk
   · exact creditFx_noBrkSeg dy id t actual (some ci) x hx d' g hxg w hk
   · split at hx
-    · simp only [List.mem_cons, List.not_mem_nil] at hx
-      rcases hx with rfl | rfl | rfl | h
-      · cases hxg
-      · simp at hxg
-      · cases hxg
-      · exact h.elim
+    · simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx
+      split at hx <;> simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false, false_or] at hx <;> rcases hx with rfl | rfl | rfl | rfl <;> simp_all
     · cases hx
   · split at hx
     · simp only [List.mem_singleton] at hx; subst hx; cases hxg
@@ -532,16 +528,13 @@ theorem arm_noBrkSeg (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : M
     simp only [hb pl w hev]
     exact brkStartArm_noBrkSeg dy m t d _ _
   all_goals (simp only; exact hd)
-
 /-! ### The newest ledger day the held breaks hold, and `pruneBrks`' bound -/
-
 theorem fm_mono (i j : Nat) (hij : i ≤ j) :
     ∀ l : List HeldBrk, l.foldl (fun a k => max a k.day) i ≤ l.foldl (fun a k => max a k.day) j
   | [] => hij
   | k :: l => by
     simp only [List.foldl_cons]
     exact fm_mono _ _ (by omega) l
-
 theorem fm_ge_init (i : Nat) : ∀ l : List HeldBrk, i ≤ l.foldl (fun a k => max a k.day) i
   | [] => Nat.le_refl i
   | k :: l => by
@@ -625,6 +618,9 @@ theorem DayOp.apply_segments (op : DayOp) (a : DayAcc) :
     all_goals exact hg
   | undur l k =>
     left; simp only [DayOp.apply, DayAcc.undurOf] at hg; repeat' split at hg
+    all_goals exact hg
+  | durPre l k =>
+    left; simp only [DayOp.apply, DayAcc.netDurOf] at hg; repeat' split at hg
     all_goals exact hg
   | _ => left; exact hg
 theorem DayOp.alterFn_segments (op : DayOp) (o : Option DayAcc) (a' : DayAcc) (h : op.alterFn o = some a') :
@@ -825,6 +821,10 @@ theorem fm_erase_le (l : List HeldBrk) (k k0 : HeldBrk) (hk : k ∈ l) (hday : k
   by_cases hjk : j = k
   · subst hjk; exact Nat.le_trans hday (fm_ge_mem 0 _ k0 List.mem_cons_self)
   · exact fm_ge_mem 0 _ j (List.mem_cons_of_mem _ ((List.mem_erase_of_ne hjk).2 hj))
+
+
+
+
 theorem stepWith_brkHeld_d141 (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry)
     (h : BrkHeld st) {p : Log.U32} {a0 : Option Log.U32} {w0 : Option (List Char)} (hev : e.ev = .brk p a0 w0) {x : Ending}
     (hK : findEnded st.machine (e.t.val, e.off.val) = some x ∨ (findEnded st.machine (e.t.val, e.off.val) = none ∧ st.machine.brkOpen = none ∧ findFin st.machine (e.t.val, e.off.val) p.val = some x))

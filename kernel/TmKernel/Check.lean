@@ -9314,3 +9314,4 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_longer_line_raises_the_widest_end
 #print axioms Tm.Replay.a_retime_gives_back_only_what_a_paused_block_worked
 #print axioms Tm.Replay.a_p127_line_lets_its_ending_go
+#print axioms Tm.Replay.a_retime_raises_the_duration_observation

@@ -104832,6 +104832,19 @@ user's own `tm break` (a D105 pair); `Replay.a_retime_gives_back_only_what_a_pau
 09:50 and done at 10:00 gets back only what it worked before the pause (the take reaches `closeEnd`, not the `done`).
 Behaviour row: `tm/tests/cli_w54_k_retime.rs`.  CHEAT 791.
 
+**The duration observation (gap 5883, found by a fresh proptest seed, D46).**  The fourth workspace run drew a case
+of `tm/tests/kernel_break_union.rs`'s `a_break_logged_after_the_close_is_netted_as_the_host_unions_it` (seed committed
+in `kernel_break_union.proptest-regressions`): a block 59–190 with a break 76–101 inside it and one 161–179 logged
+before it, then the same 161–179 line logged again after the `done` — the `done`'s duration observation read **70**
+where the host's union reads **88**.  The cause was this step's: an open block's take gave back through `giveOne`, whose
+`undur` takes back a netting of the duration observation, and an open block's `done` had never been netted by its
+breaks (its `actual_min` already excludes them), so the give-back saturated at nothing while the re-time's netting
+took the break off again; item 1's own log read a duration of **10** after the re-time (base 20, the block worked 50).
+**The fix:** a `done` that closes a block open breaks netted raises its duration observation by what they took and
+pre-nets it by the same (`Replay.preTake`, `DayOp.durPre`, the observation's `actualMin` the `done`'s plus `preTake`),
+so the observation reads the `done`'s minutes as before, and a give-back restores exactly what the block worked:
+`Replay.a_retime_raises_the_duration_observation` (20, then 50 after the re-time); the seed's case reads 88.
+
 **`stop`'s estimate.** On the `stop` scenario the kernel now reads `^t1` worked **50** minutes, and the host's D126
 correction — already wired, reading the kernel's minutes — rewrites the line at the re-time: `tm: ^t1's estimate is now
 10m (was 40m)`, the line `- [ ] 5 10m Read ch.6 §1–2 @m3 ^t1` (base: `40m`, kept).
@@ -104958,10 +104971,10 @@ longer line at `widest`: the gate is the host's.  `Replay.a_finished_break_keeps
   the late-binding and energy-line laws, `SealLaw`'s duration law, `SealCutMachine`'s three, `SealPending`'s; the helpers
   each reads a `brkArm` through now quantify over the held break (`brkArmK`), so the re-time's widened break is covered.
 
-**Mutations (check 9), `mutate.py --gate --write` capped at 16 GB:** 25 definitions new or changed, each run with `mutate.py --write --only` in a `git clone --shared` sandbox
+**Mutations (check 9), `mutate.py --gate --write` capped at 16 GB:** 27 definitions new or changed (`preTake` and `doneFx` with gap 5883's fix, `DayOp.apply` re-run for `durPre`), each run with `mutate.py --write --only` in a `git clone --shared` sandbox
 (four in parallel) and the rows merged: `closeEnd`, `openTakes`, `cut`, `doneClosed`, `netTake`, `letGo`, `d141Ok`,
 `d141Arm`, `brkArmK`, `brkArm`, `drawnFrom`, `maxAt`, `wideOf`, `finished`, `findFin`, `DayOp.apply`, `Ending.hb`,
-`heldOf`, `endingOf`, `endRecs`, `endMachine`, `endBrkFx` and `Seal.stepQueries` PINNED (by a synthesised constant or
+`heldOf`, `endingOf`, `endRecs`, `endMachine`, `endBrkFx`, `preTake`, `doneFx` and `Seal.stepQueries` PINNED (by a synthesised constant or
 an identity: `maxAt`'s `fun a _ => a` by `Replay.a_longer_line_raises_the_widest_end`, `closeEnd`'s `fun _ _ t => t` by
 `Replay.a_retime_gives_back_only_what_a_paused_block_worked`, `letGo`'s identity by `Replay.a_p127_line_lets_its_ending_go`);
 `Seal.cEnded` and `Seal.cMachine` unfoldable and pinned by nothing, as at HEAD.  **The pin sites did not drift**: every
@@ -104971,8 +104984,8 @@ takeFx's laws were deleted carry a comment saying so), so no row needed `--verif
 changed under a moved site (`letGo`, `finished`) were re-run.  `mutate.py --gate`: 964 new or changed, 964 rostered, 0
 owed.
 
-**Census (check 12).** `reach-exempt.txt`'s `Replay.lean` section re-derived: **185 of 324** emitted definitions reached
-(179 of 318 before; `closeEnd`, `openTakes`, `drawnFrom`, `maxAt`, `wideOf` and `brkArmK` joined, each reached).
+**Census (check 12).** `reach-exempt.txt`'s `Replay.lean` section re-derived: **186 of 325** emitted definitions reached
+(179 of 318 before; `closeEnd`, `openTakes`, `drawnFrom`, `maxAt`, `wideOf` and `brkArmK` and `preTake` joined, each reached).
 `Seal.lean`'s is unchanged (`cEnded` and `cMachine` changed in place).
 
 **The register.** P143's row in `kernel/parity.txt` is restated (§4–§6: wherever the line ends, twins as one, the open
@@ -105315,6 +105328,9 @@ re-proof.  3. *Cost.* Reached only by a hand-written or merged log (a break over
 between two lines at one stamp with one planned figure); the fact then names the newer of the two (`findFin` finds it)
 and not the older, and a re-time of the newer leaves the older's span standing, so the block gets back nothing the
 older still covers.  4. *Clears it.* With D145's park, if the owner wants it.
+
+**Gap 5883 — a re-time of a break that netted an open block under-counted the `done`'s duration observation.** Found
+by run 4's proptest seed and closed in this step (§1, "The duration observation").
 
 **Gap 5880 — a running break's provisional netting does not cut the takes a block holds, and an ending a `start` makes
 (`endMachine`) does not cut them by its span.**  1. *What.* `Replay.runOne` keeps a block's takes as they stand (a

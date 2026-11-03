@@ -3294,6 +3294,7 @@ inductive DayOp
   line that ends a running break gives a closed block back what the running break took (`giveOne`; its credit comes back
   as a `credit`).  A day that does not exist is left absent. -/
   | undur (line : Option Nat) (k : Nat)
+  /-- **W-54 (README gap 5883): a duration observation's netting pre-loaded** — `k` minutes netted from the duration observation of the `done` at `line` when it closes a block open breaks netted (`preTake`), its observation raised by the same `k`, so a later re-time's give-back (`undur`) restores what the block worked. -/ | durPre (line : Option Nat) (k : Nat)
   | lost (min : Nat) (dropped : List Id)
   /-- C5: `wake`, `slept_min` and `onset_min`, if the day has no wake yet -/
   | wake (t : At) (slept : Nat) (onset : Option Nat)
@@ -3386,6 +3387,7 @@ def DayOp.apply : DayOp → DayAcc → DayAcc
   | .unsegment s, a => { a with segments := a.segments.erase s }
   | .net id ci k line, a => DayAcc.netDurOf line k (DayAcc.netCredit id ci k a)
   | .undur line k, a => DayAcc.undurOf line k a
+  | .durPre line k, a => DayAcc.netDurOf line k a
   | .lost min dropped, a => { a with lostMin := a.lostMin + min, dropped := dropped.reverse ++ a.dropped }
   | .wake t slept onset, a =>
     match a.wake with
@@ -3675,11 +3677,9 @@ def cutPieces (b : Block) (m : Machine) (t : At) : List (At × At) :=
 
 /-- **Pieces' worked minutes** — site R8 (quirk Q6c, gap 83): each piece's own seconds over 60 (`Cal.minutesBetween`, `num_minutes().max(0)`), summed, as fork `close_sub` truncated each sub-segment. -/
 def minutesOf (P : List (At × At)) : Nat := (P.map (fun p => Cal.minutesBetween p.1.1 p.2.1)).sum
-
 /-- Two stamps are one: the same instant at the same offset, compared field by field. -/
 def atEq (a b : At) : Bool :=
   a.1.sec == b.1.sec && a.1.ns == b.1.ns && a.2.west == b.2.west && a.2.sec == b.2.sec
-
 theorem atEq_iff (a b : At) : atEq a b = true ↔ a = b := by
   obtain ⟨⟨as, an⟩, ⟨aw, ao⟩⟩ := a
   obtain ⟨⟨bs, bn⟩, ⟨bw, bo⟩⟩ := b
@@ -4007,6 +4007,8 @@ def openTakes (b : Block) (m : Machine) (t : At) : List Take :=
       some ⟨k.key, ((pieces (b.idle ++ spansFor (m.brks.erase k) b.day) b.started (closeEnd b m t)).filter (fun q => !decide (q.2.1 ≤ k.s.1 ∨ k.e.1 ≤ q.1.1))).map (fun q => ⟨q.1, q.2, b.day⟩),
         minutesOf (pieces (b.idle ++ spansFor (m.brks.erase k) b.day) b.started (closeEnd b m t)) - minutesOf (cutPieces b m t)⟩
     else none)
+/-- **What the held breaks took from the open block a `done` closes** (W-54, README gap 5883): the minutes of its `openTakes`, which the `done`'s duration observation is raised by and pre-netted by (`DayOp.durPre`). -/
+def preTake (m : Machine) (t : At) (id : Id) : Nat := match m.block with | some b => if b.id = id then ((openTakes b m t).map (·.min)).sum else 0 | none => 0
 /-- **Fork `cut(t)`**: take the block, draw its pieces to `t` (`cutPieces`, re-drawn over what it drew while open:
 the owner's D99) and its pause, credit their minutes with no ci, and remember the cut.  The block's pending
 observation is emitted. -/
@@ -4118,7 +4120,6 @@ def cutRan (s e : At) (R : List Piece) : List Piece :=
 gap 5630): `netMin`'s reading over `Closed.restored` and the credit it would carry (`min + ranMin`). -/
 def shadowNet (s e : At) (C : Closed) : Nat :=
   min (minutesOf C.restored - minutesOf (cutOut s e C.restored)) (C.min + C.ranMin)
-
 /-- **What a running break took, after a later netting** (the W-51 repair, README gap 5630; the owner's D100, D115, D119 and
 D137): a later netting over `[s, e)` stepped on ledger day `d` — a late `break`, a late interruption's span, a late
 `start`'s cut — that leaves the block's credit at `min'` cuts the pieces the running break took as it cuts the drawn ones
@@ -4129,7 +4130,6 @@ empty, or the netting is filed on a ledger day before the block's (D94's rule). 
 def reNet (s e : At) (d : Nat) (C : Closed) (min' : Nat) : List Piece × Nat :=
   if d < C.day ∨ (C.ran.isEmpty ∧ C.ranMin = 0) ∨ e.1 ≤ s.1 then (C.ran, C.ranMin)
   else (cutRan s e C.ran, min (C.min + C.ranMin - shadowNet s e C - min') C.ranMin)
-
 /-- **What a D129 ending took, after a later netting** (the owner's **D141**, W-52 repair track R, README gap 5711): a held
 take is cut as `ran` is (`reNet`), read over the block with that take in `ran`'s place — so the ending's own line gives
 back the block a later netting has netted, and undoes nothing logged after the ending. -/
@@ -4224,7 +4224,7 @@ def doneFx (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : At) (d : N
   .machine (runNet dy { rc.1 with closed := doneClosed dy m line t id actual ci }).1 :: rc.2 ++
     creditFx dy id t actual (some ci) ++
     (if 0 < actual then
-      [.itemAdd id .block, .dayAdd d .blockDone, .obs (.duration ⟨line, t, d, id, ci, tags, est, actual, went, isPartial⟩)]
+      [.itemAdd id .block, .dayAdd d .blockDone] ++ (if 0 < preTake m t id then [.dayAdd d (.durPre (some line) (preTake m t id))] else []) ++ [.obs (.duration ⟨line, t, d, id, ci, tags, est, actual + preTake m t id, went, isPartial⟩)]
      else []) ++
     (if isPartial then [.itemAdd id (.partialDoneAt t)] else [.itemAdd id (.doneAt t), .dayAdd d (.done id)]) ++
     (runNet dy { rc.1 with closed := doneClosed dy m line t id actual ci }).2
@@ -5868,8 +5868,8 @@ theorem doneFx_blockOnly (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (
   · exact doneClose_blockOnly dy m t id actual went x hx
   · exact blockOnly_of_plain x (creditFx_plain dy id t actual (some ci) x hx)
   · split at hx
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-      rcases hx with rfl | rfl | rfl <;> rfl
+    · simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx
+      split at hx <;> simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false, false_or] at hx <;> rcases hx with rfl | rfl | rfl | rfl <;> rfl
     · simp at hx
   · split at hx
     · simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
@@ -6361,6 +6361,7 @@ theorem DayOp.bal_apply (op : DayOp) (hop : ∀ i m, op ≠ .uncredit i m) (hnet
   | uncredit i m => exact absurd rfl (hop i m)
   | net i c k l => exact absurd rfl (hnet i c k l)
   | undur l k => simp only [DayOp.apply]; unfold DayAcc.undurOf; split <;> exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
+  | durPre l k => simp only [DayOp.apply]; unfold DayAcc.netDurOf; split <;> exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
   | unsegBrks k c rest => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
   | unbrkAt k => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩ | redraw k c c' => (simp only [DayOp.apply]; unfold DayAcc.redrawBrk; split <;> exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩)
   | blockDone => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
@@ -6375,7 +6376,6 @@ theorem DayOp.bal_apply (op : DayOp) (hop : ∀ i m, op ≠ .uncredit i m) (hnet
   | idle r => simp only [DayOp.apply]; split <;> exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
   | routineMin m => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
   | plan h r dr => exact ⟨⟨hs, hn⟩, fun _ => Nat.le_refl _⟩
-
 /-- **An uncredit keeps the balance** when the day holds at least the minutes taken back. -/
 theorem DayAcc.bal_uncredit (a : DayAcc) (i : Id) (m : Nat) (ha : a.Bal)
     (hm : m ≤ (a.ciUnknown.get i).getD 0) : ((DayOp.uncredit i m).apply a).Bal := by
@@ -8005,8 +8005,8 @@ theorem conserves_doneFx (dy : Cal.Instant → Nat) (st : State) (line : Nat) (t
   generalize hM : ({ (doneClose dy st.machine t id actual went).1 with
     closed := doneClosed dy st.machine line t id actual ci } : Machine) = M
   generalize hX : (if 0 < actual then
-      [Effect.itemAdd id .block, .dayAdd d .blockDone,
-        .obs (.duration ⟨line, t, d, id, ci, tags, est, actual, went, isPartial⟩)]
+      [Effect.itemAdd id .block, .dayAdd d .blockDone] ++ (if 0 < preTake st.machine t id then [.dayAdd d (.durPre (some line) (preTake st.machine t id))] else []) ++
+        [.obs (.duration ⟨line, t, d, id, ci, tags, est, actual + preTake st.machine t id, went, isPartial⟩)]
      else []) = X
   generalize hY : (if isPartial then [Effect.itemAdd id (.partialDoneAt t)]
      else [.itemAdd id (.doneAt t), .dayAdd d (.done id)]) = Y
@@ -8021,8 +8021,8 @@ theorem conserves_doneFx (dy : Cal.Instant → Nat) (st : State) (line : Nat) (t
     · exact safe_of_plain x (creditFx_plain dy _ t _ _ x hx)
     · rw [← hX] at hx
       split at hx
-      · simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-        rcases hx with rfl | rfl | rfl <;> rfl
+      · simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx
+        rcases hx with ((rfl | rfl) | hx) | rfl <;> first | rfl | (split at hx <;> simp only [List.mem_singleton, List.not_mem_nil] at hx; subst hx; rfl)
       · simp at hx
     · rw [← hY] at hx
       split at hx
@@ -8412,6 +8412,7 @@ theorem DayOp.fifths_apply (op : DayOp) (a : DayAcc) (ha : a.Fifths) : (op.apply
       omega
     | none => exact ha
   | undur line k => simp only [DayOp.apply]; unfold DayAcc.undurOf; split <;> exact ha
+  | durPre line k => simp only [DayOp.apply]; unfold DayAcc.netDurOf; split <;> exact ha
   | _ => first | exact ha | (simp only [DayOp.apply]; unfold DayAcc.redrawBrk; split <;> exact ha)
 
 theorem DayOp.fifths_alterFn (op : DayOp) (o : Option DayAcc) (ho : ∀ a, o = some a → a.Fifths) :
@@ -8481,7 +8482,6 @@ end Fifths
 section BlockLaws
 
 open Log (Id U8 U32 Num)
-
 /-- **Site R8 (quirk Q6c, gap 83), the law**: a cut credits the floor of **each piece's own** seconds over 60
 (`num_minutes().max(0)` of its span), summed — so a block paused `k` times can lose up to `k` minutes against the floor
 of its total (`worked_minutes_is_not_the_floor_of_the_block`).  Since the owner's D94 a block's pieces are cut around
@@ -9492,8 +9492,8 @@ theorem doneFx_sleptOk (sl : Nat → Option Nat) (dy : Cal.Instant → Nat) (m :
   · exact List.all_eq_true.1 h1 x hx
   · exact List.all_eq_true.1 (creditFx_sleptOk sl dy id t actual (some ci)) x hx
   · split at hx
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-      rcases hx with rfl | rfl | rfl <;> rfl
+    · simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx
+      split at hx <;> simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false, false_or] at hx <;> rcases hx with rfl | rfl | rfl | rfl <;> rfl
     · simp at hx
   · split at hx
     · simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
@@ -10551,8 +10551,8 @@ theorem doneFx_obs (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : At
   obtain ⟨h1, h2, h3⟩ := doneClose_obs dy m t id actual went
   obtain ⟨c1, c2, c3⟩ := creditFx_obs dy id t actual (some ci)
   unfold doneFx
-  by_cases ha : 0 < actual <;> by_cases hp : isPartial = true <;>
-    simp only [ha, hp, if_true, if_false, List.filterMap_cons, List.filterMap_append, List.filterMap_nil,
+  by_cases ha : 0 < actual <;> by_cases hp : isPartial = true <;> by_cases hq : 0 < preTake m t id <;>
+    simp only [ha, hp, hq, if_true, if_false, List.filterMap_cons, List.filterMap_append, List.filterMap_nil,
       Effect.machineOf?, Effect.energyOf?, Effect.durationOf?, h2, h3, c1, c2, c3, List.nil_append, List.append_nil,
       List.getLast?_singleton, Option.getD_some, Bool.false_eq_true, runNet_energy, runNet_duration, runNet_machines,
       runNet_pendLines] <;>
@@ -14890,6 +14890,12 @@ theorem a_retime_gives_back_only_what_a_paused_block_worked :
 theorem a_p127_line_lets_its_ending_go :
     (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924370200 (.brkStart 20 none), bE 6 63924370200 (.brk 20 (some 50) none)]).openEnded = [] ∧
     (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924370200 (.brkStart 20 none), bE 6 63924370200 (.brk 20 (some 50) none)]).openFinished.map (fun x => (x.s.1.sec, x.e.1.sec)) = [(63924370200, 63924372600)] := by
+  decide
+
+/-- **A re-time raises the duration observation of the block it gives back to** (W-54, README gap 5883, `preTake`, `DayOp.durPre`): `a` started 09:00, a break 09:20–10:00 netted it open, `a` done at 10:00 for twenty — its duration observation twenty — then the break re-timed to 09:30: fifty, what the block now worked (the observation raised by what the break took and pre-netted by it, so the give-back restores it). -/
+theorem a_retime_raises_the_duration_observation :
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369600 (.brkStart 10 none), bE 3 63924369600 (.brk 10 (some 40) none), bE 4 63924372000 (bDone ['a'] 20 false)]).durations.map (·.actualMin) = [20] ∧
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924369600 (.brkStart 10 none), bE 3 63924369600 (.brk 10 (some 40) none), bE 4 63924372000 (bDone ['a'] 20 false), bE 5 63924369600 (.brk 10 (some 10) none)]).durations.map (·.actualMin) = [50] := by
   decide
 
 end W54K
