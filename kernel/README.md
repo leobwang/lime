@@ -105096,3 +105096,21 @@ K's item 4 lets the refusal fire.
    shown (`cli_late_mark_estimate` ×2, `cli_d141_break_end`) — D149's finds were the larger set.
 5. Item 5: fixed, not recorded, for every verb that ends a running break (`note_break_ended` is their one writer); the
    midnight case keeps the record's wall clock (gap 5898).
+
+### 11. Acceptance
+
+On `3b247ec` (this block's tree but for this section), every command capped at 40 GB (8 GB for the drives); Lean
+unchanged by this track.
+
+* `kernel/check.sh`: **17/17 `ok`, rc 0** (axiom audit 7,101, FFI target 97, corpus 29/37 files and 4/5 whole plans,
+  stage goals 1, prose citations 69,853 (0 unresolved), check 9 958 rostered and 0 owed, parity P1-P148 with 1 declared
+  hole (next free **P149**), check 12 1,692 reachable, 97 modules replayed).  After this section: checks 8 and 10 re-run
+  alone, both `ok`.
+* `cargo test --workspace --no-fail-fast`, **three runs**: run 1 (load 4.7 → 9.3, 16 m 8 s) **3,142 passed / 1 failed /
+  63 ignored over 187 result lines**; run 2 (load 9.3 → 8.5, 16 m 23 s) **3,142 / 1 / 63 over 187**; run 3 (load 8.5 →
+  4.4, 15 m 59 s) **3,143 / 0 / 63 over 187**.  The one failure in runs 1 and 2 is gap 5541's row,
+  `cli_latency`'s `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second` (`tm drop ^z15` still running
+  after 1 s).  Alone, alternating with the BASE build of that test (2e3c9d6, its own target directory) at load 6.8 and
+  5.7, both builds failed it both times — load noise, not this track (track K was building alongside).  No other test
+  failed in any run; no `.proptest-regressions` file moved.  The 63 ignored are the base's 54 and this track's 9.
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**, 0 failed, over 5 result lines.
