@@ -377,11 +377,11 @@ def cInterruption : Codec Interruption :=
     (fun r => (r.line, r.start, r.stop, r.day, r.id, r.lostMin, r.dropped, ()))
     (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)
 
-/-- A break record: `[t, day, planned, actual?, where?, src?]` — `src` the key of the D129 ending that wrote it (`Replay.BreakRec.src`, the owner's D141, README gap 5713), `null` on every other record. -/
+/-- A break record: `[t, day, planned, actual?, where?, src?, key]` — `src` the key of the D129 ending that wrote it (`Replay.BreakRec.src`, the owner's D141, README gap 5713), `null` on every other record; `key` the held break's identity (`Replay.BreakRec.key`, W-53 repair track K, README gap 5791). -/
 def cBreakRec : Codec BreakRec :=
-  cIso (cTuple <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cOptNat <| tCons cOptStr <| tCons cOptNat <| tNil)
-    (fun r => (r.t, r.day, r.plannedMin, r.actualMin, r.where_, r.src, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1⟩) (fun _ => rfl)
+  cIso (cTuple <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cOptNat <| tCons cOptStr <| tCons cOptNat <| tCons cNat <| tNil)
+    (fun r => (r.t, r.day, r.plannedMin, r.actualMin, r.where_, r.src, r.key, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)
 
 /-- **The running break** (the owner's D105, parity P100; `Replay.OpenBrk`): `null`, or `[start, planned, where?, day]` — what the checkpoint's machine carries across a cut (`cMachine`'s fifth element) and what the `log` answer's
 `open.break` says (`emitAnswer`): ONE codec for both, so the bytes a resume reads back and the bytes the host rebuilds
@@ -556,8 +556,8 @@ def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons 
 def cMachine : Codec Machine :=
   cIso (cTuple <| tCons (cOpt cBlock cBlock_nonnull) <| tCons (cOpt cCut cCut_nonnull)
       <| tCons (cOpt cOpenInt cOpenInt_nonnull)
-      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
-          (fun (k : Replay.HeldBrk) => (k.s, k.e, k.day, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1⟩) (fun _ => rfl)))
+      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr <| tNil)
+          (fun (k : Replay.HeldBrk) => (k.s, k.e, k.day, k.key, k.planned, k.where_, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1⟩) (fun _ => rfl)))
       <| tCons cOptOpenBrk
       <| tCons (cList maxList (cIso (cTuple <| tCons cStr <| tCons cNat <| tCons cNat <| tCons cOptU8 <| tCons cNat
           <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
@@ -893,7 +893,7 @@ def Refusal.isGuard : Refusal → Bool
   | .undoReach .. | .wakeBehindCut .. | .sealedDay .. | .sealedWindow .. | .nowBelowLedger .. => true
   | _ => false
 
-/-- **The answer a verb reads on the hot path** (§11.1's `Hot` scope): A, W and O, finished. -/
+/-- **The answer a verb reads on the hot path** (§11.1's `Hot` scope): A, W and O, finished — `openEnded` the breaks a `break` line would end now (D141, `Replay.endable`, W-52 repair track R), `openFinished` the breaks with their own `break` line (D147's fact, `Replay.finished`, W-53 repair track K). -/
 structure Answer where
   ledgerDay : Nat
   horizon : Nat
@@ -906,8 +906,8 @@ structure Answer where
   openInterrupt : Option Interruption
   /-- the running break (D105, `Replay.Machine.brkOpen`) -/
   openBreak : Option Replay.OpenBrk
-  /-- the breaks a `break` line would end now (D141, `Replay.endable`, W-52 repair track R) -/
   openEnded : List Replay.Ending
+  openFinished : List Replay.Ending
   lastDay : Option Nat
   lastEffective : Option At
   entryCount : Nat
@@ -1594,7 +1594,7 @@ def answer (k : Ckpt) : Seal.Answer :=
    k.openDays.map (OpenDay.finish k.machine),
    Replay.openOf k.machine,
    k.machine.interrupt.map (fun i => ⟨0, some i.1, none, i.2.1, i.2.2, 0, []⟩),
-   k.machine.brkOpen, Replay.endable k.machine,
+   k.machine.brkOpen, Replay.endable k.machine, Replay.finished k.machine,
    k.lastDay, k.lastEff, k.entryCount, k.unknown, k.longestLeak, k.rwarns, k.warnings, k.warnOverflow⟩
 
 /-- The answer's observations (law 11): each open day's, energy then durations. -/
@@ -1639,7 +1639,7 @@ def askAnswer (v : Seal.Answer) : Q → Option Replay.Answer
   | .openBlock => some (.openBlock v.openBlock)
   | .openInterrupt => some (.openInterrupt v.openInterrupt)
   | .openBreak => some (.openBreak v.openBreak)
-  | .openEnded => some (.openEnded v.openEnded)
+  | .openEnded => some (.openEnded v.openEnded) | .openFinished => some (.openFinished v.openFinished)
   | .lastDay => some (.date v.lastDay)
   | .lastEffective => some (.stamp v.lastEffective)
   | .unknown => some (.count v.unknown)
@@ -2090,6 +2090,36 @@ theorem a_break_an_ending_covered_is_recorded_again_when_its_line_lets_it_go :
   decide
 
 end EndAll141Witnesses
+
+section W53RepairKWitnesses
+
+open Log (Id U8 U32 Num)
+
+set_option maxRecDepth 8000 in
+/-- **D147's replay half, a plain line** (parity **P143**): `a` 09:00–10:00 and `b` 10:10–11:10 done, a `break` 09:30 for
+ten, then a later `break` 09:30 with four — the later line is the break's reading: `a` fifty-six, one break drawn
+09:30–09:34 and one record of four. -/
+theorem a_later_shorter_line_at_a_finished_breaks_stamp_re_times_it :
+    let f := replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924370200 (.brk 10 (some 10) none), bE 6 63924370200 (.brk 10 (some 4) none)]
+    (f.items.get ['a']).map (·.minutes) = some 56 ∧
+    (f.days.get 739865).map (fun a => a.breaks.map (fun r => (r.t.1.sec, r.actualMin))) = some [(63924370200, some 4)] ∧
+    (f.days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924370200, 63924370440)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/-- **Two finished breaks at one stamp stay two** (P143 narrowed by planned minutes, the W-53 repair orchestrator's pair):
+`tm break --now 09:50 30m` then `tm break --now 09:50 10m` log two plain lines at 09:50, planned 30 and planned 10 — the
+second is a new D143 break, not a re-timing (a re-timing line carries the break's own planned minutes, as
+`a_later_shorter_line_at_a_finished_breaks_stamp_re_times_it`'s does).  D142's union reads them: one segment 09:50–10:20,
+thirty recorded minutes over two records, and both held with their own ends. -/
+theorem two_finished_breaks_at_one_stamp_stay_two :
+    let f := replay utcZone [bE 1 63924371400 (.brk 30 (some 30) none), bE 2 63924371400 (.brk 10 (some 10) none)]
+    (f.days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924371400, 63924373200)] ∧
+    (f.days.get 739865).map (fun a => ((a.breaks.map (fun r => r.actualMin.getD 0)).foldl (· + ·) 0, a.breaks.length)) = some (30, 2) ∧
+    f.openFinished.map (fun x => (x.s.1.sec, x.e.1.sec, x.planned, x.key)) = [(63924371400, 63924372000, 10, 2), (63924371400, 63924373200, 30, 1)] := by
+  decide
+
+end W53RepairKWitnesses
 
 end Replay
 end Tm

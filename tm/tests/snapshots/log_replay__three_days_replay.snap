@@ -741,6 +741,19 @@ open_block:
   since: ~
   paused: true
 open_interrupt: ~
+finished_breaks:
+  - started: "2026-09-08T08:45:00-05:00"
+    ended: "2026-09-08T09:05:00-05:00"
+    planned_min: 20
+    where: ~
+    day: 2026-09-08
+    key: 37
+  - started: "2026-09-07T09:08:00-05:00"
+    ended: "2026-09-07T09:32:00-05:00"
+    planned_min: 20
+    where: walk
+    day: 2026-09-07
+    key: 8
 unknown: 1
 warnings: []
 seams:

@@ -252,7 +252,9 @@ pub fn now_lines(app: &App, width: usize) -> Vec<Line<'static>> {
                 .open_break
                 .as_ref()
                 .filter(|_| seg.kind == SegKind::Break)
-                .map(|b| emit::OnBreak { started: b.started.with_timezone(&app.now.timezone()), planned_min: b.planned_min });
+                .map(|b| {
+                    emit::OnBreak::new(b.started.with_timezone(&app.now.timezone()), b.planned_min, [seg], app.now)
+                });
             let (elapsed, planned) = match &on_break {
                 Some(b) => (b.elapsed_min(app.now), b.planned_min.max(1)),
                 None => (elapsed, planned),

@@ -1422,16 +1422,16 @@ does not extend for it and `wall_conflicts` skips it (`a.adhoc || b.adhoc → co
 theorem interruptRows_are_not_walls (r : PlanReq) (s : Seg) (h : s ∈ interruptRows r) :
     s.kind ≠ SegKind.wall := by
   rw [(interruptRows_are_open_lost_time r s h).1]; intro hc; cases hc
-
-/-- **§9's running break** (W-35, owner D57 (1), parity **P45**): a Break row from where it started
-to its planned end, or to `now`, open, once overrun.  Its laws and its reason close the module. -/
+/-- **Where the running break begins to be drawn** (the owner's D142 reaching the running break, W-53 repair track K, the W-53 critic's F3): from `c`, past every logged break of today's record that covers it — D142's union, so a running break begun inside a logged one is drawn from where the logged ones stop, never over them (`a_running_break_is_drawn_from_where_the_logged_breaks_stop`); one pass per segment, each moving `c` only forward. -/
+def brkCover (r : PlanReq) (c : Nat) : Nat := ((r.todayRecord.map (·.segments)).getD []).foldr (fun _ c => ((r.todayRecord.map (·.segments)).getD []).foldl (fun c g => if (match g.kind with | .brk _ => true | _ => false) && decide (g.start.1.sec ≤ c) && decide (c < g.stop.1.sec) then g.stop.1.sec else c) c) c
+/-- **§9's running break** (W-35, owner D57 (1), parity **P45**): a Break row from where it started — since W-53 repair track K from where the logged breaks covering its start stop (`brkCover`, D142) — to its planned end, or to `now`, open, once overrun.  Its laws and its reason close the module. -/
 def breakRows (r : PlanReq) : List Seg :=
   match r.runningBreak.bind (fun b => b.started.map (b, ·)) with
   | none => []
   | some (b, t) =>
     let e := max (min (t.sec + 60 * b.plannedMin) r.dayEnd) r.now.sec
-    if e ≤ max t.sec r.dayStart then [] else
-      [{ start := max t.sec r.dayStart, stop := e, kind := .brk, energy := none, item := none,
+    if e ≤ max (brkCover r t.sec) r.dayStart then [] else
+      [{ start := max (brkCover r t.sec) r.dayStart, stop := e, kind := .brk, energy := none, item := none,
          inst := none, planned := none, mult := none, note := b.place.map (·.word |> .breakWhere),
          flags := { SegFlags.none with isOpen := decide (t.sec + 60 * b.plannedMin ≤ r.now.sec) } }]
 

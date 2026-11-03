@@ -3394,7 +3394,7 @@ def emitAnswer (a : Seal.Answer) : JVal :=
         ("open".toList, .obj [("block".toList, Seal.cOptOpenBlock.enc a.openBlock),
           ("interrupt".toList, Seal.cOptInterruption.enc a.openInterrupt),
           ("break".toList, Seal.cOptOpenBrk.enc a.openBreak),
-          ("ended".toList, Seal.cEnded.enc a.openEnded)]),
+          ("ended".toList, Seal.cEnded.enc a.openEnded), ("finished".toList, Seal.cEnded.enc a.openFinished)]),
         ("lastDay".toList, Seal.cOptNat.enc a.lastDay), ("lastEffective".toList, Seal.cOptAt.enc a.lastEffective),
         ("entryCount".toList, .num a.entryCount), ("unknown".toList, .num a.unknown),
         ("longestLeak".toList, Seal.cOptLeak.enc a.longestLeak), ("replayWarnings".toList, Seal.cRWarns.enc a.rwarns),
@@ -12899,7 +12899,7 @@ theorem the_log_op_merges_a_sealed_day_below_its_ledger_day :
       = .inr (logBody ⟨1, [], true, none, [], true, Replay.utcZone, some 739900,
           some { Seal.Ckpt.empty Replay.utcZone with ledgerDay := 5 }, none,
           some ⟨[⟨3, none, none, [], [], [], [], [], []⟩, ⟨7, none, none, [], [], [], [], [], []⟩], []⟩⟩
-        (emitAnswer ⟨5, 0, [], [], [], [], [⟨3, none, none, [], [], [], [], [], []⟩], none, none, none, [], none, none, 0, 0,
+        (emitAnswer ⟨5, 0, [], [], [], [], [⟨3, none, none, [], [], [], [], [], []⟩], none, none, none, [], [], none, none, 0, 0,
           none, [], [], 0⟩) [] .null) := by
   decide
 

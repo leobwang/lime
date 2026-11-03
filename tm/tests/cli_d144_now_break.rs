@@ -141,3 +141,44 @@ fn tm_nows_break_survives_the_cache_deletion() {
     assert_eq!(now_text(&tm, "11:15"), text);
     assert_eq!(tm.json_at(&at("11:15"), &["now"]), v);
 }
+
+/// **Across local midnight the minutes are the DRAWN row's** (the W-53 critic's F7, stage 6 W-53 repair track H,
+/// README gap 5775's host half): a break begun at 23:50 with thirty minutes is drawn on Wednesday from `00:00`, so at
+/// 00:10 `tm now` reads `10m of 30m` with the row `00:00 · break 20m` and `left 10m` (its planned end, 00:20), and at
+/// 00:30 `30m of 30m` with the open row `00:00 · break 30m`, `left 0m (overrun 10m)`, `--json`'s `elapsed_min` thirty.
+/// Until the repair the header and the line read the wall clock since 23:50 (`20m` and `40m`) beside a row drawn
+/// from midnight — two readings of one span (§5.3).
+#[test]
+fn tm_now_reads_a_running_break_as_drawn_across_midnight() {
+    let tm = day();
+    tm.ok_at(&at("23:50"), &["break", "30m"]);
+    let wed = |hm: &str| format!("2026-09-09T{hm}:00-05:00");
+    let early = tm.ok_at(&wed("00:10"), &["now"]).stdout;
+    assert!(early.starts_with("on break since 23:50 · 10m of 30m\n00:00  ·      break 20m\n"), "{early}");
+    assert!(early.contains("  00:00–00:20 · elapsed 10m · left 10m\n"), "{early}");
+    let late = tm.ok_at(&wed("00:30"), &["now"]).stdout;
+    assert!(late.starts_with("on break since 23:50 · 30m of 30m\n00:00  ·      break 30m\n"), "{late}");
+    assert!(late.contains("  00:00–00:30 · elapsed 30m · left 0m (overrun 10m)\n"), "{late}");
+    let v = tm.json_at(&wed("00:30"), &["now"]);
+    assert_eq!(v["break"]["start"], "23:50", "{v}");
+    assert_eq!(v["break"]["elapsed_min"], 30, "as drawn: {v}");
+    assert_eq!(v["current"]["start"], "00:00", "{v}");
+}
+
+/// **A running break over an earlier logged break reads its drawn row** (the critic's F3, README gap 5775): a break
+/// logged 10:20–10:40 by hand, then `tm break --now 10:30 20m` left running; with track K's D142 reaching a running
+/// break the planner draws it only where no logged break covers it, from 10:40, so at 11:00 `tm now` reads `20m of
+/// 20m` (and `--json` `elapsed_min` twenty), not the wall clock's `30m of 20m`.
+#[test]
+fn tm_now_reads_a_running_break_drawn_after_a_logged_one_gap_5775() {
+    let tm = day();
+    let log = tm.plan.join(".tm/log.jsonl");
+    let mut text = std::fs::read_to_string(&log).expect("the log");
+    text.push_str("{\"t\":\"2026-09-08T10:20:00-05:00\",\"ev\":\"break\",\"planned_min\":20,\"actual_min\":20}\n");
+    std::fs::write(&log, text).expect("the log");
+    tm.ok_at(&at("10:30"), &["break", "20m"]);
+    let now = now_text(&tm, "11:00");
+    assert!(now.starts_with("on break since 10:30 · 20m of 20m\n10:40  ·      break "), "{now}");
+    let v = tm.json_at(&at("11:00"), &["now"]);
+    assert_eq!(v["break"]["elapsed_min"], 20, "{v}");
+}

@@ -96,8 +96,8 @@ def giveReads (m : Machine) : List Cal.Instant :=
 
 /-- **The instants a break held as `[s, e)` on ledger day `d` reads the index at** (D87, D94, D100; `Replay.brkFx`): the
 open block's new pieces once the break is held (`settleReads`), and each held closed block's it nets (`closedReads`). -/
-def brkFxReads (m : Machine) (s e : Replay.At) (d : Nat) : List Cal.Instant :=
-  settleReads { m with brks := Replay.pruneBrks (⟨s, e, d⟩ :: m.brks), brkOpen := none } ++ closedReads s e d m.closed
+def brkFxReads (m : Machine) (k : Replay.HeldBrk) : List Cal.Instant :=
+  settleReads { m with brks := Replay.pruneBrks (k :: m.brks), brkOpen := none } ++ closedReads k.s k.e k.day m.closed
 
 /-- **The instants a `start` at `t` reads the index at, over the machine it starts from** (C3, D99, D115, gap 5180;
 `Replay.startArm`). -/
@@ -160,7 +160,7 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
         closed := Replay.doneClosed dy m e.line (e.t.val, e.off.val) id actual.val ci }
     | .brkStart planned where_ =>
       match Replay.firstStart (e.t.val, e.off.val) (dy e.t.val) m with
-      | some t0 => brkFxReads { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ t0 e.line) m } (e.t.val, e.off.val) t0 (dy e.t.val)
+      | some t0 => brkFxReads { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ t0 e.line) m } ⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, planned.val, where_⟩
       | none =>
         settleReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
           runReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
@@ -168,12 +168,12 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       match Replay.findEnded m (e.t.val, e.off.val) with
       | some x =>
         if Replay.d141Ok m x (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val) then
-          giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1 (e.t.val, e.off.val)
-            (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
+          giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1
+            (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val)))
         else []
       | none =>
-        giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (e.t.val, e.off.val)
-          (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val)
+        giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (Replay.heldOf m e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))) ++
+          (match Replay.findFin m (e.t.val, e.off.val) planned.val with | some x => giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1 (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))) | none => [])
     | _ => []
 
 /-! ### What a netting reads depends on the held blocks' days and spans alone (README gap 5180)
@@ -281,10 +281,10 @@ theorem giveBack_shp (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) :
 
 /-- **What a `break` line nets after its give-back does not depend on the index** (D137): the give-back moves only the
 held closed blocks and the last cut, and their days and spans not by the index (`giveBack_shp`). -/
-theorem brkFxReads_giveBack (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (s e : Replay.At) (d : Nat) :
-    brkFxReads (Replay.giveBack dy₁ m).1 s e d = brkFxReads (Replay.giveBack dy₂ m).1 s e d := by
+theorem brkFxReads_giveBack (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (k : Replay.HeldBrk) :
+    brkFxReads (Replay.giveBack dy₁ m).1 k = brkFxReads (Replay.giveBack dy₂ m).1 k := by
   unfold brkFxReads
-  rw [closedReads_shp s e d _ _ (giveBack_shp dy₁ dy₂ m)]
+  rw [closedReads_shp k.s k.e k.day _ _ (giveBack_shp dy₁ dy₂ m)]
   rfl
 
 theorem netStart_shp (dy₁ dy₂ : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Machine) :
@@ -377,7 +377,7 @@ theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e :
     · split
       · rw [brkFxReads_giveBack dy₁ dy₂]
       · rfl
-    · rw [brkFxReads_giveBack dy₁ dy₂]
+    · simp only [brkFxReads_giveBack dy₁ dy₂]
 
 /-- **The tail without its settled undos** (§7.4): a settled undo cancels nothing after the cut. -/
 def unsettled (settled : List Nat) (bs : List Entry) : List Entry :=
@@ -528,7 +528,7 @@ def resumedAnswer (K : Ckpt) (st : State) (hs : List (Nat × HeaderRec)) (entrie
    (daysFrom st hs K.ledgerDay).map (OpenDay.finish st.machine),
    Replay.openOf st.machine,
    st.machine.interrupt.map (fun i => ⟨0, some i.1, none, i.2.1, i.2.2, 0, []⟩),
-   st.machine.brkOpen, Replay.endable st.machine,
+   st.machine.brkOpen, Replay.endable st.machine, Replay.finished st.machine,
    maxOpt K.lastDay (Replay.maxDay? (st.days.pairs.map Prod.fst)),
    st.global.lastEffective, K.entryCount + entries, st.unknown, st.longestLeak, st.rwarns.reverse,
    (K.warnings ++ ws).take maxWarnings, K.warnings.length + K.warnOverflow + ws.length - maxWarnings⟩

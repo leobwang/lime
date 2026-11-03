@@ -6459,10 +6459,10 @@ theorem a_past_row_lies_inside_its_segment {r : PlanReq} {t : Seg} (h : t ∈ pa
   have := clipCut_within hq
   simp only [pastRowOf]
   omega
-
-/-- The running break's row starts where the break started, or at the day's start. -/
+theorem brkCover_ge (r : PlanReq) (c : Nat) : c ≤ brkCover r c := by unfold brkCover; generalize ((r.todayRecord.map (·.segments)).getD []) = l; have hb : ∀ (b : Bool) (s c : Nat), c ≤ (if (b && decide (c < s)) = true then s else c) := (by intro b s c; cases b <;> by_cases h : c < s <;> simp [h] <;> omega); have hi : ∀ (l' : List Replay.Segment) (c : Nat), c ≤ l'.foldl (fun c g => if (match g.kind with | .brk _ => true | _ => false) && decide (g.start.1.sec ≤ c) && decide (c < g.stop.1.sec) then g.stop.1.sec else c) c := (by intro l'; induction l' with | nil => intro c; exact Nat.le_refl c | cons g t ih => intro c; exact Nat.le_trans (hb _ _ _) (ih _)); have ho : ∀ (l2 : List Replay.Segment) (c : Nat), c ≤ l2.foldr (fun _ c => l.foldl (fun c g => if (match g.kind with | .brk _ => true | _ => false) && decide (g.start.1.sec ≤ c) && decide (c < g.stop.1.sec) then g.stop.1.sec else c) c) c := (by intro l2; induction l2 with | nil => intro c; exact Nat.le_refl c | cons _ t ih => intro c; exact Nat.le_trans (ih c) (hi _ _)); exact ho l c  -- the running break's drawn start only moves forward (W-53 repair track K, D142)
+/-- The running break's row starts where the logged breaks covering its start stop — *restated at W-53 repair track K* (the W-53 critic's F3, D142; `brkCover`): from the break's own start until then; refuted as W-35 stated it by `the_running_break_row_starts_where_it_started_as_w35_stated_it_is_refuted` (`PlannerWit`) — or at the day's start. -/
 theorem the_running_break_row_starts_where_it_started {r : PlanReq} {u : Seg} (h : u ∈ breakRows r) :
-    ∃ bs tb, r.runningBreak = some bs ∧ bs.started = some tb ∧ u.start = max tb.sec r.dayStart := by
+    ∃ bs tb, r.runningBreak = some bs ∧ bs.started = some tb ∧ u.start = max (brkCover r tb.sec) r.dayStart ∧ tb.sec ≤ brkCover r tb.sec := by
   unfold breakRows at h
   cases hb0 : r.runningBreak with
   | none => rw [hb0] at h; cases h
@@ -6476,7 +6476,7 @@ theorem the_running_break_row_starts_where_it_started {r : PlanReq} {u : Seg} (h
       · cases h
       · simp only [List.mem_singleton] at h
         subst h
-        exact ⟨x, y, rfl, hx, rfl⟩
+        exact ⟨x, y, rfl, hx, rfl, brkCover_ge r y.sec⟩
 
 /-- **`Goals.plan_places_no_block_over_a_break` as written, on a request whose replay is apart** (W-48 track G, README
 gap 5181): every Block row of the day — replayed, open, reserved or assigned — lies beside every Break row — replayed,
@@ -6535,7 +6535,7 @@ theorem plan_places_no_block_over_a_break_on_an_apart_replay (r : PlanReq)
     · rcases mem_replayedRows.1 ht with ht | ht
       · obtain ⟨gb, hgb, htb, hb1, hb12, hb2⟩ := a_past_row_lies_inside_its_segment ht
         have hbb : (pastKind gb.kind).1 = SegKind.block := htb ▸ (segOf_kind t ▸ hbk)
-        obtain ⟨bs, tb, hbs, htb, hus⟩ := the_running_break_row_starts_where_it_started hu
+        obtain ⟨bs, tb, hbs, htb, hus, hcov⟩ := the_running_break_row_starts_where_it_started hu
         have := hrun bs (by rw [hbs]; simp) tb (by rw [htb]; simp) gb hgb hbb (by omega)
         exact Or.inl (segOf_apart t _ (by omega) (by rw [hus]; omega))
       · obtain ⟨-, -, hst, -⟩ := mem_openBlockRows ht

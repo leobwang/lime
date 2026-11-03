@@ -280,7 +280,8 @@ fn a_running_break_past_its_planned_end_stays_current() {
     let (current, next) = emit::now_window(&day, now);
     assert_eq!(current, Some(0), "the open break is current");
     assert_eq!(next, vec![1], "the routine at `now` is next");
-    let b = emit::OnBreak { started: at(10, 10), planned_min: 20 };
+    let b = emit::OnBreak::new(at(10, 10), 20, &day.segments, now);
+    assert_eq!(b.drawn_from, at(10, 10), "drawn from its start");
     assert_eq!(
         emit::now_annotation(&day.segments[0], now, None, Some(&b)),
         "  10:10–11:15 · elapsed 1h5m · left 0m (overrun 45m)\n"

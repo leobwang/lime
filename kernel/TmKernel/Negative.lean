@@ -3838,4 +3838,43 @@ theorem aCoveredBreakStaysUndrawn :
       = some [(63924366600, 63924366900)] := by
   decide
 
+/- ======================================================================
+   W-53 repair track K (`w53r-k`): cheats 771-790.  Each states the reading this step replaced and is
+   refused by `decide` proving it false.
+   ====================================================================== -/
+
+/- CHEAT 771 — a re-drawing that finds its record by stamp and minutes (README gap 5791, the auditor's col3 log): breaks
+   07:40 for twenty, a `break_start` 08:00 the 08:30 `start` ends, then 07:50 for forty and 07:30 for fifty logged late.
+   Claimed the day `01ad5b1` drew — `07:30 break 50m` and `08:00 break 30m`, the stretch 08:00–08:20 twice.  A held break
+   now carries its key and its record that key; `decide` computes `[07:30, 08:20)` and `[08:20, 08:30)`
+   (`Replay.col3_is_one_day_in_either_logging_order`). -/
+theorem col3DrawsAnOverlapTwice :
+    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924363600 (.brk 20 (some 20) none), Replay.bE 2 63924364800 (.brkStart 30 none), Replay.bE 3 63924366600 (bStart ['t']), Replay.bE 4 63924368400 (bDone ['t'] 30 false), Replay.bE 5 63924364200 (.brk 40 (some 40) none), Replay.bE 6 63924363000 (.brk 50 (some 50) none)])).days.get 739865).map
+      (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec)))
+      = some [(63924363000, 63924366000), (63924364800, 63924366600)] := by
+  decide
+
+
+/- CHEAT 772 — a later shorter `break` line at a finished break's stamp read as a break of its own (the owner's D147,
+   parity P143): `a` 09:00–10:00 and `b` 10:10–11:10 done, a `break` 09:30 for ten, then a later `break` 09:30 with
+   four.  Claimed the reading until this step — D142's union, the later line covered whole, `a` fifty.  The later line
+   now re-times the break; `decide` computes fifty-six (`Replay.a_later_shorter_line_at_a_finished_breaks_stamp_re_times_it`). -/
+theorem aLaterShorterLineIsABreakOfItsOwn :
+    ((Replay.replay Replay.utcZone [Replay.bE 1 63924368400 (Replay.bStart ['a']),
+      Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']),
+      Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false), Replay.bE 5 63924370200 (.brk 10 (some 10) none),
+      Replay.bE 6 63924370200 (.brk 10 (some 4) none)]).items.get ['a']).map (·.minutes) = some 50 := by
+  decide
+
+
+set_option maxRecDepth 400000 in
+/- CHEAT 773 — the running break drawn from its own start over a logged break (the W-53 critic's F3, D142): the busy
+   Wednesday's walk started at 14:00 with a break 13:50–14:10 already logged.  Claimed the row `breakRows` drew until this
+   step, 14:00–14:30, ten minutes twice.  It is drawn from where the logged break stops; `decide` computes 14:10
+   (`PlannerWit.a_running_break_is_drawn_from_where_the_logged_breaks_stop`). -/
+theorem theCoveredWalkIsDrawnFromItsOwnStart :
+    (Planner.breakRows PlannerWit.theCoveredBreakRequest).map (fun s => (s.start, s.stop)) =
+      [((Cal.instantOf Cal.chicago 739867 840).sec, (Cal.instantOf Cal.chicago 739867 870).sec)] := by
+  decide
+
 end Tm

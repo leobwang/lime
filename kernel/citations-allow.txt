@@ -1794,3 +1794,22 @@ with_minute
 # W-52 repair track R (host half): the test that pinned `tm break` at a D129-ended break's own start beginning a second
 # break is REPLACED by the P139 refusal's row (README §7); the counted citations are W-52 track H's block and this repair's naming it as it stood.
 4 a_break_typed_at_the_breaks_own_start_begins_a_break
+# W-53 repair track K: takeFx is DELETED -- P143 made `brkFx` net through `netTake`, as the D129 ending's netting always did,
+# so it became a second name for one definition and check 12 found it emitted and called by nothing; the counted citations
+# are the W-50 to W-53 blocks naming it while it lived.
+7 takeFx
+# W-53 repair track H (README gaps 5840-5859; the owner's D146 and D148).  Two tests of the W-53 track H block are RENAMED
+# with the statement each makes now: `cli_d141_break_end`'s pin of the D141 arm discarding a typed length is restated under
+# D146 (parity P144) as the_d141_arm_reports_a_break_end_and_logs_the_typed_length_p144, and `cli_d143_finished_break`'s
+# row keeping D129 for a length past the later start is split under D148 (parity P146) into no_length_keeps_d129 and
+# a_length_past_the_later_start_is_logged_finished_and_nets_the_block_p146.  Each counted citation is an append-only
+# README block naming the test as it stood (W-52 track H's for the first, swept once; W-53 track H's for the second).
+1 the_d141_arm_reports_a_break_end_and_does_not_retime_p138
+1 no_length_or_a_length_past_the_start_keeps_d129
+# W-53 repair land (README "Stage 6 — W-53 repair land"): two tests that pinned a no-length `tm break` inside a finished
+# break beginning a second break are RENAMED with the statement each makes once D147's gate is wired (parity P145):
+# `cli_d141_break_end`'s as a_break_its_own_line_ended_is_retimed_not_ended_again_p145 and `cli_d143_finished_break`'s
+# as a_tm_break_inside_a_finished_break_retimes_it_p145.  Each counted citation is an append-only README block naming
+# the test as it stood (W-52 track H's and later blocks for the first, W-53 track H's for the second), this land's block among them.
+6 a_break_its_own_line_ended_is_not_ended_again
+3 a_tm_break_inside_a_finished_break_is_not_its_end

@@ -472,7 +472,8 @@ pub struct BreakNowOut {
     pub start: String,
     /// Its planned minutes.
     pub planned_min: u32,
-    /// The wall-clock minutes since it began.
+    /// The minutes its drawn row has run by now (`emit::OnBreak::new`: from where `tm plan` draws it at
+    /// `now`, not the wall clock since its start — README gap 5775).
     pub elapsed_min: u32,
     /// The place its `break_start` logged, if any.
     pub place: Option<String>,
@@ -558,9 +559,10 @@ pub fn now(g: &Globals) -> Result<i32, CliError> {
     });
     // **The running break** — the owner's **D144** (README gap 5750, parity **P141**): the replay's open
     // break, one reading of it with `tm plan`'s row (`Planner.breakRows` reads the same replay, D133).
-    let on_break = ctx.replay.open_break.as_ref().map(|b| tm_core::emit::OnBreak {
-        started: b.started.with_timezone(&ctx.cfg.tz),
-        planned_min: b.planned_min,
+    // Its minutes are the DRAWN row's (README gap 5775's host half, `emit::OnBreak::new`): the row the
+    // planner draws for it at `now`, never the wall clock since its `break_start`.
+    let on_break = ctx.replay.open_break.as_ref().map(|b| {
+        tm_core::emit::OnBreak::new(b.started.with_timezone(&ctx.cfg.tz), b.planned_min, &plan.segments, ctx.now_tz)
     });
     let break_ = ctx.replay.open_break.as_ref().zip(on_break.as_ref()).map(|(b, ob)| BreakNowOut {
         start: hhmm(ob.started),

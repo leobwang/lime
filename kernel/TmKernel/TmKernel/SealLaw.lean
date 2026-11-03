@@ -845,6 +845,9 @@ theorem openEnded_reads_state (st : State) (hs : List (Nat × HeaderRec)) (n : N
     askAnswer v .openEnded = some (Replay.ask ⟨Replay.finish st, hs, n⟩ .openEnded) := by
   show some (Replay.Answer.openEnded v.openEnded) = some (Replay.Answer.openEnded (Replay.finish st).openEnded)
   rw [h]; rfl
+/-- **The breaks held with their own `break` line, of an answer holding a state's machine, are the finished state's** (W-53 repair track K, D147's fact): `openEnded_reads_state`'s, for `Replay.finished`. -/
+theorem openFinished_reads_state (st : State) (hs : List (Nat × HeaderRec)) (n : Nat) (v : Seal.Answer) (h : v.openFinished = Replay.finished st.machine) : askAnswer v .openFinished = some (Replay.ask ⟨Replay.finish st, hs, n⟩ .openFinished) := by
+  show some (Replay.Answer.openFinished v.openFinished) = some (Replay.Answer.openFinished (Replay.finish st).openFinished); rw [h]; rfl
 
 /-! ### The answer of a specification checkpoint, field by field -/
 
@@ -884,6 +887,7 @@ theorem answer_openBreak : (answer (ckptOfEntries z T₀ L cut es er ws)).openBr
 theorem answer_openEnded : (answer (ckptOfEntries z T₀ L cut es er ws)).openEnded
     = Replay.endable (foldedState z es er).machine := by
   simp only [answer, ckptOfEntries]
+theorem answer_openFinished : (answer (ckptOfEntries z T₀ L cut es er ws)).openFinished = Replay.finished (foldedState z es er).machine := by simp only [answer, ckptOfEntries]
 theorem answer_lastDay :
     (answer (ckptOfEntries z T₀ L cut es er ws)).lastDay = Replay.maxDay? ((foldedState z es er).days.pairs.map Prod.fst) := by
   simp only [answer, ckptOfEntries]
@@ -944,6 +948,8 @@ theorem answer_reads_state (z : Cal.Tz) (T₀ L cut : Nat) (es : List Entry) (ws
     exact openBreak_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openBreak z T₀ L cut es [] ws)
   | openEnded =>
     exact openEnded_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openEnded z T₀ L cut es [] ws)
+  | openFinished =>
+    exact openFinished_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openFinished z T₀ L cut es [] ws)
   | lastDay => exact hsc.2.2.1
   | lastEffective => exact hsc.2.2.2.1
   | unknown => exact hsc.2.2.2.2.1
@@ -1119,13 +1125,13 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
       intro M; unfold Replay.brkArm
       rw [List.filterMap_append, Replay.reachFx_filterMap Effect.durationOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).2.1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.1, List.nil_append]
-      exact (Replay.brkFx_obs dy _ t _ d).2
+      exact (Replay.brkFx_obs dy _ _).2
+    have hd : ∀ M x0, (Replay.d141Arm dy M x0 e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := fun M x0 => by unfold Replay.d141Arm; split; (simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _); rfl
     split
-    · -- D141: the ending's segment and record undone are day records; then a `break` line's arm
-      unfold Replay.d141Arm; split
-      · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _
-      · rfl
-    · exact hb _
+    · unfold Replay.brkOwn; split; exact hd _ _; exact hb _
+    · unfold Replay.brkLine Replay.finArm; split; exact hd _ _; split; split; exact hd _ _; exact hb _; exact hb _
+    -- (D147: a finished break a later line re-times is `d141Arm`'s too)
+    -- (D147)
   case brkStart planned where_ =>
     split
     · exact (Replay.endBrkFx_obs dy m _ _ _).2.1
