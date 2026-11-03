@@ -202,6 +202,10 @@ fn a_break_tying_a_start_logged_before_it_runs() {
 /// — after the block's `start`, so no start ends it: it runs, and the verb says nothing of D129. Until
 /// the W-50 repair it was "ended at 13:50, at the `start` the log already holds after it" (the only
 /// start is 12:55), drawn `13:00 · break 50m`, and `tm review day` read 50 minutes of break.
+///
+/// **Typed with NO length since the owner's D149** (stage 6 W-54 track H, parity P147; a behaviour row, never a
+/// re-bless): `tm break --now 13:00 10m` inside `^t4`, which the 14:30 `done` closed, is now logged finished in one
+/// plain line, so the break that RUNS — this row's subject — is the no-length keystroke; the readings are unchanged.
 #[test]
 fn a_late_break_inside_a_block_is_not_ended_by_its_first_drawn_piece() {
     let tm = Tm::empty();
@@ -210,7 +214,7 @@ fn a_late_break_inside_a_block_is_not_ended_by_its_first_drawn_piece() {
     tm.ok_at("2026-09-07T07:00:00-05:00", &["arrive", "lounge"]);
     tm.ok_at("2026-09-07T12:55:00-05:00", &["start", "^t4"]);
     tm.ok_at("2026-09-07T14:30:00-05:00", &["done"]);
-    let out = tm.ok_at("2026-09-07T13:00:00-05:00", &["break", "10m"]);
+    let out = tm.ok_at("2026-09-07T13:00:00-05:00", &["break"]);
     assert!(!out.stderr.contains("D129"), "a drawn piece ended the break: {}", out.stderr);
     assert!(!tm.state()["break"].is_null(), "no break runs: {}", tm.state());
     // Its own `break` line, ten minutes on, ends it there: ten minutes of break, not fifty.

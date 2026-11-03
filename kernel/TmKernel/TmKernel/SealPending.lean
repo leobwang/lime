@@ -130,8 +130,8 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         · exact Or.inl rfl
       · exact Or.inl rfl
   case brk p a w =>
-    have hbk : ∀ M : Machine, M.block = m.block → m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → m'.block.bind (·.obs) = m.block.bind (·.obs) := fun M hM hm => by
-      unfold Replay.brkArm at hm
+    have hbk : ∀ (M : Machine) (k0 : Replay.HeldBrk), M.block = m.block → m' ∈ (Replay.brkArmK dy M e t d p.val (a.map (·.val)) k0).filterMap Effect.machineOf? → m'.block.bind (·.obs) = m.block.bind (·.obs) := fun M k0 hM hm => by
+      unfold Replay.brkArmK at hm
       rw [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
       have h := (Replay.brkFx_machine dy _ _ m' hm).2.2
@@ -142,14 +142,14 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     · -- D141 (and D147's finished break): the undoing writes no machine; then a `break` line's arm over the machine with that break let go
       unfold Replay.d141Arm at hm; split at hm
       · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
-        exact Or.inl (hbk _ (by rfl) hm)
+        exact Or.inl (hbk _ _ (by rfl) hm)
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
-    · exact Or.inl (hbk m rfl hm)
+    · exact Or.inl (hbk m _ rfl hm)
   case brkStart pl w =>
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      exact Or.inl (Replay.takeFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w⟩ m' hm').2.2
+      exact Or.inl (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm').2.2
     unfold Replay.brkStartArm at hm
     -- D105: the running break is set and the block, with its pending observation, untouched — settled over the
     -- running break and the held closed blocks netted by it since README gap 5180, neither of which moves it.

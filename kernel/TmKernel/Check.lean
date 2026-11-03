@@ -9148,24 +9148,17 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.forgetIdle_headOk
 #print axioms Tm.Replay.forgetIdle_keeps
 #print axioms Tm.Replay.conserves_netTake
-#print axioms Tm.Replay.conserves_takeFx
-#print axioms Tm.Replay.takeFx_brk
-#print axioms Tm.Replay.takeFx_brkOpen
-#print axioms Tm.Replay.takeFx_machine
-#print axioms Tm.Replay.takeFx_block
+#print axioms Tm.Replay.brkFx_block
 #print axioms Tm.Replay.a_break_line_before_its_d129_end_ends_the_break_there
 #print axioms Tm.Replay.a_break_line_at_or_after_its_d129_end_is_the_breaks_own
 #print axioms Tm.Replay.a_break_line_ending_at_its_d129_end_is_the_breaks_own
 #print axioms Tm.Replay.a_break_line_ending_a_covered_break_leaves_two_records
 #print axioms Tm.Replay.a_break_line_for_an_older_ended_break_a_newer_one_overlaps_is_its_own
 #print axioms Tm.Replay.forgetIdle_clears_a_take_only_with_no_break_running
-#print axioms Tm.Seal.takeFx_congr
 #print axioms Tm.Seal.mi_of_sub
 #print axioms Tm.Seal.forget_mi
 #print axioms Tm.Seal.forgetIdle_mi
 #print axioms Tm.Seal.tail_mi
-#print axioms Tm.Seal.takeFx_mi
-#print axioms Tm.BreakFold.takeFx_noBrkSeg
 #print axioms Tm.BreakFold.undo141_seg
 #print axioms Tm.BreakFold.stepWith_brkHeld_d141
 #print axioms Tm.Replay.a_d129_ending_covered_in_part_is_recorded_by_its_drawn_minutes
@@ -9247,7 +9240,6 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.doneClose_noRedraw
 #print axioms Tm.Replay.machineList_noRedraw
 #print axioms Tm.Replay.brkFx_noRedraw
-#print axioms Tm.Replay.takeFx_noRedraw
 #print axioms Tm.Replay.doneFx_noRedraw
 #print axioms Tm.Replay.extendFx_noRedraw
 #print axioms Tm.Replay.dayArm_noRedraw
@@ -9279,7 +9271,6 @@ seal laws re-proved over the instants they read. -/
    ====================================================================== -/
 #print axioms Tm.Replay.col3_is_one_day_in_either_logging_order
 #print axioms Tm.Replay.col2_draws_each_minute_once
-#print axioms Tm.Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line
 #print axioms Tm.Seal.openFinished_reads_state
 #print axioms Tm.Seal.answer_openFinished
 #print axioms Tm.Replay.arm_brk_eq
@@ -9296,3 +9287,31 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.PlannerWit.a_running_break_is_drawn_from_where_the_logged_breaks_stop
 #print axioms Tm.PlannerWit.the_running_break_row_starts_where_it_started_as_w35_stated_it_is_refuted
 #print axioms Tm.Replay.two_finished_breaks_at_one_stamp_stay_two
+
+/-! APPENDED 2026-11-03, stage 6 W-54 track K (README gaps 5870-5889): the re-time's give-back from an open block
+    (`openTakes`), the later nettings kept, the exact un-draw, the P127 take kept, the finished-break fact's contract,
+    twins as one, the widest end, and the refutations of the W-53 repair's unrefuted old forms and of this step's
+    restated `arm_brk_of_endable`. -/
+#print axioms Tm.Replay.brkArmK_mem
+#print axioms Tm.Replay.finished_mem
+#print axioms Tm.Replay.finished_of_running
+#print axioms Tm.Replay.a_finished_break_is_re_timed_by_its_line
+#print axioms Tm.Replay.pruneBrks_pair_ne
+#print axioms Tm.Replay.arm_brk_of_endable_as_w53r_stated_it_is_refuted
+#print axioms Tm.Replay.the_finished_breaks_are_the_ones_a_line_re_times
+#print axioms Tm.Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line_as_w53r_stated_it_is_refuted
+#print axioms Tm.Seal.openTakes_mi
+#print axioms Tm.Seal.arm_brks_as_w53_stated_it_is_refuted
+#print axioms Tm.BreakFold.stepWith_brks_as_w53_stated_it_is_refuted
+#print axioms Tm.BreakFold.stepWith_brks_of_brk_as_w53_stated_it_is_refuted
+#print axioms Tm.Replay.a_retime_gives_back_what_the_break_took_from_an_open_block
+#print axioms Tm.Replay.a_retime_keeps_a_later_breaks_take
+#print axioms Tm.Replay.col3_with_a_retime_is_one_day_in_every_logging_order
+#print axioms Tm.Replay.a_retime_of_a_p127_break_gives_back_its_take
+#print axioms Tm.Replay.the_fact_omits_a_break_a_newer_one_overlaps
+#print axioms Tm.Replay.twin_finished_breaks_are_re_timed_as_one
+#print axioms Tm.Replay.a_finished_break_keeps_its_widest_end
+#print axioms Tm.Replay.a_longer_line_raises_the_widest_end
+#print axioms Tm.Replay.a_retime_gives_back_only_what_a_paused_block_worked
+#print axioms Tm.Replay.a_p127_line_lets_its_ending_go
+#print axioms Tm.Replay.a_retime_raises_the_duration_observation

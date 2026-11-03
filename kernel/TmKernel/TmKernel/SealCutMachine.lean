@@ -164,21 +164,21 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         · exact Or.inl rfl
       · exact Or.inl rfl
   case brk p a w =>
-    have hbk : ∀ M : Machine, m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → m' ∈ (Replay.brkFx dy (Replay.giveBack dy M).1 (Replay.heldOf M e t d p.val (a.map (·.val)))).filterMap Effect.machineOf? := fun M hm => by
-      unfold Replay.brkArm at hm; rwa [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil, List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
+    have hbk : ∀ (M : Machine) (k0 : Replay.HeldBrk), m' ∈ (Replay.brkArmK dy M e t d p.val (a.map (·.val)) k0).filterMap Effect.machineOf? → m' ∈ (Replay.brkFx dy (Replay.giveBack dy M).1 k0).filterMap Effect.machineOf? := fun M k0 hm => by
+      unfold Replay.brkArmK at hm; rwa [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil, List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
     have hcase : (∃ x0, m' ∈ (Replay.d141Arm dy m x0 e t d p.val (a.map (·.val))).filterMap Effect.machineOf?) ∨ m' ∈ (Replay.brkArm dy m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? := by split at hm; (rcases Replay.brkOwn_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm); (rcases Replay.brkLine_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm)
     rcases hcase with ⟨x0, hm⟩ | hm
     · unfold Replay.d141Arm at hm; split at hm  -- that break let go — its last cut, interruption and running break the old one's
       · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
-        have h := congrArg (Option.map (fun x => x.2.2)) (Replay.giveBack_brkFx_machine dy _ _ m' (hbk _ hm)).1; simp only [Option.map_map, Function.comp_def] at h; exact Or.inl h
+        have h := congrArg (Option.map (fun x => x.2.2)) (Replay.giveBack_brkFx_machine dy _ _ m' (hbk _ _ hm)).1; simp only [Option.map_map, Function.comp_def] at h; exact Or.inl h
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
-    · have h := congrArg (Option.map (fun x => x.2.2)) (Replay.giveBack_brkFx_machine dy m _ m' (hbk _ hm)).1; simp only [Option.map_map, Function.comp_def] at h; exact Or.inl h
+    · have h := congrArg (Option.map (fun x => x.2.2)) (Replay.giveBack_brkFx_machine dy m _ m' (hbk _ _ hm)).1; simp only [Option.map_map, Function.comp_def] at h; exact Or.inl h
   case brkStart pl w =>
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
       have h := congrArg (Option.map (fun x => x.2.2))
-        (Replay.takeFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w⟩ m' hm').1
+        (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm').1
       simp only [Option.map_map, Function.comp_def] at h
       exact Or.inl h
     · unfold Replay.brkStartArm at hm
@@ -279,20 +279,20 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
         · exact Or.inl rfl
       · exact Or.inl rfl
   case brk p a w =>
-    have hbk : ∀ M : Machine, m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → m' ∈ (Replay.brkFx dy (Replay.giveBack dy M).1 (Replay.heldOf M e t d p.val (a.map (·.val)))).filterMap Effect.machineOf? := fun M hm => by
-      unfold Replay.brkArm at hm; rwa [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil, List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
+    have hbk : ∀ (M : Machine) (k0 : Replay.HeldBrk), m' ∈ (Replay.brkArmK dy M e t d p.val (a.map (·.val)) k0).filterMap Effect.machineOf? → m' ∈ (Replay.brkFx dy (Replay.giveBack dy M).1 k0).filterMap Effect.machineOf? := fun M k0 hm => by
+      unfold Replay.brkArmK at hm; rwa [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil, List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
     have hcase : (∃ x0, m' ∈ (Replay.d141Arm dy m x0 e t d p.val (a.map (·.val))).filterMap Effect.machineOf?) ∨ m' ∈ (Replay.brkArm dy m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? := by split at hm; (rcases Replay.brkOwn_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm); (rcases Replay.brkLine_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm)
     rcases hcase with ⟨x0, hm⟩ | hm
     · unfold Replay.d141Arm at hm; split at hm  -- that break let go — its last cut, interruption and running break the old one's
       · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
-        exact Or.inl (Replay.giveBack_brkFx_machine dy _ _ m' (hbk _ hm)).2.1
+        exact Or.inl (Replay.giveBack_brkFx_machine dy _ _ m' (hbk _ _ hm)).2.1
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
-    · exact Or.inl (Replay.giveBack_brkFx_machine dy m _ m' (hbk _ hm)).2.1
+    · exact Or.inl (Replay.giveBack_brkFx_machine dy m _ m' (hbk _ _ hm)).2.1
   case brkStart pl w =>
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      exact Or.inl (Replay.takeFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w⟩ m' hm').2.1
+      exact Or.inl (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm').2.1
     · unfold Replay.brkStartArm at hm
       simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
         List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
@@ -384,20 +384,20 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     subst hm
     exact Or.inl ((Replay.runNet_keeps dy _).2.2.2.1.trans (Replay.doneClose_brkOpen dy m t id actual.val went))
   case brk p a w =>
-    have hbk : ∀ M : Machine, m' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → m' ∈ (Replay.brkFx dy (Replay.giveBack dy M).1 (Replay.heldOf M e t d p.val (a.map (·.val)))).filterMap Effect.machineOf? := fun M hm => by
-      unfold Replay.brkArm at hm; rwa [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil, List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
+    have hbk : ∀ (M : Machine) (k0 : Replay.HeldBrk), m' ∈ (Replay.brkArmK dy M e t d p.val (a.map (·.val)) k0).filterMap Effect.machineOf? → m' ∈ (Replay.brkFx dy (Replay.giveBack dy M).1 k0).filterMap Effect.machineOf? := fun M k0 hm => by
+      unfold Replay.brkArmK at hm; rwa [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil, List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
     have hcase : (∃ x0, m' ∈ (Replay.d141Arm dy m x0 e t d p.val (a.map (·.val))).filterMap Effect.machineOf?) ∨ m' ∈ (Replay.brkArm dy m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? := by split at hm; (rcases Replay.brkOwn_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm); (rcases Replay.brkLine_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm)
     rcases hcase with ⟨x0, hm⟩ | hm
     · unfold Replay.d141Arm at hm; split at hm  -- that break let go — its last cut, interruption and running break the old one's
       · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
-        exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy _ _ m' (hbk _ hm)))
+        exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy _ _ m' (hbk _ _ hm)))
       · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
-    · exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy _ _ m' (hbk _ hm)))
+    · exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy _ _ m' (hbk _ _ hm)))
   case brkStart pl w =>
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      exact Or.inr (Or.inl (Replay.takeFx_brkOpen dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w⟩ m' hm'))
+      exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm'))
     · unfold Replay.brkStartArm at hm
       simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
         List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm

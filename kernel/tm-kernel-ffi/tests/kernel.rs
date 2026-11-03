@@ -1566,8 +1566,9 @@ fn the_log_op_answers_a_running_break() {
     assert!(malformed.contains(r#""warnings":[{"line":1,"w":"badField","key":"where"}]"#), "{malformed}");
     let over = ask(&format!("{start},{ended}"));
     // since W-53 repair track K the `break` line's break is a finished one (D147's fact): held as the kernel holds it,
-    // from the line's `t` for its minutes, with the `break_start`'s place (D116) and the line's own line as its key
-    assert!(over.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[[[63924369600,0,false,0],[63924370800,0,false,0],20,"walk",739865,2]]},"#), "{over}");
+    // from the line's `t` for its minutes, with the `break_start`'s place (D116) and the line's own line as its key —
+    // and, since W-54 track K (the owner's D150), the widest end the log held for it, its own end here
+    assert!(over.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[[[63924369600,0,false,0],[63924370800,0,false,0],20,"walk",739865,2,[63924370800,0,false,0]]]},"#), "{over}");
     let cancelled = ask(&format!("{start},{undone}"));
     assert!(cancelled.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[]},"#), "{cancelled}");
 }
