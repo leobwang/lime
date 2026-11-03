@@ -205,6 +205,21 @@ fn a_no_length_break_past_a_shortened_breaks_end_retimes_it_out_p148() {
     assert_eq!(v["action"], "unchanged", "at its new end: {v}");
 }
 
+/// **D147's own row, one instant on** (`cli_d147_retime.rs`'s first row typed 09:26 here until W-54): `09:20 10m`
+/// re-timed to 09:24, then `tm break --now 09:26` — inside the widest span (09:30) — re-times it OUT to 09:26: the
+/// break six, `^t1` fifty-four.
+#[test]
+#[ignore = "P148: D150's widest end is track K's fact (W-54 track K item 6); `widest_of` in day.rs is a stub until the land wires it"]
+fn a_break_retimed_in_is_retimed_out_inside_its_old_span_p148() {
+    let tm = j_tree();
+    tm.ok_at(&at("09:20"), &["break", "10m"]);
+    assert!(tm.ok_at(&at("09:24"), &["break"]).stdout.contains("re-timed to end at 09:24 (D147)"));
+    let v = tm.json_at(&at("09:26"), &["break"]);
+    assert_eq!((v["action"].as_str(), v["actual_min"].as_u64()), (Some("retimed"), Some(6)), "{v}");
+    assert_eq!(review(&tm), (114, vec![6]));
+    has_row(&rows(&tm), "09:20 · break 6m");
+}
+
 /// **`--json`**: `action` `retimed`, `superseded_end` the end it replaced.
 #[test]
 #[ignore = "P148: D150's widest end is track K's fact (W-54 track K item 6); `widest_of` in day.rs is a stub until the land wires it"]

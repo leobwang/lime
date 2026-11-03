@@ -81,8 +81,11 @@ fn a_no_length_break_inside_a_finished_break_retimes_it_p145() {
     assert!(rows.iter().any(|r| r == "09:20 · break 4m"), "{rows:#?}");
     assert!(rows.iter().any(|r| r == "09:24 5 ✓ Read ch.6 §1–2 @m3 1b (36m)"), "{rows:#?}");
     assert!(tm.read(&format!("day/{TUE}.md")).contains("09:24 break ended 4m/10m"));
-    let v = tm.json_at(&at("09:26"), &["break"]);
-    assert_eq!(v["action"], "started", "09:26 is outside the re-timed break: {v}");
+    // 09:31, past the break's WIDEST end (09:30): a break begins. Until stage 6 W-54 track H this row typed 09:26 —
+    // past the re-timed end but inside the break's widest span, where the owner's D150 (parity P148) re-times it OUT;
+    // that keystroke is `cli_w54_h_breaks.rs`'s P148 row now. A behaviour row, never a re-bless.
+    let v = tm.json_at(&at("09:31"), &["break"]);
+    assert_eq!(v["action"], "started", "09:31 is outside the break's widest span: {v}");
 }
 
 /// **`--json`**: `action` `retimed`, the new minutes, and `superseded_end` the end it replaced.

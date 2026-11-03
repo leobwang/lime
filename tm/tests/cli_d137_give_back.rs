@@ -37,15 +37,20 @@ fn breaks(tm: &Tm) -> Vec<Value> {
 }
 
 /// **D137 on a plain block (parity P134).** `^t1` 09:00–10:00, done with sixty; then — a clock behind the log — `tm
-/// break --now 09:30 10m`, which runs and nets `^t1` from 09:30 on (thirty, D129); ended at 09:40, its `break` line
+/// break --now 09:30`, which runs and nets `^t1` from 09:30 on (thirty, D129); ended at 09:40, its `break` line
 /// gives back what lies after its span: fifty, the block less the break. Until D137 the block stayed at thirty.
+///
+/// **Typed with NO length since the owner's D149** (stage 6 W-54 track H, parity P147; a behaviour row, never a
+/// re-bless): `tm break --now 09:30 10m` inside a block a later `done` closed is now logged finished in one plain line,
+/// so the break that RUNS — this row's subject — is the no-length keystroke (planned the example's twenty); the
+/// readings asserted are unchanged.
 #[test]
 fn a_late_breaks_line_gives_back_what_lies_after_it_p134() {
     let tm = tree(TUE);
     tm.ok_at(&at(TUE, "09:00"), &["start", "^t1"]);
     tm.ok_at(&at(TUE, "10:00"), &["done"]);
     assert_eq!(review_block_min(&tm, &at(TUE, "10:05")), 60, "the block, before any break");
-    tm.ok_at(&at(TUE, "09:30"), &["break", "10m"]);
+    tm.ok_at(&at(TUE, "09:30"), &["break"]);
     assert_eq!(review_block_min(&tm, &at(TUE, "10:05")), 30, "while the break runs it nets the block from 09:30 (D129)");
     tm.ok_at(&at(TUE, "09:40"), &["break"]);
     let b = breaks(&tm);
@@ -60,7 +65,7 @@ fn a_late_breaks_line_gives_back_what_lies_after_it_p134() {
 /// wall holds it paused until 13:50 (D110), done at 14:30; then `tm break --now 13:00 10m`, ended at 13:10. While the
 /// break runs it nets the block from 13:00 — all of it; once ended, the break's span `[13:00, 13:10)` lies inside the
 /// meeting, where the block drew nothing, so nothing of the block is netted and it reads its whole forty minutes
-/// (13:50–14:30). Until D137 it read 0.
+/// (13:50–14:30). Until D137 it read 0. Typed with NO length since D149 (P147), as the row above.
 #[test]
 fn a_late_break_inside_a_meeting_gives_the_whole_block_back_p134() {
     let tm = tree(MON);
@@ -68,7 +73,7 @@ fn a_late_break_inside_a_meeting_gives_the_whole_block_back_p134() {
     tm.ok_at(&at(MON, "14:30"), &["done"]);
     let before = review_block_min(&tm, &at(MON, "14:35"));
     assert_eq!(before, 40, "13:50-14:30: the meeting held the block paused (D110)");
-    tm.ok_at(&at(MON, "13:00"), &["break", "10m"]);
+    tm.ok_at(&at(MON, "13:00"), &["break"]);
     assert_eq!(review_block_min(&tm, &at(MON, "14:35")), 0, "while the break runs it nets the block from 13:00 (D129)");
     tm.ok_at(&at(MON, "13:10"), &["break"]);
     assert_eq!(review_block_min(&tm, &at(MON, "14:35")), before, "the break's span meets none of the block (D137)");
