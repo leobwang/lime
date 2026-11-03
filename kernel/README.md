@@ -104998,7 +104998,19 @@ and `finished_breaks` is the kernel's alone.  The one snapshot that moved, `tm/t
 gains `widest` on each of its two finished breaks (each its own end) and nothing else — a decoded field, not a
 behaviour change.  The FFI crate's `the_log_op_answers_a_running_break` reads the seventh element of `open.finished`.
 
-**Acceptance.** [ACC]
+**Acceptance.** Taken on `27c62c6`, the final kernel, every command capped at 40 GB.
+* `check.sh`: all seventeen lines ok, 5 m 53 s. Axiom audit 7,115 theorems; FFI 97 tests; corpus 29/37 files and 4/5
+  whole plans; stage goals 1 (`plan_places_no_block_over_a_break`, unchanged); check 9 965 new or changed since
+  `86c4dc6`, 965 rostered, 0 owed; parity 145 registered (P1–P146, one declared hole); check 12 1,699 reachable,
+  0 unanswered.
+* `cargo test --workspace --no-fail-fast`, **three runs** (D46): each **3,154 passed / 1 failed / 54 ignored over 188
+  result lines**. The one failure in each is `cli_latency`'s
+  `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second` (`tm drop ^z15` at about 1.02 s against a 1 s
+  bound, gap 5541's row). It is not this step's: on the captured stall tree the base binary (`2e3c9d6`) measured
+  1,014–1,040 ms against this step's 1,020–1,027 ms. None of the three runs added a proptest seed.
+* Before the fix for gap 5883, a fourth run (3,153 / 2 / 54) drew the `kernel_break_union` seed this step commits.
+  With the fix, `kernel_break_union` reads 21 passed / 0 failed, the seed included.
+* FFI crate `cargo test`: **105 passed / 0 failed** (corpus 8, kernel 90, stack 7).
 
 ### 8. The drive (§5.13)
 
