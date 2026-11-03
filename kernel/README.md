@@ -105858,7 +105858,7 @@ keystroke by name (gap 5895) and writes nothing (§6, 3a-3d).
   what the parked reading reads is among those and the line's own (`Seal.brkPark_congr`), and naming them all keeps the
   list free of the index (`stepQueries_congr`).  `Seal.arm_congr` and the fold's congruence moved below the `_mi` family
   in `SealStep.lean` (their proofs now read it).
-* **Mutations (check 9), `mutate.py` capped at 16 GB in a `git clone --shared` sandbox:** MUTATIONS_PLACEHOLDER
+* **Mutations (check 9), `mutate.py` capped at 16 GB in a `git clone --shared` sandbox:** ten definitions new or changed — `Replay.parkM`, `Replay.lastMach`, `Replay.brkPark` and `Replay.otherMeets` new; `Replay.arm`, `Replay.lateWarnList`, `Replay.d141Arm`, `Replay.finished`, `Replay.wideOf` and `Seal.stepQueries` changed — each PINNED (`parkM` and `lastMach` unfoldable at `default`, no `Inhabited Machine`, and pinned by the identity on their machine and by a synthesised empty machine: `conserves_arm`, `a_parked_line_reads_as_if_logged_before_the_running_break`, `lastMach_eq`); and nine rows whose recorded pin sites the moves shifted re-run with `--verify --write --only` (`BreakFold.BrkHeld`, `Replay.dropTake`, `Replay.findFin`, `Seal.brkEndAt?`, `Seal.giveReads`, `Seal.machineInstants` — its row's file column now `SealResume.lean`, the body's sha unchanged — `Seal.settleReads`, `Seal.startReads`, `Seal.foldQueries`).  `mutate.py --gate`: 969 new or changed since `86c4dc6`, 969 rostered, 0 owed.
 * **Census (check 12).**  `reach-exempt.txt`: `Replay.lean` 190 of 329 emitted definitions reached (186 of 325 before;
   `parkM`, `lastMach`, `brkPark` and `otherMeets` joined, each reached); `SealResume.lean` 39 of 56 (`machineInstants`
   moved in and is reached through `stepQueries`); its SealStep.lean exemption deleted (`EXEMPT 1095`).
@@ -105866,13 +105866,24 @@ keystroke by name (gap 5895) and writes nothing (§6, 3a-3d).
   `citations-allow.txt`.
 * **Pin padding.**  `SealCutMachine.lean`'s three `break` cases shrank to `Seal.arm_brk_machine_keeps`; 18 blank lines,
   with a comment saying so, keep check 9's recorded pin sites below where they were.
-* **Frozen comparands.**  FROZEN_PLACEHOLDER
+* **Frozen comparands.**  None moved: no file under `tm/tests/fixtures/` changed, and the fork's frozen `Replay` keys carry no `break_start` (fork 4748911 logged none).  Four behaviour rows were restated with the rule that moved them, each saying so in its doc comment: `kernel_break_start.rs`'s file-order pairing (an earlier-stamped `break` line no longer ends the running break, D145), `kernel_w53r_k_finished.rs`'s `a_partly_covered_break_keeps_its_own_end` and `kernel_w54_k_finished.rs`'s `the_fact_omits_a_break_a_newer_one_overlaps` (the fact empty, §3), and `cli_w52r_break_ends.rs`'s gap-5730 witness (`tm break --now 09:45` after the D141 end begins a break 10:10 ends again and prints the D129 notice, D151 — the row as it stood before the W-54 land).  The last is track H's file; the restatement is the land's to keep or move.
 * **Wire.**  No fact's shape changed: `open.finished`'s entries are the seven elements W-54 gave them; only which breaks
   are listed (§3) and which end a parked line holds as its widest (§2) moved.  No Rust decode changed.
 
 ### 5. Acceptance
 
-ACCEPTANCE_PLACEHOLDER
+Taken on `56891e1` (the kernel this block describes; only this block's prose moved after it), every command capped at
+40 GB.
+* `check.sh`: all seventeen lines ok, 6 m 01 s.  Axiom audit 7,154 theorems; FFI 97 tests; corpus 29/37 files and 4/5
+  whole plans; stage goals 1 (`plan_places_no_block_over_a_break`, unchanged); check 9 969 new or changed since `86c4dc6`,
+  969 rostered, 0 owed; parity 148 registered (P1–P148, no hole: P142 filled), next free `P149`; check 12 1,704
+  reachable, 0 unanswered; check 14 97 modules replayed by the kernel.
+* `cargo test --workspace --no-fail-fast`, **three runs** (D46), each over 190 result lines: 3,185 passed / 1 failed /
+  53 ignored, 3,186 / 0 / 53, and 3,185 / 1 / 53 (15 m 39–43 s each).  The one failure, in two of the three, is
+  `cli_latency`'s `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second` (gap 5541's row, failing on the
+  base too).  No `.proptest-regressions` file moved.  A first run before the four behaviour rows of §4 were restated
+  failed on those four and nothing else.
+* `kernel/tm-kernel-ffi` `cargo test`: **105 passed**, 0 failed, over 5 result lines.
 
 ### 6. The drives (§5.13)
 
@@ -105944,6 +105955,13 @@ stopped ^t4 after 40m · 20m left
 ✓ ^t4 Claude Code drafts tests · 40m/60m
 {"t":"2026-09-08T11:00:00-05:00","ev":"done","id":"t4","est_min":60,"actual_min":40,"tags":[],"ci":3}
   block 40 | breaks [(10, 10)]
+== gap 5879's reach: J day, 09:20 20m, 09:30 20m, 09:20 20m again, then --now 09:25
+break 20m · 09:20–09:40 · logged finished (a later start follows it, D143)
+break 20m · 09:30–09:50 · logged finished (a later start follows it, D143)
+break 20m · 09:20–09:40 · logged finished (a later start follows it, D143)
+  block 90 | breaks [(20, 20), (20, 10), (20, 0)]
+tm: a break is drawn 09:20–09:40 here (a break logged at 09:20), and another logged break overlaps it — `tm break` cannot re-time it (D147) and would begin a break inside it; type a length to log a finished break (D143), or `tm undo` the line that overlaps it
+  block 90 | breaks [(20, 20), (20, 10), (20, 0)]
 ```
 
 Base (the W-54 land's binary, 418e5d5):
