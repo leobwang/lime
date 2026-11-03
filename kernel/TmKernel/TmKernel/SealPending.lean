@@ -130,21 +130,34 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
         · exact Or.inl rfl
       · exact Or.inl rfl
   case brk p a w =>
-    have hbk : ∀ (M : Machine) (k0 : Replay.HeldBrk), M.block = m.block → m' ∈ (Replay.brkArmK dy M e t d p.val (a.map (·.val)) k0).filterMap Effect.machineOf? → m'.block.bind (·.obs) = m.block.bind (·.obs) := fun M k0 hM hm => by
+    have hbk : ∀ (m'' M : Machine) (k0 : Replay.HeldBrk), M.block = m.block → m'' ∈ (Replay.brkArmK dy M e t d p.val (a.map (·.val)) k0).filterMap Effect.machineOf? → m''.block.bind (·.obs) = m.block.bind (·.obs) := fun m'' M k0 hM hm => by
       unfold Replay.brkArmK at hm
       rw [List.filterMap_append, Replay.reachFx_filterMap Effect.machineOf? (fun _ _ => rfl), List.append_nil, List.filterMap_append, (Replay.brkDay_obs3 M e t d _ _).1, List.append_nil,
         List.filterMap_append, (Replay.giveBack_obs dy M).2.2, List.nil_append] at hm
-      have h := (Replay.brkFx_machine dy _ _ m' hm).2.2
+      have h := (Replay.brkFx_machine dy _ _ m'' hm).2.2
       rw [(Replay.giveBack_keeps dy M).1, hM] at h
       exact h
-    have hcase : (∃ x0, m' ∈ (Replay.d141Arm dy m x0 e t d p.val (a.map (·.val))).filterMap Effect.machineOf?) ∨ m' ∈ (Replay.brkArm dy m e t d p.val (a.map (·.val))).filterMap Effect.machineOf? := by split at hm; (rcases Replay.brkOwn_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm); (rcases Replay.brkLine_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm)
-    rcases hcase with ⟨x0, hm⟩ | hm
-    · -- D141 (and D147's finished break): the undoing writes no machine; then a `break` line's arm over the machine with that break let go
-      unfold Replay.d141Arm at hm; split at hm
-      · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
-        exact Or.inl (hbk _ _ (by rfl) hm)
-      · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; exact Or.inl rfl
-    · exact Or.inl (hbk m _ rfl hm)
+    have hDA : ∀ (M m'' : Machine), M.block = m.block → ((∃ x0, m'' ∈ (Replay.d141Arm dy M x0 e t d p.val (a.map (·.val))).filterMap Effect.machineOf?) ∨ m'' ∈ (Replay.brkArm dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf?) → m''.block.bind (·.obs) = m.block.bind (·.obs) := fun M m'' hM hc => by
+      rcases hc with ⟨x0, hm⟩ | hm
+      · -- D141 (and D147's finished break): the undoing writes no machine; then a `break` line's arm over the machine with that break let go
+        unfold Replay.d141Arm at hm; split at hm
+        · simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.nil_append] at hm
+          exact hbk _ (Replay.d141Machine M x0) _ hM hm
+        · simp only [List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton] at hm; subst hm; show M.block.bind (·.obs) = _; rw [hM]
+      · exact hbk _ _ _ hM hm
+    have hLn : ∀ (M m'' : Machine), M.block = m.block → m'' ∈ (Replay.brkLine dy M e t d p.val (a.map (·.val))).filterMap Effect.machineOf? → m''.block.bind (·.obs) = m.block.bind (·.obs) := fun M m'' hM hm => hDA M m'' hM (by rcases Replay.brkLine_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm)
+    replace hm : m' ∈ (Replay.arm dy sl m e t d).filterMap Effect.machineOf? := by unfold Replay.arm; simp only [hev]; exact hm
+    rcases Replay.arm_brk_eq dy sl m e t d hev with ⟨o, -, -, he⟩ | ⟨o, -, -, he⟩ | ⟨-, he⟩ <;> rw [he] at hm
+    · exact Or.inl (hDA m m' rfl (by rcases Replay.brkOwn_machines hm with ⟨x0, -, hm⟩ | hm; exact Or.inl ⟨x0, hm⟩; exact Or.inr hm))
+    · -- the owner's D145: the parked reading, over the parked machine (its block the old one), then the running break opened again
+      have hpk : (Replay.parkM dy m).block = m.block := (Replay.giveBack_keeps dy m).1
+      have hM : ∀ M2, (M2 = Replay.parkM dy m ∨ M2 ∈ (Replay.brkArm dy (Replay.parkM dy m) e t d p.val (a.map (·.val))).filterMap Effect.machineOf?) → M2.block.bind (·.obs) = m.block.bind (·.obs) := fun M2 h => by rcases h with rfl | h; (rw [hpk]); exact hDA _ _ hpk (Or.inr h)
+      rcases brkPark_machine_cases hm with ⟨y, -, hm⟩ | ⟨M2, hM2, h | h⟩
+      · exact Or.inl (hDA m m' rfl (Or.inl ⟨y, hm⟩))
+      all_goals rw [h]
+      · exact Or.inl (hM M2 hM2)
+      · exact Or.inl ((reopen_keeps dy M2 o).1.trans (hM M2 hM2))
+    · exact Or.inl (hLn m m' rfl hm)
   case brkStart pl w =>
     split at hm
     · rename_i t0 _

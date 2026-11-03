@@ -108,11 +108,13 @@ def startQueries (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : Repl
     settleReads (Replay.startedMachine m id t d
       (rep.map (fun rp => ⟨line, t, d, pred, rp, hsw, loc, some sleptMin.val, none, some id, true⟩)))
 
+/-- **The instants a machine holds**: its open block's start, clock start, pause start and the ends of its own idle spans (the owner's D99: a piece a later step draws begins at its start or at one of these ends), and — since the owner's D92 (README gap 4241), every break it holds since D94 (README gaps 4361 and 4506) — the ends of the breaks it holds, where a piece after one begins; and — since the owner's D100 (README gap 4520b) — the starts of the pieces of every closed block it holds, where a piece a late break re-draws for one begins (or at the break's end); and — since the owner's D137 (README gaps 5504 and 5302) — the starts of the pieces a running break took from one (`Closed.ran`), where a piece the `break` line gives back begins; and, since W-52 repair track R (README gaps 5711 and 5712), the starts of the pieces every D129 ending holds as its take (`Closed.held`), which its own `break` line gives back. -/
+def machineInstants (m : Machine) : List Cal.Instant := (match m.block with | some b => b.started.1 :: ((b.since.map (·.1)).toList ++ (b.pausedAt.map (·.1)).toList ++ b.idle.map (·.2.1)) | none => []) ++ (m.brks.map (·.e.1) ++ m.closed.flatMap (fun C => (C.drawn ++ C.ran ++ C.held.flatMap (·.ran)).map (·.s.1)))
 /-- **Every instant a step reads the day index at**: the entry's own (`entryInstants`), the open block's pause start
 when the step closes it (`closePause`), and — since the owner's D99 (README gap 4520a) — the start of every piece the
 step draws for the open block that was not drawn before (`settleReads`, `cutReads`): a piece drawn before is moved by
 un-drawing it from the day it was filed under, which is read nowhere.  The day index `dy` is read here only at the
-entry's own stamp (the ledger day a `start` opens its block on, and a `break` is held with). -/
+entry's own stamp (the ledger day a `start` opens its block on, and a `break` is held with).  **Since the owner's D145** (W-54 repair track K, README gap 5927) a `break` line read with the running break parked (`Replay.brkPark`) is answered by every instant the machine holds (`machineInstants`): what the parked reading reads is among them and the step's own (`stepQueries_sub`), and naming them all keeps the list free of the index (`stepQueries_congr`) — a resume refuses such a step where a narrower list might not have, and a genesis answers it. -/
 def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.Instant :=
   entryInstants e ++
     match e.ev with
@@ -164,20 +166,18 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
       | none =>
         settleReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
           runReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
-    | .brk planned actual _ =>
+    | .brk planned actual _ => if (m.brkOpen.map (fun o => decide (o.s.1.sec / 60 = e.t.val.sec / 60))) = some false then machineInstants m else
       match Replay.findEnded m (e.t.val, e.off.val) with
       | some x =>
         if Replay.d141Ok m x (Replay.brkEnd (e.t.val, e.off.val) planned.val (actual.map (·.val))) (dy e.t.val) then
           giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1
-            (Replay.wideOf x (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))))
+            (Replay.wideOf m x (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))))
         else []
       | none =>
         giveReads m ++ brkFxReads (Replay.giveBack dy m).1 (Replay.heldOf m e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val))) ++
-          (match Replay.findFin m (e.t.val, e.off.val) planned.val with | some x => giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1 (Replay.wideOf x (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val)))) | none => [])
+          (match Replay.findFin m (e.t.val, e.off.val) planned.val with | some x => giveReads (Replay.d141Machine m x) ++ brkFxReads (Replay.giveBack dy (Replay.d141Machine m x)).1 (Replay.wideOf m x (Replay.heldOf (Replay.d141Machine m x) e (e.t.val, e.off.val) (dy e.t.val) planned.val (actual.map (·.val)))) | none => [])
     | _ => []
-
 /-! ### What a netting reads depends on the held blocks' days and spans alone (README gap 5180)
-
 The running break's netting is read over a machine a step has just written (a cut's, a `done`'s), whose held blocks
 carry days and credits the index gave — but `closedReads` and `Replay.runTo` read a held block's ledger day and its
 pieces' spans and nothing else, and those do not depend on the index.  So the queries still depend on the index only at
@@ -373,7 +373,7 @@ theorem stepQueries_congr (dy₁ dy₂ : Cal.Instant → Nat) (m : Machine) (e :
           rw [Replay.doneClose_brkOpen, Replay.doneClose_brkOpen])
       (doneClosed_shp dy₁ dy₂ m e.line (e.t.val, e.off.val) id actual.val ci)]
   case brk planned actual where_ =>
-    split
+    split; rfl; split -- (the owner's D145: a parked line names `machineInstants m`, free of the index)
     · split
       · rw [brkFxReads_giveBack dy₁ dy₂]
       · rfl

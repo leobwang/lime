@@ -1548,7 +1548,10 @@ fn the_log_op_answers_a_running_break() {
     // other word is a malformed line and holds no running break (asserted below with `cafe`).
     let start = r#""{\"t\":\"2026-09-07T09:00:00Z\",\"ev\":\"break_start\",\"planned_min\":20,\"where\":\"walk\"}""#;
     let off_the_table = r#""{\"t\":\"2026-09-07T09:00:00Z\",\"ev\":\"break_start\",\"planned_min\":20,\"where\":\"cafe\"}""#;
-    let ended = r#""{\"t\":\"2026-09-07T09:20:00Z\",\"ev\":\"break\",\"planned_min\":20,\"actual_min\":20,\"where\":\"cafe\"}""#;
+    // stamped at its start, as every verb that ends a break writes it (`day::end_break_at`): since the owner's D145
+    // (W-54 repair track K, parity P142) a `break` line stamped outside the running break's start's minute is a finished
+    // break's and ends only its own break (until then this line was stamped 09:20, and ended the break in file order)
+    let ended = r#""{\"t\":\"2026-09-07T09:00:00Z\",\"ev\":\"break\",\"planned_min\":20,\"actual_min\":20,\"where\":\"cafe\"}""#;
     let undone = r#""{\"t\":\"2026-09-07T09:01:00Z\",\"ev\":\"undo\",\"of\":\"break_start\"}""#;
     let ask = |lines: &str| {
         call(&format!(r#"{{"docs":[],"now":"2026-09-07","tz":{utc},"log":{{"ckpt":null,"from":1,"lines":[{lines}],"terminated":true,"want":{{"facts":true}}}}}}"#)).unwrap()
@@ -1568,7 +1571,7 @@ fn the_log_op_answers_a_running_break() {
     // since W-53 repair track K the `break` line's break is a finished one (D147's fact): held as the kernel holds it,
     // from the line's `t` for its minutes, with the `break_start`'s place (D116) and the line's own line as its key —
     // and, since W-54 track K (the owner's D150), the widest end the log held for it, its own end here
-    assert!(over.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[[[63924369600,0,false,0],[63924370800,0,false,0],20,"walk",739865,2,[63924370800,0,false,0]]]},"#), "{over}");
+    assert!(over.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[[[63924368400,0,false,0],[63924369600,0,false,0],20,"walk",739865,2,[63924369600,0,false,0]]]},"#), "{over}");
     let cancelled = ask(&format!("{start},{undone}"));
     assert!(cancelled.contains(r#""open":{"block":null,"interrupt":null,"break":null,"ended":[],"finished":[]},"#), "{cancelled}");
 }

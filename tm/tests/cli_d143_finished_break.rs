@@ -292,7 +292,6 @@ fn a_backdated_finished_break_leaves_the_running_breaks_cache_p140() {
 /// running — `tm now` at 10:40 reads `^t4` paused and `on break since 10:30 · 10m of 20m`, no verb re-logs the cached
 /// break (D133 has nothing to log), `tm check` is silent, and deleting `.tm/state.json` changes nothing (D42).
 #[test]
-#[ignore = "P142: D145 (a finished break's `break` line ends only its own break) is unbuilt -- README gap 5820; un-ignore when it lands"]
 fn a_backdated_finished_break_leaves_a_running_break_running_p142() {
     let tm = f1_tree();
     tm.ok_at(&at("09:20"), &["break", "5m"]);

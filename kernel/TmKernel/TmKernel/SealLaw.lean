@@ -1127,11 +1127,11 @@ theorem arm_durations_nil (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
         List.filterMap_append, (Replay.giveBack_obs dy M).2.1, List.nil_append]
       exact (Replay.brkFx_obs dy _ _).2
     have hd : ∀ M x0, (Replay.d141Arm dy M x0 e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := fun M x0 => by unfold Replay.d141Arm; split; (simp only [List.filterMap_append, Replay.growFx_filterMap Effect.machineOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.durationOf? (fun _ _ => rfl), Replay.growFx_filterMap Effect.energyOf? (fun _ _ => rfl), List.filterMap_cons, List.filterMap_nil, Effect.durationOf?, List.nil_append]; exact hb _ _); rfl
+    have hl : ∀ M, (Replay.brkLine dy M e t d planned.val (actual.map (·.val))).filterMap Effect.durationOf? = [] := fun M => by unfold Replay.brkLine Replay.finArm; split; exact hd _ _; split; split; exact hd _ _; exact hb _ _; exact hb _ _
     split
-    · unfold Replay.brkOwn; split; exact hd _ _; exact hb _ _
-    · unfold Replay.brkLine Replay.finArm; split; exact hd _ _; split; split; exact hd _ _; exact hb _ _; exact hb _ _
-    -- (D147: a finished break a later line re-times is `d141Arm`'s too)
-    -- (D147)
+    · split; (unfold Replay.brkOwn; split; exact hd _ _; exact hb _ _); (unfold Replay.brkPark; split; exact hd _ _; unfold Replay.brkStartArm; simp only [List.filterMap_append, List.filterMap_cons, Effect.durationOf?, (Replay.giveBack_obs dy m).2.1, Replay.brkArm, hb, Replay.settle_duration, Replay.runNet_duration, List.filterMap_nil, List.nil_append, List.append_nil])
+    · exact hl m
+    -- (D147: a finished break a later line re-times is `d141Arm`'s too; the owner's D145: a line read with the running break parked, `brkPark`)
   case brkStart planned where_ =>
     split
     · exact (Replay.endBrkFx_obs dy m _ _ _).2.1

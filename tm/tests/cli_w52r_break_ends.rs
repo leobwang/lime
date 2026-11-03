@@ -122,27 +122,41 @@ fn a_break_typed_at_an_ended_breaks_own_start_is_refused_p139() {
     assert_eq!(review(&tm), (110, vec![10]));
 }
 
-/// **The D129 notice prints the end D129 gave the break, from the kernel's fact** (gap 5730): `tm break --now 09:30`
-/// on the J day begins a break that `^t4`'s 10:10 start ends, and the notice says so. Until the W-54 land the witness
-/// was the keystroke after the J break was ended at 09:40 (D141): `tm break --now 09:45` began a break 10:10 ended.
-/// Since D150 (parity P148, wired at the W-54 land) that break's widest span is 09:30–10:10, D129's, so 09:45 lies
-/// inside it and RE-TIMES IT OUT to 09:45 (`(20, 15)`, `^t1` 105) — the row restated under P148, named in README
-/// "Stage 6 — W-54 land". Until the W-53 repair's land it was `tm break --now 09:35`, a break whose head the
-/// 09:30–09:40 break covered (its record ended at 10:05, what 413f769's binary printed); since D147 (parity P145)
-/// that keystroke re-times the finished break instead and prints no D129 notice, so no typed keystroke reaches the
-/// covered-head case.
+/// **The D129 notice prints the end D129 gave the break, from the kernel's fact** (gap 5730): after the J break is
+/// ended at 09:40, a `tm break --now 09:45` begins a break that `^t4`'s 10:10 start ends, and the notice says so.
+/// Restored at stage 6 W-54 repair track H to its pre-land form under the owner's **D151** (parity P148 restated):
+/// a break whose end a line stated (D141 at 09:40) is not re-timed out to the end D129 inferred (10:10), so 09:45
+/// begins a new break. The W-54 land had restated it under P148 to a D150 re-time out to 09:45 (`(20, 15)`, `^t1`
+/// 105), which D151 withdraws; it runs again since the W-54 repair's land (track K's `wide`). The first keystroke's
+/// notice and the D147 half are [`the_d129_notice_names_the_end_on_the_first_keystroke`], which runs now. Until the W-53
+/// repair's land the witness was `tm break --now 09:35`, a break whose head the 09:30–09:40 break covered, so its
+/// record ended at 10:05 (what 413f769's binary printed); since D147 (parity P145) that keystroke re-times the
+/// finished break instead and prints no D129 notice, so no typed keystroke reaches the covered-head case.
 #[test]
 fn the_d129_notice_names_the_end_d129_gave_the_break() {
     let tm = j_tree();
-    let out = tm.ok_at(&at("09:30"), &["break"]);
-    assert!(out.stderr.contains("began at 09:30 ended at 10:10"), "{}", out.stderr);
+    tm.ok_at(&at("09:30"), &["break"]);
     tm.ok_at(&at("09:40"), &["break"]);
     let out = tm.ok_at(&at("09:45"), &["break"]);
-    let said = format!("{}{}", out.stdout, out.stderr);
-    assert!(!said.contains("(D129)") && said.contains("(D150)"), "{said}");
-    assert_eq!(review(&tm), (105, vec![15]));
+    assert!(out.stderr.contains("began at 09:45 ended at 10:10"), "{}", out.stderr);
+    assert!(!format!("{}{}", out.stdout, out.stderr).contains("(D150)"), "{}", out.stdout);
     let tm = j_tree();
     tm.ok_at(&at("09:30"), &["break"]);
+    tm.ok_at(&at("09:40"), &["break"]);
+    let out = tm.ok_at(&at("09:35"), &["break"]);
+    let said = format!("{}{}", out.stdout, out.stderr);
+    assert!(!said.contains("(D129)") && said.contains("(D147)"), "{said}");
+}
+
+/// **The D129 notice on the first keystroke, and D147 inside the ended break** (gap 5730; split out at stage 6 W-54
+/// repair track H so the notice keeps a running row while its sibling above waits on D151): `tm break --now 09:30` on
+/// the J day begins a break `^t4`'s 10:10 start ends, and the notice prints that end; after `09:40` ended it (D141),
+/// `--now 09:35` re-times it (D147) with no D129 notice.
+#[test]
+fn the_d129_notice_names_the_end_on_the_first_keystroke() {
+    let tm = j_tree();
+    let out = tm.ok_at(&at("09:30"), &["break"]);
+    assert!(out.stderr.contains("began at 09:30 ended at 10:10"), "{}", out.stderr);
     tm.ok_at(&at("09:40"), &["break"]);
     let out = tm.ok_at(&at("09:35"), &["break"]);
     let said = format!("{}{}", out.stdout, out.stderr);

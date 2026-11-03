@@ -1838,3 +1838,11 @@ with_minute
 # W-54 land (README gap 5893): track H's stub `widest_of` is deleted — D150's gate reads `EndedBreak::widest`, track
 # K's decoded fact; its three citations are track H's block, which records the stub it was.
 3 widest_of
+# W-54 repair track K (README gaps 5920, 5925, 5926): three names the W-54 track K block and an earlier block cite as they
+# stood are renamed — the fact's witness restated as Replay.the_finished_breaks_are_the_ones_no_other_break_overlaps (its
+# old statement refuted by name), W-54's refutation of arm_brk_of_endable's W-53 repair form withdrawn by the owner's D151
+# (that form holds again) and replaced by the refutation of W-54's own form, and D105's "whatever its stamp" witness
+# refuted by the owner's D145 under its own name; each counted citation is an append-only README block.
+1 Replay.arm_brk_of_endable_as_w53r_stated_it_is_refuted
+1 Replay.the_finished_breaks_are_the_ones_a_line_re_times
+3 a_break_line_ends_the_running_break_whatever_its_stamp

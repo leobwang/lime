@@ -2111,13 +2111,13 @@ set_option maxRecDepth 8000 in
 `tm break --now 09:50 30m` then `tm break --now 09:50 10m` log two plain lines at 09:50, planned 30 and planned 10 — the
 second is a new D143 break, not a re-timing (a re-timing line carries the break's own planned minutes, as
 `a_later_shorter_line_at_a_finished_breaks_stamp_re_times_it`'s does).  D142's union reads them: one segment 09:50–10:20,
-thirty recorded minutes over two records, and both held with their own ends — the fact naming, since W-54 (README gap
-5874), the newer alone: a line at 09:50 with thirty planned would re-time nothing the newer ten does not cover. -/
+thirty recorded minutes over two records, and both held with their own ends — the fact naming, since W-54 repair track K
+(README gap 5925), neither: each overlaps the other, so a re-time of either changes nothing D142's union reads. -/
 theorem two_finished_breaks_at_one_stamp_stay_two :
     let f := replay utcZone [bE 1 63924371400 (.brk 30 (some 30) none), bE 2 63924371400 (.brk 10 (some 10) none)]
     (f.days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .brk none)).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924371400, 63924373200)] ∧
     (f.days.get 739865).map (fun a => ((a.breaks.map (fun r => r.actualMin.getD 0)).foldl (· + ·) 0, a.breaks.length)) = some (30, 2) ∧
-    f.openFinished.map (fun x => (x.s.1.sec, x.e.1.sec, x.planned, x.key)) = [(63924371400, 63924372000, 10, 2)] := by
+    f.openFinished.map (fun x => (x.s.1.sec, x.e.1.sec, x.planned, x.key)) = [] := by
   decide
 
 end W53RepairKWitnesses
@@ -2175,12 +2175,12 @@ theorem a_retime_of_a_p127_break_gives_back_its_take :
   decide
 
 set_option maxRecDepth 8000 in
-/-- **The fact omits a break a newer one overlaps, and is empty while a break runs** (the W-54 auditor's finding 2 and
-critic's findings 2 and 3, README gap 5874): the J day with breaks 09:20 and 09:30 for twenty holds the 09:30 break alone
-— a line at 09:20 would meet it (`newerMeets`) and be a break of its own — and with a break running since 12:00 the fact
-is empty, as `open.ended` is (CHEAT 794). -/
+/-- **The fact omits a break another overlaps, and is empty while a break runs** (the W-54 auditor's finding 2 and
+critic's findings 2 and 3, README gap 5874; since W-54 repair track K, gap 5925, any other): the J day with breaks 09:20 and
+09:30 for twenty holds neither — each overlaps the other (`otherMeets`; W-54 held the 09:30 break) — and with a break running
+since 12:00 the fact is empty, as `open.ended` is (CHEAT 794). -/
 theorem the_fact_omits_a_break_a_newer_one_overlaps :
-    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 20 (some 20) none), bE 6 63924370200 (.brk 20 (some 20) none)]).openFinished.map (fun x => (x.s.1.sec, x.e.1.sec)) = [(63924370200, 63924371400)] ∧
+    (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 20 (some 20) none), bE 6 63924370200 (.brk 20 (some 20) none)]).openFinished.map (fun x => (x.s.1.sec, x.e.1.sec)) = [] ∧
     (replay utcZone [bE 1 63924368400 (bStart ['a']), bE 2 63924372000 (bDone ['a'] 60 false), bE 3 63924372600 (bStart ['b']), bE 4 63924376200 (bDone ['b'] 60 false), bE 5 63924369600 (.brk 20 (some 20) none), bE 6 63924379200 (.brkStart 20 none)]).openFinished = [] := by
   decide
 

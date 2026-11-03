@@ -8272,7 +8272,7 @@ end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 #print axioms Tm.Replay.the_break_start_has_no_completion_arm
 #print axioms Tm.Replay.a_break_start_is_the_running_break
 #print axioms Tm.Replay.a_break_line_ends_the_running_break
-#print axioms Tm.Replay.a_break_line_ends_the_running_break_whatever_its_stamp
+#print axioms Tm.Replay.a_break_line_ends_the_running_break_whatever_its_stamp_as_d105_stated_it_is_refuted
 #print axioms Tm.Replay.an_undone_break_start_leaves_no_break_running
 #print axioms Tm.Replay.an_undone_break_line_leaves_the_break_running
 #print axioms Tm.Replay.a_second_break_start_replaces_the_first
@@ -9297,8 +9297,8 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.finished_of_running
 #print axioms Tm.Replay.a_finished_break_is_re_timed_by_its_line
 #print axioms Tm.Replay.pruneBrks_pair_ne
-#print axioms Tm.Replay.arm_brk_of_endable_as_w53r_stated_it_is_refuted
-#print axioms Tm.Replay.the_finished_breaks_are_the_ones_a_line_re_times
+#print axioms Tm.Replay.arm_brk_of_endable_as_w54_stated_it_is_refuted
+#print axioms Tm.Replay.the_finished_breaks_are_the_ones_no_other_break_overlaps
 #print axioms Tm.Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line_as_w53r_stated_it_is_refuted
 #print axioms Tm.Seal.openTakes_mi
 #print axioms Tm.Seal.arm_brks_as_w53_stated_it_is_refuted
@@ -9315,3 +9315,48 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_retime_gives_back_only_what_a_paused_block_worked
 #print axioms Tm.Replay.a_p127_line_lets_its_ending_go
 #print axioms Tm.Replay.a_retime_raises_the_duration_observation
+
+/-! APPENDED 2026-11-03, stage 6 W-54 repair track K (README gaps 5920-5939): the owner's D145 (a finished break's line
+    ends only its own break: the parked reading, its laws through the window and the fold), D151 (the widest end is the
+    break's own lines'), the finished-break fact's overlap filter, and D152's replay witness.  Three audit lines above were
+    renamed with their theorems (a D105 witness refuted by D145, a W-53r refutation withdrawn by D151 and replaced by W-54's,
+    the W-54 fact witness restated). -/
+#print axioms Tm.BreakFold.arm_of_parked
+#print axioms Tm.BreakFold.brkPark_of_none
+#print axioms Tm.BreakFold.stepWith_brks_of_brk_as_w54_stated_it_is_refuted
+#print axioms Tm.BreakFold.stepWith_brks_of_park
+#print axioms Tm.Replay.a_break_line_in_the_running_breaks_minute_ends_it
+#print axioms Tm.Replay.a_finished_break_another_overlaps_is_omitted
+#print axioms Tm.Replay.a_finished_break_inside_the_running_block_nets_it_and_leaves_it_running
+#print axioms Tm.Replay.a_finished_line_ends_only_its_own_break
+#print axioms Tm.Replay.all_machine
+#print axioms Tm.Replay.an_omitted_finished_break_is_overlapped
+#print axioms Tm.Replay.a_parked_line_is_read_at_its_own_place
+#print axioms Tm.Replay.a_parked_line_leaves_the_running_break_running
+#print axioms Tm.Replay.a_parked_line_reads_as_if_logged_before_the_running_break
+#print axioms Tm.Replay.applyEffects_lastMach
+#print axioms Tm.Replay.arm_brk_eq_as_w53r_stated_it_is_refuted
+#print axioms Tm.Replay.arm_brk_of_endable_third_as_w54_stated_it_is_refuted
+#print axioms Tm.Replay.arm_brk_parked_keeps_the_running_break
+#print axioms Tm.Replay.brkPark_machines
+#print axioms Tm.Replay.brkPark_mem
+#print axioms Tm.Replay.lastMach_cases
+#print axioms Tm.Replay.lastMach_eq
+#print axioms Tm.Replay.newerMeets_of_otherMeets
+#print axioms Tm.Replay.the_finished_breaks_are_the_ones_a_line_re_times_as_w54_stated_it_is_refuted
+#print axioms Tm.Replay.the_widest_end_is_the_breaks_own_lines
+#print axioms Tm.Seal.arm_brk_machine_keeps
+#print axioms Tm.Seal.brkArmK_congr_mi
+#print axioms Tm.Seal.brkArmK_mi
+#print axioms Tm.Seal.brkLine_congr
+#print axioms Tm.Seal.brkLine_mi
+#print axioms Tm.Seal.brkPark_congr
+#print axioms Tm.Seal.brkPark_machine_cases
+#print axioms Tm.Seal.brkPark_machine_keeps
+#print axioms Tm.Seal.brkPark_mi
+#print axioms Tm.Seal.d141OrArm_congr
+#print axioms Tm.Seal.d141OrArm_keeps
+#print axioms Tm.Seal.d141OrArm_mi
+#print axioms Tm.Seal.mi_upd
+#print axioms Tm.Seal.reopen_keeps
+#print axioms Tm.Seal.reopen_mi

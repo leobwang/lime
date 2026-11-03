@@ -291,7 +291,8 @@ fn running_tree() -> Tm {
 
 /// **With a break RUNNING, a no-length `tm break` before its start is refused by name** (the campaign's call, gap
 /// 5896): inside the finished 09:20–09:30 break it said "re-timed" while the kernel re-timed nothing and the line
-/// cleared the running break (D145, not built; gap 5820's damage) — nothing is written now, and the break still runs.
+/// cleared the running break (gap 5820's damage) — nothing is written now, and the break still runs. Since D145 (W-54
+/// repair) a finished line ends only its own break, and the refusal points to typing the length (gap 5910's advice).
 #[test]
 fn a_no_length_break_inside_a_finished_break_while_one_runs_is_refused() {
     let tm = running_tree();
@@ -299,7 +300,9 @@ fn a_no_length_break_inside_a_finished_break_while_one_runs_is_refused() {
     let out = tm.run_at(&at("09:25"), &["break"]);
     assert_ne!(out.code, 0, "{}", out.stdout);
     assert!(
-        out.stderr.contains("a break is running since 11:30") && out.stderr.contains("D145") && out.stderr.contains("not built"),
+        out.stderr.contains("a break is running since 11:30")
+            && out.stderr.contains("D145")
+            && out.stderr.contains("logged finished beside it"),
         "{}",
         out.stderr
     );

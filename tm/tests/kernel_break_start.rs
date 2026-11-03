@@ -103,9 +103,11 @@ fn a_break_start_is_the_running_break_on_the_wire() {
 #[test]
 fn the_pair_is_matched_in_file_order_and_the_undo_mask_reads_both_lines() {
     assert!(replay(&[WAKE, START, BRK_START, BRK]).open_break.is_none(), "a `break` line did not end it");
-    // Whatever the ending line's stamp: an hour before the start still ends it.
+    // Since the owner's D145 (W-54 repair track K, parity P142) only the running break's own line ends it — the one
+    // stamped in its start's minute: a `break` line an hour before the start is a finished break's and ends only its
+    // own (until then any `break` line ended the running break in file order).
     let early = BRK.replace("09:00:00", "08:00:00");
-    assert!(replay(&[WAKE, START, BRK_START, &early]).open_break.is_none(), "an earlier-stamped `break` did not end it");
+    assert!(replay(&[WAKE, START, BRK_START, &early]).open_break.is_some(), "an earlier-stamped `break` ended the running break");
     // `tm undo` of `tm break` cancels the start; of the verb that ended it, the end.
     assert!(replay(&[WAKE, START, BRK_START, &undo_of("break_start")]).open_break.is_none(), "an undone start still runs");
     let back = replay(&[WAKE, START, BRK_START, BRK, &undo_of("break")]);
