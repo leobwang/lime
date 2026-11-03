@@ -9312,3 +9312,6 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.the_fact_omits_a_break_a_newer_one_overlaps
 #print axioms Tm.Replay.twin_finished_breaks_are_re_timed_as_one
 #print axioms Tm.Replay.a_finished_break_keeps_its_widest_end
+#print axioms Tm.Replay.a_longer_line_raises_the_widest_end
+#print axioms Tm.Replay.a_retime_gives_back_only_what_a_paused_block_worked
+#print axioms Tm.Replay.a_p127_line_lets_its_ending_go

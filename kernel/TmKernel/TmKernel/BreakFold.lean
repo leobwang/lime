@@ -547,7 +547,6 @@ theorem fm_ge_init (i : Nat) : ∀ l : List HeldBrk, i ≤ l.foldl (fun a k => m
   | k :: l => by
     simp only [List.foldl_cons]
     exact Nat.le_trans (Nat.le_max_left i k.day) (fm_ge_init _ l)
-
 theorem fm_ge_mem (i : Nat) : ∀ (l : List HeldBrk) (k : HeldBrk), k ∈ l → k.day ≤ l.foldl (fun a k => max a k.day) i
   | [], _, h => by cases h
   | x :: l, k, h => by
@@ -555,14 +554,12 @@ theorem fm_ge_mem (i : Nat) : ∀ (l : List HeldBrk) (k : HeldBrk), k ∈ l → 
     rcases List.mem_cons.1 h with rfl | h
     · exact Nat.le_trans (Nat.le_max_right i k.day) (fm_ge_init _ l)
     · exact fm_ge_mem _ l k h
-
 theorem fm_le (i c : Nat) (hi : i ≤ c) :
     ∀ l : List HeldBrk, (∀ k ∈ l, k.day ≤ c) → l.foldl (fun a k => max a k.day) i ≤ c
   | [], _ => hi
   | x :: l, h => by
     simp only [List.foldl_cons]
     exact fm_le _ c (Nat.max_le.2 ⟨hi, h x List.mem_cons_self⟩) l (fun k hk => h k (List.mem_cons_of_mem _ hk))
-
 theorem fm_attain (i : Nat) : ∀ l : List HeldBrk,
     l.foldl (fun a k => max a k.day) i = i ∨ ∃ k ∈ l, l.foldl (fun a k => max a k.day) i = k.day
   | [] => Or.inl rfl
@@ -574,7 +571,6 @@ theorem fm_attain (i : Nat) : ∀ l : List HeldBrk,
       · left; omega
       · right; exact ⟨x, List.mem_cons_self, by omega⟩
     · exact Or.inr ⟨k, List.mem_cons_of_mem _ hk, h⟩
-
 /-- **`pruneBrks` keeps the newest ledger day it was given.** -/
 theorem hi_pruneBrks (L : List HeldBrk) :
     (pruneBrks L).foldl (fun a k => max a k.day) 0 = L.foldl (fun a k => max a k.day) 0 := by
@@ -586,7 +582,6 @@ theorem hi_pruneBrks (L : List HeldBrk) :
     · rw [h]; exact Nat.zero_le _
     · rw [h]
       exact fm_ge_mem 0 _ k (List.mem_filter.2 ⟨hk, by simp only [decide_eq_true_eq]; omega⟩)
-
 /-- **A break `pruneBrks` drops is more than 31 ledger days behind the newest it keeps.** -/
 theorem prune_keeps (k0 : HeldBrk) (l : List HeldBrk) (k : HeldBrk) (hk : k ∈ k0 :: l) :
     k ∈ pruneBrks (k0 :: l) ∨ k.day + 31 < (pruneBrks (k0 :: l)).foldl (fun a k => max a k.day) 0 := by
@@ -594,16 +589,13 @@ theorem prune_keeps (k0 : HeldBrk) (l : List HeldBrk) (k : HeldBrk) (hk : k ∈ 
   by_cases hc : (k0 :: l).foldl (fun a k => max a k.day) 0 ≤ k.day + 31
   · left; unfold pruneBrks; exact List.mem_filter.2 ⟨hk, by simpa using hc⟩
   · right; omega
-
 /-- **The newest day never falls**: a held list grown by one and pruned holds a day at least as new. -/
 theorem hi_grows (k0 : HeldBrk) (l : List HeldBrk) :
     l.foldl (fun a k => max a k.day) 0 ≤ (pruneBrks (k0 :: l)).foldl (fun a k => max a k.day) 0 := by
   rw [hi_pruneBrks]
   simp only [List.foldl_cons]
   exact fm_mono _ _ (Nat.zero_le _) l
-
 /-! ### Where a day's segments come from -/
-
 /-- **Every op but a drawing or an un-drawing keeps a day's segments.** -/
 theorem DayOp.apply_segments (op : DayOp) (a : DayAcc) :
     ∀ g ∈ (op.apply a).segments, g ∈ a.segments ∨ op = .segment g ∨ ∃ k c c', op = .redraw k c c' ∧ k.s.1 ≤ g.start.1 ∧ g.stop = k.e := by
@@ -635,7 +627,6 @@ theorem DayOp.apply_segments (op : DayOp) (a : DayAcc) :
     left; simp only [DayOp.apply, DayAcc.undurOf] at hg; repeat' split at hg
     all_goals exact hg
   | _ => left; exact hg
-
 theorem DayOp.alterFn_segments (op : DayOp) (o : Option DayAcc) (a' : DayAcc) (h : op.alterFn o = some a') :
     ∀ g ∈ a'.segments, (∃ a, o = some a ∧ g ∈ a.segments) ∨ op = .segment g ∨ ∃ k c c', op = .redraw k c c' ∧ k.s.1 ≤ g.start.1 ∧ g.stop = k.e := by
   intro g hg
@@ -653,7 +644,6 @@ theorem DayOp.alterFn_segments (op : DayOp) (o : Option DayAcc) (a' : DayAcc) (h
     rcases DayOp.apply_segments op DayAcc.empty g hg with h | h
     · simp [DayAcc.empty] at h
     · exact Or.inr h
-
 theorem applyEffect_days (st : State) (x : Effect) (h : ∀ d op, x ≠ .dayAdd d op) :
     (applyEffect st x).days = st.days := by
   cases x
@@ -661,7 +651,6 @@ theorem applyEffect_days (st : State) (x : Effect) (h : ∀ d op, x ≠ .dayAdd 
   case itemDaySub => simp only [applyEffect]; split <;> rfl
   case obs o => cases o <;> rfl
   all_goals rfl
-
 /-- **A segment of a day after some effects was there before, or one of them drew it.** -/
 theorem applyEffects_seg_src : ∀ (fx : List Effect) (st : State) (d : Nat) (a' : DayAcc),
     (applyEffects st fx).days.get d = some a' →
@@ -683,9 +672,7 @@ theorem applyEffects_seg_src : ∀ (fx : List Effect) (st : State) (d : Nat) (a'
         rw [this] at ha
         exact Or.inl ⟨a, ha, hga⟩
     · rcases hx with hx | ⟨k, c, c', hx, h2, h3⟩; exact Or.inr (Or.inl (List.mem_cons_of_mem _ hx)); exact Or.inr (Or.inr ⟨k, c, c', List.mem_cons_of_mem _ hx, h2, h3⟩)
-
 /-! ### The invariant, and its step -/
-
 /-- **Every Break segment of a day is a held break** — a break the machine holds with that segment's span on that
 ledger day — **or one more than 31 ledger days behind the newest it holds** (`pruneBrks`' bound, the owner's D94, README
 gap 4914). -/
@@ -693,7 +680,6 @@ def BrkHeld (st : State) : Prop :=
   ∀ d a, st.days.get d = some a → ∀ g ∈ a.segments, ∀ w, g.kind = .brk w →
     (∃ k ∈ st.machine.brks, k.s.1 ≤ g.start.1 ∧ k.e = g.stop ∧ k.day = d) ∨
       d + 31 < st.machine.brks.foldl (fun a k => max a k.day) 0
-
 /-- **A step's held breaks are the old ones, or the old ones with one more, pruned** (`Seal.arm_brks`). -/
 theorem stepWith_brks (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry) :
     (stepWith z dy sl st e).machine.brks = st.machine.brks ∨
@@ -705,7 +691,6 @@ theorem stepWith_brks (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Opti
   cases hl : ((arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val)).filterMap Effect.machineOf?).getLast? with
   | none => exact Or.inl rfl
   | some m' => exact Seal.arm_brks dy sl st.machine e _ _ m' (List.mem_of_getLast? hl)
-
 /-- **A `break` line's step holds its break**: the machine after it holds `[t, brkEnd)` on the line's day, pruned — *restated at D129* for a line that is not the own line of a break a start already ended (`Machine.ended`, `findEnded`; one
 ending until W-52 repair track R), which holds nothing new (`stepWith_brks_of_brk_as_w49_stated_it_is_refuted`). -/
 theorem stepWith_brks_of_brk (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry)
@@ -732,9 +717,6 @@ theorem stepWith_brks_of_brk (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat �
     List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton, forall_eq,
     List.getLast?_singleton, Option.getD_some]
   exact id
-
-
-
 /-- **A break held on top of the old ones, pruned, is held or more than 31 ledger days behind the newest kept.** -/
 theorem held_of_prune (st' : State) (k : HeldBrk) (old : List HeldBrk) (hB : st'.machine.brks = pruneBrks (k :: old))
     (d : Nat) (g : Segment) (h1 : k.s.1 ≤ g.start.1) (h2 : k.e = g.stop) (h3 : k.day = d) :
@@ -744,7 +726,6 @@ theorem held_of_prune (st' : State) (k : HeldBrk) (old : List HeldBrk) (hB : st'
   rcases prune_keeps k old k List.mem_cons_self with hk' | hk'
   · exact Or.inl ⟨k, hk', h1, h2, h3⟩
   · exact Or.inr (h3 ▸ hk')
-
 /-- **A start ending the running break holds it** (D129): the machine after it holds `[o.s, t)` on the break's ledger
 day, pruned, with the old breaks. -/
 theorem stepWith_brks_of_start (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry)
@@ -761,7 +742,6 @@ theorem stepWith_brks_of_start (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat
   simp only [List.getLast?_singleton, Option.getD_some]
   rw [(settle_keeps dy _).2.2.1]
   exact (Replay.runNet_keeps dy _).2.2.1.trans ((Replay.cut_brk dy _ _).trans (Replay.netStart_keeps dy _ _ _).2.2.1)
-
 /-- **`stepWith_brks` as W-53 track K stated it, refuted** (the W-54 auditor, README gap 5877): its third case read a re-timing line only at a break D129 ended (`findEnded`), and on the W-53 repair's kernel a later line at a finished break's stamp re-times that break (D147, `findFin`) — the 09:30–09:40 break re-timed to 09:34 leaves the held breaks `[09:30–09:34]`: not the old ones, not the old ones with one more, and no ending at 09:30.  Restated at the W-53 repair with the `findFin` case; that step listed it as refuted by name and was not (README gap 5877). -/
 theorem stepWith_brks_as_w53_stated_it_is_refuted :
     ¬ ∀ (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry),
@@ -789,7 +769,6 @@ theorem stepWith_brks_of_brk_as_w53_stated_it_is_refuted :
   intro h
   have := h utcZone (fun _ => 739865) (fun _ => none) { State.init 2 with machine := ⟨none, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩), 739865, 1, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩ } (bE 2 63924370200 (.brk 10 (some 4) none)) 10 (some 4) none rfl (by decide)
   revert this; decide
-
 /-- **A `break_start` a held start ends holds the break** (D129): `[t, t0)` on its ledger day, pruned. -/
 theorem stepWith_brks_of_brkStart (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State)
     (e : Entry) {p : Log.U32} {w : Option (List Char)} (hev : e.ev = .brkStart p w) {t0 : At}
@@ -808,7 +787,6 @@ theorem stepWith_brks_of_brkStart (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : 
     List.filterMap_cons, Effect.machineOf?, List.filterMap_nil, List.mem_singleton, forall_eq, List.append_nil,
     List.getLast?_singleton, Option.getD_some]
   exact id
-
 /-- **What D141's two day operations leave of a day's segments** (the owner's **D141**, README gap 5660, W-52b track K2):
 every segment the day holds after them it held before, and on the ended break's day `D` a Break segment the held break `k`
 witnesses survives only when a break of `rest` witnesses it too (`DayOp.unsegBrks`). -/
@@ -835,7 +813,6 @@ theorem undo141_seg (st : State) (D : Nat) (k : HeldBrk) (c : At) (rest : List H
       obtain ⟨k', hk', ⟨c1, c2⟩, c3⟩ := h4
       exact ⟨k', hk', c1, c2.trans h2.symm, c3⟩
   · simp only [if_neg hd] at h; exact ⟨a', h, hg, fun h' => absurd h' hd⟩
-
 /-- **A `break` line ending a break D129 ended keeps the invariant** (the owner's **D141**; restated at W-52 repair track R
 for an ending anywhere among those held, `findEnded`): the ending's Break segments are undone on its day save those a
 break of `rest` (the held breaks with the ending's let go, `List.erase`) witnesses (`undo141_seg`), the line's own segment
@@ -848,7 +825,6 @@ theorem fm_erase_le (l : List HeldBrk) (k k0 : HeldBrk) (hk : k ∈ l) (hday : k
   by_cases hjk : j = k
   · subst hjk; exact Nat.le_trans hday (fm_ge_mem 0 _ k0 List.mem_cons_self)
   · exact fm_ge_mem 0 _ j (List.mem_cons_of_mem _ ((List.mem_erase_of_ne hjk).2 hj))
-
 theorem stepWith_brkHeld_d141 (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State) (e : Entry)
     (h : BrkHeld st) {p : Log.U32} {a0 : Option Log.U32} {w0 : Option (List Char)} (hev : e.ev = .brk p a0 w0) {x : Ending}
     (hK : findEnded st.machine (e.t.val, e.off.val) = some x ∨ (findEnded st.machine (e.t.val, e.off.val) = none ∧ st.machine.brkOpen = none ∧ findFin st.machine (e.t.val, e.off.val) p.val = some x))
