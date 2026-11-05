@@ -107159,7 +107159,20 @@ keystroke while the kernel reads a break of its own and nothing moves (`drv.sh`,
 
 ### 7. Acceptance
 
-ACCEPTANCE
+Every command run in this worktree, capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on the tree of the commit before this block's text.
+
+* **`check.sh`**: every line `ok`, 36.3 s on a built tree — axiom audit 7,210 theorems; FFI 97 tests (check 5); corpus 29/37 files and 4/5 whole plans; stage goals 1
+  (`plan_places_no_block_over_a_break`); citations 70,990, 67,021 resolved; check 9 997 new or changed since `86c4dc6`, 997 rostered, 0 owed; parity P1-P149, next free P150; 97 modules replayed.
+* **`cargo test --workspace --no-fail-fast`, three runs** (D46) over 194 result lines:
+
+  | run | load | passed | failed | ignored |
+  |---|---|---|---|---|
+  | 1 | 6.9 | 3,296 | 0 | 53 |
+  | 2 | 9.9 | 3,296 | 0 | 53 |
+  | 3 | 4.2 | 3,295 | 1 | 53 |
+
+  Run 3's failure is gap 5541's latency row (`a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`), which fails on the base too.  No `.proptest-regressions` file moved.
+* **FFI** (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed**, 0 failed, over 5 result lines.
 
 ### Gaps (6020-)
 
