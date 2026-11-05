@@ -163,12 +163,14 @@ fn a_d152_break_reports_the_running_block_it_lies_inside_p149() {
 }
 
 /// **With no pause marks, a later line is what says the break is over** (P149): `^t4` runs since 10:10 with no mark;
-/// an energy report at 10:50 is the log's last line, so `tm break --now 10:20 10m --where walk` is logged finished,
-/// its place on the line and in the reply; `tm now` at 10:55 reads `35m of 60m`.
+/// a `tm plan` at 10:50 is the log's last line, so `tm break --now 10:20 10m --where walk` is logged finished,
+/// its place on the line and in the reply; `tm now` at 10:55 reads `35m of 60m`. (Restated at W-54 third repair track K for the
+/// owner's D154: the later line was a plain `tm energy`, and no `energy` line witnesses an instant since the log cannot say
+/// which were typed with `--at`; README gap 6031.)
 #[test]
 fn a_later_line_with_no_pause_marks_and_a_place_p149() {
     let tm = running_t4();
-    tm.ok_at(&at("10:50"), &["energy", "3"]);
+    tm.ok_at(&at("10:50"), &["plan"]);
     let out = tm.ok_at(&at("10:20"), &["break", "10m", "--where", "walk"]);
     assert_eq!(
         out.stdout.trim(),

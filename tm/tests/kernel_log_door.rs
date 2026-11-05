@@ -678,6 +678,28 @@ fn every_door_function_the_switch_calls_is_exercised_here() {
     eprintln!("the door's surface: {} functions, every one called here", names.len());
 }
 
+/// **The door with the host's fence** (W-54 third repair track K, the owner's D154): the fence is what `Replay::latest_t` counts up
+/// to, and with none the answer carries no `latestTyped` at all.
+#[test]
+fn the_door_counts_typed_stamps_up_to_its_fence() {
+    let text = concat!(
+        r#"{"t":"2026-09-08T09:00:00-05:00","ev":"note","text":"n"}"#, "\n",
+        r#"{"t":"2027-01-01T09:00:00-06:00","ev":"note","text":"far"}"#, "\n",
+    );
+    let (dir, bytes) = tree(text);
+    let root = dir.path();
+    let today = NaiveDate::from_ymd_opt(2026, 9, 8).expect("a date");
+    let fence = |rfc: &str| {
+        let t = chrono::DateTime::parse_from_rfc3339(rfc).expect("an instant");
+        let w = kernel_log::instant_wire(t);
+        (w[0].as_u64().expect("sec"), w[1].as_u64().expect("ns"))
+    };
+    let at = |f| kernel_log::replay_scoped_at(root, &bytes, TZ, &wire(root), today, f, kernel_log::Scope::All, None).expect("the door").replay.latest_t;
+    let nine = chrono::DateTime::parse_from_rfc3339("2026-09-08T09:00:00-05:00").expect("an instant");
+    assert_eq!(at(Some(fence("2026-09-10T09:00:00-05:00"))), Some(nine));
+    assert_eq!(at(None), None);
+}
+
 /// **The deletion is mechanical here too, and this is what checks it** (gap 149).
 ///
 /// Every reference this file makes to the reader design §12 deletes is either
