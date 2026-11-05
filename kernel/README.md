@@ -106504,6 +106504,12 @@ name instead of re-timed (C2 and D-3 because the outer break's drawn piece meets
 critic typed would be read).  A per-break "re-timeable from" instant on the wire would win back C2 and D-3; it was not added,
 because track H codes against the fact's present shape (gap 5974).
 
+**For the land.**  A break the fact omits is not always one the others cover wholly: it may hold own instants outside the
+piece it is drawn as (B's 09:20 break, C's outer break).  A host that re-times only listed breaks, inside their drawn piece,
+at its end or past it, is sound on this fact.  Rows written for the brief's filter that expect B, C, C2 and D-3 re-timed
+are refused by name here; a row expecting E2's "already ends" (the nested pair's outer break, `--now 09:50`) needs no fact
+at all — nothing is written — so a gate may answer it from the held spans alone.
+
 ### 4. D153's fact: the latest surviving stamp (gap 5972)
 
 `tm_core::log::Replay::latest_t: Option<DateTime<FixedOffset>>` — the greatest `DaySeam::last_t` over the days the replay
@@ -106598,7 +106604,17 @@ the plan drawing nothing 09:42–09:45.
 
 ### 7. Acceptance
 
-(pending)
+Every command below was run in this worktree, capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`),
+on the tree this block commits (`413a74a`'s tree plus this block; no source changed after the runs).
+
+* **`check.sh`**: every line `ok`, 35.2 s on a built tree — axiom audit 7,169 theorems; FFI 97 tests (check 5); corpus
+  29/37 files and 4/5 whole plans; stage goals 1 (`plan_places_no_block_over_a_break`); check 8 0 allow entries unused;
+  check 9 971 new or changed since `86c4dc6`, 971 rostered, 0 owed; check 10 149 registered (P1-P149), next free P150;
+  check 12 1,706 reachable, 1,095 exempt; check 14 97 modules replayed by the kernel.
+* **`cargo test --workspace --no-fail-fast`, three runs** (D46): **3,230 passed / 0 failed / 54 ignored across 192
+  result lines**, each of the three (15 m 22 s, 15 m 17 s, 15 m 17 s).  No `.proptest-regressions` file changed.
+  `cli_latency`'s three-year test, whose stalled-day row sits at its bound (gap 5541), passed in all three.
+* **FFI** (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed / 0 failed / 0 ignored across 5 result lines**.
 
 ### Gaps (5970-)
 
