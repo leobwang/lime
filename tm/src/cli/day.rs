@@ -2699,7 +2699,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
              start would begin a second break inside it; {}",
             hm(x.started),
             hm(x.ended),
-            // A line ends it only a whole minute or more past its start, and before its end (README gap 6057): on an ending
+            // A line ends it only a whole minute or more past its start, and before its end (README gap 6056): on an ending
             // a minute long or less no such instant exists, so the advice is the one that does what it says.
             if x.ended - x.started <= chrono::Duration::minutes(1) {
                 format!(
@@ -2852,7 +2852,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                     span(b),
                     if b.ended - b.started < chrono::Duration::minutes(2) {
                         // Under a minute past the start is at the start and under a minute before the end is at the end, so a
-                        // break under two minutes has no instant a line re-times it at (README gap 6057).
+                        // break under two minutes has no instant a line re-times it at (README gap 6056).
                         let undo = "`tm undo` takes the last line back, one line at a time, until its line is gone";
                         format!(
                             "a line carries whole minutes from its start, so no instant inside it can end it: {}",

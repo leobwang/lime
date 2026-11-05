@@ -741,7 +741,7 @@ fn under_a_minute_past_a_d129_breaks_start_is_refused_as_at_its_start() {
     reads(&tm, 119);
 }
 
-/// **A break too short to hold an instant a line could end it at is not told to give one** (README gap 6057). A line carries
+/// **A break too short to hold an instant a line could end it at is not told to give one** (README gap 6056). A line carries
 /// whole minutes from the start: under a minute past the start is at the start, under a minute before the end is at the end, so
 /// a logged break under two minutes has no instant that re-times it. `09:20 1m`, then `09:20` or `09:20:30`: the advice is
 /// `tm undo` or a length, both driven. Two minutes do have one: `--now 09:21` moves it. The same for a D129 ending one minute long.
