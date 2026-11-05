@@ -1851,7 +1851,9 @@ with_minute
 # Replay.an_omitted_finished_break_draws_no_piece_of_its_own, the filter's comparison with `newerMeets` as
 # Replay.givesUp_of_ownDrawn, and the witness as Replay.a_finished_break_whose_drawn_piece_another_meets_is_omitted (its
 # old statement refuted by name); every counted citation is an append-only README block or a Negative.lean cheat banner
-# (CHEAT 815, whose block is never edited), and one is track H's `cli_w54r_h.rs` row of gap 5962, which the land restates.
+# (CHEAT 815, whose block is never edited), save two: the fourth `Replay.otherMeets` is the doc comment of track H's
+# `cli_w54r_h.rs` row of gap 5962 (when the land restates that row, tighten the count to 3), and the second `otherMeets`
+# is `reach-exempt.txt`'s census history for `Replay.lean`.
 2 Replay.a_finished_break_another_overlaps_is_omitted
 1 Replay.an_omitted_finished_break_is_overlapped
 1 Replay.newerMeets_of_otherMeets
