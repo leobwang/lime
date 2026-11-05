@@ -2516,7 +2516,6 @@ structure ItemAcc where
   stops : Nat
   extendedMin : Nat
 deriving DecidableEq, Repr
-
 def ItemAcc.empty : ItemAcc := ⟨0, 0, [], [], 0, 0⟩
 /-- **A drawn piece of a block** (the owner's **D99**, README gap 4520a, W-47 track K, parity P104): the span of a
 `Block` segment the replay wrote into a day record, and the day it filed it under — the day index's `dy` of its start,
@@ -2569,7 +2568,8 @@ structure HeldBrk where
   planned : Nat
   where_ : Option (List Char)
   wide : At
-  rel : At -- **the latest end it has ever had** (W-54 third repair track K, README gap 6021): `wide`, and the end D129 gave it, which `wide` leaves out (D151); `[e, rel)` is what it once covered and no longer does (`frozen`)
+  /-- **The latest end it has ever had** (W-54 third repair track K, README gap 6021): `wide`, and the end D129 gave it, which `wide` leaves out (D151); `[e, rel)` is what it once covered and no longer does (`frozen`). -/
+  rel : At
 deriving DecidableEq, Repr
 /-- **A D129 ending's take from one held closed block** (the owner's **D141**, W-52 repair track R): the pieces it took,
 whole, as `Closed.ran` holds a running break's (cut by every later netting, `reNetTake`), and the minutes it took — under
@@ -4770,7 +4770,8 @@ structure Facts where
   /-- D105: the running break (`Machine.brkOpen` at the end of the log) -/
   openBreak : Option OpenBrk
   openEnded : List Ending
-  (openFinished : List Ending) (openHeld : List HeldFact)
+  openFinished : List Ending
+  openHeld : List HeldFact
   lastEffective : Option At
   entries : Nat
   /-- C4: fork `last_done` (and `done_items`, its keys) -/
@@ -4906,7 +4907,6 @@ def DayAcc.finish (a : DayAcc) : DayAcc :=
 
 def ItemAcc.finish (a : ItemAcc) : ItemAcc :=
   { a with doneAt := a.doneAt.reverse, partialDoneAt := a.partialDoneAt.reverse }
-
 
 
 /-- **The open block, read at the end of the log** — fork `Machine::finish`'s, as the machine holds it: since the owner's D99 the machine settles it at every mark (`settle`), so what it holds is already the reading every later mark agrees with — its pieces drawn, its minutes theirs, its clock running from where every span it nets ends (README gaps 4520a and 4525).  D94 read past a break held ahead of the clock here (lastEndAfter, deleted with it). -/

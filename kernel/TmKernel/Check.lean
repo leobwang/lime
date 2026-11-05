@@ -9420,3 +9420,9 @@ go read and the break it leaves short frozen, one fact per held break, the log's
 #print axioms Tm.the_fence_is_named_on_the_wire
 #print axioms Tm.Seal.kMaxTyped_is_its_key
 #print axioms Tm.Seal.maxTyped_is_named_on_the_wire
+#print axioms Tm.a_bad_fence_is_refused_by_its_name
+#print axioms Tm.typedOf_with_a_fence_keys_it
+#print axioms Tm.readFenceField_of_a_string
+#print axioms Tm.logBodyV_is_logBody
+#print axioms Tm.resumedV_is_resumed
+#print axioms Tm.Seal.resealOfWith_answers_a_valid_cut

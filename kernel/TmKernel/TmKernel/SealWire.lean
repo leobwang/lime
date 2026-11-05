@@ -699,5 +699,9 @@ def CkField.name : CkField → String
 /-- **The field's name on the wire** (README gap 6023). -/
 theorem maxTyped_is_named_on_the_wire : CkField.name .maxTyped = "maxTyped" := rfl
 
+/-- **A reseal is answered when its cut is valid** (README gap 6023's row): the machinery's head on the empty checkpoint, the cut check given. -/
+theorem resealOfWith_answers_a_valid_cut : (resealOfWith (fun _ => 0) (fun _ => true) 0 Replay.utcZone 0 (Ckpt.empty Replay.utcZone) [] [] ⟨0, none⟩ ⟨[], [], [], [], fun _ => none, Replay.State.init 0, [], blankAnswer⟩).isSome = true := by
+  decide
+
 end Seal
 end Tm

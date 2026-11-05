@@ -3457,6 +3457,9 @@ theorem typedOf_without_a_fence (r : LogReq) (run : Seal.Run) (h : r.fence = non
 theorem typedOf_with_a_fence (r : LogReq) (run : Seal.Run) (f : Cal.Instant) (h : r.fence = some f) :
     r.typedOf run = [("latestTyped".toList, Seal.cOptInstant.enc (Seal.latestTyped r.start run.entries f))] := by simp [LogReq.typedOf, h]
 theorem the_fence_is_named_on_the_wire : LogField.name .fence = "fence" := rfl
+theorem a_bad_fence_is_refused_by_its_name : (LogRefusal.badLogReq .fence).json = jone "err" (jone "log" (jone "badLogReq" (.str "fence".toList))) := rfl
+theorem typedOf_with_a_fence_keys_it (r : LogReq) (run : Seal.Run) (f : Cal.Instant) (h : r.fence = some f) : (r.typedOf run).map Prod.fst = ["latestTyped".toList] := by simp [LogReq.typedOf, h]
+theorem readFenceField_of_a_string : readFenceField (.obj [("fence".toList, .str [])]) = .error (.badLogReq .fence) := rfl
 /-- **`fence`, read and refused** (R10, README gap 6023): absent and `null` are none, `[sec, ns]` an instant, anything else `badLogReq fence`. -/
 theorem readFenceField_reads_and_refuses :
     readFenceField (.obj []) = .ok none ∧ readFenceField (.obj [("fence".toList, .null)]) = .ok none ∧
@@ -3598,7 +3601,9 @@ def logBodyV (r : LogReq) (vs : List Log.Verdict) (facts : JVal) (headers : List
 
 def LogReq.resumedV (r : LogReq) (vs : List Log.Verdict) (run : Seal.Run) (rs : Option Seal.Resealed) : JVal :=
   logBodyV r vs (if r.facts then emitAnswer (r.merged run.answer) else .null) (r.headersOf run) (optJson Seal.emitResealed rs) (r.typedOf run)
-
+/-- **The twin that reads each line once is the op's body** (README gap 6023's rows). -/
+theorem logBodyV_is_logBody (r : LogReq) (f : JVal) (h : List JVal) (rs : JVal) (t : List (List Char × JVal)) : logBodyV r (logVerdicts r) f h rs t = logBody r f h rs t := rfl
+theorem resumedV_is_resumed (r : LogReq) (run : Seal.Run) (rs : Option Seal.Resealed) : r.resumedV (logVerdicts r) run rs = r.resumed run rs := rfl
 /-- The log op with its resume, reseal, seam and answer given. -/
 def logOpCore (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : Seal.Policy → Seal.Run → Option Seal.Resealed)
     (fac : Seal.Run → Option Seal.Answer) (rn : Seal.Run → Option Seal.Run)
@@ -3617,13 +3622,11 @@ def logOpCore (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : Seal.Poli
         match rs.bind Seal.Resealed.fault with
         | some f => .error (.seal (.counterOverflow f))
         | none => within53A (fac run) (rn run) (body run rs)
-
 theorem logOpZ_core (r : VLogReq) :
     logOpZ r = logOpCore r.val (Seal.resumeRun r.val.tz (r.val.now.getD 0) r.val.start (logLines r.val))
       (fun p run => Seal.resealOf r.val.tz (r.val.now.getD 0) r.val.start (logLines r.val) r.val.terminated p run)
       (fun run => r.val.seamFacts run) (fun run => r.val.seamRun run)
       (fun run rs => r.val.resumed run rs) := rfl
-
 /-- A resume's run mapped is the run read through the map — the seam's replay included. -/
 theorem logOpCore_map (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : Seal.Policy → Seal.Run → Option Seal.Resealed)
     (fac : Seal.Run → Option Seal.Answer) (rn : Seal.Run → Option Seal.Run)
@@ -3632,7 +3635,6 @@ theorem logOpCore_map (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : S
       = logOpCore q res (fun p run => rsf p (g run)) (fun run => fac (g run)) (fun run => rn (g run))
           (fun run rs => body (g run) rs) := by
   cases res <;> rfl
-
 /-- **The `log` op with its seam, compiled (W4)**: the resume builds its answer and headers only when the request wants them
 (`Seal.resumeRunW`), and each tail line is read once (`Log.readLine`), its verdicts giving the resume's entries,
 the resume's and the reseal's line warnings and the answer's `warnings` and `render`.  The specification reads every line
@@ -3656,7 +3658,6 @@ def logOpZFast (r : VLogReq) : Except LogRefusal LogAnswer :=
         match rs.bind Seal.Resealed.fault with
         | some f => .error (.seal (.counterOverflow f))
         | none => within53A (q.seamFacts run) (q.seamRun run) (q.resumedV vs run rs)
-
 theorem logOpZFast_core (r : VLogReq) :
     logOpZFast r = logOpCore r.val
       (Seal.resumeRunW r.val.facts r.val.headersFrom.isSome r.val.tz (r.val.now.getD 0) r.val.start (logLines r.val)
@@ -3666,7 +3667,6 @@ theorem logOpZFast_core (r : VLogReq) :
         (((logLines r.val).map Log.Line.verdict).filterMap verdictWarn) r.val.terminated p run)
       (fun run => r.val.seamFacts run) (fun run => r.val.seamRun run)
       (fun run rs => r.val.resumedV ((logLines r.val).map Log.Line.verdict) run rs) := rfl
-
 /-- **The op reading each line once is the op** (`@[csimp]`).  D24 added the seam's fourth
 argument, and with it `h4`: the trimmed run's answer is the run's answer whenever the request asked
 for facts, and when it did not there is no answer on either side — so the compiled op carries

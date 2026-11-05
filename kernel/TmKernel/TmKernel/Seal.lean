@@ -915,7 +915,8 @@ structure Answer where
   /-- the running break (D105, `Replay.Machine.brkOpen`) -/
   openBreak : Option Replay.OpenBrk
   openEnded : List Replay.Ending
-  (openFinished : List Replay.Ending) (openHeld : List Replay.HeldFact)
+  openFinished : List Replay.Ending
+  openHeld : List Replay.HeldFact
   lastDay : Option Nat
   lastEffective : Option At
   entryCount : Nat
@@ -1301,7 +1302,6 @@ def readCkptFields (kvs : List (List Char × JVal)) : Except CkErr Ckpt := do
       machine, items, window, instOther, named, openDays, lastDay, lastEff, entryCount, unknown, longestLeak, rwarns,
       warnings, warnOverflow⟩
   | _ => throw (.badCkpt .shape)
-
 /-- **The smart decoder of a checkpoint** (R10): key by key, in build order, refusing `badCkpt <field>` at the first key
 that is absent, out of order or of the wrong shape; then every bound (`Ckpt.fault`).  A missing field is never
 defaulted. -/
