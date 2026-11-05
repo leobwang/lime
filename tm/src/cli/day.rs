@@ -2699,7 +2699,15 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
              start would begin a second break inside it; {}",
             hm(x.started),
             hm(x.ended),
-            if ctx.a_line_ends(&x) {
+            // A line ends it only a whole minute or more past its start, and before its end (README gap 6057): on an ending
+            // a minute long or less no such instant exists, so the advice is the one that does what it says.
+            if x.ended - x.started <= chrono::Duration::minutes(1) {
+                format!(
+                    "nothing written: a line carries whole minutes from its start, so no instant before {} can end it — `tm undo` \
+                     takes the last line back, one line at a time, until that break's line is gone (D141)",
+                    hm(x.ended)
+                )
+            } else if ctx.a_line_ends(&x) {
                 format!("give a later instant, before {}, to end it there (D141)", hm(x.ended))
             } else {
                 "nothing written: a later break let go of a stretch that meets it, so a line would not end it — `tm undo` \
@@ -2842,7 +2850,18 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                 [b] => format!(
                     "a break is logged {} — `tm break` at its own start would leave it no minutes; nothing written: {} (D147)",
                     span(b),
-                    if b.retime_from.is_some() {
+                    if b.ended - b.started < chrono::Duration::minutes(2) {
+                        // Under a minute past the start is at the start and under a minute before the end is at the end, so a
+                        // break under two minutes has no instant a line re-times it at (README gap 6057).
+                        let undo = "`tm undo` takes the last line back, one line at a time, until its line is gone";
+                        format!(
+                            "a line carries whole minutes from its start, so no instant inside it can end it: {}",
+                            match &length {
+                                Some(l) => format!("{l}, or {undo}"),
+                                None => undo.to_string(),
+                            }
+                        )
+                    } else if b.retime_from.is_some() {
                         "give an instant inside it to end it there".to_string()
                     } else {
                         format!("{}: {advice}", in_the_way(&held, b, &span))

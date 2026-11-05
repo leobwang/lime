@@ -300,15 +300,28 @@ fn gap_6024_is_refused_and_its_advice_does_what_it_says() {
 /// **A frozen break, past its end inside the end its own lines gave it**: the gate's OutNotRead arm. `09:40 15m` re-timed to
 /// 09:45 (widest 09:55); `--now 09:30` (D129 to 10:10), ended at 09:33 (D141): what the 09:30 break let go of meets the 09:40
 /// one, so a line for it is not read. At 09:50, which no closed span holds and only its widest end reaches: refused, saying
-/// what is in the way. `tm undo` of the 09:33 line un-freezes it (a D129 ending reads again): D150 re-times it out.
+/// what is in the way. The refusal's `tm undo` is driven, one line at a time: undoing the 09:33 line re-opens the 09:30 break,
+/// D129 to 10:10, so 09:50 lies inside it and D141 ends THAT break there (review 100), not D150; undoing the 09:30 line too
+/// takes the break in the way off the log, and only then does D150 re-time the 09:40 one out (review 110).
 #[test]
 fn past_a_frozen_breaks_end_inside_its_widest_end_is_refused() {
     let tm = j_day(&[("09:40", "15m"), ("09:45", ""), ("09:30", ""), ("09:33", "")]);
     reads(&tm, 112);
     let said = refused(&tm, "09:50");
     assert!(said.contains("lies past the end of the break 09:40–09:45, inside the 09:55 its own lines gave it"), "{said}");
-    assert!(said.contains("the break 09:30–09:33, logged after it") && said.contains("(D150)"), "{said}");
+    assert!(said.contains("the break 09:30–09:33, logged after it") && said.contains("(D150)") && said.contains("`tm undo`"), "{said}");
     reads(&tm, 112);
+
+    tm.ok_at(&at("12:00"), &["undo"]);
+    let one = copied(&tm);
+    let out = one.ok_at(&at("09:50"), &["break"]);
+    assert!(out.stderr.contains("the break that began at 09:30 ends here, at 09:50") && !out.stdout.contains("re-timed"), "{}{}", out.stdout, out.stderr);
+    reads(&one, 100);
+
+    tm.ok_at(&at("12:00"), &["undo"]);
+    let out = tm.ok_at(&at("09:50"), &["break"]);
+    assert!(out.stdout.contains("break 09:40–09:45 re-timed out to end at 09:50 (D150)"), "{}{}", out.stdout, out.stderr);
+    reads(&tm, 110);
 }
 
 /// **A D129 ending a later break let go over: the D141 arm reads the fact too** (README gap 6041). `--now 09:35` (D129 to
@@ -709,6 +722,71 @@ fn d141_that_moves_with_another_span_holding_says_so() {
     let out = tm.ok_at(&at("09:42"), &["break"]);
     assert!(out.stderr.contains("ends here, at 09:42") && out.stderr.contains("the logged break 09:40–09:45 also holds this instant"), "{}{}", out.stdout, out.stderr);
     reads(&tm, 105);
+}
+
+/// **Under a minute past the start of a break D129 ended: at its start, as P139 refuses** (README gap 6056; `at_finished`'s rule
+/// for a logged break). D141's arm wrote `actual_min: 0` for `09:20`, then `--now 09:20:30`: the break gone (review 120), under a
+/// reply that said it ended here at 09:20. With a length, D146 lost it the same way. A whole minute past the start still ends it.
+#[test]
+fn under_a_minute_past_a_d129_breaks_start_is_refused_as_at_its_start() {
+    let tm = j_day(&[("09:20", "")]);
+    reads(&tm, 80);
+    let exactly = refused(&tm, "09:20");
+    assert!(exactly.contains("(D129)") && exactly.contains("give a later instant, before 10:10"), "{exactly}");
+    assert_eq!(refused(&tm, "09:20:30"), exactly);
+    assert_eq!(refused_with(&tm, "09:20:30", &["break", "5m"]), exactly);
+    reads(&tm, 80);
+    let out = tm.ok_at(&at("09:21"), &["break"]);
+    assert!(out.stderr.contains("ends here, at 09:21"), "{}{}", out.stdout, out.stderr);
+    reads(&tm, 119);
+}
+
+/// **A break too short to hold an instant a line could end it at is not told to give one** (README gap 6057). A line carries
+/// whole minutes from the start: under a minute past the start is at the start, under a minute before the end is at the end, so
+/// a logged break under two minutes has no instant that re-times it. `09:20 1m`, then `09:20` or `09:20:30`: the advice is
+/// `tm undo` or a length, both driven. Two minutes do have one: `--now 09:21` moves it. The same for a D129 ending one minute long.
+#[test]
+fn a_break_too_short_for_a_line_is_given_advice_that_works() {
+    let tm = j_day(&[("09:20", "1m")]);
+    reads(&tm, 119);
+    let said = refused(&tm, "09:20");
+    assert!(!said.contains("give an instant inside it") && said.contains("no instant inside it"), "{said}");
+    assert!(said.contains("type a length") && said.contains("`tm undo`"), "{said}");
+    assert_eq!(refused(&tm, "09:20:30"), said);
+    let length = copied(&tm);
+    let out = length.ok_at(&at("09:20"), &["break", "5m"]);
+    assert!(out.stdout.contains("09:20–09:25 · logged finished"), "{}{}", out.stdout, out.stderr);
+    reads(&length, 115);
+    tm.ok_at(&at("09:21"), &["undo"]);
+    reads(&tm, 120);
+
+    // Past the blocks, the break's own stamp is the log's latest: at 11:20:30 a length would begin a running break, so it is not
+    // offered and `tm undo` is what there is; at 11:20 the log has reached the instant, and the length it offers logs finished.
+    let tm = j_day(&[("11:20", ""), ("11:21", "")]);
+    let said = refused(&tm, "11:20:30");
+    assert!(said.contains("no instant inside it") && !said.contains("type a length") && said.contains("`tm undo`"), "{said}");
+    let said = refused(&tm, "11:20");
+    assert!(said.contains("no instant inside it") && said.contains("type a length that ends by 11:21"), "{said}");
+    let out = tm.ok_at(&at("11:20"), &["break", "1m"]);
+    assert!(out.stdout.contains("11:20–11:21 · logged finished"), "{}{}", out.stdout, out.stderr);
+    assert!(!copied(&tm).ok_at(&at("12:00"), &["now"]).stdout.contains("on break since"));
+
+    // Two minutes hold one, and the advice stands.
+    let tm = j_day(&[("09:20", "2m")]);
+    let said = refused(&tm, "09:20");
+    assert!(said.contains("give an instant inside it"), "{said}");
+    assert!(tm.ok_at(&at("09:21"), &["break"]).stdout.contains("re-timed to end at 09:21 (D147) · 1m of 2m"));
+    reads(&tm, 119);
+
+    // A D129 ending a minute long: no later instant before its end is a whole minute past its start.
+    let tm = j_day(&[("10:09", "")]);
+    let said = refused(&tm, "10:09");
+    assert!(!said.contains("give a later instant") && said.contains("no instant before 10:10") && said.contains("`tm undo`"), "{said}");
+    assert_eq!(refused(&tm, "10:09:30"), said);
+    tm.ok_at(&at("11:30"), &["undo"]);
+    reads(&tm, 120);
+    let v = copied(&tm).json_at(&at("12:30"), &["review", "day"]);
+    assert_eq!(v["review"]["breaks"]["breaks"].as_array().map(Vec::len), Some(0), "the break is gone: {v}");
 }
 
 /// **Under a minute before a break's end: it already ends there** (README gap 6053). A break has seconds on both ends: typing the

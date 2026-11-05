@@ -1506,9 +1506,15 @@ impl Ctx {
     /// **The logged break D129 ended whose own start is `at`** (stage 6 W-52 repair track R, the campaign's
     /// call, parity **P139**): `tm break --now <that start>` would open a second break wholly inside it,
     /// which D141 forbids, so the verb refuses it by name. Read off the same fact as
-    /// [`Ctx::break_a_start_ended_at`].
+    /// [`Ctx::break_a_start_ended_at`]. **Under a minute past its start is at its start** (the W-54 third repair, README gap
+    /// 6056; `at_finished`'s rule for a logged break): a line carries whole minutes from the start, so D141's arm would write
+    /// `actual_min: 0` and the break would vanish under a reply saying it ended here.
     pub(crate) fn ended_break_starting_at(&self, at: DateTime<FixedOffset>) -> Option<EndedBreak> {
-        self.replay.ended_breaks.iter().find(|x| x.started == at).cloned()
+        self.replay
+            .ended_breaks
+            .iter()
+            .find(|x| x.started <= at && at - x.started < chrono::Duration::minutes(1))
+            .cloned()
     }
 
     /// **Whether the log ENDED the running break `.tm/state.json` holds** (the W-46 audit, README gap
