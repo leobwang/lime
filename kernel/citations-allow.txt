@@ -1871,3 +1871,21 @@ with_minute
 1 Replay.a_retime_of_an_outer_break_past_a_nested_one_is_a_break_of_its_own
 1 Replay.a_retime_that_gives_up_another_breaks_stretch_is_not_read
 1 Replay.the_finished_breaks_are_the_ones_no_other_break_overlaps
+# W-54 third repair track H: the host's break gate reads Replay::held_breaks, so its span readers and three of its rows are
+# gone or renamed (cli_w54r3_h.rs carries the rows); every counted citation is an append-only README block.
+1 FinishedSpan
+1 FinishedSpan::widest
+1 HeldSpan
+4 a_break_typed_at_or_after_the_end_d129_gave_begins_a_break
+1 cli::day::tests::d147s_gate_reads_inside_end_start_and_outside_in_that_order
+1 cli::day::tests::d150s_arm_reads_past_the_end_within_the_widest_after_d147s
+1 cli_w54_h_breaks.rs::inside_an_overlapped_break_alone_the_verb_refuses_it
+1 cli_w54r2_h.rs::d3_past_a_nested_breaks_cover_inside_the_typed_length_is_refused
+1 d147s_gate_reads_inside_end_start_and_outside_in_that_order
+1 d150s_arm_reads_past_the_end_within_the_widest_after_d147s
+2 day::tests::the_verifiers_shapes_under_the_narrowed_fact
+2 held_spans
+5 retime_in_the_way
+5 spans_of
+1 the_verifiers_shapes_under_the_narrowed_fact
+2 typed_end

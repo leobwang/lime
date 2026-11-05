@@ -392,7 +392,7 @@ fn already_ends_here_inside_another_drawn_break_is_refused() {
 /// **D150's Out runs across another logged break** (the owner's shape under D151): `09:20 30m`, re-timed to 09:30, `09:35
 /// 5m`, then `--now 09:45` — the 09:20 break's widest end is its own 09:50.
 ///
-/// *Restated at the W-54 third repair track H* (README gap 6046; it read `a_retime_out_across_another_logged_break_is_refused`
+/// *Restated at the W-54 third repair track H* (README gap 6046; it read a_retime_out_across_another_logged_break_is_refused
 /// from the W-54 repair until then, gap 5941's host guard): `out_to` reaches over a break between because the kernel reads that
 /// soundly now (track K, gap 6022), so the host keeps no rule of its own: re-timed out to 09:45, the 09:35 break drawn 0, `95`.
 /// Before the other break it goes as it always did.

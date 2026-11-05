@@ -159,7 +159,7 @@ fn a_reads_88_on_the_review_the_plan_and_a_cold_rebuild() {
 
 /// **B's first** (`09:35 5m`, `09:30` D129, `09:45` D141's end): 09:47 is past the end a line stated and past the 09:35
 /// break — D151 says a break begins, which D129 runs to 10:10. On 213e827's land: refused "inside the length typed for
-/// it" (gap 6010's `typed_end`).
+/// it" (gap 6010's typed end).
 #[test]
 fn b_past_a_stated_end_a_break_begins() {
     let tm = j_day(&[("09:35", "5m"), ("09:30", ""), ("09:45", "")]);
@@ -179,7 +179,7 @@ fn b_outside_every_held_break_a_break_begins() {
 }
 
 /// **C, the auditor's d5** (`09:27 10m`, re-timed to 09:30, `09:20 10m`, `09:25 10m`, then `--now 09:33`): on 213e827's land
-/// refused, naming a phantom 09:30–09:35 (the second matching loop of `held_spans` handed one break's record to another).
+/// refused, naming a phantom 09:30–09:35 (the second matching loop of held_spans handed one break's record to another).
 /// The fact names no such break: only the 09:25 break's closed span holds 09:33, so it is re-timed, 107.
 #[test]
 fn c_d5_names_no_phantom_break() {
