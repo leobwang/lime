@@ -1081,6 +1081,34 @@ pub struct EndedBreak {
     pub widest: DateTime<FixedOffset>,
 }
 
+/// **One fact per break the log holds** (stage 6 W-54 third repair track K, README gap 6022; the kernel's
+/// `open.held`, `Replay.heldFacts`): its OWN span and identity, never clipped by D142's union, and the instants a
+/// `break` line stamped at [`HeldBreak::started`] with its planned minutes is read as its re-time. A line ending the
+/// break at `E` is read iff `retime_from <= E < ended` or `ended < E <= out_to` (`None`: not read on that side), and
+/// then yields the union's netting (`Replay.a_held_break_is_re_timed_in_its_range`, and the converse
+/// `Replay.a_held_break_is_re_timed_only_in_its_range`). Read off the kernel, never re-derived from a
+/// [`BreakRecord`], which D142 clips. Identical twins (one stamp, end, length and place) are one entry.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HeldBreak {
+    /// Its own start: its line's `t`, or its `break_start`'s.
+    pub started: DateTime<FixedOffset>,
+    /// Its own current end: `started` plus its line's actual-or-planned minutes, or the end D129 gave it.
+    pub ended: DateTime<FixedOffset>,
+    /// Planned minutes: what a re-timing line must carry.
+    pub planned_min: u32,
+    /// Where.
+    pub place: Option<String>,
+    /// **The latest end its OWN lines gave it** (`Replay.HeldBrk.wide`, the owner's D150 and D151): never less than
+    /// [`HeldBreak::ended`], and the end D129 inferred only until a line has stated one.
+    pub widest: DateTime<FixedOffset>,
+    /// From where a line ending it before [`HeldBreak::ended`] is read. `None`: no such line is — it is a break of
+    /// its own (P127's for a D129 ending), because a break runs, another break at this stamp answers the line, or a
+    /// break held after it let go of a stretch that meets it (`Replay.frozen`, README gap 6021).
+    pub retime_from: Option<DateTime<FixedOffset>>,
+    /// To where a line ending it past [`HeldBreak::ended`] is read (D150): [`HeldBreak::widest`], or `None`.
+    pub out_to: Option<DateTime<FixedOffset>>,
+}
+
 /// A block that was started and never closed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct OpenBlock {
@@ -1574,7 +1602,7 @@ impl ViewRow {
 /// ports them, so nothing here may drop or stop deriving them before it does.
 ///
 /// `PartialEq` compares the facts and ignores the **five** derived fields
-/// (`rows`, `line_count`, `entry_count`, `done_date_totals`, and `latest_t`, which `seams` decides), as serialisation
+/// (`rows`, `line_count`, `entry_count`, `done_date_totals`, and `latest_t`, which the request's clock decides), as serialisation
 /// does: two logs with the same survivors replay to equal facts whatever lines
 /// they were read from, and `replay(raw) == replay(masked)` holds although one
 /// entry list is twelve entries shorter than the other — which is exactly what
@@ -1653,11 +1681,16 @@ pub struct Replay {
     /// for it ([`EndedBreak::widest`], the owner's D150). **Since W-54 second repair track K** (README gap 5970;
     /// `Replay.ownDrawn`) a break is listed when the piece it is drawn as (D142's union: from where the breaks begun
     /// before it end, to its own end) is not empty and no other held break meets it — whatever its age, so a
-    /// head-clipped break whose tail is its own is listed; a line at its stamp re-times it when it ends in that piece,
-    /// at its end or past it (`Replay.givesUp`: it gives up nothing another break covers). W-54 omitted a break a
-    /// newer one overlapped, and W-54 repair track K every break another overlapped at all (README gap 5925).
+    /// head-clipped break whose tail is its own is listed. W-54 omitted a break a newer one overlapped, and W-54 repair
+    /// track K every break another overlapped at all (README gap 5925). **Since W-54 third repair track K** the reading
+    /// of a line is [`Replay::held_breaks`]'s (`Replay.frozen`, README gap 6021): a break listed here may be frozen.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub finished_breaks: Vec<EndedBreak>,
+    /// **Every break the log holds, one fact each** (stage 6 W-54 third repair track K, README gap 6022; [`HeldBreak`],
+    /// the kernel's `open.held`): newest first, D129 endings among them, unclipped, also while a break runs. An empty
+    /// list is not written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub held_breaks: Vec<HeldBreak>,
     /// Number of unknown events seen.
     pub unknown: u32,
     /// Inconsistencies noticed while replaying (a `done` for an item that was
@@ -1677,13 +1710,13 @@ pub struct Replay {
     /// whatever the range (`tm idle`'s default length reads it). Not the
     /// latest instant: a hand-appended or retro line can be dated earlier.
     pub last_effective_t: Option<DateTime<FixedOffset>>,
-    /// **The latest stamp of a surviving entry, by instant** (stage 6 W-54 second repair track K, the owner's D153,
-    /// README gap 5972): the greatest [`DaySeam::last_t`] of the days this replay holds seams for — each the latest
-    /// stamp over that day's survivors, undone lines and undos excluded (`Replay.lastTOn`,
-    /// `a_days_last_t_is_the_latest_stamp_of_its_survivors`) — so a line stamped later than every other is counted
-    /// wherever it sits in the file, and a cancelled one never. [`Replay::last_effective_t`] is the last survivor in
-    /// file order and can be earlier. Derived from [`Replay::seams`] by the decoder, so it is not serialised (the
-    /// fork's `Replay` has no such key) and not compared: equal seams make it equal.
+    /// **The log's latest typed-time stamp** (the owner's D153 and D154; stage 6 W-54 third repair track K, README
+    /// gap 6023; the kernel's `latestTyped`, `Seal.latestTyped`): the greatest stamp of a line stamped when its verb ran,
+    /// wherever it sits in the file, undone lines and undo lines among them (the instant was reached either way); no
+    /// `wake`, `arrive` or `energy` line, whose stamp is a stated instant that can run ahead of the clock
+    /// (`Seal.typedAt?`), and no line past D18's fence, `now` plus two days, which hides nothing behind it.
+    /// [`Replay::last_effective_t`] is the last survivor in file order and can be earlier. Not serialised (the fork's
+    /// `Replay` has no such key) and not compared: it depends on the clock it was asked with.
     #[serde(skip)]
     pub latest_t: Option<DateTime<FixedOffset>>,
     /// Every entry in file order with its line, day, mask bit and display
@@ -1755,6 +1788,7 @@ impl PartialEq for Replay {
             open_break,
             ended_breaks,
             finished_breaks,
+            held_breaks,
             unknown,
             warnings,
             late_marks,
@@ -1787,6 +1821,7 @@ impl PartialEq for Replay {
             && *open_break == other.open_break
             && *ended_breaks == other.ended_breaks
             && *finished_breaks == other.finished_breaks
+            && *held_breaks == other.held_breaks
             && *unknown == other.unknown
             && *warnings == other.warnings
             && *late_marks == other.late_marks

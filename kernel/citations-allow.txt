@@ -1863,3 +1863,11 @@ with_minute
 # W-54 second repair land (README "Stage 6 — W-54 second repair land"): track H's stub `latest_t_of` is deleted and
 # `inside_running_block` reads K's `Replay::latest_t`; the three counted citations are track H's append-only README block.
 3 latest_t_of
+# W-54 third repair track K (README gaps 6021 and 6025): the guard's law and three witnesses are restated under new names
+# (B, C and the 09:28 line are read since `Replay.frozen`), and a witness whose name was false is renamed; every counted
+# citation is an append-only README block.
+1 Replay.a_line_ending_inside_another_breaks_stretch_is_a_break_of_its_own
+1 Replay.a_retime_of_a_covering_break_off_a_later_ones_head_is_a_break_of_its_own
+1 Replay.a_retime_of_an_outer_break_past_a_nested_one_is_a_break_of_its_own
+1 Replay.a_retime_that_gives_up_another_breaks_stretch_is_not_read
+1 Replay.the_finished_breaks_are_the_ones_no_other_break_overlaps

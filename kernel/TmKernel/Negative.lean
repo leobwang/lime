@@ -4009,12 +4009,12 @@ theorem aHeadClippedBreakIsOmitted :
   decide
 
 set_option maxRecDepth 8000 in
-/- CHEAT 832 — the critic's B read as a re-time (README gaps 5970 and 5971): `09:20 10m`, `09:25 10m`, then the 09:20 break
-   re-timed to 09:22.  Claimed `a` forty-eight, the union `[09:20, 09:22) ∪ [09:25, 09:35)`.  The re-time would give up
-   09:25–09:30, which the 09:25 break also covers (`Replay.givesUp`), so the line is a break of its own and `a` stays
-   forty-five (`Replay.a_retime_of_a_covering_break_off_a_later_ones_head_is_a_break_of_its_own`). -/
+/- CHEAT 832 — the critic's B not read (README gaps 5970, 5971 and 6021; restated at W-54 third repair track K, when what it
+   claimed became the reading): `09:20 10m`, `09:25 10m`, then the 09:20 break re-timed to 09:22.  Claimed `a` forty-five, the
+   line a break of its own, as W-54 second repair track K read it.  The re-time is read and freezes the 09:25 break: `decide`
+   computes forty-eight (`Replay.a_retime_of_a_covering_break_off_a_later_ones_head_is_read`). -/
 theorem theCoveringBreakIsReTimedOffALaterOnesHead :
-    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924369900 (.brk 10 (some 10) none), Replay.bE 7 63924369600 (.brk 10 (some 2) none)])).items.get ['a']).map (·.minutes) = some 48 := by
+    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924369900 (.brk 10 (some 10) none), Replay.bE 7 63924369600 (.brk 10 (some 2) none)])).items.get ['a']).map (·.minutes) = some 45 := by
   decide
 
 set_option maxRecDepth 8000 in
@@ -4027,12 +4027,83 @@ theorem anOuterBreakANewerOneOverlapsIsNotReTimed :
   decide
 
 set_option maxRecDepth 8000 in
-/- CHEAT 834 — a line ending inside another break's stretch re-times (README gaps 5970 and 5971; W-54's reading): `09:20 10m`,
-   `09:25 10m`, then the 09:25 break re-timed to 09:28, inside the 09:20 break.  Claimed `a` fifty: the 09:25 break's take
-   given back and the line covered whole, the 09:20 break's take left short of 09:28–09:30.  The line is a break of its own
-   and `a` stays forty-five (`Replay.a_line_ending_inside_another_breaks_stretch_is_a_break_of_its_own`). -/
+/- CHEAT 834 — a line ending inside another break's stretch not read (README gaps 5970, 5971 and 6021; restated at W-54 third
+   repair track K, when what it claimed became the reading): `09:20 10m`, `09:25 10m`, then the 09:25 break re-timed to 09:28,
+   inside the 09:20 break.  Claimed `a` forty-five, as W-54 second repair track K read it.  `decide` computes fifty, the union
+   09:20–09:30 (`Replay.a_line_ending_inside_another_breaks_stretch_re_times_it`). -/
 theorem aLineInsideAnotherBreaksStretchReTimes :
-    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924369900 (.brk 10 (some 10) none), Replay.bE 7 63924369900 (.brk 10 (some 3) none)])).items.get ['a']).map (·.minutes) = some 50 := by
+    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924369900 (.brk 10 (some 10) none), Replay.bE 7 63924369900 (.brk 10 (some 3) none)])).items.get ['a']).map (·.minutes) = some 45 := by
+  decide
+
+
+/-! ===== W-54 third repair track K (README gaps 6020-6039): cheats 835-845 — a take put back whole, a shared stretch let go and the
+   break it leaves short frozen, the fact per held break, the log's typed-time lines.  Each claims a reading this track replaced, and
+   `decide` computes the other. ===== -/
+
+set_option maxRecDepth 8000 in
+/- CHEAT 835 — a piece wider than a take dropped (README gap 6020): `09:20 10m`, `09:40 15m`, the first re-timed to 09:25, the second to 09:50.  Claimed W-54 second repair track K's pieces: 09:25–09:30 drawn nowhere, the review 105 and the plan 100.  `decide` computes 09:25–09:40 (`Replay.a_piece_wider_than_a_take_is_put_back_whole`). -/
+theorem aPieceWiderThanATakeIsDropped :
+    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924370800 (.brk 15 (some 15) none), Replay.bE 7 63924369600 (.brk 10 (some 5) none), Replay.bE 8 63924370800 (.brk 15 (some 10) none)])).days.get 739865).map (fun a => (a.segments.filter (fun g => g.kind == .block ['a'])).map (fun g => (g.start.1.sec, g.stop.1.sec))) = some [(63924368400, 63924369600), (63924370200, 63924370800), (63924371400, 63924372000)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 836 — defect A's credit (README gap 6020): five lines, the first break re-timed out over the second, the second re-timed to 09:52.  Claimed thirty-eight, what the second break's take kept of the shared stretch.  `decide` computes twenty-eight (`Replay.a_retime_out_over_a_later_break_keeps_the_takes_with_the_union`). -/
+theorem aRetimeOutLeavesALaterTakeWhole :
+    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 30 (some 30) none), Replay.bE 6 63924369600 (.brk 30 (some 10) none), Replay.bE 7 63924370800 (.brk 15 (some 15) none), Replay.bE 8 63924369600 (.brk 30 (some 30) none), Replay.bE 9 63924370800 (.brk 15 (some 12) none)])).items.get ['a']).map (·.minutes) = some 38 := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 837 — the break a let-go leaves short keeps its range (README gaps 5971 and 6021): after the critic's B, the 09:25 break, its take short of 09:25–09:30.  Claimed its range from its start.  `frozen` bites; `decide` computes none (`Replay.a_retime_letting_go_of_a_shared_stretch_freezes_the_other`). -/
+theorem aShortBreakKeepsItsRange :
+    (Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924369900 (.brk 10 (some 10) none), Replay.bE 7 63924369600 (.brk 10 (some 2) none)])).openHeld.map (fun f => (f.s.1.sec, f.e.1.sec, f.retimeFrom.map (·.1.sec), f.outTo.map (·.1.sec))) = [(63924369600, 63924369720, some 63924369600, some 63924370200), (63924369900, 63924370500, some 63924369900, none)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 838 — a frozen break re-timed (README gaps 5971 and 6021): after the critic's B, a line re-timing the 09:25 break to 09:28.  Claimed `a` fifty-three, the five its short take gives back with the three the line nets, which leaves 09:28–09:30 drawn nowhere.  `decide` computes forty-eight (`Replay.a_frozen_break_is_not_re_timed_on_the_log`). -/
+theorem aFrozenBreakIsReTimed :
+    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924369900 (.brk 10 (some 10) none), Replay.bE 7 63924369600 (.brk 10 (some 2) none), Replay.bE 8 63924369900 (.brk 10 (some 3) none)])).items.get ['a']).map (·.minutes) = some 53 := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 839 — the critic's C not read (README gaps 5971 and 6021): the outer break of a nested pair re-timed to 09:25.  Claimed `a` thirty.  `decide` computes fifty (`Replay.the_outer_break_is_re_timed_past_a_nested_one_and_freezes_it`). -/
+theorem theOuterBreakIsNotReTimedPastANestedOne :
+    ((Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 30 (some 30) none), Replay.bE 6 63924370200 (.brk 5 (some 5) none), Replay.bE 7 63924369600 (.brk 30 (some 5) none)])).items.get ['a']).map (·.minutes) = some 30 := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 840 — the older break of gap 5973's day keeps its range (README gaps 5973 and 6021): `09:40 5m`, a D129 ending from 09:30 and its own line ending it at 09:35.  Claimed the 09:40 break re-timeable.  The ending took its stretch and let it go: `decide` computes none (`Replay.gap_5973s_day_freezes_the_older_break`). -/
+theorem gap5973sOlderBreakKeepsItsRange :
+    (Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924370800 (.brk 5 (some 5) none), Replay.bE 6 63924370200 (.brkStart 20 none), Replay.bE 7 63924370200 (.brk 20 (some 5) none)])).openHeld.map (fun f => (f.s.1.sec, f.e.1.sec, f.retimeFrom.map (·.1.sec), f.outTo.map (·.1.sec))) = [(63924370200, 63924370500, some 63924370200, none), (63924370800, 63924371100, some 63924370800, none)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 841 — a fact clipped by D142 (README gap 6022): the head-clipped pair.  Claimed the 09:25 break's span from where it is drawn, 09:30.  The fact is unclipped; `decide` computes 09:25 (`Replay.the_fact_holds_every_held_break_unclipped`). -/
+theorem theFactIsClipped :
+    (Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924369900 (.brk 10 (some 10) none)])).openHeld.map (fun f => (f.s.1.sec, f.e.1.sec, f.retimeFrom.map (·.1.sec), f.outTo.map (·.1.sec))) = [(63924370200, 63924370500, some 63924369900, none), (63924369600, 63924370200, some 63924369600, none)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 842 — a range while a break runs (README gap 6022): a `break_start` 11:30 no `start` follows.  Claimed the 09:20 break re-timeable.  A line is parked while a break runs; `decide` computes none (`Replay.the_fact_is_empty_of_ranges_while_a_break_runs`). -/
+theorem aRangeWhileABreakRuns :
+    (Replay.replay Replay.utcZone ([Replay.bE 1 63924368400 (Replay.bStart ['a']), Replay.bE 2 63924372000 (Replay.bDone ['a'] 60 false), Replay.bE 3 63924372600 (Replay.bStart ['b']), Replay.bE 4 63924376200 (Replay.bDone ['b'] 60 false)] ++ [Replay.bE 5 63924369600 (.brk 10 (some 10) none), Replay.bE 6 63924377400 (.brkStart 20 none)])).openHeld.map (fun f => (f.s.1.sec, f.e.1.sec, f.retimeFrom.map (·.1.sec), f.outTo.map (·.1.sec))) = [(63924369600, 63924370200, some 63924369600, none)] := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 843 — a forward report witnesses an instant (the owner's D154, README gap 6023): an `energy` line stamped 18:00 folded with a `note` at 09:00.  Claimed the stated instant.  It can run ahead of the clock; `decide` computes 09:00 (`Seal.maxTyped_is_the_latest_typed_stamp`). -/
+theorem aForwardReportIsATypedStamp :
+    (Seal.ckptOfEntries Replay.utcZone 739865 739865 2 [Replay.bE 1 63924368400 (.note ['n']), Replay.bE 2 63924400000 (.energy 3 4 (.nat 2) ['h'])] [] []).maxTyped = some ⟨63924400000, 0⟩ := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 844 — a far-future line hides the stamp behind it (D18, D154, README gap 6023): a `note` at 09:00 and one in 2028, the fence a day later.  Claimed none, as a maximum filtered after it was taken would answer.  `decide` computes 09:00 (`Seal.latestTyped_skips_a_far_future_line_and_counts_an_undone_one`). -/
+theorem aFarFutureLineHidesTheNextLatest :
+    Seal.latestTyped (Seal.Ckpt.empty Replay.utcZone) [Replay.bE 1 63924368400 (.note ['n']), Replay.bE 2 63987526800 (.note ['f'])] ⟨63924454800, 0⟩ = none := by
+  decide
+
+set_option maxRecDepth 8000 in
+/- CHEAT 845 — an undo line is no witness (D153 as first built; the owner's D154): a `note` at 09:00 undone at 09:01.  Claimed 09:00, the latest survivor's reading.  The instant was reached either way; `decide` computes 09:01 (`Seal.latestTyped_skips_a_far_future_line_and_counts_an_undone_one`). -/
+theorem anUndoLineIsNoWitness :
+    Seal.latestTyped (Seal.Ckpt.empty Replay.utcZone) [Replay.bE 1 63924368400 (.note ['n']), Replay.bE 2 63924368460 (.undo ['n', 'o', 't', 'e'] none)] ⟨63924454800, 0⟩ = some ⟨63924368400, 0⟩ := by
   decide
 
 end Tm

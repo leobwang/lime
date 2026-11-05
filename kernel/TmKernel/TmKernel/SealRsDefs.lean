@@ -55,6 +55,7 @@ def rsCkpt (z : Cal.Tz) (T : Nat) (K : Ckpt) (b : List Log.Line) (p : Policy) (r
   ⟨ckptVersion, K.tzKey, K.cut + j, sealDayOf z T K p r j, T,
    maxOptI K.maxT (maxInstant? ((rsQA K r j).filter (fun q => !isFuture T q))),
    minOptI K.futureFloor (minInstant? ((rsQA K r j).filter (isFuture T))),
+   maxOptI K.maxTyped (maxInstant? ((typedOf (rsBj K r j)).filter (fun q => !isFuture T q))),
    storedWakes (sealDayOf z T K p r j) (rsKwj z K r j), storedSlept (rsSlept z K r j) (sealDayOf z T K p r j),
    keepTags (rsMerged K r j),
    K.tagOverflow || decide ((keepTags (rsMerged K r j)).length < (rsMerged K r j).length),

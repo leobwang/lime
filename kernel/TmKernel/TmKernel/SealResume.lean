@@ -162,7 +162,7 @@ def stepQueries (dy : Cal.Instant → Nat) (m : Machine) (e : Entry) : List Cal.
         closed := Replay.doneClosed dy m e.line (e.t.val, e.off.val) id actual.val ci }
     | .brkStart planned where_ =>
       match Replay.firstStart (e.t.val, e.off.val) (dy e.t.val) m with
-      | some t0 => brkFxReads { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ t0 e.line) m } ⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, planned.val, where_, t0⟩
+      | some t0 => brkFxReads { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ t0 e.line) m } ⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, planned.val, where_, t0, t0⟩
       | none =>
         settleReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ } ++
           runReads { Replay.forgetIdle m with brkOpen := some ⟨(e.t.val, e.off.val), planned.val, where_, dy e.t.val⟩ }
@@ -528,7 +528,7 @@ def resumedAnswer (K : Ckpt) (st : State) (hs : List (Nat × HeaderRec)) (entrie
    (daysFrom st hs K.ledgerDay).map (OpenDay.finish st.machine),
    Replay.openOf st.machine,
    st.machine.interrupt.map (fun i => ⟨0, some i.1, none, i.2.1, i.2.2, 0, []⟩),
-   st.machine.brkOpen, Replay.endable st.machine, Replay.finished st.machine,
+   st.machine.brkOpen, Replay.endable st.machine, Replay.finished st.machine, Replay.heldFacts st.machine,
    maxOpt K.lastDay (Replay.maxDay? (st.days.pairs.map Prod.fst)),
    st.global.lastEffective, K.entryCount + entries, st.unknown, st.longestLeak, st.rwarns.reverse,
    (K.warnings ++ ws).take maxWarnings, K.warnings.length + K.warnOverflow + ws.length - maxWarnings⟩
@@ -676,6 +676,10 @@ def keepTags (all : List (List Char × Nat)) : List (List Char × Nat) :=
   let unknownKept := ((all.filter (fun p => !Log.isKnownTag p.1 && decide (p.1.length ≤ maxTagChars))).take maxUnknownTags)
   all.filter (fun p => Log.isKnownTag p.1 || unknownKept.contains p)
 
+/-- **The log's latest typed-time stamp at or before `f`** (the owner's D154, W-54 third repair track K, README gap 6023): the checkpoint's and the tail's, cancelled lines and undo lines counted, a line past `f` — D18's far-future line, `f` being `now` plus its two days — skipped, so it hides nothing (`latestTyped_is_the_whole_logs`). -/
+def latestTyped (K : Ckpt) (bs : List Entry) (f : Cal.Instant) : Option Cal.Instant :=
+  maxOptI (K.maxTyped.filter (fun q => decide (q ≤ f))) (maxInstant? ((typedOf bs).filter (fun q => decide (q ≤ f))))
+
 /-- Two tag-line lists merged by tag, the newer list's line winning. -/
 def mergeTagLines (old new : List (List Char × Nat)) : List (List Char × Nat) :=
   (canon idLt (old.map Prod.fst ++ new.map Prod.fst)).map (fun t =>
@@ -702,6 +706,7 @@ def resealOf (z : Cal.Tz) (T : Nat) (K : Ckpt) (b : List Log.Line) (terminated :
     let ck : Ckpt := ⟨ckptVersion, K.tzKey, K.cut + j, L', T,
       maxOptI K.maxT (maxInstant? (QAj.filter (fun q => !isFuture T q))),
       minOptI K.futureFloor (minInstant? (QAj.filter (isFuture T))),
+      maxOptI K.maxTyped (maxInstant? ((typedOf Bj).filter (fun q => !isFuture T q))),
       storedWakes L' kwj, storedSlept sleptj L', keepTags merged,
       K.tagOverflow || decide ((keepTags merged).length < merged.length),
       settledAt K r j, st.machine,

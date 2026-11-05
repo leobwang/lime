@@ -848,6 +848,9 @@ theorem openEnded_reads_state (st : State) (hs : List (Nat × HeaderRec)) (n : N
 /-- **The breaks held with their own `break` line, of an answer holding a state's machine, are the finished state's** (W-53 repair track K, D147's fact): `openEnded_reads_state`'s, for `Replay.finished`. -/
 theorem openFinished_reads_state (st : State) (hs : List (Nat × HeaderRec)) (n : Nat) (v : Seal.Answer) (h : v.openFinished = Replay.finished st.machine) : askAnswer v .openFinished = some (Replay.ask ⟨Replay.finish st, hs, n⟩ .openFinished) := by
   show some (Replay.Answer.openFinished v.openFinished) = some (Replay.Answer.openFinished (Replay.finish st).openFinished); rw [h]; rfl
+/-- **The fact per held break, of an answer holding a state's machine, is the finished state's** (W-54 third repair track K, README gap 6022). -/
+theorem openHeld_reads_state (st : State) (hs : List (Nat × HeaderRec)) (n : Nat) (v : Seal.Answer) (h : v.openHeld = Replay.heldFacts st.machine) : askAnswer v .openHeld = some (Replay.ask ⟨Replay.finish st, hs, n⟩ .openHeld) := by
+  show some (Replay.Answer.openHeld v.openHeld) = some (Replay.Answer.openHeld (Replay.finish st).openHeld); rw [h]; rfl
 
 /-! ### The answer of a specification checkpoint, field by field -/
 
@@ -888,6 +891,7 @@ theorem answer_openEnded : (answer (ckptOfEntries z T₀ L cut es er ws)).openEn
     = Replay.endable (foldedState z es er).machine := by
   simp only [answer, ckptOfEntries]
 theorem answer_openFinished : (answer (ckptOfEntries z T₀ L cut es er ws)).openFinished = Replay.finished (foldedState z es er).machine := by simp only [answer, ckptOfEntries]
+theorem answer_openHeld : (answer (ckptOfEntries z T₀ L cut es er ws)).openHeld = Replay.heldFacts (foldedState z es er).machine := by simp only [answer, ckptOfEntries]
 theorem answer_lastDay :
     (answer (ckptOfEntries z T₀ L cut es er ws)).lastDay = Replay.maxDay? ((foldedState z es er).days.pairs.map Prod.fst) := by
   simp only [answer, ckptOfEntries]
@@ -950,6 +954,8 @@ theorem answer_reads_state (z : Cal.Tz) (T₀ L cut : Nat) (es : List Entry) (ws
     exact openEnded_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openEnded z T₀ L cut es [] ws)
   | openFinished =>
     exact openFinished_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openFinished z T₀ L cut es [] ws)
+  | openHeld =>
+    exact openHeld_reads_state (foldedState z es []) (foldedHeaders z es []) es.length _ (answer_openHeld z T₀ L cut es [] ws)
   | lastDay => exact hsc.2.2.1
   | lastEffective => exact hsc.2.2.2.1
   | unknown => exact hsc.2.2.2.2.1

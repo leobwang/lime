@@ -163,7 +163,7 @@ theorem resumeRunV_eq (z : Cal.Tz) (T : Nat) (K : Ckpt) (b : List Log.Line) :
 /-! ### The resume builds what its request wants (W4) -/
 
 /-- The answer of a resume whose request asks no facts: the op never reads it (`LogReq.resumedV`). -/
-def blankAnswer : Answer := ⟨0, 0, [], [], [], [], [], none, none, none, [], [], none, none, 0, 0, none, [], [], 0⟩
+def blankAnswer : Answer := ⟨0, 0, [], [], [], [], [], none, none, none, [], [], [], none, none, 0, 0, none, [], [], 0⟩
 
 /-- A run with its answer kept only when facts are wanted, and its headers only when headers or facts are. -/
 def trimRun (wa wh : Bool) (r : Run) : Run :=
@@ -398,6 +398,7 @@ def resealOfWith (dy : Cal.Instant → Nat) (ok : Nat → Bool) (F : Nat) (z : C
     let ck : Ckpt := ⟨ckptVersion, K.tzKey, K.cut + j, L', T,
       maxOptI K.maxT (maxInstant? (QAj.filter (fun q => !isFuture T q))),
       minOptI K.futureFloor (minInstant? (QAj.filter (isFuture T))),
+      maxOptI K.maxTyped (maxInstant? ((typedOf Bj).filter (fun q => !isFuture T q))),
       storedWakes L' kwj, storedSlept sleptj L', keepTags merged,
       K.tagOverflow || decide ((keepTags merged).length < merged.length),
       settledAt K r j, st.machine,
@@ -686,7 +687,7 @@ theorem jnumsBelow_arr (b : Nat) (xs : List JVal) : jnumsBelow b (.arr xs) = xs.
 
 def CkField.name : CkField → String
   | .shape => "shape" | .v => "v" | .tzKey => "tzKey" | .cut => "cut" | .ledgerDay => "ledgerDay"
-  | .resealDay => "resealDay" | .maxT => "maxT" | .futureFloor => "futureFloor" | .wakes => "wakes"
+  | .resealDay => "resealDay" | .maxT => "maxT" | .futureFloor => "futureFloor" | .maxTyped => "maxTyped" | .wakes => "wakes"
   | .sleptByDay => "sleptByDay" | .tagLast => "tagLast" | .tagOverflow => "tagOverflow" | .settled => "settled"
   | .machine => "machine" | .items => "items" | .window => "window" | .instOther => "instOther" | .named => "named"
   | .openDays => "openDays" | .lastDay => "lastDay" | .lastEff => "lastEff" | .entryCount => "entryCount"

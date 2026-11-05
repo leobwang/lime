@@ -408,7 +408,7 @@ fn scope_of(w: &World, date: NaiveDate) -> kernel_log::Scope {
 
 /// The facts the facts section asks for.
 fn want() -> kernel_log::Want {
-    kernel_log::Want { facts: true, headers_from: None, render: vec![] }
+    kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None }
 }
 
 /// **The section the request carried before README gap 4660**: the stored checkpoint and the tail since its cut,

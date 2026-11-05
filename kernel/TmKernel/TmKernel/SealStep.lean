@@ -701,7 +701,6 @@ theorem cutPieces_mi (b : Block) (m : Machine) (hb : m.block = some b) (t : Repl
     (hq : q ∈ Replay.cutPieces b m t) : q.1.1 ∈ machineInstants m := by
   unfold Replay.cutPieces Replay.pieces at hq
   exact piece_start_mi b m hb _ _ rfl _ q hq
-
 /-- **Where what a held break took from an open block begins, the machine holds** (W-54, README gap 5870): every piece of `Replay.openTakes` begins at the block's start or where one of its spans ends — an idle span of its own, or a held break. -/
 theorem openTakes_mi (b : Block) (m : Machine) (hb : m.block = some b) (t : Replay.At) (T : Replay.Take) (hT : T ∈ Replay.openTakes b m t) (p : Replay.Piece) (hp : p ∈ T.ran) : p.s.1 ∈ machineInstants m := by
   unfold Replay.openTakes at hT; obtain ⟨k, -, hT⟩ := List.mem_filterMap.1 hT; split at hT
@@ -725,7 +724,6 @@ theorem cut_mi (dy : Cal.Instant → Nat) (m : Machine) (t : Replay.At) (q : Cal
                                              exact cutPieces_mi b m hb t q' hq'); exact openTakes_mi b m hb t T hT pc hpT
       · exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, pc, hpc, rfl⟩))
   · exact hq
-
 /-- **What a netting keeps of a D129 ending's take begins where a piece of a take began, or at the span's end** (the
 owner's D141, W-52 repair track R): `Replay.reNetTake_starts`, over every take a held block holds. -/
 theorem netOne_held_starts (dy : Cal.Instant → Nat) (s e : Replay.At) (d : Nat) (C : Replay.Closed) (pc : Replay.Piece)
@@ -737,7 +735,6 @@ theorem netOne_held_starts (dy : Cal.Instant → Nat) (s e : Replay.At) (d : Nat
   rcases Replay.reNetTake_starts s e d C a T pc hp with ⟨r, hr, hre⟩ | h
   · exact Or.inl ⟨r, List.mem_flatMap.2 ⟨T, hT, hr⟩, hre⟩
   · exact Or.inr h
-
 /-- **What a late start's cut keeps of a D129 ending's take begins where a piece of a take began** (the owner's D115 and
 D141, W-52 repair track R): `Replay.reNetTake_startEnd_starts`. -/
 theorem netOne_held_startEnd (dy : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (C : Replay.Closed) (pc : Replay.Piece)
@@ -748,7 +745,6 @@ theorem netOne_held_startEnd (dy : Cal.Instant → Nat) (t : Replay.At) (d : Nat
   obtain ⟨T, hT, rfl⟩ := List.mem_map.1 hT'
   obtain ⟨r, hr, hre⟩ := Replay.reNetTake_startEnd_starts t d C a T hT pc hp
   exact ⟨r, List.mem_flatMap.2 ⟨T, hT, hr⟩, hre⟩
-
 /-- **The machine a late break's netting leaves holds no new instant but the break's end** (the owner's D100). -/
 theorem netClosed_mi (dy : Cal.Instant → Nat) (s e : Replay.At) (d : Nat) (m : Machine) (q : Cal.Instant)
     (hq : q ∈ machineInstants (Replay.netClosed dy s e d m).1) : q ∈ machineInstants m ∨ q = e.1 := by
@@ -779,7 +775,6 @@ theorem netClosed_mi (dy : Cal.Instant → Nat) (s e : Replay.At) (d : Nat) (m :
         obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
         exact Or.inl ((mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ (List.mem_append_left _ hp), by rw [hpq, hre]⟩)))
       · exact Or.inr (by rw [hpq, h])
-
 /-- **The machine a late start's cut leaves holds no new instant** (the owner's D115): every piece it draws anew begins where one of the block's own began (`Replay.cutOut_startEnd_starts`). -/
 theorem netStart_mi (dy : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Machine) (q : Cal.Instant)
     (hq : q ∈ machineInstants (Replay.netStart dy t d m).1) : q ∈ machineInstants m := by
@@ -814,7 +809,6 @@ theorem netStart_mi (dy : Cal.Instant → Nat) (t : Replay.At) (d : Nat) (m : Ma
         unfold Replay.Closed.spans at hr
         obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
         exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ (List.mem_append_left _ hp), by rw [hpq, hre]⟩))
-
 /-- **The machine the running break's netting leaves holds no new instant** (README gap 5180): every piece it draws anew begins where one of the held block's own began (`Replay.cutOut_runTo_starts`). -/
 theorem runNet_mi (dy : Cal.Instant → Nat) (m : Machine) (q : Cal.Instant)
     (hq : q ∈ machineInstants (Replay.runNet dy m).1) : q ∈ machineInstants m := by
@@ -851,7 +845,6 @@ theorem runNet_mi (dy : Cal.Instant → Nat) (m : Machine) (q : Cal.Instant)
         unfold Replay.Closed.spans at hr
         obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr
         exact (mem_machineInstants m _).2 (Or.inr (Or.inr ⟨C, hC, p, List.mem_append_left _ (List.mem_append_left _ hp), by rw [hpq, hre]⟩))
-
 /-- **The closed blocks a `done` leaves begin where the machine already holds** (the owner's D100). -/
 theorem doneClosed_mi (dy : Cal.Instant → Nat) (m : Machine) (line : Nat) (t : Replay.At) (id : Log.Id)
     (actual : Nat) (ci : Log.U8) (C : Replay.Closed) (hC : C ∈ Replay.doneClosed dy m line t id actual ci)
@@ -916,12 +909,19 @@ theorem startQueries_sub (dy : Cal.Instant → Nat) (M : Machine) (line : Nat) (
 /-- **Where a held block's restored pieces begin, it held a piece** (the owner's D137): its own drawn pieces' starts and those of the pieces the running break took (`Replay.Closed.ran`). -/
 theorem restored_starts (C : Replay.Closed) (q : Replay.At × Replay.At) (hq : q ∈ C.restored) :
     ∃ p ∈ C.drawn ++ C.ran, p.s = q.1 := by
-  unfold Replay.Closed.restored at hq
-  rcases List.mem_append.1 hq with hq | hq
-  · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hq
-    exact ⟨p, List.mem_append_left _ (List.mem_filter.1 hp).1, rfl⟩
-  · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hq
-    exact ⟨p, List.mem_append_right _ hp, rfl⟩
+  have hj : ∀ (l : List (Replay.At × Replay.At)) (a r : Replay.At × Replay.At), r ∈ Replay.joinIn l a → ∃ t ∈ a :: l, t.1 = r.1 := by
+    intro l; induction l with
+    | nil => intro a r h; simp only [Replay.joinIn, List.mem_singleton] at h; exact ⟨a, List.mem_cons_self, by rw [h]⟩
+    | cons b l ih =>
+      intro a r h; unfold Replay.joinIn at h; split at h
+      · rcases List.mem_cons.1 h with rfl | h; (exact ⟨r, by simp, rfl⟩); (obtain ⟨t, ht, he⟩ := ih a r h; rcases List.mem_cons.1 ht with rfl | ht; (exact ⟨t, by simp, he⟩); (exact ⟨t, by simp [ht], he⟩))
+      · obtain ⟨t, ht, he⟩ := ih _ r h; rcases List.mem_cons.1 ht with rfl | ht; (dsimp only at he; split at he; (exact ⟨a, by simp, he⟩); (exact ⟨b, by simp, he⟩)); (exact ⟨t, by simp [ht], he⟩)
+  have hf : ∀ (S B : List (Replay.At × Replay.At)) (r : Replay.At × Replay.At), r ∈ S.foldl Replay.joinIn B → ∃ t ∈ S ++ B, t.1 = r.1 := by
+    intro S; induction S with
+    | nil => intro B r h; exact ⟨r, by simpa using h, rfl⟩
+    | cons a S ih => intro B r h; obtain ⟨t, ht, he⟩ := ih _ r h; rcases List.mem_append.1 ht with ht | ht; (exact ⟨t, by simp [ht], he⟩); (obtain ⟨t', ht', he'⟩ := hj B a t ht; rcases List.mem_cons.1 ht' with rfl | ht'; (exact ⟨t', by simp, by rw [he', he]⟩); (exact ⟨t', by simp [ht'], by rw [he', he]⟩))
+  unfold Replay.Closed.restored at hq; obtain ⟨t, ht, he⟩ := hf _ _ q hq; simp only [List.mem_append, List.mem_map, List.mem_filter] at ht
+  rcases ht with ⟨p, hp, rfl⟩ | (⟨p, hp, rfl⟩ | ⟨p, hp, rfl⟩); (exact ⟨p, List.mem_append_left _ hp.1, he⟩); (exact ⟨p, List.mem_append_left _ hp.1, he⟩); (exact ⟨p, List.mem_append_right _ hp, he⟩)
 /-- **What a give-back reads, the machine holds** (the owner's D137). -/
 theorem giveReads_mi (m : Machine) (q : Cal.Instant) (hq : q ∈ giveReads m) : q ∈ machineInstants m := by
   obtain ⟨C, hC, hq⟩ := List.mem_flatMap.1 hq
@@ -988,7 +988,7 @@ theorem pcs_unstash (k : Nat) (C : Replay.Closed) (p : Replay.Piece)
 /-- **The machine a start ending a running break starts from holds the old one's instants and the start's stamp** (D129, `Replay.endMachine`): the break is held with the ones before it, its end the start's stamp. -/
 theorem endMachine_mi (m : Machine) (o : Replay.OpenBrk) (t : Replay.At) (key : Nat) (q : Cal.Instant)
     (hq : q ∈ machineInstants (Replay.endMachine m o t key)) : q ∈ machineInstants m ∨ q = t.1 := by
-  apply heldBrk_mi m ⟨o.s, t, o.day, key, o.planned, o.where_, t⟩ q
+  apply heldBrk_mi m ⟨o.s, t, o.day, key, o.planned, o.where_, t, t⟩ q
   rw [mem_machineInstants] at hq ⊢
   rcases hq with h | h | ⟨C', hC', p, hp, rfl⟩
   · exact Or.inl h
@@ -1374,7 +1374,7 @@ theorem arm_mi_of_not_brk (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (
     split at hm
     · rename_i t0 hF
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      rcases brkFx_mi dy _ ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm' q hq with h | h
+      rcases brkFx_mi dy _ ⟨t, t0, d, e.line, pl.val, w, t0, t0⟩ m' hm' q hq with h | h
       · exact Or.inl (forget_mi m q h)
       · rw [h]; exact Or.inl (firstStart_mi t d m t0 hF)
     · unfold Replay.brkStartArm at hm
@@ -1824,7 +1824,7 @@ theorem arm_brks (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Machi
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      exact Or.inr (Or.inl ⟨_, Replay.brkFx_brk dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm'⟩)
+      exact Or.inr (Or.inl ⟨_, Replay.brkFx_brk dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0, t0⟩ m' hm'⟩)
     · unfold Replay.brkStartArm at hm
       simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
         List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
@@ -1840,11 +1840,11 @@ theorem arm_brks_as_w53_stated_it_is_refuted :
       ∃ k x, (∃ p a w, e.ev = .brk p a w ∧ Replay.findEnded m t = some x ∧ Replay.d141Ok m x (Replay.brkEnd t p.val (a.map (·.val))) d = true) ∧
         m'.brks = Replay.pruneBrks (k :: m.brks.erase x.hb) := by
   intro h
-  let x0   : Replay.HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩), 739865, 1, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
+  let x0   : Replay.HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩), 739865, 1, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
   let M : Machine := ⟨none, none, none, [x0], none, [], []⟩
   let e := Replay.bE 2 63924370200 (.brk 10 (some 4) none)
   let t : Replay.At := (⟨63924370200, 0⟩, ⟨false, 0⟩)
-  let k1   : Replay.HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370440, 0⟩, ⟨false, 0⟩), 739865, 2, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
+  let k1   : Replay.HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370440, 0⟩, ⟨false, 0⟩), 739865, 2, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
   have hl : ∀ m' ∈ (Replay.arm (fun _ => 739865) (fun _ => none) M e t 739865).filterMap Effect.machineOf?, m'.brks = [k1] := by decide
   have hn : (Replay.arm (fun _ => 739865) (fun _ => none) M e t 739865).filterMap Effect.machineOf? ≠ [] := by decide
   have hE : Replay.findEnded M t = none := by decide
@@ -1910,7 +1910,7 @@ theorem arm_mi_as_w2_stated_it_is_refuted :
     (Replay.bE 2 63924370200 (.brk 20 (some 20) none)) (⟨63924370200, 0⟩, ⟨false, 0⟩) 739865
     ⟨some ⟨['a'], (⟨63924368400, 0⟩, ⟨false, 0⟩), some (⟨63924371400, 0⟩, ⟨false, 0⟩), false, none, 30, none, 739865,
       [], [⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865⟩], 0⟩,
-      none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865, 2, 20, none, (⟨63924371400, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩ (by decide)
+      none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865, 2, 20, none, (⟨63924371400, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩ (by decide)
     ⟨63924371400, 0⟩ (by decide)
   revert this
   decide
@@ -1930,14 +1930,14 @@ theorem stepWith_mi_as_w2_stated_it_is_refuted :
 
 /-- **A machine holds the end of the last break it stepped** (the owner's D92, README gap 4241): with no block open and the span `[09:30, 09:50]` held, its one instant is 09:50 — where a clock a later step starts inside that break begins, and where the step that closes it reads the day index (`Replay.settle`, the owner's D99). -/
 theorem a_machine_holds_its_last_breaks_end :
-    machineInstants ⟨none, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865, 0, 0, none, (⟨63924371400, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩
+    machineInstants ⟨none, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩), 739865, 0, 0, none, (⟨63924371400, 0⟩, ⟨false, 0⟩), (⟨63924371400, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩
       = [⟨63924371400, 0⟩] := by
   decide
 
 /-- **…and the end of every break it holds** (the owner's D94, README gap 4506): with `[09:00, 09:30]` and `[09:40, 09:45]` held, its instants are both ends — a clock a later step starts inside the earlier break begins at 09:30, and a stretch closed across the later one resumes at 09:45. -/
 theorem a_machine_holds_the_end_of_every_break_it_holds :
-    machineInstants ⟨none, none, none, [⟨(⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924371100, 0⟩, ⟨false, 0⟩), 739865, 0, 0, none, (⟨63924371100, 0⟩, ⟨false, 0⟩)⟩,
-      ⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865, 0, 0, none, (⟨63924370200, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩
+    machineInstants ⟨none, none, none, [⟨(⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924371100, 0⟩, ⟨false, 0⟩), 739865, 0, 0, none, (⟨63924371100, 0⟩, ⟨false, 0⟩), (⟨63924371100, 0⟩, ⟨false, 0⟩)⟩,
+      ⟨(⟨63924368400, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩), 739865, 0, 0, none, (⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370200, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩
       = [⟨63924371100, 0⟩, ⟨63924370200, 0⟩] := by
   decide
 

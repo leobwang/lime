@@ -1869,12 +1869,15 @@ impl Ctx {
             &store.read_text(super::undo::UNDO_PATH).unwrap_or_default(),
             now,
         );
-        let read = kernel_log::replay_scoped(
+        // D18's fence on this clock (the owner's D154): what `Replay::latest_t` counts up to.
+        let fence = now + chrono::Duration::days(tm_core::check::LOG_FUTURE_DAYS);
+        let read = kernel_log::replay_scoped_at(
             store.root(),
             &bytes,
             cfg.tz,
             &tz,
             today,
+            kernel_log::instant_wire(fence).as_array().and_then(|a| Some((a[0].as_u64()?, a[1].as_u64()?))),
             scope.to_kernel(),
             pin,
         )
@@ -2043,7 +2046,7 @@ impl Ctx {
     /// a second reader of the same concept. It never touches the checkpoint on
     /// disk, because genesis over zero lines seals nothing.
     fn empty_replay(cfg: &Config, tz: &Value, today: NaiveDate) -> Result<Replay, CliError> {
-        let want = kernel_log::Want { facts: true, headers_from: None, render: vec![] };
+        let want = kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None };
         let policy = kernel_log::Policy { keep_days: kernel_log::KEEP_DAYS, max_line: None };
         let now = today.format("%Y-%m-%d").to_string();
         let g = kernel_log::genesis(&now, tz, &kernel_log::split(&[]), policy, &want)

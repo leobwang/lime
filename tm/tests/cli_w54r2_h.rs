@@ -338,19 +338,19 @@ fn d153_with_nothing_logged_past_the_typed_end_a_break_begins() {
     assert_eq!(tm.last()["ev"], "break_start");
 }
 
-/// **A cancelled line does not witness "already over"** (D153: the latest stamp over SURVIVING lines): `^t4` running
-/// since 10:10, a `pause` at 10:50 undone (the `undo` typed at 10:21), then `tm break --now 10:20 10m` — the one line
-/// past 10:30 is cancelled, so the break begins.
+/// **An undone line witnesses "already over"** (restated at W-54 third repair track K for the owner's D154, which reverses D153
+/// here: the instant was reached either way): `^t4` running since 10:10, a `pause` at 10:50 undone (the `undo` typed at 10:21),
+/// then `tm break --now 10:20 10m` — the cancelled line is past 10:30, so the break is logged finished.
 #[test]
-fn d153_an_undone_line_past_the_typed_end_does_not_witness_it() {
+fn d154_an_undone_line_past_the_typed_end_witnesses_it() {
     let tm = fresh();
     tm.ok_at(&at("10:10"), &["start", "^t4"]);
     tm.ok_at(&at("10:50"), &["pause"]);
     tm.ok_at(&at("10:21"), &["undo"]);
     assert_eq!(tm.last()["ev"], "undo");
     let out = tm.ok_at(&at("10:20"), &["break", "10m"]);
-    assert!(!out.stdout.contains("logged finished"), "{}", out.stdout);
-    assert_eq!(tm.last()["ev"], "break_start");
+    assert!(out.stdout.contains("logged finished"), "{}", out.stdout);
+    assert_eq!(tm.last()["ev"], "break");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
