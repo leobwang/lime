@@ -106396,3 +106396,203 @@ capped). On the J tree (`^t1` 09:00–10:00, `^t4` 10:10–11:10 done) unless sa
   seventeen `ok`. `cargo test -p tm --test cli_w54r_h` ran again: all rows pass but the one ignored.
 * `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**, 0 failed.
 
+
+<!-- ======================================================================
+     Stage 6 — W-54 second repair track H (2026-11-04): the host. Branch `w54r2-h` off 263010a. Gaps 5990-6009 are
+     this block's (5990-6000 used); parity P149 restated for D153 (no new number). No Lean, no cheat. Track K
+     (`w54r2-k`) narrows the finished-break fact to every break with an own drawn piece and gives the host the log's
+     latest surviving stamp, in parallel; the rows that wait on it are ignored here, each named (§2, §3).
+     Whoever merges renumbers.
+     ====================================================================== -->
+
+## Stage 6 — W-54 second repair track H: the break gate's one rule, D153's latest stamp, the cache at the minute
+
+### 1. The gate's one rule (the W-54 repair's verifiers' D-1, D-2, D-3; gaps 5990-5996)
+
+**What landed** (`tm/src/cli/day.rs`, `take_break`).  A no-length `tm break --now <t>`, with nothing running and no
+break D129 ended around it, now reads the span of EVERY held break (`held_spans`): the finished-break fact's entries
+(`Replay::finished_breaks`) with their own spans, exact, and each break record (`DayReplay::breaks`) no fact entry and
+no D129 ending accounts for, at the record's start for its planned minutes (its drawn minutes when D142's union drew any
+of it).  Per typed instant (`at_finished`, then `retime_in_the_way`):
+
+| the instant | answer |
+|---|---|
+| strictly inside exactly one listed break, or at its end, no other held break's closed span holding it | D147 as before: re-timed / "already ends" |
+| past a listed break's current end, inside its widest span, no held break holding it | D150's Out; refused if a drawn break lies between (the W-54 repair's guard) |
+| at the start, end or inside of MORE than one held break (a twin pair is one) | refused by name, every break named by its OWN span and its relation (`its start`, `its end`, `inside it`), nothing written |
+| at the start of every held break holding it | refused (D147's at-start refusal, naming each) |
+| inside or at an edge of a held break the fact does not list, alone | refused by name (`AtFinished::Held`) — never a new break |
+| outside every held break and every listed break's widest span | a break begins, as before |
+
+So no `break_start` is ever written where a held break's closed span holds the instant (rule 3) — the loss of gap
+5810, which the W-54 repair's filter re-opened at the edges of an overlapped break (D-1: E1, E3, F3 and F5 began a break
+D129 ran to the next start).  The decision is the host's; the spans are the kernel's records and fact (§5.3) — no log
+line is read.
+
+**The shapes, through the binary** (`tm/tests/cli_w54r2_h.rs`; J day, review `block_min` at 12:30; the first column
+driven on 263010a's fresh build, the second on this branch's, `shapes.sh` in the track's scratchpad `h/`):
+
+| shape | 263010a (ba525fa's host) | this host on 263010a's kernel | this host under K's fact (the land) |
+|---|---|---|---|
+| E1 `09:20 10m`, `09:25 10m`, `--now 09:35` | new break to 10:10, 105 → 80 | refused by name, 105 | "break 09:25–09:35 already ends at 09:35", 105 (ignored) |
+| E3 `10:30 10m`, `10:30 15m`, `--now 10:45` | "break 20m", 105 → 80 | refused, 105 | "already ends at 10:45", 105 (ignored) |
+| F3 E3's day, `--now 10:30` | "break 20m", 105 → 80 | refused at its start | refused at the start of both, naming both |
+| F5 E1's day, `--now 09:30` | new break to 10:10, 105 → 80 | refused, "more than one" | refused, naming `09:20–09:30 (its end)` and `09:25–09:35 (inside it)` |
+| F1 E1's day, `--now 09:20` | new break to 10:10, 105 → 80 | refused (its start) | refused (its start) |
+| F2 nested `09:20 30m` + `09:30 5m`, `--now 09:20` | new break to 10:10, 90 → 80 | refused (its start) | refused (its start) |
+| E2 nested, `--now 09:50` | new break to 10:10, 90 → 80 | refused, 90 | "already ends at 09:50", 90 (ignored) |
+| head-clipped, `--now 09:33` | refused (gap 5962) | refused | re-timed, 107 `[3, 10]` (ignored, `cli_w54r_h.rs`) |
+| B E1's day, `--now 09:22` | refused | refused | re-timed to 09:22, 108 `[2, 10]` (ignored) |
+| C nested, `--now 09:25` | refused | refused | re-timed to 09:25, 110 `[5, 5]` (ignored) |
+| C2 nested, `--now 09:40` | refused | refused | re-timed to 09:40, 100 `[0, 20]` (ignored) |
+| nested, `--now 09:32` (critic d9) | refused | refused, naming both | refused, naming both |
+| E near-twins `09:20 10m` + `09:21 10m`, `--now 09:27` | refused | refused | refused, naming both |
+| D-3 `09:20 30m` →09:40, `09:35 5m`, `--now 09:45` | new break to 10:10, 100 → 85 | new break to 10:10 (unchanged) | re-timed out to 09:45 (D150), 95 (ignored) |
+| adjoining `09:20 10m` + `09:30 10m`, `--now 09:30` | "already ends at 09:30", 100 | refused, naming both, 100 | refused, naming both |
+
+"(ignored)" rows carry `#[ignore = "W-54 second repair: K's fact (own drawn piece)"]` and fail on 263010a's kernel for
+the one reason named (the fact omits the break, so the host refuses — safe, nothing written); the land un-ignores them.
+They are E1, E3, E2, B, C, C2 and D-3 in `cli_w54r2_h.rs`, `cli_w54r_h.rs`'s head-clipped row (its reason restated to
+this repair), and `cli_w54_h_breaks.rs`'s two rows restated for D-2 (`09:20 20m` + `09:30 20m` at 09:25 → re-timed, 95;
+nested at 09:45 → re-timed, 95), which until now pinned the refusal D-2 calls wrong.  Their expected answers were checked
+in the host alone by `day::tests::the_verifiers_shapes_under_the_narrowed_fact`: the records exactly as 263010a's kernel
+reports them for each J day, the fact as K narrows it, and the arm and the obstacle the gate answers for every shape.
+
+**F5 is the campaign's call, revisable by the owner** (gap 5995): refused as ambiguous.  09:30 is the 09:20 break's end
+and inside the 09:25 break, and the one rule (more than one held break holds the instant → refused) answers it without
+an exception; 418e5d5's re-time of the 09:25 break to 09:30 would read the instant as one break's end when the user may
+mean the other's ("it already ends here").  Typing 09:31 re-times the 09:25 break.
+
+### 2. D153 (D-4; P149 restated; gap 5892 reopened, narrowed)
+
+`inside_running_block` reads `latest_t_of(replay)` — the latest stamp over the log's SURVIVING lines, at or after the
+typed end — at its one call site.  Track K's latest-stamp field (proposed Replay::latest_t) is not on this branch:
+`latest_t_of` is a stub answering `Replay::last_effective_t`, the reading before D153, marked `// W-54 second repair:
+the land wires K's latest_t`; the land replaces its body.  Rows (`cli_w54r2_h.rs`):
+
+* `o.sh`'s first order (`^t4` running 10:10, paused and unpaused 10:50; `10:15 5m`, then `10:40 5m`): both logged
+  finished, `stop` at 11:10 `after 50m · 10m left`, the week file `10m`.  On 263010a the 10:15 line was the last in FILE
+  order, so the second began a running break and `stop` wrote `35m left`.  Ignored for the land (K's field).
+* the reverse order: both logged finished, `10m` — holds on 263010a, un-ignored.
+* the owner's D152 drive with nothing after 10:10: `--now 10:20 10m` BEGINS a running break (a `break_start`) — gap 5892
+  reopened, narrowed to that case (gap 5998).  Holds on 263010a.
+* a cancelled line past the end does not witness it: a `pause` at 10:50 undone by `tm undo` typed at 10:21, then `--now
+  10:20 10m` begins a break.  Holds on 263010a, and fails if K's field counts a cancelled line.
+
+**Parity P149** — the register row (`kernel/parity.txt`) is restated in place for D153: "already passed" is the latest
+stamp over the surviving lines, never the last line in file order; with no surviving line past the typed end the break
+begins.  No new number: no behaviour diverges from fork 4748911 beyond P145, P148 and P149.
+
+### 3. The running break's cache at the minute (D-5; gap 5997)
+
+`Ctx::reconcile_state` compared `.tm/state.json`'s break (`BreakState::started`, written `HH:MM`) with the one derived
+from the log's `break_start` instant, seconds and all, so a break begun on the real clock (16:47:44) never equalled its
+own cache, and every later verb printed "said a break began at 16:47 (20m, no place) and … one began at 16:47 (20m, no
+place) — the log decides".  The two are now compared at the cache's resolution, the minute: no notice when they agree.
+Driven (`d5.sh`, `--now 09:20:44 break`, then `tm now` at 09:25 and 09:26): before, the notice on both; after, none, and
+`on break since 09:20 · 4m of 20m`.  Rows: `a_break_begun_mid_minute_agrees_with_its_cache` and, the other direction,
+`a_cache_a_minute_off_is_still_corrected` (the cache edited to 09:21: the notice names both).
+
+### 4. Mutations by hand (check 9 mutates Lean only)
+
+Each applied alone, then `cli_w54r2_h`, `cli_w54r_h`, `cli_w54_h_breaks`, `cli_d147_retime`, `cli_d143_finished_break`
+and `cli_w52r_break_ends` run, the change reverted:
+
+* `retime_in_the_way`'s AtEnd branch → `None`: 1 fails (`at_one_breaks_end_and_anothers_start_is_refused`).
+* its Inside branch → `None`: **0 fail on 263010a's kernel** — the fact omits every break another overlaps, so a listed
+  break holding the instant with another never occurs there (gap 5993).  Under K's fact the land must see it fail
+  `cli_w54r2_h.rs`'s `inside_a_break_and_the_break_it_nests_is_refused_naming_both`,
+  `e_inside_near_twins_is_refused` and `f5_at_one_breaks_end_inside_another_is_refused_as_ambiguous`, and
+  `cli_w54r_h.rs`'s nested, twins, shorter-twin, overlapping and already-ends rows; the unit test
+  `day::tests::the_verifiers_shapes_under_the_narrowed_fact` fails under it now.
+* the held-break arm off (`at_finished` never answers `AtFinished::Held`/`AtFinished::AtStart`): 13 fail.
+* unlisted records dropped from `held_spans`: 12 fail.
+* AtStart when ANY holding break starts at the instant (not all): 1 fails (F5).
+* the reconcile back to the exact comparison: 1 fails (the mid-minute row).
+
+### 5. Gaps (5990-6009; 5990-6000 used)
+
+**Gap 5990 — the gate's one rule** (§1): the campaign's call, revisable by the owner.  1. *What.*  An instant a held
+break's closed span holds never begins a break; meeting more than one held break is refused by name; one listed break
+alone is re-timed or "already ends" as D147 says.  2. *Why.*  The W-54 repair's verifiers' D-1 to D-3 and common rule.
+3. *Cost.*  A user meaning one of two overlapping breaks types an instant only that break holds, a length (D143), or
+`tm undo`.  Two behaviour moves beyond the verifiers' table: an instant at one break's end and another's start (adjoining
+breaks) is refused where it said "already ends" (nothing was written either way); and every refusal names breaks by
+their own spans.  4. *Clears it.*  Nothing owed unless the owner rules.
+
+**Gaps 5961 and 5962 are superseded by gap 5990.**  5961's two days: `09:20 30m` + `09:30 5m` at 09:32 is refused,
+naming both breaks by their own spans (as the land refused it, now by the one rule and not by the fact's omission);
+`10:30 10m` + `10:30 15m` at 10:35 the same.  5962's head-clipped re-time (09:33 → 107 `[10, 3]`) goes once the fact
+lists the 09:25 break (K's narrowing), and so do the wider D-2 shapes: B (108), C (110) and C2 (100) re-time; E (near
+twins) and the nested instant are refused as ambiguous.  The ignored rows of §1 are where each is asserted.
+
+**Gap 5991 — rows wait on track K.**  1. *What.*  §1's seven ignored rows, `cli_w54r_h.rs`'s head-clipped row, the two
+restated rows of `cli_w54_h_breaks.rs`, and §2's first-order D153 row.  2. *Why.*  The fact's narrowing and the
+latest-stamp field are track K's.  3. *Cost.*  On 263010a's kernel those shapes are refused by name (D-2's re-times) or,
+for D-3 alone, still begin a break (gap 5992).  4. *Clears it.*  The land: un-ignore them and wire `latest_t_of`.
+
+**Gap 5992 — D-3 needs the fact to list the break.**  1. *What.*  The widest span is read off the fact alone
+(`EndedBreak::widest`); a break the fact omits has none the host can read, so on 263010a's kernel (which omits the 09:20
+break, overlapped) `--now 09:45` still begins a break D129 runs to 10:10.  Under K's fact the 09:20 break has an own
+piece and is listed, and D150's Out runs.  2. *Why.*  Re-deriving a widest end from the log's lines is a second reader.
+3. *Cost.*  Rule 3's "inside any held break's widest span" holds for listed breaks only: a break other breaks cover
+wholly has no widest end on the wire, and an instant past its end but inside its widest span (re-timed in before it was
+covered) is not refused.  4. *Clears it.*  A widest end for every held break on the wire, if wanted.
+
+**Gap 5993 — the Inside and AtEnd guards' reach** (D-6 d).  1. *What.*  The guards are where rule 2 lives: another held
+break holding the instant.  AtEnd bites through the binary on 263010a's kernel (adjoining breaks, §4).  Inside cannot be
+reached there — the fact omits every break another overlaps — and bites through the binary only under K's fact (§4 names
+the rows).  Each guard's SECOND half, a drawn piece crossing the instant with no held break named, is defence only: a
+drawn piece lies inside some held break, which the first half names.  2. *Why.*  As at ba525fa, the old fact made the
+guards unreachable; the narrowed fact makes Inside reachable.  3. *Cost.*  The drawn halves have unit tests only.
+4. *Clears it.*  The land runs the Inside plant against the rows §4 names.
+
+**Gap 5994 — the refusal names breaks by their own spans** (D-6 e).  1. *What.*  The W-54 repair's "(a break logged at
+09:30)" named the clipped drawn START of a break record (D142's union stamps a clipped record where its drawn piece
+begins), not any line's stamp — gap 5895 described it as "the latest logged break stamped at or before it", which it
+was only by accident.  The message is corrected: each break is named by its own span (a fact entry's, or a record's
+start and minutes, gap 5996), and D150's Out refusal names the breaks in the way as `(logged 09:35–09:40)`.  2. *Why.*
+A name the user cannot find in the log is not a name.  3. *Cost.*  None.  4. *Clears it.*  Done.
+
+**Gap 5995 — F5 refused as ambiguous** (§1): the campaign's call, revisable by the owner.
+
+**Gap 5996 — an unlisted break's span is its record's.**  1. *What.*  A held break the fact does not list is read as
+its record's start plus its planned minutes (its drawn minutes when any are drawn).  Under K's fact such a break is one
+the others cover wholly; its record then sits at its own start, and its span is exact unless it was re-timed before
+another break came to cover it, or (a three-break shape) part of it is drawn although every instant of it is covered.
+A D129 ending's record is never read as a held break here (D141 and P139 answer its instants first).  2. *Why.*  The
+records are clipped by D142's union and carry no own span; the log's lines are not read (§5.3).  3. *Cost.*  In those
+shapes a refusal may name a span a few minutes off, or refuse an instant the break no longer holds (refused, never
+written).  4. *Clears it.*  Every held break's own span on the wire.
+
+**Gap 5997 — the running-break reconcile compares at the minute** (§3).  Closed by this block.
+
+**Gap 5998 — gap 5892 reopened, narrowed by D153** (D-6 a).  1. *What.*  A length typed inside the running block whose
+typed end no surviving line has reached begins a running break, as before D152 — the owner's own D152 drive with nothing
+logged after the block's start.  2. *Why.*  D153: `--now` is the only clock; "already over" is what the log witnesses.
+3. *Cost.*  The user ends that break, or types the length after a later verb.  4. *Clears it.*  Nothing owed unless the
+owner rules.  The W-54 repair track H block's "Gap 5892 is closed" stands corrected by this.
+
+**Gap 5999 — gap 5940 restated** (D-6 b).  1. *What.*  5940 named a retro D143 line as what hides the latest stamp; any
+retro line does — D152's own finished line included (`o.sh`'s first order: the 10:15 line, D152's, made the 10:40 one
+begin a running break).  With D153's latest stamp wired (the land) no line order hides it.  2. *Why.*  The last line in
+file order is not the latest instant.  3. *Cost.*  Until the land, gap 5940's cost.  4. *Clears it.*  The land.
+
+**Gap 6000 — a cold rebuild re-sweeps a closed week and stops a running block** (D-6 h; the W-54 repair auditor's
+`d/dd.sh`).  1. *What.*  `^t1` done in W37, wakes through 09-26, `start ^t1` and `break 20m` on 09-26; delete
+`.tm/state.json` and the cache; `tm now`: D42's rebuild resets `closed` ("swept is a fact about a sweep"), the automatic
+close sweeps W37 again, and D130 logs a stop of `^t1` at its latest mark ("stopped ^t1 at 2026-09-26 10:30 … before the
+close of 2026-W37 took it · 30m worked"), so `tm now` says "nothing running" where the warm tree said `^t1` paused on a
+break.  Driven on this branch (`dd/d/dd.sh`).  2. *Why.*  Pre-existing: the reset of `closed.swept` is deliberate (the
+safe direction for a missed sweep), and a re-sweep of a week whose item is running again meets D130.  3. *Cost.*
+Deleting the cache changes the day (a D42 violation) on that shape.  4. *Clears it.*  A swept fact derivable from the
+log, or D130 skipping a block started after the week's close; the owner's call.
+
+### 6. brief_corrections
+
+1. The brief's "the day's break records … the held breaks' spans": the records are D142's union pieces — a clipped break's
+   record is stamped where its drawn piece begins and carries its drawn minutes, a covered break's record drew 0 — so they
+   give no own span.  The gate reads the fact's spans exact and approximates the rest (gap 5996).
+2. Common.md's F5: refused as ambiguous, not re-timed (gap 5995).
+3. D-6 (d)'s "a plant of the Inside or AtEnd branch must fail a binary row after the land": AtEnd fails one now; Inside can
+   fail none on 263010a's kernel and must be checked at the land (§4).

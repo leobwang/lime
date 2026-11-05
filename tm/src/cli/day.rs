@@ -2596,7 +2596,7 @@ fn inside_running_block(
     latest_t_of(replay).filter(|t| *t >= end).map(|_| open.id.clone())
 }
 
-/// **The latest stamp over the log's surviving lines** (D153) — track K's `Replay::latest_t` (the undo-masked
+/// **The latest stamp over the log's surviving lines** (D153) — track K's Replay::latest_t (the undo-masked
 /// maximum, W-54 second repair track K item 3). Until the land wires it, [`Replay::last_effective_t`] (the last
 /// surviving line in FILE order), which is what this binary read before D153 (README gap 5940).
 ///
@@ -4099,6 +4099,77 @@ mod tests {
         assert_eq!(arm_of(at_finished(&[], &alone, at_("09:35"))), "held 09:30", "its end");
         assert_eq!(arm_of(at_finished(&[], &alone, at_("09:30"))), "start 09:30");
         assert_eq!(arm_of(at_finished(&[], &alone, at_("09:36"))), "none");
+    }
+
+    /// **The verifiers' shapes under track K's narrowed fact** (the W-54 second repair, README gaps 5990-5993): the
+    /// break records exactly as 263010a's kernel reports them for each J day (clipped by D142's union: a covered break's
+    /// record drawn nothing, a clipped one's stamped where its drawn piece begins), the fact as K narrows it (every break
+    /// with an own drawn piece, its own span), and the arm and the obstacle the gate answers — E1 and E3 "already ends",
+    /// F5, E and nested-at-09:32 refused naming the other break, B, C, C2 and the head-clipped break re-timed, D-3 out.
+    #[test]
+    fn the_verifiers_shapes_under_the_narrowed_fact() {
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 8).expect("a day");
+        let rec = |t: &str, planned: u32, actual: u32| tm_core::log::BreakRecord {
+            t: at_(t),
+            day: date,
+            planned_min: planned,
+            actual_min: Some(actual),
+            r#where: None,
+        };
+        let span = |from: &str, to: &str, widest: &str, planned: u32| FinishedSpan {
+            started: at_(from),
+            ended: at_(to),
+            widest: at_(widest),
+            planned_min: planned,
+            place: None,
+        };
+        let brk = |from: &str, to: &str| LogSegment { start: at_(from), end: at_(to), kind: SegmentKind::Break { r#where: None } };
+        let hm = |t: DateTime<FixedOffset>| t.format("%H:%M").to_string();
+        let gate = |spans: &[FinishedSpan], records: &[tm_core::log::BreakRecord], segs: &[LogSegment], t: &str| {
+            let records: Vec<_> = records.iter().collect();
+            let segs: Vec<_> = segs.iter().collect();
+            let held = held_spans(spans, &[], &records);
+            let arm = at_finished(spans, &held, at_(t));
+            let way = arm.as_ref().and_then(|a| retime_in_the_way(&segs, &held, a, at_(t)));
+            let way = way.map(|w| w.held.iter().map(|h| format!("{}–{}", hm(h.started), hm(h.ended))).collect::<Vec<_>>().join(","));
+            (arm_of(arm), way)
+        };
+        let s = |a: &str, w: Option<&str>| (a.to_string(), w.map(str::to_string));
+        // E1's day: 09:20 10m, 09:25 10m.
+        let f = [span("09:20", "09:30", "09:30", 10), span("09:25", "09:35", "09:35", 10)];
+        let r = [rec("09:20", 10, 10), rec("09:30", 10, 5)];
+        let g = [brk("09:20", "09:30"), brk("09:30", "09:35")];
+        assert_eq!(gate(&f, &r, &g, "09:35"), s("end 09:25", None), "E1");
+        assert_eq!(gate(&f, &r, &g, "09:30"), s("inside 09:25", Some("09:20–09:30")), "F5");
+        assert_eq!(gate(&f, &r, &g, "09:22"), s("inside 09:20", None), "B");
+        assert_eq!(gate(&f, &r, &g, "09:33"), s("inside 09:25", None), "head-clipped");
+        assert_eq!(gate(&f, &r, &g, "09:20"), s("start 09:20", None), "F1");
+        // E3's day: 10:30 10m, 10:30 15m — the ten-minute break covered.
+        let f = [span("10:30", "10:45", "10:45", 15)];
+        let r = [rec("10:30", 10, 10), rec("10:40", 15, 5)];
+        let g = [brk("10:30", "10:40"), brk("10:40", "10:45")];
+        assert_eq!(gate(&f, &r, &g, "10:45"), s("end 10:30", None), "E3");
+        assert_eq!(gate(&f, &r, &g, "10:30"), s("start 10:30,10:30", None), "F3");
+        assert_eq!(gate(&f, &r, &g, "10:35"), s("inside 10:30", Some("10:30–10:40")), "inside both");
+        // Nested: 09:20 30m, 09:30 5m.
+        let f = [span("09:20", "09:50", "09:50", 30)];
+        let r = [rec("09:20", 30, 30), rec("09:30", 5, 0)];
+        let g = [brk("09:20", "09:50")];
+        assert_eq!(gate(&f, &r, &g, "09:50"), s("end 09:20", None), "E2");
+        assert_eq!(gate(&f, &r, &g, "09:25"), s("inside 09:20", None), "C");
+        assert_eq!(gate(&f, &r, &g, "09:40"), s("inside 09:20", None), "C2");
+        assert_eq!(gate(&f, &r, &g, "09:32"), s("inside 09:20", Some("09:30–09:35")), "nested at 09:32");
+        assert_eq!(gate(&f, &r, &g, "09:20"), s("start 09:20", None), "F2");
+        // E: near-twins 09:20 10m, 09:21 10m.
+        let f = [span("09:20", "09:30", "09:30", 10), span("09:21", "09:31", "09:31", 10)];
+        let r = [rec("09:20", 10, 10), rec("09:30", 10, 1)];
+        let g = [brk("09:20", "09:30"), brk("09:30", "09:31")];
+        assert_eq!(gate(&f, &r, &g, "09:27"), s("inside 09:21", Some("09:20–09:30")), "E");
+        // D-3: 09:20 30m re-timed to 09:40 (widest 09:50), 09:35 5m nested.
+        let f = [span("09:20", "09:40", "09:50", 30)];
+        let r = [rec("09:20", 30, 20), rec("09:35", 5, 0)];
+        let g = [brk("09:20", "09:40")];
+        assert_eq!(gate(&f, &r, &g, "09:45"), s("out 09:20", None), "D-3");
     }
 
     /// **The drawn break defence** (README gap 5895): a Break segment holding the instant strictly inside; none at a

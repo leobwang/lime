@@ -10,7 +10,7 @@
 //! * **D-5** (README gap 5997): a running break's cache is compared with the log at the cache's resolution, the minute.
 //!
 //! Rows that need track K's narrowed fact (`Replay.finished` lists every break with an own drawn piece) or its
-//! `Replay::latest_t` are ignored here, each named; the land un-ignores them. The rest hold on 263010a's kernel.
+//! Replay::latest_t (D153) are ignored here, each named; the land un-ignores them. The rest hold on 263010a's kernel.
 //!
 //! The day is the example tree, woken 07:00, home 08:00, `TZ` the plan's (America/Chicago), Tuesday 2026-09-08; the
 //! "J day" adds `^t1` 09:00–10:00 and `^t4` 10:10–11:10, both done (`tm review day` 120 with no break).
