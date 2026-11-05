@@ -696,5 +696,8 @@ def CkField.name : CkField → String
   | .durations => "durations" | .interrupts => "interrupts" | .demotions => "demotions" | .closes => "closes"
   | .headers => "headers" | .itemMin => "itemMin" | .doneIds => "doneIds" | .inst => "inst"
 
+/-- **The field's name on the wire** (README gap 6023). -/
+theorem maxTyped_is_named_on_the_wire : CkField.name .maxTyped = "maxTyped" := rfl
+
 end Seal
 end Tm

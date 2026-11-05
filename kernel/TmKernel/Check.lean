@@ -9417,3 +9417,6 @@ go read and the break it leaves short frozen, one fact per held break, the log's
 #print axioms Tm.CapWire.corpus_request_day_one
 #print axioms Tm.CapWire.corpus_request_too_long
 #print axioms Tm.CapWire.corpus_request_without_a_zone
+#print axioms Tm.the_fence_is_named_on_the_wire
+#print axioms Tm.Seal.kMaxTyped_is_its_key
+#print axioms Tm.Seal.maxTyped_is_named_on_the_wire

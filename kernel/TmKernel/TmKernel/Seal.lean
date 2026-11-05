@@ -2216,6 +2216,8 @@ end W54KWitnesses
 
 end Replay
 namespace Seal
+/-- The checkpoint's key for it. -/
+theorem kMaxTyped_is_its_key : kMaxTyped = "maxTyped".toList := rfl
 section
 open Replay (bE utcZone)
 /-- **`maxTyped` skips a stated instant and a line future at the seal, and counts an undone line and its undo** (the owner's D154): an `energy` report stamped 18:00, a `note` in 2028, and a `note` at 09:00 undone at 09:01. -/

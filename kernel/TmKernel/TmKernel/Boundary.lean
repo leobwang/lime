@@ -3456,6 +3456,7 @@ def LogReq.resumed (r : LogReq) (run : Seal.Run) (rs : Option Seal.Resealed) : J
 theorem typedOf_without_a_fence (r : LogReq) (run : Seal.Run) (h : r.fence = none) : r.typedOf run = [] := by simp [LogReq.typedOf, h]
 theorem typedOf_with_a_fence (r : LogReq) (run : Seal.Run) (f : Cal.Instant) (h : r.fence = some f) :
     r.typedOf run = [("latestTyped".toList, Seal.cOptInstant.enc (Seal.latestTyped r.start run.entries f))] := by simp [LogReq.typedOf, h]
+theorem the_fence_is_named_on_the_wire : LogField.name .fence = "fence" := rfl
 /-- **`fence`, read and refused** (R10, README gap 6023): absent and `null` are none, `[sec, ns]` an instant, anything else `badLogReq fence`. -/
 theorem readFenceField_reads_and_refuses :
     readFenceField (.obj []) = .ok none ∧ readFenceField (.obj [("fence".toList, .null)]) = .ok none ∧
@@ -3982,7 +3983,6 @@ and the kernel rechecks it on every build. -/
 theorem the_spec_pair_puts_the_tombstone_in_the_month :
     specPairEntity.map (fun e => (e.val.live.doc, e.val.archiveSite.map Site.doc))
       = some (0, some 1) := by decide
-
 set_option maxRecDepth 40000 in
 /-- **The pair loads.**  Under the old orientation the tombstone was the line in
 the earlier horizon — the week — which reads `[ ]`, so this request was
