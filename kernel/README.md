@@ -107287,9 +107287,9 @@ of the rule, an instant only one span holds moves that break, is false on one sh
 | AtStart, several | `f3_at_the_start_of_two_breaks_is_refused` |
 | Out arm off | 10, among them `d3_…`, `a_retime_out_runs_across_another_logged_break`, `past_a_frozen_breaks_end_…` |
 | OutNotRead to Out | `past_a_frozen_breaks_end_inside_its_widest_end_is_refused` |
-| Many, past two ends, to Out | none on the first pass; `past_two_breaks_ends_inside_both_widest_ends_is_refused_naming_both` added for it |
+| Many, past two ends, to Out | `past_two_breaks_ends_inside_both_widest_ends_is_refused_naming_both`, added after the first pass found none, then re-planted |
 | seconds: past the end under a minute | `an_instant_with_seconds_reads_the_end_its_line_gives` |
-| seconds: another span at the whole minute | none on the first pass; `a_line_whose_whole_minute_another_break_holds_is_refused` added for it |
+| seconds: another span at the whole minute | `a_line_whose_whole_minute_another_break_holds_is_refused`, added after the first pass found none, then re-planted |
 | `a_line_moves` off | `a_hidden_twin_…`, `the_briefs_shapes_hold_the_invariant`, the proptest's seed |
 | `a_line_ends` off | `a_frozen_ending_is_refused_at_d141s_instant_and_at_its_start` |
 | `drawn_break_at` guard off | `a_break_past_the_bound_of_held_breaks_is_refused_by_what_is_drawn` |
