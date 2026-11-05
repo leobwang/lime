@@ -107133,7 +107133,7 @@ keystroke while the kernel reads a break of its own and nothing moves (`drv.sh`,
 | Y, `09:40 5m`, `09:30`, `09:35`, then `09:42` | "re-timed", 110 `[5, 2]`, a hole at 09:42–09:45 | the verb's "re-timed" until H, 110 `[5, 5, 0]`, plan 110, no hole |
 
 **The invariant, generated.**  `fz.py --struct` (appended lines; review against plan, no hole, no block over a break, cold rebuild the same): base **18 of 300 bad**
-(A's class and Z's), K **0 of 300**, and 0 of 300 on a second seed; `fz.py` over the wider grid with `break_start` lines, 500 sequences of up to 8 lines, 0.
+(A's class and Z's), K **0 of 300**, and 0 of 300 on each of two more seeds, the last on the tip's kernel; `fz.py` with `break_start` lines, 500 sequences of up to 8 lines on the dense grid and 300 of up to 6 on the wide one, 0.
 `tm/tests/kernel_w54r3_k.rs` commits it at the replay level, with the stronger oracle the fact allows: the credit, the block rows and the break rows are the union of
 `Replay::held_breaks`, over 240 generated days; every instant of every range moves its break to it and keeps the invariant, over 60 more.
 
