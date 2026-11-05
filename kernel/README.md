@@ -106982,3 +106982,213 @@ No shape begins a break or loses a minute.
   which fails on the base too. No `.proptest-regressions` file moved. Every row either track left ignored now runs.
 * `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**, 0 failed.
 
+<!-- ======================================================================
+     Stage 6 — W-54 third repair track K (2026-11-05): the kernel — a take put back whole (`Replay.Closed.restored`,
+     `Replay.joinIn`); a re-time letting go of a shared stretch read, the break it leaves short frozen (`Replay.frozen`,
+     `HeldBrk.rel`, replacing `givesUp` in the guard); one fact per held break (`Replay.heldFacts`, the wire's `open.held`,
+     `tm_core::log::HeldBreak`); the log's typed-time lines (the owner's D154: `Seal.typedAt?`, `Ckpt.maxTyped`,
+     `Seal.latestTyped`, the wire's `fence` and `latestTyped`).  Branch `w54r3-k` off 675953f.  Gaps 6020-6039 are this
+     block's (6020-6030 used); cheats 835-845 (832 and 834 restated); no new parity number — P137, P143 and P149 restated.
+     Track H branches off this tip and reads the fact as built.  Whoever merges renumbers (AGENTS §6.4).
+     ====================================================================== -->
+
+## Stage 6 — W-54 third repair track K: a take put back whole, a shared stretch let go, one fact per held break, the typed-time lines
+
+Scripts are this track's scratchpad `w54r3/k/d/`: `fz.py` appends generated `break` and `break_start` lines to a J day and
+checks the review against the plan, every minute of the blocks drawn, and a cold rebuild.
+
+### 1. The root of defect A: a drawn piece wider than a take (gap 6020)
+
+**The brief's reading and the code's.**  The brief's smallest repair for A was to make `givesUp` true for a lengthen another
+held break meets.  Working A's five lines through the takes by hand shows why the shared stretch stayed in the 15m break's take:
+`Closed.restored`, the block "as it would stand had this take never been taken", kept a drawn piece only if it met no taken piece,
+on the premise (true when it was written, D137) that a drawn piece meeting a taken one is a remainder inside it.  Since a re-time
+gives a take back, a drawn piece can be WIDER: `09:20 30m` re-timed to 09:30 gives back `[09:00, 09:40)`, which straddles the
+15m break's taken `[09:30, 10:00)`.  So `shadowNet` read a block missing `[09:00, 09:30)`, the later netting seemed to take less
+than it did, and the 15m break's take kept minutes for a stretch it no longer held.
+
+**The same root is a second, plainer defect the brief does not list, and the guard would not have touched it.**  Two breaks APART,
+each re-timed once: `09:20 10m`, `09:40 15m`, `--now 09:25`, `--now 09:50`.  On 213e827 the review says 105 and the plan draws 100,
+`09:25–09:30` drawn nowhere, `tm check` "no problems" (`d/g.sh`).  The give-back dropped the straddling piece from the drawing.
+
+**The fix.**  `Closed.restored` joins a drawn piece that meets a taken piece without lying inside it to that piece (`joinIn`, the
+hull of what it touches); with no such piece it is the list it always was, byte for byte.  `Seal.restored_starts` is re-proved (a
+hull begins where a piece began, so the day index is read at no new instant).  A's five lines read 88 on review and plan
+(`Replay.a_retime_out_over_a_later_break_keeps_the_takes_with_the_union`); the second shape 105 on both
+(`Replay.a_piece_wider_than_a_take_is_put_back_whole`).  **`givesUp` is not widened**: with the takes right a lengthen over another
+break is consistent, so D150's reading stands wherever the widest end reaches, and the brief's goal — every take consistent with the
+union whichever way the end moves — is met without taking a re-time away.  `fz.py --struct`, 300 generated days: 213e827 18 bad, this
+track 0.
+
+### 2. A shared stretch let go is read; the break it leaves short is frozen (gaps 6021, 5971, 5973)
+
+**What makes a let-go unsound is later, and elsewhere.**  What two breaks cover is in neither take (`reNetTake`).  Letting go of
+such a stretch is exact when it happens: the credit is the union's.  What goes wrong is the OTHER break's next re-time: it now
+covers the stretch alone with a take short of it (gap 5971's arithmetic; gap 5973's hole).  So the guard belongs on that break.
+
+**The rule.**  A break records the latest end it has ever had, D129's included (`HeldBrk.rel`, kept by `wideOf`; `wide` stays what
+its own lines gave it, D151).  `[j.e, j.rel)` is what `j` once covered and no longer does.  `Replay.frozen m x`: a break held AFTER
+`x` has such a stretch that meets `x`.  `retimeBlocked` is `frozen`, and for a D129 ending `newerMeets` as before; `givesUp` leaves
+the guard (it stays in `ownDrawn`).  A frozen break's line is a break of its own, D142's union, as any unread line is.  A frozen break
+stays frozen while it stands, because a re-time is what would move it after `j` and forget the stretch; `j` lengthened back over the
+stretch unfreezes it, for `j` covers it again.
+
+| shape (J day) | 213e827 | this track, replay level |
+|---|---|---|
+| B `09:20 10m`, `09:25 10m`, the first to 09:22 | not read, 105 | read, **108**; the 09:25 break frozen |
+| …then the 09:25 break to 09:28 | — | a break of its own, 108 (read, gap 5971's short take) |
+| C nested, the outer to 09:25 | not read, 90 | read, **110**; the inner frozen |
+| C2 nested, the outer to 09:40 | read, 100 | the same; the inner free |
+| D-3 `09:20 30m` → 09:40, `09:35 5m`, out to 09:45 | read, 95 | the same |
+| 09:25 break to 09:28, inside the 09:20 break | not read, 105 | read, **110**; the 09:20 break frozen |
+| gap 5973 `09:40 5m`, D129 from 09:30, D141 to 09:35 | read, 110 | the same; the 09:40 break frozen |
+| …then the 09:40 break to 09:42 | "re-timed", 110, 09:42–09:45 drawn nowhere | a break of its own, 110 |
+
+**Why not the guard the brief offered for gap 5973** (`givesUp` on an ending).  Built first, it refused the D141 end itself, and three of
+the campaign's own witnesses said why that is wrong: `a_block_is_netted_by_the_union_once_the_line_lets_the_ending_go`,
+`a_break_an_ending_covered_is_drawn_again_when_its_line_lets_it_go` and B2's `b2_two_breaks_at_one_stamp_end_by_identity`, all D141
+reads the owner asked for.  Freezing the older break keeps them, and the 09:42 re-time, which is the one that was wrong, is what is
+refused.
+
+**The take model, priced (the brief's item 3).**  A model where a block's credit and drawing are recomputed from the held breaks'
+union: a `base` on `Closed`, `netOne`, `giveOne` and the takes replaced.  It reads what `frozen` refuses.  It touches 627 references
+across 19 modules (`reNet`, `netOne`, `giveOne`, `giveBack`, `stash`, `netTake`, `runOne`, `ranMin`, `held`), 93 theorems named for
+them in `Replay`, `SealStep`, `BreakFold` and `SealResume`, and the checkpoint's machine codec: on this campaign's rate about 2,000-3,000
+proof lines and 5-8 agent-days.  Not small, and not needed for B and C, which `frozen` reads for about thirty lines.  Not built (gap 6024).
+
+### 3. One fact per held break (gaps 6022, 5974, 5996, 5992)
+
+`Replay.heldFacts`, `Facts.openHeld`, `Seal.Answer.openHeld`, the wire's `open.held`, `tm_core::log::Replay::held_breaks`:
+
+```rust
+pub struct HeldBreak {
+    pub started: DateTime<FixedOffset>,            // its own, never clipped by D142
+    pub ended: DateTime<FixedOffset>,
+    pub planned_min: u32,                          // what a re-timing line must carry
+    pub place: Option<String>,
+    pub widest: DateTime<FixedOffset>,             // the latest end its OWN lines gave it (D150, D151)
+    pub retime_from: Option<DateTime<FixedOffset>>,
+    pub out_to: Option<DateTime<FixedOffset>>,     // `widest`, a finished break past its end only
+}
+```
+
+Wire element: `[start, end, planned, where?, widest, retimeFrom?, outTo?]`.  Every break the machine holds, newest first, D129 endings
+among them, also while a break runs (then with no range).  A line stamped `started`, carrying `planned_min`, ending at `E` is read as
+the break's re-time iff `retime_from <= E < ended` or `ended < E <= out_to`.  `retime_from` is `started` or `None`: with the guard on
+the frozen break there is no partial range, so the brief's general shape is more than the rule needs and is kept because H codes
+against a `<=`.  `None` means a break runs, another break answers a line at this stamp (an older twin), a D129 ending a newer break
+overlaps, or `frozen`.
+
+**The law, over what the host decodes.**  `Replay.a_held_break_is_re_timed_in_its_range` (every instant in the range: `d141Ok` holds and
+the arm is `d141Arm`) and `Replay.a_held_break_is_re_timed_only_in_its_range` (a line that addresses the break and is read, ending
+before its end or inside its widest span, finds the range).  `a_finished_break_is_re_timed_by_its_line` is restated with hD, not
+`frozen`; W-54's form and W-54 second repair track K's are refuted by name.  **"Yields the union's netting" is not a general theorem**:
+a proof would carry the take invariant through every netting law, the price of §2.  It is witnessed per shape and held by two generated
+rows of `tm/tests/kernel_w54r3_k.rs` (gap 6027).
+
+**What the host must still decide** (for track H; the fact does not).  The kernel reads a line whose instant another break also holds,
+and it moves nothing there (a nested break's own re-time; the union does not change).  The gate's one rule — an instant more than one held
+break's closed span holds is refused — is what keeps "re-timed" meaning "moved".  An instant only `k` holds moves `k`.  `out_to` reaches over a
+break between, and the W-54 repair's host guard ("refused if a drawn break lies between") is no longer the kernel's need.  `open.finished` is
+unchanged for H's code as it stands; when H stops reading it nothing else does, and the land may retire it (gap 6028).
+
+### 4. D154: the log's typed-time lines (gaps 6023, 6026, 5972)
+
+**Which stamps.**  Read off the verbs: `tm wake` (`ctx.at`, a stated `HH:MM`), `tm arrive --at`, `tm energy --at` (D86) can run ahead of the
+clock.  `tm stop --at` and `tm done --at` are D79's latest instant at or before now; a backdated `tm break` is a past instant by its gate; D61's
+wall marks are bounded by `now` (`WallTimer.step`), D130's stop by the last activity; everything else is `ctx.now`.  `Seal.typedAt?` is the
+stamp of every line but a `wake`, an `arrive` or an `energy`, typed at that instant or not, because the log does not say which (the brief named
+`energy` and `arrive`; `wake` is this track's finding).
+
+**Where the whole-log maximum lives.**  The replay folds survivors only, so no seam or machine field can hold a cancelled line's stamp.  The
+checkpoint already keeps two instants over every folded entry (G2's `maxT`, `futureFloor`); `Ckpt.maxTyped` is the third, the latest typed stamp
+not future at the seal, resealed as `maxT` is (`Seal.resealed_maxTyped`, a typed stamp being one of `entryInstants`; law 6's `refine` gains its
+conjunct).  The answer is `Seal.latestTyped K tail f`: `K.maxTyped` and the tail's, each at or before the fence.
+
+**How D18 is applied when `now` moves.**  A maximum filtered after it was taken would let a far-future line hide the next-latest stamp, so the fence
+filters before the maximum, and the request carries it: `log.fence`, `[sec, ns]`, the host's `now` plus `LOG_FUTURE_DAYS` — the instant `tm check`'s
+warning compares against, which the `now` day cannot say.  Folded lines cannot be re-filtered, but they do not need to be: every folded line not
+future at the seal lies below the ledger day, and a future one was fenced out of `maxTyped`.
+`Seal.latestTyped_is_the_whole_logs` says it: where `f` separates the folded instants as the seal did, the answer is the whole log's, wherever the
+cut fell.  Answer key `log.latestTyped`, present only when the request set a fence, so every other request is byte-identical.
+
+**The name stands**: `Replay::latest_t`, `Option<DateTime<FixedOffset>>`, no shape change.  `replay_scoped_at` takes the fence; `replay_scoped`
+keeps its signature for the suites, with a fence two days past the date's end.
+
+**Gap 5972 closed** by D154: the seams are no longer read.
+
+### 5. The drives (§5.13)
+
+`TZ=America/Chicago`, every command capped at 8 GB, Tuesday 2026-09-08 on a fresh `init --example` tree woken at 07:00 and arrived home at 08:00;
+"J day" is `^t1` 09:00–10:00 and `^t4` 10:10–11:10 done.  Base is 213e827's binary (`tm-land`), "K" this track's, built fresh.  Both run 213e827's verb: track
+H's gate is not on this branch, so until it lands the host reads `open.finished` and refuses B, C, C2, E2 and D-3 by name, and says "re-timed" on gap 5973's last
+keystroke while the kernel reads a break of its own and nothing moves (`drv.sh`, row Y).  H's gate closes that; the kernel's half is below.
+
+| shape (`drv.sh`; review before → after; plan; cold) | base | K |
+|---|---|---|
+| A, `09:20 30m`, `09:30`, `09:40 15m`, `--now 09:20 30m`, `--now 09:52` | 85 → 98, plan 88, cold 98 | 85 → **88**, plan 88, cold 88 |
+| Z, `09:20 10m`, `09:40 15m`, `09:25`, then `09:50` | 100 → 105, plan **100**, cold 105 | 100 → 105, plan **105**, cold 105 |
+| E1, head-clipped, `--now 09:35` | "already ends", 105 | the same |
+| head-clipped, `--now 09:33` | re-timed, 107 | the same |
+| Y, `09:40 5m`, `09:30`, `09:35`, then `09:42` | "re-timed", 110 `[5, 2]`, a hole at 09:42–09:45 | the verb's "re-timed" until H, 110 `[5, 5, 0]`, plan 110, no hole |
+
+**The invariant, generated.**  `fz.py --struct` (appended lines; review against plan, no hole, no block over a break, cold rebuild the same): base **18 of 300 bad**
+(A's class and Z's), K **0 of 300**, and 0 of 300 on a second seed; `fz.py` over the wider grid with `break_start` lines, 500 sequences of up to 8 lines, 0.
+`tm/tests/kernel_w54r3_k.rs` commits it at the replay level, with the stronger oracle the fact allows: the credit, the block rows and the break rows are the union of
+`Replay::held_breaks`, over 240 generated days; every instant of every range moves its break to it and keeps the invariant, over 60 more.
+
+**D154** (`e.sh`, through the binary):
+
+| drive | answer |
+|---|---|
+| `^t4` running, `tm energy 3 --at 18:00` at 10:12, `tm break 5m` at 10:15 | a running break (`break_start`), `tm now` agrees |
+| a `plan` line dated 2027-01-01 by hand, the same keystroke | a running break |
+| pause and unpause at 10:50, both undone at 10:51, `--now 10:15 5m`, `--now 10:40 5m`, `stop` at 11:10 | both logged finished, `stopped ^t4 after 50m · 10m left`, the week file `10m` |
+
+### 6. Records
+
+* **Parity.**  No new number.  P143's row restated (a re-time is read unless `frozen`; `open.held`), P137's (a D141 end freezes an older break it let go of), P149's (D154).
+* **Behaviour rows restated, each saying so in its doc.**  `kernel_w54r2_k.rs`: `a_retime_giving_up_another_breaks_stretch_is_read` (108, 110, 110), `latest_t_counts_a_cancelled_line_and_its_undo`.  `cli_w54r2_h.rs`: `d154_an_undone_line_past_the_typed_end_witnesses_it`.  `cli_w54r_h.rs`: `a_later_line_with_no_pause_marks_and_a_place_p149` (its witness a `tm plan`, gap 6031).  One snapshot gains `held_breaks` (`log_replay__three_days_replay`); FFI exact strings gain `"held":[]`, and `open.finished`'s entries an eighth element, `rel`.
+* **Cheats.**  835-845 appended; 832 and 834 restated in place, for what each claimed became the reading.  Each of 831-845 run alone fails at its `decide`, the proposition false (`Negative.lean` stops at 100 errors, so check 4 alone never reaches them; a scratch file holding the tail does).
+* **Line-neutral above the end.**  Every recorded pin site is where it was: `Replay.lean`, `Seal.lean`, `SealStep.lean` and `Boundary.lean` drop one blank line between declarations for each line added above a pin, and declarations are on their own lines, because the gates' scanners read column zero (a first version put several on one line and check 8, check 9 and check 11 could not see them).  New laws are at the ends of their modules; `restored_starts`'s proof is dense for the same reason.
+* **Census (check 12).**  `reach-exempt.txt`: `Replay.lean` 198 of 337, `Seal.lean` 76 of 244 (`cAt`, reached through `heldJson`, leaves the list), `SealResume.lean` 40 of 57, `Boundary.lean` 226 of 441.
+* **Citations (check 8).**  Five names this track renames or deletes, cited by append-only README blocks, are counted in `citations-allow.txt`.
+* **Check 3.**  Five `Check.lean` lines renamed in place, 41 appended under a new banner (7,169 → 7,210 audited).  Three of them are `runCap_reads_the_corpus_request`'s halves (gap 6030).
+* **Mutations (check 9).**  `mutate.py --write --only`, capped at 16 GB, in a `git clone --shared` sandbox, 50 definitions in all: new, or changed by the positional field or the field's reader.  Each PINNED or rostered by name as unfoldable, as its neighbours are.  Six came back ALONE on the first pass (`Seal.resealOfWith`, `LogField.name`, `readFenceField`, `LogReq.typedOf`, `logBodyV`, `LogReq.resumedV`) and each has a second witness now (`resealOfWith_answers_a_valid_cut`, `a_bad_fence_is_refused_by_its_name`, `readFenceField_of_a_string`, `typedOf_with_a_fence_keys_it`, `logBodyV_is_logBody`, `resumedV_is_resumed`).  `mutate.py`'s synthesised constants read a structure one field per line, so `Seal.Answer`, `Facts` and `HeldBrk` keep that shape.
+* **The checkpoint.**  `Ckpt` gains `maxTyped` (key `maxTyped`, after `futureFloor`), so a checkpoint written before this track is refused `badCkpt maxTyped` and rebuilt, as any cache another kernel wrote is (D93, D98).  The version number does not move: the kernel id already says so.
+
+### 7. Acceptance
+
+ACCEPTANCE
+
+### Gaps (6020-)
+
+**Gap 6020 — a drawn piece wider than a take.**  Closed (§1).
+
+**Gap 6021 — the guard on the break a let-go leaves short.**  Closed (§2); closes gap 5971 and gap 5973 as defects of reading: B, C and gap 5973's D141 end
+read, the second-order re-time refused by the host through the fact.
+
+**Gap 6022 — one fact per held break.**  Closed (§3); closes gaps 5974, 5996 and 5992 once H reads it.
+
+**Gap 6023 — the log's typed-time lines.**  Closed (§4).
+
+**Gap 6024 — `frozen` is conservative, and what it costs.**  1. *What.*  A break `j` whose release came BEFORE `x` stepped, then re-timed again after `x`,
+freezes `x` though `x`'s take holds the stretch: `09:20 30m`, `--now 09:30`, `09:40 15m`, `--now 09:32`, then `--now 09:45` is refused where it would have been sound.  And a frozen break
+stays refused until the break that froze it lengthens back or is pruned.  2. *Why.*  The machine holds a span, not a history of releases.  3. *Cost.*  A refusal by name on
+second-order keystrokes, never a wrong number; `tm undo` is the way back.  4. *Clears it.*  §2's take model.
+
+**Gap 6025 — a name false as it stood.**  Closed: the_finished_breaks_are_the_ones_no_other_break_overlaps is renamed `the_fact_holds_no_break_on_the_col3_log`, and `finished`'s doc comment brought to the code.
+
+**Gap 6026 — the fence past a folded future line.**  1. *What.*  A typed line future when it was folded (`K.futureFloor`) is outside `maxTyped`; once `f` reaches it the fact is short of it, and a cold
+rebuild is not.  2. *Why.*  Holding every folded future stamp is a list in the checkpoint for a hand edit; `migrationOk` already stops resealing there.  3. *Cost.*  A D152 length whose typed end only that
+line has passed begins a running break (D153's safe reading), warm; `latestTyped_is_the_whole_logs` names the subdomain.  4. *Clears it.*  A rebuild when `migrationOk` fails, which nothing does today: such a tree also stops resealing.
+
+**Gap 6027 — "the union's netting" is witnessed and generated, not proved.**  §3.  Two generated rows, 240 and 60 days, deterministic.
+
+**Gap 6028 — `open.finished` and `HeldBrk.rel` beside `wide`.**  1. *What.*  `Replay.finished`, `ownDrawn` and `givesUp` remain for H's code as it stands.  2. *Why.*  K first, H next; removing them under H is the failure this sequence exists to avoid.  3. *Cost.*  A wire key with no reader once H moves.  4. *Clears it.*  The land, after H.
+
+**Gap 6029 — the kernel's D141 read on a hand-logged line.**  A log written before this track holding a line this kernel now reads differently (a line re-timing a break another's let-go froze, read by 213e827) reads as a break of its own here: a replay change under P143, on the campaign's own logs only; nothing shipped wrote one except through the shapes §2 lists.
+
+**Gap 6031 — a plain `tm energy` is no witness.**  1. *What.*  `Seal.typedAt?` excludes by kind, so `tm energy 3` typed at 10:50, stamped when its verb ran, does not count, though D154's words would count it.  2. *Why.*  The log does not say which `energy`, `arrive` or `wake` line was typed with a stated instant; marking them is a log-grammar change, and reading them all as witnesses is the reading D154 declined.  3. *Cost.*  A D152 length whose typed end only such a line has passed begins a running break, the safe reading (`cli_w54r_h.rs`'s row restated: its later line is a `tm plan` now).  4. *Clears it.*  A mark on the line, if the owner wants it.
+
+**Gap 6030 — `runCap_reads_the_corpus_request` split.**  The `rfl` stood at about 205,000 of its 200,000 heartbeats once the answer gained a field; it was near the limit before.  Its three halves are three declarations (`corpus_request_day_one`, `corpus_request_too_long`, `corpus_request_without_a_zone`), each one budget, the statement unchanged; `maxHeartbeats` not raised.
