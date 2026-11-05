@@ -80,6 +80,8 @@ fn a_d129_ending_is_finished_only_once_its_own_line_comes() {
 /// breaks a line re-times, and 07:40–08:00 lies under 07:50, logged after it, so it is gone from the list; the
 /// 07:50 break keeps its own end.  *Restated at W-54 repair track K* (README gap 5925): the fact omits a break ANY other
 /// held break overlaps, so 07:50–08:30, which 07:40–08:00 overlaps, is gone from it too, and the fact is empty.
+/// *Restated at W-54 second repair track K* (README gap 5970, `Replay.ownDrawn`): the fact lists a break whose drawn
+/// piece is its own, and the 07:50 break's piece 08:00–08:30 is, so it is listed again with its own end, 08:30.
 #[test]
 fn a_partly_covered_break_keeps_its_own_end() {
     let text = log(&[
@@ -89,5 +91,5 @@ fn a_partly_covered_break_keeps_its_own_end() {
     let r = chokepoint::replay_of_text(&text, TZ);
     let mut spans: Vec<_> = r.finished_breaks.iter().map(|b| (b.started, b.ended, b.key)).collect();
     spans.sort();
-    assert_eq!(spans, vec![]);
+    assert_eq!(spans, vec![(at("2026-09-08T07:50:00-05:00"), at("2026-09-08T08:30:00-05:00"), 2)]);
 }

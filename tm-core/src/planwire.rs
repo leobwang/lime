@@ -2211,6 +2211,7 @@ mod tests {
             late_marks: Vec::new(),
             seams: Default::default(),
             last_effective_t: None,
+            latest_t: None,
             rows: Vec::new(),
             line_count: 0,
             entry_count: 0,

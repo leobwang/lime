@@ -2331,18 +2331,118 @@ struct FinishedSpan {
     place: Option<String>,
 }
 
-/// **Where a no-length `tm break --now <t>` falls against the finished breaks** (D147), in the gate's order:
-/// strictly inside one (the latest-begun, as D141 picks), else at the end of one, else at the start of one.
+/// **A break the kernel holds, as the gate reads its span** — stage 6 W-54 second repair track H (the target behaviour
+/// of the W-54 repair's verifiers, D-1 to D-3; the campaign's call, revisable by the owner). Every break the day's
+/// records name, once: the fact's entries ([`Replay::finished_breaks`], `listed`) with their OWN spans, exact; and each
+/// break record no fact entry and no D129 ending accounts for, at the record's start for its minutes — its planned
+/// minutes where D142's union drew nothing of it (`actual_min` 0), else its drawn minutes. Since the second repair's
+/// kernel (track K) the fact lists every break with an own drawn piece (an instant of its span no other held break
+/// covers), so an unlisted break is one the others cover wholly; its record is then stamped at its own start, and its
+/// span is exact unless it was re-timed before another break came to cover it (README gap 5996). Identical spans are
+/// one entry (a twin pair counts once). Read off the kernel's records only (§5.3): the log's lines are never read here.
+///
+/// [`Replay::finished_breaks`]: tm_core::log::Replay::finished_breaks
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct HeldSpan {
+    started: DateTime<FixedOffset>,
+    ended: DateTime<FixedOffset>,
+    /// In the kernel's finished-break fact: a break `tm break` may re-time.
+    listed: bool,
+    /// The end its typed length gave it (its start plus its planned minutes), at or after `ended` — for a break the
+    /// fact does not list, the reach the gate never begins a break inside (the W-54 second repair's land, README gap
+    /// 6010: the D-3 shape, where an earlier re-time shortened the break and D150's Out cannot be read off the fact).
+    typed_end: DateTime<FixedOffset>,
+}
+
+impl HeldSpan {
+    /// The closed span `[started, ended]` holds `at`.
+    fn holds(&self, at: DateTime<FixedOffset>) -> bool {
+        self.started <= at && at <= self.ended
+    }
+
+    /// Past its end, at or before the end its typed length gave it: an instant a no-length `tm break` must not begin a
+    /// break at while the fact does not list this break (README gap 6010).
+    fn reaches_past(&self, at: DateTime<FixedOffset>) -> bool {
+        !self.listed && self.ended < at && at <= self.typed_end
+    }
+
+    fn same(&self, f: &FinishedSpan) -> bool {
+        self.started == f.started && self.ended == f.ended
+    }
+}
+
+/// [`HeldSpan`]s of the held breaks: the fact's `finished` (listed, exact), then each break record (`records`) neither a
+/// fact entry nor a D129 ending (`ended`, [`Replay::ended_breaks`] — D141's and P139's, never this gate's) accounts for.
+/// An owner accounts for the record of its planned minutes stamped at its own start, else the earliest such record
+/// stamped inside its span (D142's union clips a break's head to where no earlier break covers it).
+///
+/// [`Replay::ended_breaks`]: tm_core::log::Replay::ended_breaks
+fn held_spans(
+    finished: &[FinishedSpan],
+    ended: &[tm_core::log::EndedBreak],
+    records: &[&tm_core::log::BreakRecord],
+) -> Vec<HeldSpan> {
+    let owners: Vec<(DateTime<FixedOffset>, DateTime<FixedOffset>, u32)> = finished
+        .iter()
+        .map(|f| (f.started, f.ended, f.planned_min))
+        .chain(ended.iter().map(|x| (x.started, x.ended, x.planned_min)))
+        .collect();
+    let mut taken = vec![false; records.len()];
+    let mut owned = vec![false; owners.len()];
+    for (k, (s, _, p)) in owners.iter().enumerate() {
+        if let Some(i) = (0..records.len()).find(|&i| !taken[i] && records[i].t == *s && records[i].planned_min == *p) {
+            taken[i] = true;
+            owned[k] = true;
+        }
+    }
+    for (k, (s, e, p)) in owners.iter().enumerate() {
+        if owned[k] {
+            continue;
+        }
+        if let Some(i) = (0..records.len())
+            .filter(|&i| !taken[i] && records[i].planned_min == *p && *s <= records[i].t && records[i].t <= *e)
+            .min_by_key(|&i| records[i].t)
+        {
+            taken[i] = true;
+        }
+    }
+    let mut held: Vec<HeldSpan> =
+        finished.iter().map(|f| HeldSpan { started: f.started, ended: f.ended, listed: true, typed_end: f.ended }).collect();
+    for (r, _) in records.iter().zip(&taken).filter(|(_, t)| !**t) {
+        let minutes = match r.actual_min {
+            Some(0) => r.planned_min,
+            _ => r.actual_or_planned(),
+        };
+        let ended = r.t + chrono::Duration::minutes(i64::from(minutes));
+        let typed_end = ended.max(r.t + chrono::Duration::minutes(i64::from(r.planned_min)));
+        let h = HeldSpan { started: r.t, ended, listed: false, typed_end };
+        if !held.iter().any(|x| x.started == h.started && x.ended == h.ended) {
+            held.push(h);
+        }
+    }
+    held
+}
+
+/// **Where a no-length `tm break --now <t>` falls against the held breaks** (D147, D150; the gate of the W-54 second
+/// repair), in the gate's order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum AtFinished {
-    /// Strictly inside its span: the typed instant re-times its end.
+    /// Strictly inside a break the fact lists (the latest-begun): the typed instant re-times its end — unless another
+    /// held break holds the instant too ([`retime_in_the_way`]).
     Inside(FinishedSpan),
-    /// At its end: it already ends there.
+    /// At the end of a break the fact lists (the latest-begun): it already ends there — unless another held break holds
+    /// the instant too.
     AtEnd(FinishedSpan),
-    /// At its own start: refused by name (the campaign's call inside D147, as P139 at a D129-ended break's).
-    AtStart(FinishedSpan),
+    /// At the start of every held break that holds the instant: refused by name (the campaign's call inside D147, as
+    /// P139 at a D129-ended break's).
+    AtStart(Vec<HeldSpan>),
+    /// Inside or at an edge of held breaks none of which the fact lists here, or past an unlisted break's end inside the
+    /// length typed for it (README gap 6010): refused by name, naming them (rule 2;
+    /// never a new break D129 runs to the next start, rule 3).
+    Held(Vec<HeldSpan>),
     /// **Past its current end, at or before the widest end the log has held for it** (the owner's **D150**, parity
-    /// **P148**): an earlier re-time shortened it, and the typed instant re-times it OUT again.
+    /// **P148**, as D151 narrows it), with no held break holding the instant: an earlier re-time shortened it, and the
+    /// typed instant re-times it OUT again.
     Out(FinishedSpan),
 }
 
@@ -2367,103 +2467,112 @@ fn spans_of(xs: &[tm_core::log::EndedBreak]) -> Vec<FinishedSpan> {
         .collect()
 }
 
-/// [`AtFinished`] for `at` over `spans`; `None` when `at` lies outside every finished break and past the widest end
-/// of every one. The gate's order (D147, then D150): strictly inside one, at the end of one, at the start of one,
-/// then past one's current end but at or before its widest end — the latest-begun in each arm.
-fn at_finished(spans: &[FinishedSpan], at: DateTime<FixedOffset>) -> Option<AtFinished> {
+/// [`AtFinished`] for `at` over the fact's `spans` and the `held` breaks; `None` when no held break holds `at` (its
+/// closed span) and `at` is past the widest end of every listed one — a break then begins. The order: strictly inside
+/// a listed break, at the end of a listed break (the latest-begun in each), at the start of every held break holding
+/// `at`, any other held break holding `at`, then past a listed break's current end but at or before its widest end.
+fn at_finished(spans: &[FinishedSpan], held: &[HeldSpan], at: DateTime<FixedOffset>) -> Option<AtFinished> {
     if let Some(f) = spans.iter().filter(|f| f.started < at && at < f.ended).max_by_key(|f| f.started) {
         return Some(AtFinished::Inside(f.clone()));
     }
     if let Some(f) = spans.iter().filter(|f| f.ended == at).max_by_key(|f| f.started) {
         return Some(AtFinished::AtEnd(f.clone()));
     }
-    if let Some(f) = spans.iter().find(|f| f.started == at) {
-        return Some(AtFinished::AtStart(f.clone()));
+    let mut holding: Vec<HeldSpan> = held.iter().filter(|h| h.holds(at)).cloned().collect();
+    if !holding.is_empty() {
+        holding.sort_by_key(|h| (h.started, h.ended));
+        return Some(if holding.iter().all(|h| h.started == at) {
+            AtFinished::AtStart(holding)
+        } else {
+            AtFinished::Held(holding)
+        });
     }
     spans
         .iter()
         .filter(|f| f.ended < at && at <= f.widest)
         .max_by_key(|f| f.started)
         .map(|f| AtFinished::Out(f.clone()))
+        .or_else(|| {
+            let mut past: Vec<HeldSpan> = held.iter().filter(|h| h.reaches_past(at)).cloned().collect();
+            past.sort_by_key(|h| (h.started, h.ended));
+            (!past.is_empty()).then_some(AtFinished::Held(past))
+        })
 }
 
-/// **A drawn break piece the finished-break fact does not account for** — the campaign's call at stage 6 W-54 track
-/// H (README gap 5895, revisable by the owner): the kernel's drawn Break segments ([`DayReplay::segments`], the
-/// day's drawn rows, `segments`) that hold `at` strictly inside, when `at` lies in no finished break the fact lists. Since track
-/// K's W-54 item 4 the fact lists only the breaks a re-time line WILL re-time, so a break another overlaps is absent
-/// from it while still drawn; a no-length `tm break` there is refused by name (never a "re-timed" that is not, and
-/// never a new break D129 runs to the next start, gap 5810's loss). Answers the drawn piece and the latest stamp of a
-/// logged break at or before its start (the day's break records, [`DayReplay::breaks`], `records`) to name it.
+/// **A drawn break piece holding `at` strictly inside** — the kernel's drawn Break segments ([`DayReplay::segments`],
+/// `segments`), the latest-begun piece. The defence of the gate's last arm (README gap 5895, kept at the W-54 second
+/// repair): with every held break's span read ([`held_spans`]) a drawn piece lies inside some held break, so an instant
+/// it holds is one [`at_finished`] answers; this refuses beginning a break inside a drawn piece should the spans and
+/// the drawing ever disagree (a record whose span the gate cannot read, README gap 5996).
 ///
 /// [`DayReplay::segments`]: tm_core::log::DayReplay::segments
-/// [`DayReplay::breaks`]: tm_core::log::DayReplay::breaks
 fn drawn_break_at(
     segments: &[&tm_core::log::LogSegment],
-    records: &[&tm_core::log::BreakRecord],
     at: DateTime<FixedOffset>,
-) -> Option<(DateTime<FixedOffset>, DateTime<FixedOffset>, Option<DateTime<FixedOffset>>)> {
-    let seg = segments
+) -> Option<(DateTime<FixedOffset>, DateTime<FixedOffset>)> {
+    segments
         .iter()
         .filter(|s| matches!(s.kind, tm_core::log::SegmentKind::Break { .. }) && s.start < at && at < s.end)
-        .max_by_key(|s| s.start)?;
-    let logged = records
-        .iter()
-        .filter(|b| b.t <= seg.start)
-        .map(|b| b.t)
-        .max();
-    Some((seg.start, seg.end, logged))
+        .max_by_key(|s| s.start)
+        .map(|s| (s.start, s.end))
 }
 
-/// **A drawn break in the way of a re-time** — what [`retime_in_the_way`] answers: the drawn Break piece and the
-/// latest stamp of a logged break at or before its start, as [`drawn_break_at`] names one.
+/// **What stands in the way of a re-time the gate chose** — what [`retime_in_the_way`] answers: the OTHER held breaks
+/// whose spans meet the instant (or, for D150's Out, the stretch it would cross), each by its own span, and the drawn
+/// Break piece that would not move.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct InTheWay {
-    from: DateTime<FixedOffset>,
-    until: DateTime<FixedOffset>,
-    logged: Option<DateTime<FixedOffset>>,
+    drawn: Option<(DateTime<FixedOffset>, DateTime<FixedOffset>)>,
+    held: Vec<HeldSpan>,
 }
 
-/// **Whether a re-time the gate chose would leave the drawn rows as they are** — stage 6 W-54 repair track H (the W-54
-/// auditor's first note and critic's second, README gap 5941; the campaign's call, revisable by the owner). Read off
-/// the kernel's drawn Break segments and break records only ([`drawn_break_at`]'s inputs, §5.3):
+/// **Whether a re-time or an "already ends" the gate chose meets another held break** — stage 6 W-54 repair track H
+/// (README gap 5941), made the target behaviour's rule 2 at the W-54 second repair (the campaign's call, revisable by
+/// the owner):
 ///
-/// * [`AtFinished::Inside`] `f`: a drawn piece holds `at` strictly inside and it is not `f`'s own piece. D142's union
-///   draws each break only where no break begun earlier covers it, and every break covering `f`'s head begun earlier,
-///   so `f`'s own piece is the SUFFIX of its span, ending at its own end; a piece ending elsewhere is another break's,
-///   which keeps covering `at` once `f` is re-timed there (the nested, twin and overlapping shapes: the reply said
-///   "re-timed" and the review did not move). A head another break clipped is still `f`'s piece and re-times (the
-///   drawn end moves to `at`).
-/// * [`AtFinished::AtEnd`] `f`: any drawn piece holds `at` strictly inside — another break keeps the span past it, so
-///   "already ends here" is not what the user sees.
-/// * [`AtFinished::Out`] `f`: a drawn piece meets the stretch between `f`'s current end and `at` — another logged
-///   break, which the re-time out would swallow (the owner's shape under D151: `09:20 30m`, re-timed to 09:30, `09:35
-///   5m`, then `--now 09:45`).
+/// * [`AtFinished::Inside`] or [`AtFinished::AtEnd`] `f`: another held break's closed span holds `at` — its start, its
+///   end or inside it (a twin of `f`'s span is `f`) — so which break the instant names is not clear, and a re-time of
+///   `f` would leave the other drawn across it (the nested, twin, overlapping and adjoining shapes, and the W-54
+///   repair's verifiers' E, F5 and C-at-09:32). Failing that (a defence, README gap 5996), a drawn piece holds `at`
+///   strictly inside that is not `f`'s own: D142's union draws each break only where no break begun earlier covers it,
+///   so `f`'s own piece is the SUFFIX of its span (inside), and at its end no piece crosses it.
+/// * [`AtFinished::Out`] `f`: a drawn piece meets the stretch between `f`'s current end and `at` — another logged break,
+///   which the re-time out would swallow; the held breaks meeting that stretch are named.
 ///
-/// `None` for [`AtFinished::AtStart`], which is refused on its own.
+/// `None` for [`AtFinished::AtStart`] and [`AtFinished::Held`], which are refused on their own.
 fn retime_in_the_way(
     segments: &[&tm_core::log::LogSegment],
-    records: &[&tm_core::log::BreakRecord],
+    held: &[HeldSpan],
     arm: &AtFinished,
     at: DateTime<FixedOffset>,
 ) -> Option<InTheWay> {
-    let name = |seg: &tm_core::log::LogSegment| InTheWay {
-        from: seg.start,
-        until: seg.end,
-        logged: records.iter().filter(|b| b.t <= seg.start).map(|b| b.t).max(),
-    };
+    let others = |f: &FinishedSpan| -> Vec<HeldSpan> { held.iter().filter(|h| !h.same(f) && h.holds(at)).cloned().collect() };
     match arm {
-        AtFinished::Inside(f) => drawn_break_at(segments, records, at)
-            .filter(|(from, until, _)| !(*until == f.ended && *from >= f.started))
-            .map(|(from, until, logged)| InTheWay { from, until, logged }),
-        AtFinished::AtEnd(_) => {
-            drawn_break_at(segments, records, at).map(|(from, until, logged)| InTheWay { from, until, logged })
+        AtFinished::Inside(f) => {
+            let held = others(f);
+            if !held.is_empty() {
+                return Some(InTheWay { drawn: None, held });
+            }
+            drawn_break_at(segments, at)
+                .filter(|(from, until)| !(*until == f.ended && *from >= f.started))
+                .map(|d| InTheWay { drawn: Some(d), held: vec![] })
+        }
+        AtFinished::AtEnd(f) => {
+            let held = others(f);
+            if !held.is_empty() {
+                return Some(InTheWay { drawn: None, held });
+            }
+            drawn_break_at(segments, at).map(|d| InTheWay { drawn: Some(d), held: vec![] })
         }
         AtFinished::Out(f) => segments
             .iter()
             .filter(|s| matches!(s.kind, tm_core::log::SegmentKind::Break { .. }) && s.start < at && s.end > f.ended)
             .min_by_key(|s| s.start)
-            .map(|s| name(s)),
-        AtFinished::AtStart(_) => None,
+            .map(|s| InTheWay {
+                drawn: Some((s.start, s.end)),
+                held: held.iter().filter(|h| !h.same(f) && h.started < at && h.ended > f.ended).cloned().collect(),
+            }),
+        AtFinished::AtStart(_) | AtFinished::Held(_) => None,
     }
 }
 
@@ -2486,27 +2595,33 @@ fn netted_closed_block(before: &tm_core::log::Replay, held: &tm_core::log::Repla
 }
 
 /// **The RUNNING block a backdated finished break lies inside** — the owner's **D152** (stage 6 W-54 repair track H,
-/// parity **P149**, closing README gap 5892): with a length typed, no later logged `start` (D143) and no closed block
-/// it would net (D149), a break typed at an instant at or after the open block's own `start`
-/// ([`OpenBlock::started`], the kernel's) whose typed end (`end`) the log has ALREADY passed — the kernel's
-/// [`Replay::last_effective_t`], the stamp of the log's last surviving line, at or after `end` — is a break already
-/// over: the length typed is a fact. Answers the open block's item. `None` with no block open, an instant before its
-/// start, or a typed end the log has not reached (a break that may still be running: it begins as before). `--now`
-/// is the verb's only clock, so "already over" is what the log witnesses; a retro line appended after the block's
-/// last mark can stamp `last_effective_t` earlier than an instant the log has passed (README gap 5940).
+/// parity **P149**) as **D153** reads "already over" (stage 6 W-54 second repair track H): with a length typed, no later
+/// logged `start` (D143) and no closed block it would net (D149), a break typed at an instant at or after the open
+/// block's own `start` ([`OpenBlock::started`], the kernel's) whose typed end (`end`) the log has ALREADY passed — the
+/// LATEST stamp over the log's surviving lines, at or after `end` ([`Replay::latest_t`], track K's undo-masked maximum, wired at the W-54 second repair's land), never the last line in file order
+/// — is a break already over: the length typed is a fact. Answers the open block's item. `None` with no block open, an
+/// instant before its start, or a typed end no surviving line has reached (a break that may still be running: it
+/// begins as before — the owner's own D152 drive with nothing logged after the block's start, README gap 5892 as D153
+/// narrows it). `--now` is the verb's only clock, so "already over" is what the log witnesses.
 ///
 /// [`OpenBlock::started`]: tm_core::log::OpenBlock::started
-/// [`Replay::last_effective_t`]: tm_core::log::Replay::last_effective_t
+/// [`Replay::latest_t`]: tm_core::log::Replay::latest_t
 fn inside_running_block(
     replay: &tm_core::log::Replay,
     at: DateTime<FixedOffset>,
     end: DateTime<FixedOffset>,
 ) -> Option<String> {
     let open = replay.open_block.as_ref().filter(|b| b.started <= at)?;
-    replay.last_effective_t.filter(|t| *t >= end).map(|_| open.id.clone())
+    replay.latest_t.filter(|t| *t >= end).map(|_| open.id.clone())
 }
 
 /// `tm break [20m] [--where walk]` — starts a break, or ends the running one.
+///
+/// With no break running and no length typed, an instant at or inside a break the log already holds is read by the
+/// gate below (D141 for a break D129 ended; D147, D150 and the W-54 second repair's one rule for a finished one):
+/// it ends, re-times or re-times out exactly one held break, says that one already ends there, or is refused by name —
+/// never a new break inside a held break's span. A length typed for a break already over is logged finished (D143,
+/// D146, D148, D149, D152 as D153 reads "already over"); otherwise a break begins (D105's `break_start`).
 pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError> {
     let mut ctx = Ctx::load(g, true)?;
     // **The arguments are read in both arms** (the owner's D20, gap 138). The
@@ -2626,52 +2741,86 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     // no longer takes (D137). At its end the instant changes nothing and the verb says so, writing nothing; at its
     // own start it is refused by name (the campaign's call inside D147: re-timing there would leave a zero-minute
     // break, as P139 refuses at a D129-ended break's start). A LENGTH typed at or inside a finished break keeps
-    // D143: a new finished break (README gap 5849). Outside every finished break, a break begins as before.
+    // D143: a new finished break (README gap 5849). Outside every held break, a break begins as before (below).
     //
     // **D150** (stage 6 W-54 track H, parity **P148**): past a finished break's CURRENT end but at or before the widest
     // end the log has held for it (an earlier re-time shortened it), the instant re-times it OUT — the same one line,
     // `actual_min` the typed instant less its start — after the at-start refusal and before a break begins
     // ([`AtFinished::Out`], read off track K's fact, `EndedBreak::widest`).
     //
-    // **Inside a drawn break the fact omits, refused by name** — the campaign's call (README gap 5895): since W-54
-    // track K the fact lists only breaks a re-time line will re-time, so a break another overlaps is absent while still
-    // drawn ([`drawn_break_at`]); beginning a break there would be one D129 runs to the next start (gap 5810's loss),
-    // so the verb names the drawn break and writes nothing.
-    //
-    // **A re-time reply must change what the user sees** (stage 6 W-54 repair track H, the W-54 auditor's first note and
-    // critic's second, README gap 5941): before acting on [`AtFinished::Inside`], [`AtFinished::AtEnd`] or
-    // [`AtFinished::Out`], the drawn rows are read ([`retime_in_the_way`]). Inside or at the end of a finished break,
-    // a drawn break that is not that break's own piece holding the instant means D142's union keeps the span whatever
-    // line is written ("re-timed" with nothing changed, each retry a new line); past its end, a drawn break between its
-    // current end and the instant is another logged break D150's line would swallow. Either is refused by name,
-    // nothing written. The arms keep their order (D147's before D150's Out — the campaign's call, revisable).
+    // **One instant, at most one held break — the gate's rule** (stage 6 W-54 second repair track H, the W-54 repair's
+    // verifiers' D-1 to D-3; the campaign's call, revisable by the owner). The verb reads every held break's span
+    // ([`held_spans`]: the fact's entries exact, each other record at its start) and decides per typed instant:
+    // inside exactly one break the fact lists, or at its end, D147 as before (re-time / "already ends"); past a listed
+    // break's current end inside its widest span, D150's Out, refused if it would swallow another logged break; at the
+    // start, end or inside of MORE than one held break (a twin pair is one), refused by name, naming them — never a
+    // "re-timed" that changes nothing ([`retime_in_the_way`]); at the start of every break holding it, refused (D147);
+    // and never a new break where any held break's closed span holds the instant ([`AtFinished::Held`]) — the loss
+    // gap 5810 named, which a break another overlaps reached until this repair (the fact omitted it, D-1). Outside
+    // every held break and every listed one's widest span a break begins as before. Nothing written on a refusal.
     let retimed = if ended.is_none() && superseded.is_none() && asked.is_none() {
         let segments: Vec<_> = ctx.replay.days.values().flat_map(|d| d.segments.iter()).collect();
         let records: Vec<_> = ctx.replay.days.values().flat_map(|d| d.breaks.iter()).collect();
-        let at = at_finished(&finished_breaks(&ctx), ctx.now);
-        if let Some(way) = at.as_ref().and_then(|a| retime_in_the_way(&segments, &records, a, ctx.now)) {
-            let hm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).format("%H:%M").to_string();
-            let logged = way.logged.map(|t| format!(" (a break logged at {})", hm(t))).unwrap_or_default();
-            return Err(CliError::msg(match at {
+        let spans = finished_breaks(&ctx);
+        let held = held_spans(&spans, &ctx.replay.ended_breaks, &records);
+        let at = at_finished(&spans, &held, ctx.now);
+        let hm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).format("%H:%M").to_string();
+        let span = |h: &HeldSpan| format!("{}–{}", hm(h.started), hm(h.ended));
+        let named = |hs: &[HeldSpan]| {
+            hs.iter()
+                .map(|h| {
+                    let edge = if h.started == ctx.now {
+                        "its start"
+                    } else if h.ended == ctx.now {
+                        "its end"
+                    } else if h.ended < ctx.now {
+                        "past its end, inside the length typed for it"
+                    } else {
+                        "inside it"
+                    };
+                    format!("{} ({edge})", span(h))
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let more_than_one = |hs: &[HeldSpan]| {
+            format!(
+                "`tm break` at {} meets more than one logged break — {} — and cannot tell which to re-time (D147); \
+                 nothing written: type a length to log a finished break (D143), or `tm undo` the line that overlaps it",
+                ctx.now_tz.format("%H:%M"),
+                named(hs),
+            )
+        };
+        if let Some(way) = at.as_ref().and_then(|a| retime_in_the_way(&segments, &held, a, ctx.now)) {
+            return Err(CliError::msg(match &at {
                 Some(AtFinished::Out(f)) => format!(
-                    "`tm break` at {} would re-time the break {}–{} out across the break drawn {}–{}{}, which the log \
+                    "`tm break` at {} would re-time the break {}–{} out across the break drawn {}{}, which the log \
                      holds as its own — D150 re-times a break out only up to the next logged break; give an instant at \
                      or before {}, or type a length to log a finished break (D143)",
                     ctx.now_tz.format("%H:%M"),
                     hm(f.started),
                     hm(f.ended),
-                    hm(way.from),
-                    hm(way.until),
-                    logged,
-                    hm(way.from),
+                    way.drawn.map(|(a, b)| format!("{}–{}", hm(a), hm(b))).unwrap_or_default(),
+                    match way.held.as_slice() {
+                        [] => String::new(),
+                        hs => format!(
+                            " (logged {})",
+                            hs.iter().map(&span).collect::<Vec<_>>().join(", ")
+                        ),
+                    },
+                    way.drawn.map(|(a, _)| hm(a)).unwrap_or_default(),
                 ),
+                Some(AtFinished::Inside(f)) | Some(AtFinished::AtEnd(f)) if !way.held.is_empty() => {
+                    let mut hs = way.held.clone();
+                    hs.push(HeldSpan { started: f.started, ended: f.ended, listed: true, typed_end: f.ended });
+                    hs.sort_by_key(|h| (h.started, h.ended));
+                    more_than_one(&hs)
+                }
                 _ => format!(
-                    "a break is drawn {}–{} here{}, and another logged break overlaps it — `tm break` cannot re-time it \
-                     (D147): the break drawn here would not change; type a length to log a finished break (D143), or \
-                     `tm undo` the line that overlaps it",
-                    hm(way.from),
-                    hm(way.until),
-                    logged,
+                    "a break is drawn {} here that is not the break `tm break` would re-time, and another logged break \
+                     overlaps it — `tm break` cannot re-time it (D147): the break drawn here would not change; type a \
+                     length to log a finished break (D143), or `tm undo` the line that overlaps it",
+                    way.drawn.map(|(a, b)| format!("{}–{}", hm(a), hm(b))).unwrap_or_default(),
                 ),
             }));
         }
@@ -2703,25 +2852,41 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                 )?;
                 return Ok(0);
             }
-            Some(AtFinished::AtStart(f)) => {
-                return Err(CliError::msg(format!(
-                    "a break was logged finished {}–{} — `tm break` at its own start would leave it no minutes; give \
-                     an instant inside it to end it there (D147)",
-                    f.started.with_timezone(&tz).format("%H:%M"),
-                    f.ended.with_timezone(&tz).format("%H:%M"),
-                )));
+            Some(AtFinished::AtStart(hs)) => {
+                return Err(CliError::msg(match hs.as_slice() {
+                    [h] => format!(
+                        "a break was logged finished {} — `tm break` at its own start would leave it no minutes; give \
+                         an instant inside it to end it there (D147)",
+                        span(h),
+                    ),
+                    hs => format!(
+                        "breaks were logged finished {} — `tm break` at their own start would leave them no minutes, and \
+                         which one it names is not clear; nothing written (D147)",
+                        hs.iter().map(&span).collect::<Vec<_>>().join(" and "),
+                    ),
+                }));
+            }
+            Some(AtFinished::Held(hs)) => {
+                return Err(CliError::msg(match hs.as_slice() {
+                    [h] => format!(
+                        "`tm break` at {} lies in the break {}, which the kernel does not list as one a line re-times \
+                         (another logged break overlaps the piece it draws) — `tm break` cannot re-time it (D147) and would begin a break \
+                         inside it; nothing written: type a length to log a finished break (D143), or `tm undo` the line \
+                         that overlaps it",
+                        ctx.now_tz.format("%H:%M"),
+                        named(std::slice::from_ref(h)),
+                    ),
+                    hs => more_than_one(hs),
+                }));
             }
             None => {
-                if let Some((from, until, logged)) = drawn_break_at(&segments, &records, ctx.now) {
+                if let Some((from, until)) = drawn_break_at(&segments, ctx.now) {
                     return Err(CliError::msg(format!(
-                        "a break is drawn {}–{} here{}, and another logged break overlaps it — `tm break` cannot \
+                        "a break is drawn {}–{} here, and another logged break overlaps it — `tm break` cannot \
                          re-time it (D147) and would begin a break inside it; type a length to log a finished break \
                          (D143), or `tm undo` the line that overlaps it",
-                        from.with_timezone(&tz).format("%H:%M"),
-                        until.with_timezone(&tz).format("%H:%M"),
-                        logged
-                            .map(|t| format!(" (a break logged at {})", t.with_timezone(&tz).format("%H:%M")))
-                            .unwrap_or_default(),
+                        hm(from),
+                        hm(until),
                     )));
                 }
                 None
@@ -3797,38 +3962,53 @@ mod tests {
     use super::*;
     use tm_core::log::{LogSegment, SegmentKind};
 
-    /// **D147's gate, in its order** (parity P145): strictly inside a finished break → inside (the latest-begun
-    /// when two hold the instant, as D141 picks); else at a break's end → at its end; else at its own start → at
-    /// its start; outside every one → none. Over the kernel fact's own record shape ([`spans_of`]), so the
-    /// gate the verb runs is tested here before track K's fact reaches it (README gap 5845).
+    fn at_(s: &str) -> DateTime<FixedOffset> {
+        DateTime::parse_from_rfc3339(&format!("2026-09-08T{s}:00-05:00")).expect("a stamp")
+    }
+
+    fn arm_of(r: Option<AtFinished>) -> String {
+        let hm = |t: DateTime<FixedOffset>| t.format("%H:%M").to_string();
+        let list = |hs: &[HeldSpan]| hs.iter().map(|h| hm(h.started)).collect::<Vec<_>>().join(",");
+        match r {
+            Some(AtFinished::Inside(f)) => format!("inside {}", hm(f.started)),
+            Some(AtFinished::AtEnd(f)) => format!("end {}", hm(f.started)),
+            Some(AtFinished::AtStart(hs)) => format!("start {}", list(&hs)),
+            Some(AtFinished::Held(hs)) => format!("held {}", list(&hs)),
+            Some(AtFinished::Out(f)) => format!("out {}", hm(f.started)),
+            None => "none".to_string(),
+        }
+    }
+
+    fn held_of(spans: &[FinishedSpan]) -> Vec<HeldSpan> {
+        held_spans(spans, &[], &[])
+    }
+
+    /// **D147's gate, in its order** (parity P145): strictly inside a listed break → inside (the latest-begun when two
+    /// hold the instant, as D141 picks; [`retime_in_the_way`] then refuses it, README gap 5990); else at a listed break's
+    /// end → at its end; else at the start of every held break holding it → at its start; outside every one → none.
+    /// Over the kernel fact's own record shape ([`spans_of`]).
     #[test]
     fn d147s_gate_reads_inside_end_start_and_outside_in_that_order() {
-        let at = |s: &str| DateTime::parse_from_rfc3339(&format!("2026-09-08T{s}:00-05:00")).expect("a stamp");
         let rec = |from: &str, to: &str, planned: u32| tm_core::log::EndedBreak {
-            started: at(from),
-            ended: at(to),
+            started: at_(from),
+            ended: at_(to),
             planned_min: planned,
             r#where: None,
             day: chrono::NaiveDate::from_ymd_opt(2026, 9, 8).expect("a day"),
             key: 0,
-            widest: at(to),
+            widest: at_(to),
         };
         let spans = spans_of(&[rec("09:20", "09:30", 10), rec("09:25", "09:28", 3), rec("10:30", "10:40", 10)]);
-        let start_of = |r: Option<AtFinished>| match r {
-            Some(AtFinished::Inside(f)) => format!("inside {}", f.started.format("%H:%M")),
-            Some(AtFinished::AtEnd(f)) => format!("end {}", f.started.format("%H:%M")),
-            Some(AtFinished::AtStart(f)) => format!("start {}", f.started.format("%H:%M")),
-            Some(AtFinished::Out(f)) => format!("out {}", f.started.format("%H:%M")),
-            None => "none".to_string(),
-        };
-        assert_eq!(start_of(at_finished(&spans, at("09:24"))), "inside 09:20");
-        assert_eq!(start_of(at_finished(&spans, at("09:26"))), "inside 09:25", "the latest-begun");
-        assert_eq!(start_of(at_finished(&spans, at("09:28"))), "inside 09:20", "inside one beats the end of another");
-        assert_eq!(start_of(at_finished(&spans, at("09:30"))), "end 09:20");
-        assert_eq!(start_of(at_finished(&spans, at("10:40"))), "end 10:30");
-        assert_eq!(start_of(at_finished(&spans, at("09:20"))), "start 09:20");
-        assert_eq!(start_of(at_finished(&spans, at("10:30"))), "start 10:30");
-        assert_eq!(start_of(at_finished(&spans, at("09:45"))), "none");
+        let held = held_of(&spans);
+        let arm = |t: &str| arm_of(at_finished(&spans, &held, at_(t)));
+        assert_eq!(arm("09:24"), "inside 09:20");
+        assert_eq!(arm("09:26"), "inside 09:25", "the latest-begun");
+        assert_eq!(arm("09:28"), "inside 09:20", "inside one beats the end of another");
+        assert_eq!(arm("09:30"), "end 09:20");
+        assert_eq!(arm("10:40"), "end 10:30");
+        assert_eq!(arm("09:20"), "start 09:20");
+        assert_eq!(arm("10:30"), "start 10:30");
+        assert_eq!(arm("09:45"), "none");
         assert_eq!(spans[0].planned_min, 10);
         assert!(
             spans.iter().all(|f| f.widest == f.ended),
@@ -3836,112 +4016,253 @@ mod tests {
         );
     }
 
-    /// **D150's arm, after D147's** (parity P148): past a finished break's current end and at or before its widest end
-    /// → re-timed OUT (the latest-begun), and only once inside, at an end and at a start have answered nothing; past
-    /// the widest end → nothing.
+    /// **D150's arm, after D147's** (parity P148): past a listed break's current end and at or before its widest end →
+    /// re-timed OUT (the latest-begun), and only once inside, at an end and at a start have answered nothing; past the
+    /// widest end → nothing.
     #[test]
     fn d150s_arm_reads_past_the_end_within_the_widest_after_d147s() {
-        let at = |s: &str| DateTime::parse_from_rfc3339(&format!("2026-09-08T{s}:00-05:00")).expect("a stamp");
         let span = |from: &str, to: &str, widest: &str| FinishedSpan {
-            started: at(from),
-            ended: at(to),
-            widest: at(widest),
+            started: at_(from),
+            ended: at_(to),
+            widest: at_(widest),
             planned_min: 30,
             place: None,
         };
         let spans = vec![span("09:20", "09:30", "09:50"), span("09:40", "09:42", "09:44"), span("10:00", "10:05", "10:05")];
-        let arm = |r: Option<AtFinished>| match r {
-            Some(AtFinished::Inside(f)) => format!("inside {}", f.started.format("%H:%M")),
-            Some(AtFinished::AtEnd(f)) => format!("end {}", f.started.format("%H:%M")),
-            Some(AtFinished::AtStart(f)) => format!("start {}", f.started.format("%H:%M")),
-            Some(AtFinished::Out(f)) => format!("out {}", f.started.format("%H:%M")),
-            None => "none".to_string(),
-        };
-        assert_eq!(arm(at_finished(&spans, at("09:35"))), "out 09:20");
-        assert_eq!(arm(at_finished(&spans, at("09:50"))), "out 09:20", "the widest end itself");
-        assert_eq!(arm(at_finished(&spans, at("09:43"))), "out 09:40", "the latest-begun");
-        assert_eq!(arm(at_finished(&spans, at("09:41"))), "inside 09:40", "inside one beats out of another");
-        assert_eq!(arm(at_finished(&spans, at("09:42"))), "end 09:40", "an end beats out of another");
-        assert_eq!(arm(at_finished(&spans, at("09:40"))), "start 09:40", "a start beats out of another");
-        assert_eq!(arm(at_finished(&spans, at("09:55"))), "none", "past the widest end");
-        assert_eq!(arm(at_finished(&spans, at("10:06"))), "none", "a break never shortened has no out");
+        let held = held_of(&spans);
+        let arm = |t: &str| arm_of(at_finished(&spans, &held, at_(t)));
+        assert_eq!(arm("09:35"), "out 09:20");
+        assert_eq!(arm("09:50"), "out 09:20", "the widest end itself");
+        assert_eq!(arm("09:43"), "out 09:40", "the latest-begun");
+        assert_eq!(arm("09:41"), "inside 09:40", "inside one beats out of another");
+        assert_eq!(arm("09:42"), "end 09:40", "an end beats out of another");
+        assert_eq!(arm("09:40"), "start 09:40", "a start beats out of another");
+        assert_eq!(arm("09:55"), "none", "past the widest end");
+        assert_eq!(arm("10:06"), "none", "a break never shortened has no out");
     }
 
-    /// **The drawn break the fact omits** (README gap 5895): a Break segment holding the instant strictly inside, with
-    /// the latest record stamped at or before its start; none at a segment's edge or in a Block segment.
+    /// **The held breaks' spans** (the W-54 second repair, README gap 5990): the fact's entries exactly; a record no fact
+    /// entry accounts for at its start for its planned minutes when nothing of it is drawn, else its drawn minutes; a
+    /// fact entry's record found at its own start or, clipped, inside its span; a D129 ending's record never a held
+    /// break of this gate; identical spans once.
     #[test]
-    fn a_drawn_break_is_read_off_the_segments() {
-        let at = |s: &str| DateTime::parse_from_rfc3339(&format!("2026-09-08T{s}:00-05:00")).expect("a stamp");
+    fn the_held_spans_read_the_fact_and_the_records_no_entry_accounts_for() {
         let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 8).expect("a day");
-        let seg = |from: &str, to: &str, kind: SegmentKind| LogSegment { start: at(from), end: at(to), kind };
-        let rec = |t: &str| tm_core::log::BreakRecord {
-            t: at(t),
+        let rec = |t: &str, planned: u32, actual: u32| tm_core::log::BreakRecord {
+            t: at_(t),
             day: date,
-            planned_min: 20,
-            actual_min: Some(10),
+            planned_min: planned,
+            actual_min: Some(actual),
             r#where: None,
         };
+        let span = |from: &str, to: &str, planned: u32| FinishedSpan {
+            started: at_(from),
+            ended: at_(to),
+            widest: at_(to),
+            planned_min: planned,
+            place: None,
+        };
+        let ending = tm_core::log::EndedBreak {
+            started: at_("11:30"),
+            ended: at_("12:00"),
+            planned_min: 20,
+            r#where: None,
+            day: date,
+            key: 0,
+            widest: at_("12:00"),
+        };
+        // 09:20 30m with 09:30 5m nested (drawn nothing); 10:30 10m clipped by 10:20 15m (drawn 10:35–10:40); a D129
+        // ending 11:30–12:00; a twin record of 09:20 30m.
+        let spans = vec![span("09:20", "09:50", 30), span("10:20", "10:35", 15), span("10:30", "10:40", 10)];
+        let records = [
+            rec("09:20", 30, 30),
+            rec("09:30", 5, 0),
+            rec("10:20", 15, 15),
+            rec("10:35", 10, 5),
+            rec("11:30", 20, 30),
+            rec("09:20", 30, 0),
+        ];
+        let records: Vec<_> = records.iter().collect();
+        let held = held_spans(&spans, &[ending], &records);
+        let hm = |t: DateTime<FixedOffset>| t.format("%H:%M").to_string();
+        let got: Vec<_> = held.iter().map(|h| (hm(h.started), hm(h.ended), h.listed)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("09:20".to_string(), "09:50".to_string(), true),
+                ("10:20".to_string(), "10:35".to_string(), true),
+                ("10:30".to_string(), "10:40".to_string(), true),
+                ("09:30".to_string(), "09:35".to_string(), false),
+            ]
+        );
+        // The gate over them: inside the nested break and the outer one — inside the outer (listed), which
+        // retime_in_the_way then refuses; at the nested one's start inside the outer — the same.
+        assert_eq!(arm_of(at_finished(&spans, &held, at_("09:32"))), "inside 09:20");
+        let outer = AtFinished::Inside(span("09:20", "09:50", 30));
+        let way = |t: &str| retime_in_the_way(&[], &held, &outer, at_(t)).map(|w| w.held.iter().map(|h| hm(h.started)).collect::<Vec<_>>());
+        assert_eq!(way("09:32"), Some(vec!["09:30".to_string()]));
+        assert_eq!(way("09:30"), Some(vec!["09:30".to_string()]), "at its start");
+        assert_eq!(way("09:35"), Some(vec!["09:30".to_string()]), "at its end");
+        assert_eq!(way("09:25"), None, "the outer alone");
+        // An unlisted break alone (a record the fact does not account for): held, refused by name.
+        let alone = held_spans(&[], &[], &records[1..2]);
+        assert_eq!(arm_of(at_finished(&[], &alone, at_("09:32"))), "held 09:30");
+        assert_eq!(arm_of(at_finished(&[], &alone, at_("09:35"))), "held 09:30", "its end");
+        assert_eq!(arm_of(at_finished(&[], &alone, at_("09:30"))), "start 09:30");
+        assert_eq!(arm_of(at_finished(&[], &alone, at_("09:36"))), "none");
+    }
+
+    /// **The verifiers' shapes under track K's narrowed fact** (the W-54 second repair, README gaps 5990-5993): the
+    /// break records exactly as 263010a's kernel reports them for each J day (clipped by D142's union: a covered break's
+    /// record drawn nothing, a clipped one's stamped where its drawn piece begins), the fact as K narrows it (every break
+    /// with an own drawn piece, its own span), and the arm and the obstacle the gate answers — E1 and E3 "already ends",
+    /// F5, E and nested-at-09:32 refused naming the other break, B, C, C2 and the head-clipped break re-timed, D-3 out.
+    /// *At the W-54 second repair's land:* that is the brief's fact, not the one track K built — K lists a break only
+    /// where no other held break meets the piece it draws (`Replay.ownDrawn`, README gaps 5970, 5971 and 5974), so
+    /// through the binary B, C, C2, E2 and D-3 are refused by name (`cli_w54r2_h.rs`). This test keeps the gate's
+    /// answer should a later fact list those breaks.
+    #[test]
+    fn the_verifiers_shapes_under_the_narrowed_fact() {
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 8).expect("a day");
+        let rec = |t: &str, planned: u32, actual: u32| tm_core::log::BreakRecord {
+            t: at_(t),
+            day: date,
+            planned_min: planned,
+            actual_min: Some(actual),
+            r#where: None,
+        };
+        let span = |from: &str, to: &str, widest: &str, planned: u32| FinishedSpan {
+            started: at_(from),
+            ended: at_(to),
+            widest: at_(widest),
+            planned_min: planned,
+            place: None,
+        };
+        let brk = |from: &str, to: &str| LogSegment { start: at_(from), end: at_(to), kind: SegmentKind::Break { r#where: None } };
+        let hm = |t: DateTime<FixedOffset>| t.format("%H:%M").to_string();
+        let gate = |spans: &[FinishedSpan], records: &[tm_core::log::BreakRecord], segs: &[LogSegment], t: &str| {
+            let records: Vec<_> = records.iter().collect();
+            let segs: Vec<_> = segs.iter().collect();
+            let held = held_spans(spans, &[], &records);
+            let arm = at_finished(spans, &held, at_(t));
+            let way = arm.as_ref().and_then(|a| retime_in_the_way(&segs, &held, a, at_(t)));
+            let way = way.map(|w| w.held.iter().map(|h| format!("{}–{}", hm(h.started), hm(h.ended))).collect::<Vec<_>>().join(","));
+            (arm_of(arm), way)
+        };
+        let s = |a: &str, w: Option<&str>| (a.to_string(), w.map(str::to_string));
+        // E1's day: 09:20 10m, 09:25 10m.
+        let f = [span("09:20", "09:30", "09:30", 10), span("09:25", "09:35", "09:35", 10)];
+        let r = [rec("09:20", 10, 10), rec("09:30", 10, 5)];
+        let g = [brk("09:20", "09:30"), brk("09:30", "09:35")];
+        assert_eq!(gate(&f, &r, &g, "09:35"), s("end 09:25", None), "E1");
+        assert_eq!(gate(&f, &r, &g, "09:30"), s("inside 09:25", Some("09:20–09:30")), "F5");
+        assert_eq!(gate(&f, &r, &g, "09:22"), s("inside 09:20", None), "B");
+        assert_eq!(gate(&f, &r, &g, "09:33"), s("inside 09:25", None), "head-clipped");
+        assert_eq!(gate(&f, &r, &g, "09:20"), s("start 09:20", None), "F1");
+        // E3's day: 10:30 10m, 10:30 15m — the ten-minute break covered.
+        let f = [span("10:30", "10:45", "10:45", 15)];
+        let r = [rec("10:30", 10, 10), rec("10:40", 15, 5)];
+        let g = [brk("10:30", "10:40"), brk("10:40", "10:45")];
+        assert_eq!(gate(&f, &r, &g, "10:45"), s("end 10:30", None), "E3");
+        assert_eq!(gate(&f, &r, &g, "10:30"), s("start 10:30,10:30", None), "F3");
+        assert_eq!(gate(&f, &r, &g, "10:35"), s("inside 10:30", Some("10:30–10:40")), "inside both");
+        // Nested: 09:20 30m, 09:30 5m.
+        let f = [span("09:20", "09:50", "09:50", 30)];
+        let r = [rec("09:20", 30, 30), rec("09:30", 5, 0)];
+        let g = [brk("09:20", "09:50")];
+        assert_eq!(gate(&f, &r, &g, "09:50"), s("end 09:20", None), "E2");
+        assert_eq!(gate(&f, &r, &g, "09:25"), s("inside 09:20", None), "C");
+        assert_eq!(gate(&f, &r, &g, "09:40"), s("inside 09:20", None), "C2");
+        assert_eq!(gate(&f, &r, &g, "09:32"), s("inside 09:20", Some("09:30–09:35")), "nested at 09:32");
+        assert_eq!(gate(&f, &r, &g, "09:20"), s("start 09:20", None), "F2");
+        // E: near-twins 09:20 10m, 09:21 10m.
+        let f = [span("09:20", "09:30", "09:30", 10), span("09:21", "09:31", "09:31", 10)];
+        let r = [rec("09:20", 10, 10), rec("09:30", 10, 1)];
+        let g = [brk("09:20", "09:30"), brk("09:30", "09:31")];
+        assert_eq!(gate(&f, &r, &g, "09:27"), s("inside 09:21", Some("09:20–09:30")), "E");
+        // D-3: 09:20 30m re-timed to 09:40 (widest 09:50), 09:35 5m nested.
+        let f = [span("09:20", "09:40", "09:50", 30)];
+        let r = [rec("09:20", 30, 20), rec("09:35", 5, 0)];
+        let g = [brk("09:20", "09:40")];
+        assert_eq!(gate(&f, &r, &g, "09:45"), s("out 09:20", None), "D-3");
+    }
+
+    /// **The drawn break defence** (README gap 5895): a Break segment holding the instant strictly inside; none at a
+    /// segment's edge or in a Block segment.
+    #[test]
+    fn a_drawn_break_is_read_off_the_segments() {
+        let seg = |from: &str, to: &str, kind: SegmentKind| LogSegment { start: at_(from), end: at_(to), kind };
         let segments = [
             seg("09:00", "09:20", SegmentKind::Block { id: "t1".into() }),
             seg("09:20", "09:40", SegmentKind::Break { r#where: None }),
             seg("09:40", "09:50", SegmentKind::Break { r#where: None }),
         ];
-        let records = [rec("09:20"), rec("09:30")];
-        let (segments, records): (Vec<_>, Vec<_>) = (segments.iter().collect(), records.iter().collect());
+        let segments: Vec<_> = segments.iter().collect();
         let hm = |t: DateTime<FixedOffset>| t.format("%H:%M").to_string();
-        let read = |t: &str| drawn_break_at(&segments, &records, at(t)).map(|(a, b, l)| (hm(a), hm(b), l.map(hm)));
-        assert_eq!(read("09:25"), Some(("09:20".into(), "09:40".into(), Some("09:20".into()))));
-        assert_eq!(read("09:45"), Some(("09:40".into(), "09:50".into(), Some("09:30".into()))));
+        let read = |t: &str| drawn_break_at(&segments, at_(t)).map(|(a, b)| (hm(a), hm(b)));
+        assert_eq!(read("09:25"), Some(("09:20".into(), "09:40".into())));
+        assert_eq!(read("09:45"), Some(("09:40".into(), "09:50".into())));
         assert_eq!(read("09:40"), None, "at an edge");
         assert_eq!(read("09:10"), None, "a block");
         assert_eq!(read("09:55"), None, "past every break");
     }
 
-    /// **A re-time the drawn rows would not bear out** (README gap 5941): inside a finished break, a drawn piece that is
-    /// not its own suffix holds the instant (refused), its own piece — whole, or with its head clipped — does not; at its
-    /// end, any piece across the instant; past its end (D150), a piece between its current end and the instant.
+    /// **A re-time another held break or the drawn rows would not bear out** (README gaps 5941, 5990): inside or at the
+    /// end of a listed break, another held break holding the instant (refused); failing that, a drawn piece not its own
+    /// suffix; past its end (D150), a piece between its current end and the instant.
     #[test]
-    fn a_retime_in_the_way_is_read_off_the_drawn_pieces() {
-        let at = |s: &str| DateTime::parse_from_rfc3339(&format!("2026-09-08T{s}:00-05:00")).expect("a stamp");
-        let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 8).expect("a day");
-        let brk = |from: &str, to: &str| LogSegment { start: at(from), end: at(to), kind: SegmentKind::Break { r#where: None } };
-        let rec = |t: &str| tm_core::log::BreakRecord {
-            t: at(t),
-            day: date,
-            planned_min: 10,
-            actual_min: Some(10),
-            r#where: None,
-        };
+    fn a_retime_in_the_way_is_read_off_the_held_spans_and_the_drawn_pieces() {
+        let brk = |from: &str, to: &str| LogSegment { start: at_(from), end: at_(to), kind: SegmentKind::Break { r#where: None } };
         let span = |from: &str, to: &str, widest: &str| FinishedSpan {
-            started: at(from),
-            ended: at(to),
-            widest: at(widest),
+            started: at_(from),
+            ended: at_(to),
+            widest: at_(widest),
             planned_min: 10,
             place: None,
         };
-        // 09:20–09:30, a break begun 09:25 drawn 09:30–09:35 (its head clipped), 09:40–09:45 another, 10:00–10:20 one
-        // that nests a break 10:05–10:08 drawn nowhere.
+        // 09:20–09:30, 09:25–09:35 (its head clipped: drawn 09:30–09:35), 09:40–09:45, 10:00–10:20 nesting 10:05–10:08.
+        let spans = vec![
+            span("09:20", "09:30", "09:30"),
+            span("09:25", "09:35", "09:35"),
+            span("09:40", "09:45", "09:45"),
+            span("10:00", "10:20", "10:20"),
+            span("10:05", "10:08", "10:08"),
+        ];
+        let held = held_of(&spans);
         let segments = [brk("09:20", "09:30"), brk("09:30", "09:35"), brk("09:40", "09:45"), brk("10:00", "10:20")];
-        let records = [rec("09:20"), rec("09:30"), rec("09:40"), rec("10:00")];
-        let (segments, records): (Vec<_>, Vec<_>) = (segments.iter().collect(), records.iter().collect());
-        let way = |arm: AtFinished, t: &str| retime_in_the_way(&segments, &records, &arm, at(t)).map(|w| w.from);
+        let segments: Vec<_> = segments.iter().collect();
+        let way = |arm: AtFinished, t: &str| {
+            retime_in_the_way(&segments, &held, &arm, at_(t)).map(|w| {
+                w.held.iter().map(|h| h.started).min().or(w.drawn.map(|d| d.0)).expect("something in the way")
+            })
+        };
         assert_eq!(way(AtFinished::Inside(span("09:25", "09:35", "09:35")), "09:33"), None, "its own piece, head clipped");
-        assert_eq!(way(AtFinished::Inside(span("09:20", "09:30", "09:30")), "09:25"), None, "its own piece, whole");
-        assert_eq!(way(AtFinished::Inside(span("10:05", "10:08", "10:08")), "10:06"), Some(at("10:00")), "nested");
-        assert_eq!(way(AtFinished::Inside(span("09:25", "09:35", "09:35")), "09:27"), Some(at("09:20")), "covered");
-        assert_eq!(way(AtFinished::AtEnd(span("10:05", "10:08", "10:08")), "10:08"), Some(at("10:00")), "an end inside");
-        assert_eq!(way(AtFinished::AtEnd(span("09:20", "09:30", "09:30")), "09:30"), None, "an end at an edge");
-        assert_eq!(way(AtFinished::Out(span("09:20", "09:30", "09:50")), "09:38"), Some(at("09:30")), "touches the next");
+        assert_eq!(way(AtFinished::Inside(span("09:20", "09:30", "09:30")), "09:22"), None, "its own piece, whole");
+        assert_eq!(way(AtFinished::Inside(span("10:05", "10:08", "10:08")), "10:06"), Some(at_("10:00")), "nested");
+        assert_eq!(way(AtFinished::Inside(span("09:25", "09:35", "09:35")), "09:27"), Some(at_("09:20")), "covered");
+        assert_eq!(way(AtFinished::Inside(span("09:25", "09:35", "09:35")), "09:30"), Some(at_("09:20")), "another's end");
+        assert_eq!(way(AtFinished::AtEnd(span("10:05", "10:08", "10:08")), "10:08"), Some(at_("10:00")), "an end inside");
+        assert_eq!(way(AtFinished::AtEnd(span("09:40", "09:45", "09:45")), "09:45"), None, "an end alone");
+        assert_eq!(way(AtFinished::Out(span("09:20", "09:30", "09:50")), "09:38"), Some(at_("09:25")), "touches the next");
+        // The drawn-piece defence alone (no held break named): a piece crossing the instant that is not the break's own.
+        let lone = held_of(&[span("09:20", "09:30", "09:30")]);
+        let crossing = [brk("09:10", "09:40")];
+        let crossing: Vec<_> = crossing.iter().collect();
+        let drawn = |arm: AtFinished, t: &str| retime_in_the_way(&crossing, &lone, &arm, at_(t)).and_then(|w| w.drawn);
+        assert_eq!(drawn(AtFinished::Inside(span("09:20", "09:30", "09:30")), "09:25"), Some((at_("09:10"), at_("09:40"))));
+        assert_eq!(drawn(AtFinished::AtEnd(span("09:20", "09:30", "09:30")), "09:30"), Some((at_("09:10"), at_("09:40"))));
         let segments2 = [brk("09:20", "09:30"), brk("09:40", "09:45")];
         let segments2: Vec<_> = segments2.iter().collect();
+        let held2 = held_of(&[span("09:20", "09:30", "09:50"), span("09:40", "09:45", "09:45")]);
         let out = |t: &str| {
-            retime_in_the_way(&segments2, &records, &AtFinished::Out(span("09:20", "09:30", "09:50")), at(t)).map(|w| w.from)
+            retime_in_the_way(&segments2, &held2, &AtFinished::Out(span("09:20", "09:30", "09:50")), at_(t))
+                .map(|w| (w.drawn.map(|d| d.0), w.held.iter().map(|h| h.started).collect::<Vec<_>>()))
         };
         assert_eq!(out("09:38"), None, "before the next break");
         assert_eq!(out("09:40"), None, "at its start");
-        assert_eq!(out("09:42"), Some(at("09:40")), "across it");
-        assert_eq!(out("09:48"), Some(at("09:40")), "past it");
-        assert_eq!(way(AtFinished::AtStart(span("09:20", "09:30", "09:30")), "09:20"), None);
+        assert_eq!(out("09:42"), Some((Some(at_("09:40")), vec![at_("09:40")])), "across it, named by its span");
+        assert_eq!(out("09:48"), Some((Some(at_("09:40")), vec![at_("09:40")])), "past it");
+        assert_eq!(retime_in_the_way(&segments2, &held2, &AtFinished::AtStart(vec![]), at_("09:20")), None);
     }
 
     /// The kernel's absolute second of an RFC 3339 stamp.
