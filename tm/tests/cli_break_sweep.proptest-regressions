@@ -5,3 +5,5 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc da47288e4073c454b6c7d6eaa8cd44d0cc0b0efc87cc1fe50d76370830949ba2 # shrinks to keys = [(575, Some(15)), (555, None), (575, Some(15)), (580, None)]
+cc 3dfb9f84890c6f1f0f7cb57be53f3f321957e3cc13f13c23272a08cbee660418 # shrinks to keys = [(555, None), (595, Some(15)), (555, None)]
+cc 21146238047320eeb2b0ed2e8b4dff3c791f00bb39db6785ccdbb4b29242100e # shrinks to keys = [(570, None), (555, None), (570, None)]

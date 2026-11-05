@@ -2277,6 +2277,10 @@ pub struct FinishedBreak {
     /// replay nets the block by its minutes (D87, D100) and the block stays running, not paused. Absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inside_running: Option<String>,
+    /// **The held break it lies inside, by its own span** (`HH:MM–HH:MM`; the W-54 third repair, README gap 6050), when no
+    /// block names why it is over: the log's own stamps have passed its typed end. Absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inside_break: Option<String>,
     /// **Whether the block it lies inside counts fewer minutes for it** (D149 or D152; stage 6 W-54 repair track H,
     /// the W-54 critic's fourth note) — read off the replay before and after the line, never re-derived: `false` when
     /// the break lies where the block was not running (a pause, or another break). Absent when it lies inside none.
@@ -2325,8 +2329,8 @@ enum AtFinished {
     /// Strictly inside exactly one held break, at an instant the kernel reads as its re-time (D147). An instant only
     /// one closed span holds moves that break, so "re-timed" means moved.
     Inside(HeldBreak),
-    /// At the end of a held break no other break holds the instant of: it already ends there (D147). No fact is
-    /// needed, for nothing is written.
+    /// At the end of a held break, or under a minute before it, no other break holding the instant: it already ends
+    /// there (D147). No fact is needed, for nothing is written.
     AtEnd(HeldBreak),
     /// At the start of every break holding the instant: refused by name (the campaign's call inside D147, as P139 at
     /// a D129-ended break's start: a re-time there would leave no minutes).
@@ -2369,7 +2373,8 @@ fn retiming_line(b: &HeldBreak, at: DateTime<FixedOffset>) -> log::LogEntry {
 ///
 /// * One closed span holds `at`: at its end [`AtFinished::AtEnd`]; at its start [`AtFinished::AtStart`]; inside it
 ///   [`AtFinished::Inside`] when `retime_from` reads the line, else [`AtFinished::NotRead`]. A line typed under a minute past
-///   the start would end the break at its start, so it is at its start.
+///   the start would end the break at its start, so it is at its start; an instant under a minute before the end is at its end
+///   (a line carries whole minutes from the start, and would take a minute off a reply that reads as no change, README gap 6053).
 /// * Several hold it: [`AtFinished::AtStart`] at the start of all of them, else [`AtFinished::Many`].
 /// * None holds it: the breaks past whose end it lies inside their widest end. One: [`AtFinished::Out`] when `out_to` reaches
 ///   it, else [`AtFinished::OutNotRead`]; a line typed under a minute past its end changes nothing ([`AtFinished::AtEnd`]),
@@ -2405,6 +2410,7 @@ fn at_finished(held: &[HeldBreak], at: DateTime<FixedOffset>) -> Option<AtFinish
         }
         [b] if at == b.ended => Some(AtFinished::AtEnd(b.clone())),
         [b] if line_end(b, at) == b.started => Some(AtFinished::AtStart(vec![b.clone()])),
+        [b] if b.ended - at < chrono::Duration::minutes(1) => Some(AtFinished::AtEnd(b.clone())),
         [b] if b.retime_from.is_some_and(|r| r <= at) => Some(AtFinished::Inside(b.clone())),
         [b] => Some(AtFinished::NotRead(b.clone())),
         many if many.iter().all(|b| b.started == at) => Some(AtFinished::AtStart(holding)),
@@ -2455,29 +2461,116 @@ fn drawn_break_at(
         .map(|s| (s.start, s.end))
 }
 
-/// **Whether the kernel, reading this re-timing line, draws another day** — asked over the line held, nothing reaching the
-/// disk (the W-54 third repair, README gap 6045). Track K's fact merges identical twins into one entry and a line moves only
-/// the newest, so a twin the fact cannot show keeps the union drawn: "re-timed" would move nothing. Read off the kernel's own
-/// drawn segments, never a line of the log (§5.3).
+/// **The one `break` line that ends a break D129 ended at `at`** (D141): `t` its own start, its planned minutes and place,
+/// `actual_min` the whole minutes from its start.
+fn ending_line(b: &tm_core::log::EndedBreak, at: DateTime<FixedOffset>) -> log::LogEntry {
+    log::LogEntry::new(
+        b.started,
+        Event::Break {
+            planned_min: b.planned_min,
+            actual_min: Some((at - b.started).num_minutes().max(0) as u32),
+            r#where: b.r#where.clone(),
+        },
+    )
+}
+
+/// **The day as a line can move it**: every segment the kernel draws, its touching Break pieces merged, because a break's row cut
+/// in two where the union stands is the same wall clock (README gap 6052).
+fn the_day_drawn(r: &tm_core::log::Replay) -> Vec<tm_core::log::LogSegment> {
+    let mut drawn: Vec<tm_core::log::LogSegment> = vec![];
+    let mut all: Vec<_> = r.days.values().flat_map(|d| d.segments.iter().cloned()).collect();
+    all.sort_by_key(|s| s.start);
+    for s in all {
+        let is_break = matches!(s.kind, tm_core::log::SegmentKind::Break { .. });
+        match drawn.last_mut() {
+            Some(l) if is_break && matches!(l.kind, tm_core::log::SegmentKind::Break { .. }) && s.start <= l.end => {
+                l.end = l.end.max(s.end);
+            }
+            _ => drawn.push(s),
+        }
+    }
+    drawn
+}
+
+/// **Whether the kernel, reading this line, draws another day** — asked over the line held, nothing reaching the disk (the
+/// W-54 third repair, README gaps 6045 and 6052). Track K's fact merges identical twins into one entry and a line moves only
+/// the newest, so a twin the fact cannot show keeps the union drawn: "re-timed" would move nothing; and a D141 end inside a
+/// break that still covers the rest gives no minute back. Read off the kernel's own drawn segments, never a line of the log (§5.3).
 fn a_line_moves(ctx: &mut Ctx, entry: &log::LogEntry) -> Result<bool, CliError> {
-    let drawn = |r: &tm_core::log::Replay| -> Vec<tm_core::log::LogSegment> {
-        r.days.values().flat_map(|d| d.segments.iter().cloned()).collect()
-    };
     let line = Ctx::render_entry(entry)?;
-    let before = drawn(&ctx.replay);
+    let before = the_day_drawn(&ctx.replay);
     ctx.hold_begin()?;
     let asked = ctx.append_line(&line).and_then(|()| ctx.reload());
-    let moved = asked.map(|()| drawn(&ctx.replay) != before);
+    let moved = asked.map(|()| the_day_drawn(&ctx.replay) != before);
     ctx.release();
     moved
 }
 
+/// **A length typed inside a held break's closed span** (the W-54 third repair, README gap 6050; clause 4 of the break invariant),
+/// when no later start, closed block it would net or passed end has logged it finished already. At a held break's very end the
+/// instant is outside it, and a break begins after it, with nothing lost.
+#[derive(Clone, Debug, PartialEq)]
+enum LengthInHeld {
+    /// No closed span holds it, or nothing is at stake: no block open at the instant and no typed-time line at or past it
+    /// (README gap 6044's shape, the owner's call). A break begins, as before.
+    Begins,
+    /// Its typed end lies at or before the span's end or the log's latest typed-time stamp: a break already over, logged
+    /// finished beside the one that holds it. The break that holds it, with the latest end, and that reach.
+    Over(HeldBreak, DateTime<FixedOffset>),
+    /// Its typed end lies past both, so nothing says it is over; a break begun here would run on from inside the held break, and
+    /// the minutes after that break's end would be gone (gap 5810's loss). Refused, with the latest end a length may reach.
+    Past(HeldBreak, DateTime<FixedOffset>),
+}
+
+fn length_in_held(replay: &tm_core::log::Replay, at: DateTime<FixedOffset>, end: DateTime<FixedOffset>) -> LengthInHeld {
+    let holder = replay.held_breaks.iter().filter(|b| b.started <= at && at < b.ended).max_by_key(|b| b.ended);
+    let Some(holder) = holder else {
+        return LengthInHeld::Begins;
+    };
+    let block = replay.open_block.as_ref().is_some_and(|b| b.started <= at);
+    if !block && replay.latest_t.map_or(true, |t| t < at) {
+        return LengthInHeld::Begins;
+    }
+    let reach = replay.latest_t.map_or(holder.ended, |t| t.max(holder.ended));
+    if end <= reach {
+        LengthInHeld::Over(holder.clone(), reach)
+    } else {
+        LengthInHeld::Past(holder.clone(), reach)
+    }
+}
+
+/// **Whether the kernel would read a finished `break` line typed at this instant as a break of its own** — asked over the line
+/// held, nothing reaching the disk (the W-54 third repair, README gap 6051). `Err` names the break at this stamp when it would
+/// not: a `break` line at a D129 ending's stamp that is not that ending's D141 line is read as P127's own line (`Replay.letGo`), its
+/// minutes ignored, so the length would be gone under a reply saying "logged finished". Only a stamp a held break already
+/// starts at can be misread; the fact is read before and after, never a line of the log (§5.3).
+fn a_finished_line_is_read(ctx: &mut Ctx, minutes: u32, place: &Option<String>) -> Result<Result<(), HeldBreak>, CliError> {
+    let at = ctx.now;
+    let Some(there) = ctx.replay.held_breaks.iter().find(|b| b.started == at).cloned() else {
+        return Ok(Ok(()));
+    };
+    let end = at + chrono::Duration::minutes(i64::from(minutes));
+    let line = Ctx::render_entry(&log::LogEntry::new(
+        at,
+        Event::Break { planned_min: minutes, actual_min: Some(minutes), r#where: place.clone() },
+    ))?;
+    ctx.hold_begin()?;
+    let asked = ctx.append_line(&line).and_then(|()| ctx.reload());
+    let read = asked.map(|()| ctx.replay.held_breaks.iter().any(|b| b.started == at && b.ended == end));
+    ctx.release();
+    Ok(if read? { Ok(()) } else { Err(there) })
+}
+
 /// **What a length typed at this instant would do**, in the words of a refusal's advice: asked of the kernel over the
 /// same held `break_start` the starting arm asks ([`followed_by_a_start`], [`netted_closed_block`],
-/// [`inside_running_block`]), nothing reaching the disk. `Some` when it logs a finished break, with the rule; `None` when it
-/// would begin a running break inside the held one (README gap 6044, the behaviour of gap 5775's row), which no refusal offers.
+/// [`inside_running_block`], [`length_in_held`]), nothing reaching the disk. `Some` when it logs a finished break, with the
+/// rule; `None` when the kernel would not read the line as one (README gap 6051) or it would begin a running break inside the
+/// held one (README gap 6044, the behaviour of gap 5775's row), which no refusal offers.
 fn a_length_here(ctx: &mut Ctx) -> Result<Option<String>, CliError> {
     let minutes = 1;
+    if a_finished_line_is_read(ctx, minutes, &None)?.is_err() {
+        return Ok(None);
+    }
     let cached = BreakState { started: Some(ctx.now_tz.time()), planned_min: minutes, place: None };
     let line = Ctx::render_entry(&log::LogEntry::new(ctx.now, Event::BreakStart { planned_min: minutes, r#where: None }))?;
     let (followed, held) = followed_by_a_start(ctx, &line, &cached)?;
@@ -2488,7 +2581,14 @@ fn a_length_here(ctx: &mut Ctx) -> Result<Option<String>, CliError> {
     } else if inside_running_block(&ctx.replay, ctx.now, ctx.now + chrono::Duration::minutes(i64::from(minutes))).is_some() {
         Some("type a length the log has already passed to log a finished break beside it (D152)".to_string())
     } else {
-        None
+        let end = ctx.now + chrono::Duration::minutes(i64::from(minutes));
+        match length_in_held(&ctx.replay, ctx.now, end) {
+            LengthInHeld::Over(_, reach) => Some(format!(
+                "type a length that ends by {} to log a finished break beside it",
+                reach.with_timezone(&ctx.cfg.tz).format("%H:%M")
+            )),
+            _ => None,
+        }
     })
 }
 
@@ -2538,8 +2638,10 @@ fn inside_running_block(
 /// gate below (D141 for a break D129 ended, where the kernel's fact reads the line; D147, D150 and [`at_finished`] for every
 /// held break, over track K's fact): it ends, re-times or re-times out exactly one held break, says that one already ends
 /// there, or is refused by name — never a new break inside a held break's span. A length typed for a break already over is
-/// logged finished (D143, D146, D148, D149, D152 as D153 and D154 read "already over"); otherwise a break begins (D105's
-/// `break_start`), inside a held break too when nothing would end it (README gap 6044).
+/// logged finished (D143, D146, D148, D149, D152 as D153 and D154 read "already over"), and so is one typed inside a held
+/// break's span that ends by that span's end or the log's latest stamp (README gap 6050); one that ends past both is refused,
+/// and so is one the kernel would not read as a break of its own (README gap 6051). Otherwise a break begins (D105's
+/// `break_start`), inside a held break's span only when nothing is at stake there (README gap 6044, the owner's call).
 pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError> {
     let mut ctx = Ctx::load(g, true)?;
     // **The arguments are read in both arms** (the owner's D20, gap 138). The
@@ -2650,8 +2752,19 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     // ended at the typed instant as above, and a finished break of the typed length, with the typed place,
     // is logged from it in one plain `break` line (below) — the typed length of a break already over is a
     // fact (D143), where until W-53's repair the length and the place were discarded.
+    //
+    // **Where another closed span also holds the instant, a D141 line may move nothing** (the W-54 third repair, README gap 6052):
+    // `09:40` and `09:30`, both D129 to 10:10, then `--now 09:45` said "ends here" with no minute back. So it is asked: a line that
+    // moves nothing stands aside (the gate below refuses it by name, and a length logs a break of its own); one that does move (a
+    // shorter break nested inside, `09:40 5m`) ends the break, and the reply says what still holds the instant.
     let superseded = if ended.is_none() {
-        ctx.break_a_start_ended_at(ctx.now)
+        match ctx.break_a_start_ended_at(ctx.now) {
+            Some(b) if matches!(at_finished(&ctx.replay.held_breaks, ctx.now), Some(AtFinished::Many(_))) => {
+                let line = ending_line(&b, ctx.now);
+                if a_line_moves(&mut ctx, &line)? { Some(b) } else { None }
+            }
+            found => found,
+        }
     } else {
         None
     };
@@ -2819,7 +2932,10 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     let mut finished: Option<(u32, Option<DateTime<FixedOffset>>)> = None;
     // The start of the finished break this run re-timed (D147), `HH:MM`, and whether it re-timed it OUT (D150).
     let mut retimed_from: Option<String> = None;
+    let mut retimed_to: Option<String> = None;
     let mut retimed_out = false;
+    // The held break a finished break this run logs lies inside, when no block names why it is over (README gap 6050).
+    let mut inside_break: Option<String> = None;
     // The block a finished break this run logs lies inside, that a later `done` or `stop` closed (D149).
     let mut inside_block: Option<String> = None;
     // The RUNNING block a finished break this run logs lies inside, its typed end already passed (D152).
@@ -2832,6 +2948,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     } else if let Some((f, out_)) = retimed {
         let actual = (ctx.now - f.started).num_minutes().max(0) as u32;
         retimed_from = Some(f.started.with_timezone(&tz).format("%H:%M").to_string());
+        retimed_to = Some(line_end(&f, ctx.now).with_timezone(&tz).format("%H:%M").to_string());
         retimed_out = out_;
         ctx.append_entry(&retiming_line(&f, ctx.now))?;
         BreakOut {
@@ -2845,22 +2962,31 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         }
     } else if let Some(b) = superseded {
         let actual = (ctx.now - b.started).num_minutes().max(0) as u32;
-        let entry = log::LogEntry::new(
-            b.started,
-            Event::Break {
-                planned_min: b.planned_min,
-                actual_min: Some(actual),
-                r#where: b.r#where.clone(),
-            },
-        );
-        ctx.append_entry(&entry)?;
+        // What else holds the instant keeps drawing: the reply says so, so "ends here" reads as what the plan will draw (README gap 6052).
+        let also: Vec<String> = ctx
+            .replay
+            .held_breaks
+            .iter()
+            .filter(|h| h.started <= ctx.now && ctx.now <= h.ended)
+            .filter(|h| !(h.started == b.started && h.ended == b.ended && h.planned_min == b.planned_min))
+            .map(|h| {
+                let hm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).format("%H:%M").to_string();
+                format!("{}–{}", hm(h.started), hm(h.ended))
+            })
+            .collect();
+        ctx.append_entry(&ending_line(&b, ctx.now))?;
         let (from, until) = (b.started.with_timezone(&tz), b.ended.with_timezone(&tz));
         eprintln!(
             "tm: the break that began at {} ends here, at {} — the `start` the log holds at {} had ended it \
-             (D129); typed inside it, `tm break` ends it (D141)",
+             (D129); typed inside it, `tm break` ends it (D141){}",
             from.format("%H:%M"),
-            ctx.now_tz.format("%H:%M"),
-            until.format("%H:%M")
+            (from + chrono::Duration::minutes(i64::from(actual))).format("%H:%M"),
+            until.format("%H:%M"),
+            if also.is_empty() {
+                String::new()
+            } else {
+                format!("; the logged break {} also holds this instant, and stays", also.join(", "))
+            },
         );
         if let Some(len) = asked {
             finished = Some((len, None));
@@ -2937,11 +3063,73 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             }
             _ => None,
         };
+        // **A length typed inside a held break's closed span** (the W-54 third repair, README gap 6050; clause 4): asked only when
+        // none of D143, D149 and D152 took it, for what those take reads no held break. `tm break --now 10:20 5m` inside a
+        // 10:15–10:40 break the user ended, `^t4` running: the kernel's `latestTyped` reads that break's `break` line at its start
+        // stamp, so D152 sees no witness of 10:25, and a `break_start` there took every minute after 10:40 from the block. The span's
+        // own end is the witness: both lie in one stretch the log already reads as over. Past it, refused by name.
+        let in_held = match (&probed, &closed, &running_in) {
+            (Some((None, _)), None, None) => {
+                length_in_held(&ctx.replay, ctx.now, ctx.now + chrono::Duration::minutes(i64::from(planned)))
+            }
+            _ => LengthInHeld::Begins,
+        };
+        let hm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).format("%H:%M").to_string();
+        if let LengthInHeld::Past(b, reach) = &in_held {
+            return Err(CliError::msg(format!(
+                "`tm break {planned}m` at {} lies inside the logged break {}–{} and ends at {}, which neither that break nor the log \
+                 has reached: nothing says it is over, and a break begun here would take every minute after {} (D152); nothing \
+                 written: type a length that ends by {} to log a finished break beside it, or `tm undo` takes the last line back",
+                ctx.now_tz.format("%H:%M"),
+                hm(b.started),
+                hm(b.ended),
+                hm(ctx.now + chrono::Duration::minutes(i64::from(planned))),
+                hm(b.ended),
+                hm(*reach),
+            )));
+        }
+        // At a held break's own start with its planned minutes, the kernel reads the line as THAT break's reading: not a finished break
+        // beside it, and the reply would say so of a line that moved it (`10:15 20m` over 10:15–10:40). Refused, the re-time named.
+        if let LengthInHeld::Over(..) = &in_held {
+            if let Some(b) = ctx.replay.held_breaks.iter().find(|b| b.started == ctx.now && b.planned_min == planned) {
+                return Err(CliError::msg(format!(
+                    "a {planned}m break is logged {}–{} from this very instant — the kernel reads a `break` line with its start and \
+                     its length as that break's own, not as a finished break beside it; nothing written: `tm break` at the instant \
+                     it should end re-times it (D147), or a different length logs a finished break beside it",
+                    hm(b.started),
+                    hm(b.ended),
+                )));
+            }
+        }
+        // **Whatever arm logs it finished, the kernel must read the line as a break of its own** (README gap 6051): at a D129 ending's
+        // own start it keeps D129's span and drops the length, under a reply that said it was logged and netted. P139 refuses that
+        // instant when the ending is listed; this is the same refusal for one `ended_breaks` omits, a newer break overlapping it.
+        let logs_finished = matches!(probed, Some((Some(_), _)))
+            || closed.is_some()
+            || running_in.is_some()
+            || matches!(in_held, LengthInHeld::Over(..));
+        if logs_finished {
+            if let Err(there) = a_finished_line_is_read(&mut ctx, planned, &place)? {
+                return Err(CliError::msg(format!(
+                    "a break is logged {}–{} from this very instant — the kernel reads a `break` line at its stamp as that break's \
+                     own line and keeps its span, so a {planned}m length here would be dropped; nothing written: give another \
+                     instant for the length (D143), or `tm undo` takes the last line back, one line at a time",
+                    hm(there.started),
+                    hm(there.ended),
+                )));
+            }
+        }
         match probed {
-            Some((None, _)) if closed.is_some() || running_in.is_some() => {
+            Some((None, _)) if closed.is_some() || running_in.is_some() || matches!(in_held, LengthInHeld::Over(..)) => {
+                if let LengthInHeld::Over(b, _) = &in_held {
+                    inside_break = Some(format!("{}–{}", hm(b.started), hm(b.ended)));
+                }
                 finished = Some((planned, None));
                 inside_block = closed;
-                inside_running = running_in;
+                inside_running = running_in.or_else(|| {
+                    let open = ctx.replay.open_block.as_ref().filter(|b| b.started <= ctx.now)?;
+                    matches!(in_held, LengthInHeld::Over(..)).then(|| open.id.clone())
+                });
                 BreakOut {
                     action: "finished".to_string(),
                     planned_min: planned,
@@ -3022,6 +3210,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                 into_start: into.map(|u| u.with_timezone(&tz).format("%H:%M").to_string()),
                 inside_block: inside_block.clone(),
                 inside_running: inside_running.clone(),
+                inside_break: inside_break.clone(),
                 nets: None,
             };
             out.finished = Some(f.clone());
@@ -3136,6 +3325,10 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                         _ => format!("it lies inside ^{k}, which is running; it nets it, D152"),
                     }
                 }
+                (None, _) if f.inside_break.is_some() => format!(
+                    "it lies inside the break {} the log holds, and the log has passed its end",
+                    f.inside_break.as_deref().unwrap_or_default()
+                ),
                 (None, "ended") => "typed with its length inside the break it ended, D146".to_string(),
                 (None, _) => "a later start follows it, D143".to_string(),
             }
@@ -3157,7 +3350,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                 retimed_from.as_deref().unwrap_or_default(),
                 out.superseded_end.as_deref().unwrap_or_default(),
                 if retimed_out { "out " } else { "" },
-                ctx.now_tz.format("%H:%M"),
+                retimed_to.as_deref().unwrap_or_default(),
                 if retimed_out { "D150" } else { "D147" },
                 out.actual_min.unwrap_or(0),
                 out.planned_min

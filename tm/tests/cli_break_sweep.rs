@@ -6,9 +6,13 @@
 //!    as a block or a break, and no block lies over a break;
 //! 2. a cold rebuild (`.tm/state.json` and the cache deleted) answers the same;
 //! 3. a reply saying "re-timed" or "ended" moved the review or the drawn rows, and a refusal wrote nothing;
-//! 4. no `break_start` is written at an instant inside the closed span of a break the log holds (a length with nothing to
-//!    end it is the one exception, README gap 6044), and a no-length keystroke with nothing running DOES begin a break outside
-//!    every held break's own span and widest end.
+//! 4. no `break_start` is written at an instant inside the closed span of a break the log holds (README gap 6044's one
+//!    exception, as the test states it from the log: a length, no block open at the instant and no typed-time line stamped at or
+//!    after it), and a no-length keystroke with nothing running DOES begin a break outside every held break's own span and
+//!    widest end.
+//!
+//! The R day (`^t1` done, `^t4` running since 10:10) holds the same clauses, read after a `tm stop` at 12:30 on the copy, because
+//! the review counts closed blocks (README gap 6050).
 //!
 //! What the log "holds" is the kernel's fact, `Replay::held_breaks`, read off the log's text before each keystroke. Every
 //! read runs on a COPY of the tree: `tm plan` logs a line, and the sequence under test must hold the keystrokes alone.
@@ -70,27 +74,40 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// The J day, once per test binary; each sequence runs on a copy of it.
-fn j_day() -> &'static Path {
-    static DAY: OnceLock<TempDir> = OnceLock::new();
-    DAY.get_or_init(|| {
+/// Which day a sequence runs on: `J`, both blocks done; `R`, `^t4` still running since 10:10.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Day {
+    J,
+    R,
+}
+
+/// The day, once per test binary; each sequence runs on a copy of it.
+fn the_day(day: Day) -> &'static Path {
+    static J: OnceLock<TempDir> = OnceLock::new();
+    static R: OnceLock<TempDir> = OnceLock::new();
+    let build = || {
         let tmp = TempDir::new().expect("a directory");
         let d = tmp.path();
-        for (now, args) in [
-            ("06:00", &["init", "--example"][..]),
-            ("07:00", &["wake", "07:00"][..]),
-            ("08:00", &["arrive", "home"][..]),
-            ("09:00", &["start", "^t1"][..]),
-            ("10:00", &["done"][..]),
-            ("10:10", &["start", "^t4"][..]),
-            ("11:10", &["done"][..]),
-        ] {
+        let steps: &[(&str, &[&str])] = &[
+            ("06:00", &["init", "--example"]),
+            ("07:00", &["wake", "07:00"]),
+            ("08:00", &["arrive", "home"]),
+            ("09:00", &["start", "^t1"]),
+            ("10:00", &["done"]),
+            ("10:10", &["start", "^t4"]),
+            ("11:10", &["done"]),
+        ];
+        let steps = if day == Day::J { steps } else { &steps[..6] };
+        for (now, args) in steps {
             let o = run(d, &format!("2026-09-08T{now}:00-05:00"), args);
             assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
         }
         tmp
-    })
-    .path()
+    };
+    match day {
+        Day::J => J.get_or_init(build).path(),
+        Day::R => R.get_or_init(build).path(),
+    }
 }
 
 /// What the day reads at 12:30, on a copy.
@@ -107,7 +124,7 @@ fn minutes(s: &str) -> u32 {
     h * 60 + n
 }
 
-fn read(tree: &Path, cold: bool) -> Result<Read, String> {
+fn read(day: Day, tree: &Path, cold: bool) -> Result<Read, String> {
     let tmp = TempDir::new().expect("a directory");
     let d = tmp.path().join("t");
     copy_dir(tree, &d);
@@ -116,6 +133,13 @@ fn read(tree: &Path, cold: bool) -> Result<Read, String> {
         let _ = fs::remove_dir_all(d.join(".tm/cache"));
     }
     let now = at(m(12, 30));
+    if day == Day::R {
+        let o = run(&d, &now, &["stop"]);
+        if !o.status.success() {
+            return Err(format!("`tm stop` failed: {}", String::from_utf8_lossy(&o.stderr)));
+        }
+    }
+    let horizon = if day == Day::J { m(12, 0) } else { m(12, 30) };
     let doc = |args: &[&str]| -> Result<Value, String> {
         let o = run(&d, &now, args);
         if !o.status.success() {
@@ -129,7 +153,7 @@ fn read(tree: &Path, cold: bool) -> Result<Read, String> {
     let (mut blocks, mut breaks) = (vec![], vec![]);
     for s in plan["segments"].as_array().ok_or("no segments")? {
         let (from, to) = (minutes(s["start"].as_str().ok_or("a start")?), minutes(s["end"].as_str().ok_or("an end")?));
-        if from >= m(12, 0) {
+        if from >= horizon {
             continue;
         }
         match s["kind"].as_str() {
@@ -146,12 +170,12 @@ fn read(tree: &Path, cold: bool) -> Result<Read, String> {
 }
 
 /// Clause 1, on one read.
-fn the_day_is_one_reading(r: &Read) -> Result<(), String> {
+fn the_day_is_one_reading(day: Day, r: &Read) -> Result<(), String> {
     let drawn: u32 = r.blocks.iter().map(|(a, b, _)| b - a).sum();
     if u64::from(drawn) != r.block_min {
         return Err(format!("the review says {} and the plan draws {drawn}: {r:?}", r.block_min));
     }
-    for b in m(9, 0)..m(11, 10) {
+    for b in m(9, 0)..(if day == Day::J { m(11, 10) } else { m(12, 30) }) {
         if (m(10, 0)..m(10, 10)).contains(&b) {
             continue;
         }
@@ -172,11 +196,42 @@ fn fact(tree: &Path) -> Replay {
     chokepoint::replay_of_text(&text, TZ)
 }
 
+/// Spans, adjacent or overlapping ones merged: a break cut in two and drawn in the same place is the same day.
+fn merged<I: IntoIterator<Item = (u32, u32)>>(spans: I) -> Vec<(u32, u32)> {
+    let mut v: Vec<(u32, u32)> = spans.into_iter().collect();
+    v.sort_unstable();
+    let mut out: Vec<(u32, u32)> = vec![];
+    for (a, b) in v {
+        match out.last_mut() {
+            Some(l) if a <= l.1 => l.1 = l.1.max(b),
+            _ => out.push((a, b)),
+        }
+    }
+    out
+}
+
+/// What a line must have changed for "re-timed" or "ended" to be true (clause 3): the review, or where the blocks and breaks
+/// are drawn. A break's row cut in two at the typed instant, with the union as it was, is not a move (README gap 6052).
+fn drawn(r: &Read) -> (u64, Vec<(u32, u32)>, Vec<(u32, u32)>) {
+    (r.block_min, merged(r.blocks.iter().map(|(a, b, _)| (*a, *b))), merged(r.breaks.iter().copied()))
+}
+
+/// The log's latest stamp of a line stamped when its verb ran (D154's `typedAt?`, read off the log's text by this test).
+fn latest_typed(log: &str) -> Option<DateTime<FixedOffset>> {
+    log.lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|v| !matches!(v["ev"].as_str(), Some("wake" | "arrive" | "energy")))
+        .filter_map(|v| DateTime::parse_from_rfc3339(v["t"].as_str()?).ok())
+        .max()
+}
+
 /// One keystroke on `tree`, holding clauses 3 and 4.
-fn keystroke(tree: &Path, (minute, len): Key) -> Result<(), String> {
+fn keystroke(day: Day, tree: &Path, (minute, len): Key) -> Result<(), String> {
     let before = fact(tree);
     let t = stamp(minute);
-    let closed: Vec<_> = before.held_breaks.iter().filter(|b| b.started <= t && t <= b.ended).collect();
+    // A length at a held break's very end begins after it, with nothing lost; no length there is "already ends".
+    let closed: Vec<_> =
+        before.held_breaks.iter().filter(|b| b.started <= t && (t < b.ended || (len.is_none() && t == b.ended))).collect();
     let reach = before.held_breaks.iter().any(|b| b.started <= t && t <= b.ended.max(b.widest));
     let snapshot = TempDir::new().expect("a directory");
     let prior = snapshot.path().join("t");
@@ -210,18 +265,24 @@ fn keystroke(tree: &Path, (minute, len): Key) -> Result<(), String> {
     }
     let doc: Value = serde_json::from_slice(&o.stdout).map_err(|e| format!("not JSON ({e}): {said}"))?;
     let action = doc["action"].as_str().unwrap_or_default().to_string();
-    if matches!(action.as_str(), "retimed" | "ended") {
-        let (was, is) = (read(&prior, false)?, read(tree, false)?);
-        if was == is {
+    // A length typed with an ending (D146) says both: the break ended here and a finished one from here, and the two may fill
+    // the stretch again exactly (`09:15`, then `09:55 15m` up to 10:10). The union then stays, and the reply is true.
+    if action == "retimed" || (action == "ended" && len.is_none()) {
+        let (was, is) = (read(day, &prior, false)?, read(day, tree, false)?);
+        if drawn(&was) == drawn(&is) {
             return Err(format!("the reply says {action:?} and nothing moved: {said} {is:?}"));
         }
     }
     let new_lines = log1.strip_prefix(log0.as_str()).unwrap_or_default();
     let began = new_lines.lines().any(|l| l.contains("\"ev\":\"break_start\""));
-    // A length with nothing to end it begins a running break there (README gap 6044: gap 5775's row pins it, no start follows,
-    // so gap 5810's loss cannot happen); the keystroke goes to the owner. Everything else inside a held span is the loss.
-    let runs_on = len.is_some() && fact(tree).open_break.is_some();
-    if began && !closed.is_empty() && !runs_on {
+    // README gap 6044's one exception, the owner's call, in its own words read off the log: a length, no block open at the
+    // instant, and no typed-time line at or past it (so no later start, no closed block around it, no passed end). Everything
+    // else inside a held span is gap 5810's loss. Until the attackers' re-drive this was `len.is_some() && open_break.is_some()`,
+    // true of every length that begins a break, which exempted the very shapes clause 4 exists for (README gap 6050).
+    let nothing_at_stake = len.is_some()
+        && before.open_block.as_ref().map_or(true, |b| t < b.started)
+        && latest_typed(&log0).map_or(true, |l| l < t);
+    if began && !closed.is_empty() && !nothing_at_stake {
         return Err(format!("a `break_start` inside the held span {}–{}: {said}", closed[0].started, closed[0].ended));
     }
     if len.is_none() && before.open_break.is_none() && !reach && !began {
@@ -230,21 +291,25 @@ fn keystroke(tree: &Path, (minute, len): Key) -> Result<(), String> {
     Ok(())
 }
 
-/// The whole invariant over one sequence, on a copy of the J day; `Err` names the step.
-fn sequence(keys: &[Key]) -> Result<(), String> {
+/// The whole invariant over one sequence, on a copy of the day; `Err` names the step.
+fn on_day(day: Day, keys: &[Key]) -> Result<(), String> {
     let tmp = TempDir::new().expect("a directory");
     let tree = tmp.path().join("t");
-    copy_dir(j_day(), &tree);
+    copy_dir(the_day(day), &tree);
     for (i, k) in keys.iter().enumerate() {
-        keystroke(&tree, *k).map_err(|e| format!("keystroke {i} of {keys:?}: {e}"))?;
+        keystroke(day, &tree, *k).map_err(|e| format!("{day:?} keystroke {i} of {keys:?}: {e}"))?;
     }
-    let warm = read(&tree, false).map_err(|e| format!("{keys:?}: {e}"))?;
-    the_day_is_one_reading(&warm).map_err(|e| format!("{keys:?}: {e}"))?;
-    let cold = read(&tree, true).map_err(|e| format!("{keys:?}: {e}"))?;
+    let warm = read(day, &tree, false).map_err(|e| format!("{day:?} {keys:?}: {e}"))?;
+    the_day_is_one_reading(day, &warm).map_err(|e| format!("{day:?} {keys:?}: {e}"))?;
+    let cold = read(day, &tree, true).map_err(|e| format!("{day:?} {keys:?}: {e}"))?;
     if cold != warm {
-        return Err(format!("{keys:?}: warm {warm:?}, cold {cold:?}"));
+        return Err(format!("{day:?} {keys:?}: warm {warm:?}, cold {cold:?}"));
     }
     Ok(())
+}
+
+fn sequence(keys: &[Key]) -> Result<(), String> {
+    on_day(Day::J, keys)
 }
 
 /// The shapes of the W-54 third repair's brief, each a sequence (`None`: no length).
@@ -268,6 +333,27 @@ fn shapes() -> Vec<(&'static str, Vec<Key>)> {
         ("one start", vec![k(10, 30, Some(10)), k(10, 30, Some(15)), k(10, 45, None)]),
         ("after the blocks", vec![k(11, 20, Some(20)), k(11, 30, None), k(11, 25, Some(5))]),
         ("hidden twin", vec![k(9, 35, Some(15)), k(9, 15, None), k(9, 35, Some(15)), k(9, 40, None)]),
+        ("span over a closed block", vec![k(10, 30, Some(90)), k(10, 35, Some(5))]),
+        ("span over a closed block, past it", vec![k(10, 30, Some(90)), k(10, 35, Some(90))]),
+        ("d129 start, 60m", vec![k(9, 42, None), k(9, 25, Some(30)), k(9, 42, Some(60))]),
+        ("d129 start, the old advice", vec![k(9, 42, None), k(9, 25, Some(30)), k(9, 42, None), k(9, 42, Some(5)), k(9, 45, None), k(9, 30, None)]),
+        ("d141 in two spans", vec![k(9, 40, None), k(9, 30, None), k(9, 45, None)]),
+        ("d141 in two spans, finished", vec![k(9, 40, Some(30)), k(9, 30, None), k(9, 45, None)]),
+        ("d141 at the inner start (seed)", vec![k(9, 30, None), k(9, 15, None), k(9, 30, None)]),
+    ]
+}
+
+/// The R day's shapes: the block runs, so a break the user ended is the only witness of its end (README gap 6050).
+fn r_shapes() -> Vec<(&'static str, Vec<Key>)> {
+    let k = |h, n, l: Option<u32>| (m(h, n), l);
+    vec![
+        ("R", vec![k(10, 15, None), k(10, 40, None), k(10, 20, Some(5))]),
+        ("R past", vec![k(10, 15, None), k(10, 40, None), k(10, 20, Some(30))]),
+        ("R at its start", vec![k(10, 15, None), k(10, 40, None), k(10, 15, Some(5))]),
+        ("R same length at its start", vec![k(10, 15, None), k(10, 40, None), k(10, 15, Some(20))]),
+        ("R at its end", vec![k(10, 15, None), k(10, 40, None), k(10, 40, Some(5))]),
+        ("R two", vec![k(10, 15, Some(5)), k(10, 20, None), k(10, 30, None), k(10, 40, None), k(10, 35, Some(5))]),
+        ("d146 refills the stretch (seed)", vec![k(9, 15, None), k(9, 55, Some(15)), k(9, 15, None)]),
     ]
 }
 
@@ -282,6 +368,16 @@ fn the_briefs_shapes_hold_the_invariant() {
     }
 }
 
+/// **The R day's shapes hold it** (README gap 6050): this row fails on the binary before that gap's fix.
+#[test]
+fn the_r_days_shapes_hold_the_invariant() {
+    for (name, keys) in r_shapes() {
+        if let Err(e) = on_day(Day::R, &keys) {
+            panic!("{name}: {e}");
+        }
+    }
+}
+
 /// **Every minute of the morning, against every shape** — no length and five minutes typed last. Run at acceptance
 /// (`--ignored`; about ten minutes on twelve threads): the result is quoted in the README, W-54 third repair track H, §2.
 #[test]
@@ -289,22 +385,26 @@ fn the_briefs_shapes_hold_the_invariant() {
 fn every_minute_against_every_shape_holds_the_invariant() {
     let shapes = shapes();
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(12));
-    let mut jobs: Vec<Vec<Key>> = vec![];
-    for (_, keys) in &shapes {
-        for minute in m(9, 0)..=m(11, 30) {
-            for len in [None, Some(5)] {
-                let mut k = keys.clone();
-                k.push((minute, len));
-                jobs.push(k);
+    let r_shapes = r_shapes();
+    let mut jobs: Vec<(Day, Vec<Key>)> = vec![];
+    for (day, set) in [(Day::J, &shapes), (Day::R, &r_shapes)] {
+        for (_, keys) in set {
+            for minute in m(9, 0)..=m(11, 30) {
+                for len in [None, Some(5)] {
+                    let mut k = keys.clone();
+                    k.push((minute, len));
+                    jobs.push((day, k));
+                }
             }
         }
     }
     let total = jobs.len();
-    let chunks: Vec<Vec<Vec<Key>>> = (0..threads).map(|i| jobs.iter().skip(i).step_by(threads).cloned().collect()).collect();
+    let chunks: Vec<Vec<(Day, Vec<Key>)>> =
+        (0..threads).map(|i| jobs.iter().skip(i).step_by(threads).cloned().collect()).collect();
     let bad: Vec<String> = std::thread::scope(|s| {
         let hs: Vec<_> = chunks
             .iter()
-            .map(|c| s.spawn(move || c.iter().filter_map(|k| sequence(k).err()).collect::<Vec<_>>()))
+            .map(|c| s.spawn(move || c.iter().filter_map(|(d, k)| on_day(*d, k).err()).collect::<Vec<_>>()))
             .collect();
         hs.into_iter().flat_map(|h| h.join().expect("a thread")).collect()
     });
@@ -321,7 +421,9 @@ fn a_key() -> impl Strategy<Value = Key> {
         1 => Just(Some(5u32)),
         1 => Just(Some(10u32)),
         1 => Just(Some(15u32)),
+        1 => Just(Some(20u32)),
         1 => Just(Some(30u32)),
+        1 => Just(Some(90u32)),
     ];
     (at, len)
 }
@@ -338,6 +440,14 @@ proptest! {
     #[test]
     fn the_invariant_holds_after_any_break_keystrokes(keys in proptest::collection::vec(a_key(), 3..=6)) {
         if let Err(e) = sequence(&keys) {
+            prop_assert!(false, "{}", e);
+        }
+    }
+
+    /// **The same on the R day, its block still running** (README gap 6050): the J day cannot draw a running block.
+    #[test]
+    fn the_invariant_holds_after_any_break_keystrokes_on_a_running_block(keys in proptest::collection::vec(a_key(), 3..=6)) {
+        if let Err(e) = on_day(Day::R, &keys) {
             prop_assert!(false, "{}", e);
         }
     }

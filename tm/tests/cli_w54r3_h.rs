@@ -340,10 +340,11 @@ fn past_the_last_block_the_refusal_offers_no_length() {
     assert!(!said.contains("type a length") && said.contains("`tm undo`"), "{said}");
 }
 
-/// **A length with nothing to end it begins a running break, inside a held span too** (README gap 6044: the invariant's
-/// fourth clause, read literally, refuses this, and three rows that predate it pin it — `cli_d144_now_break.rs`'s gap 5775,
-/// `cli_w54_h_breaks.rs`'s F3, `cli_week_grid.rs`'s union; so the behaviour stands and the shape goes to the owner). No start
-/// follows, so D129's loss cannot happen: the break runs, drawn after the held one, the review and the plan agree.
+/// **A length with nothing at stake begins a running break, inside a held span too** (README gap 6044: the invariant's fourth
+/// clause, read literally, refuses this, and three rows that predate it pin it — `cli_d144_now_break.rs`'s gap 5775,
+/// `cli_w54_h_breaks.rs`'s F3, `cli_week_grid.rs`'s union; so the behaviour stands and the shape goes to the owner). No block is
+/// open at the instant and no typed-time line lies at or past it, so no block's minutes can go: the break runs, drawn after the
+/// held one, the review and the plan agree. Gaps 6050's rows are where a block IS at stake.
 #[test]
 fn a_length_with_nothing_to_end_it_begins_a_running_break_inside_a_held_span() {
     let tm = j_day(&[("11:20", ""), ("11:30", "")]);
@@ -466,9 +467,13 @@ fn d154_a_far_future_line_is_no_witness() {
     let tm = running_t4();
     let path = tm.plan.join(".tm/log.jsonl");
     let mut text = fs::read_to_string(&path).expect("the log");
-    text.push_str("{\"t\":\"2027-01-01T09:00:00-06:00\",\"ev\":\"plan\",\"hash\":\"x\",\"dropped\":[]}\n");
+    text.push_str("{\"t\":\"2027-01-01T09:00:00-06:00\",\"ev\":\"plan\",\"hash\":\"6e147b39012b85f2\",\"replans_today\":0,\"drift_min\":0}\n");
     fs::write(&path, text).expect("the log");
     begins_a_running_break(&tm, "10:15", "5m");
+    // The line is READ, as a far-future line: until the attackers' re-drive this row wrote a line the reader refuses
+    // (`missing field replans_today`), which passed on 213e827 too (README gap 6054).
+    let check = tm.run_at(&at("10:16"), &["check"]);
+    assert!(check.stdout.contains("warning[log-future]") && !check.stdout.contains("warning[log-line]"), "{}{}", check.stdout, check.stderr);
 }
 
 /// **An undone line and its `undo` witness it** (D154): pause and unpause at 10:50, both undone at 10:51, `--now 10:15 5m`
@@ -532,4 +537,214 @@ fn d154_d61s_marks_witness_their_own_stamps_and_no_later() {
     let out = tm.ok_at(&mon("13:55"), &["break", "10m"]);
     assert!(!out.stdout.contains("logged finished"), "{}{}", out.stdout, out.stderr);
     assert_eq!(tm.last()["ev"], "break_start");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The attackers' five (README gaps 6050-6054)
+
+/// The R day: `^t1` 09:00–10:00 done, `^t4` started 10:10 and running, then each break typed.
+fn r_day(breaks: &[(&str, &str)]) -> Tm {
+    let tm = fresh();
+    tm.ok_at(&at("09:00"), &["start", "^t1"]);
+    tm.ok_at(&at("10:00"), &["done"]);
+    tm.ok_at(&at("10:10"), &["start", "^t4"]);
+    typed(&tm, breaks);
+    tm
+}
+
+fn no_break_start_at(tm: &Tm, hm: &str) {
+    let t = at(hm);
+    let bad = tm.log().into_iter().find(|l| l["ev"] == "break_start" && l["t"] == t.as_str());
+    assert!(bad.is_none(), "a `break_start` at {hm}: {bad:?}");
+}
+
+/// **R: a length inside a closed span, the block still running, is a break already over** (README gap 6050; clause 4). The break
+/// 10:15–10:40 the user ended is the log's own witness that 10:25 is past, and `latestTyped` cannot see it (a `break` line
+/// counts at its start stamp). Until this row: `break_start` at 10:20, `tm now` at 12:30 `5m of 60m · paused`, `on break since
+/// 10:20 · 110m of 5m`, `tm stop` `after 5m`: the 110 minutes after the user ended the break gone from the block.
+#[test]
+fn r_a_length_ending_inside_the_held_span_is_logged_finished_and_the_block_keeps_running() {
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let out = tm.ok_at(&at("10:20"), &["break", "5m"]);
+    assert!(out.stdout.contains("logged finished (it lies inside ^t4, which is running; ^t4 was not running there"), "{}{}", out.stdout, out.stderr);
+    no_break_start_at(&tm, "10:20");
+    let last = tm.last();
+    assert_eq!((last["ev"].as_str(), last["actual_min"].as_u64()), (Some("break"), Some(5)), "{last}");
+    let now = copied(&tm).ok_at(&at("12:30"), &["now"]).stdout;
+    assert!(now.contains("115m of 60m") && !now.contains("paused") && !now.contains("on break since"), "{now}");
+    let c = copied(&tm);
+    fs::remove_file(c.plan.join(".tm/state.json")).expect("the cache");
+    let _ = fs::remove_dir_all(c.plan.join(".tm/cache"));
+    let cold_now = c.ok_at(&at("12:30"), &["now"]).stdout;
+    assert!(cold_now.contains("115m of 60m") && !cold_now.contains("on break since"), "{cold_now}");
+    let stop = tm.ok_at(&at("12:30"), &["stop"]);
+    assert!(stop.stdout.contains("stopped ^t4 after 115m"), "{}{}", stop.stdout, stop.stderr);
+}
+
+/// **R, a length past the span: refused by name, and the advice is driven** (README gap 6050). `10:20 30m` ends at 10:50, past
+/// the break and past the log's latest stamp, so nothing says it is over, and a break begun there would lose every minute after
+/// 10:40. The refusal offers a length that ends by 10:40, and that length does log finished.
+#[test]
+fn r_a_length_past_the_held_span_is_refused_and_its_advice_works() {
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let said = refused_with(&tm, "10:20", &["break", "30m"]);
+    assert!(said.contains("10:15–10:40") && said.contains("10:50") && said.contains("by 10:40"), "{said}");
+    let out = tm.ok_at(&at("10:20"), &["break", "20m"]);
+    assert!(out.stdout.contains("10:20–10:40 · logged finished"), "{}{}", out.stdout, out.stderr);
+    no_break_start_at(&tm, "10:20");
+}
+
+/// **R, a length at the break's own start with its planned minutes: the kernel reads it as that break's line** (README gap 6050).
+/// So it is refused, not said as a finished break "that nets nothing" while the break moved under it; both ways out are driven.
+#[test]
+fn r_a_length_with_the_breaks_own_start_and_planned_minutes_is_refused() {
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let said = refused_with(&tm, "10:15", &["break", "20m"]);
+    assert!(said.contains("10:15–10:40") && said.contains("re-times it (D147)") && said.contains("a different length"), "{said}");
+    let other = copied(&tm).ok_at(&at("10:15"), &["break", "5m"]);
+    assert!(other.stdout.contains("10:15–10:20 · logged finished"), "{}{}", other.stdout, other.stderr);
+    assert!(copied(&tm).ok_at(&at("10:35"), &["break"]).stdout.contains("re-timed to end at 10:35"));
+}
+
+/// **J: a length inside a closed span over a closed block** (README gap 6050). `10:30 90m` netted `^t4` from 10:30, so
+/// `10:35 5m` nets nothing further and `netted_closed_block` cannot see the block. The `done` at 11:10 has passed 10:40: logged
+/// finished, drawn inside the break. Until this row: `break_start` at 10:35, `tm now` reading `on break since 10:35`.
+#[test]
+fn j_a_length_inside_a_span_over_a_closed_block_is_logged_finished() {
+    let tm = j_day(&[("10:30", "90m")]);
+    reads(&tm, 80);
+    let out = tm.ok_at(&at("10:35"), &["break", "5m"]);
+    assert!(out.stdout.contains("10:35–10:40 · logged finished (it lies inside the break 10:30–12:00"), "{}{}", out.stdout, out.stderr);
+    no_break_start_at(&tm, "10:35");
+    let now = copied(&tm).ok_at(&at("12:30"), &["now"]).stdout;
+    assert!(!now.contains("on break since"), "{now}");
+    reads(&tm, 80);
+}
+
+/// **J, a length past the span and past the log: refused, and the advice is driven** (README gap 6050).
+#[test]
+fn j_a_length_past_the_span_over_a_closed_block_is_refused_and_its_advice_works() {
+    let tm = j_day(&[("10:30", "90m")]);
+    let said = refused_with(&tm, "10:35", &["break", "90m"]);
+    assert!(said.contains("10:30–12:00") && said.contains("12:05") && said.contains("by 12:00"), "{said}");
+    let out = tm.ok_at(&at("10:35"), &["break", "85m"]);
+    assert!(out.stdout.contains("logged finished"), "{}{}", out.stdout, out.stderr);
+    no_break_start_at(&tm, "10:35");
+    reads(&tm, 80);
+}
+
+/// **A D129 ending's own start, unlisted: a length is refused, never swallowed** (README gap 6051). `09:42` (D129 to 10:10),
+/// `09:25 30m`: the newer break overlaps it, so `ended_breaks` omits it and P139's guard does not fire. The kernel takes a
+/// `break` line at that stamp as P127's own line and keeps D129's span. Until this row: `break 60m · 09:42–10:42 · logged
+/// finished (… whose block it nets, D148)`, review 85 before and after, the length gone.
+#[test]
+fn a_length_at_an_unlisted_d129_endings_start_is_refused_never_swallowed() {
+    let tm = j_day(&[("09:42", ""), ("09:25", "30m")]);
+    reads(&tm, 85);
+    for len in ["60m", "30m", "5m"] {
+        let said = refused_with(&tm, "09:42", &["break", len]);
+        assert!(said.contains("09:42–10:10") && said.contains("own line") && said.contains("another instant"), "{len}: {said}");
+    }
+    reads(&tm, 85);
+    // The refusal's advice: another instant logs a finished break of its own.
+    let out = tm.ok_at(&at("09:43"), &["break", "5m"]);
+    assert!(out.stdout.contains("09:43–09:48 · logged finished (a later start follows it, D143)"), "{}{}", out.stdout, out.stderr);
+    assert_eq!(tm.last()["t"], at("09:43").as_str());
+    reads(&tm, 85);
+}
+
+/// **The no-length refusal there does not offer the length a line cannot carry** (README gap 6051). Following the old advice
+/// literally logged `09:42–09:47` while the kernel kept 09:42–10:10; re-timing the outer break then drew `09:42 break 28m`.
+#[test]
+fn the_refusal_at_an_unlisted_d129_endings_start_does_not_offer_a_length() {
+    let tm = j_day(&[("09:42", ""), ("09:25", "30m")]);
+    let said = refused(&tm, "09:42");
+    assert!(said.contains("09:25–09:55 (inside it)") && said.contains("09:42–10:10 (its start)"), "{said}");
+    assert!(!said.contains("type a length"), "{said}");
+    assert!(said.contains("`tm undo`"), "{said}");
+    // Inside both, the advice stands, and it is true: a length there logs a finished break of its own.
+    let said = refused(&tm, "09:45");
+    assert!(said.contains("type a length to log a finished break beside it (D143)"), "{said}");
+    let out = tm.ok_at(&at("09:45"), &["break", "5m"]);
+    assert!(out.stdout.contains("09:45–09:50 · logged finished (a later start follows it, D143)"), "{}{}", out.stdout, out.stderr);
+    reads(&tm, 85);
+}
+
+/// **D141's arm keeps the one-instant rule** (README gap 6052). `09:40` and `09:30` both run to 10:10 (D129); 09:45 lies in both.
+/// Until this row the verb said `the break that began at 09:30 ends here` and no minute came back: review 90 before and after,
+/// 09:30–09:45 and 09:45–10:10 drawn. It is refused as the finished arm refuses it, and a length logs a break of its own.
+#[test]
+fn d141_is_refused_at_an_instant_another_break_also_holds() {
+    for setup in [[("09:40", ""), ("09:30", "")], [("09:40", "30m"), ("09:30", "")]] {
+        let tm = j_day(&setup);
+        reads(&tm, 90);
+        let said = refused(&tm, "09:45");
+        assert!(said.contains("meets more than one logged break") && said.contains("09:30–10:10") && said.contains("09:40–10:10"), "{said}");
+        assert!(said.contains("type a length to log a finished break beside it (D143)"), "{said}");
+        reads(&tm, 90);
+        let n = tm.log().len();
+        let out = tm.ok_at(&at("09:45"), &["break", "5m"]);
+        assert!(out.stdout.contains("09:45–09:50 · logged finished (a later start follows it, D143)"), "{}{}", out.stdout, out.stderr);
+        assert_eq!(tm.log().len(), n + 1, "one line, no D141 end beside it");
+        reads(&tm, 90);
+    }
+}
+
+/// **D141 still ends a break alone holding the instant** (README gap 6052).
+#[test]
+fn d141_still_ends_a_break_no_other_span_holds() {
+    let tm = j_day(&[("09:30", "")]);
+    reads(&tm, 90);
+    let out = tm.ok_at(&at("09:45"), &["break"]);
+    assert!(out.stderr.contains("ends here, at 09:45") && !out.stderr.contains("also holds"), "{}{}", out.stdout, out.stderr);
+    reads(&tm, 105);
+}
+
+/// **A D141 end that does give minutes back stands, and the reply says what still holds the instant** (README gap 6052): a shorter
+/// break nested inside (`09:40 5m`), the outer D129 to 10:10, `--now 09:42`: 09:45–10:10 comes back, 09:40–09:45 stays drawn.
+#[test]
+fn d141_that_moves_with_another_span_holding_says_so() {
+    let tm = j_day(&[("09:40", "5m"), ("09:30", "")]);
+    reads(&tm, 90);
+    let out = tm.ok_at(&at("09:42"), &["break"]);
+    assert!(out.stderr.contains("ends here, at 09:42") && out.stderr.contains("the logged break 09:40–09:45 also holds this instant"), "{}{}", out.stdout, out.stderr);
+    reads(&tm, 105);
+}
+
+/// **Under a minute before a break's end: it already ends there** (README gap 6053). A break has seconds on both ends: typing the
+/// displayed end used to say `break 11:30–11:40 re-timed to end at 11:40 · 9m of 20m` and write `actual_min: 9`, a minute lost
+/// under a reply whose old span and new end read the same.
+#[test]
+fn under_a_minute_before_a_breaks_end_it_already_ends_there() {
+    let tm = j_day(&[("11:30:30", ""), ("11:40:45", "")]);
+    let n = tm.log().len();
+    let out = tm.ok_at(&at("11:40"), &["break"]);
+    assert!(out.stdout.contains("break 11:30–11:40 already ends at 11:40"), "{}{}", out.stdout, out.stderr);
+    assert_eq!(tm.log().len(), n, "nothing written");
+
+    let tm = j_day(&[("09:20:30", "10m")]);
+    let n = tm.log().len();
+    let r = review(&tm);
+    let out = tm.ok_at(&at("09:30"), &["break"]);
+    assert!(out.stdout.contains("break 09:20–09:30 already ends at 09:30"), "{}{}", out.stdout, out.stderr);
+    assert_eq!(tm.log().len(), n, "nothing written");
+    assert_eq!(review(&tm), r);
+}
+
+/// **"re-timed" says the end its line gives** (README gap 6053): a line carries whole minutes from the break's start, so
+/// `--now 09:25` in a break begun 09:20:30 gives 09:24:30, and the plan draws 09:24.
+#[test]
+fn the_reply_prints_the_end_the_line_gives() {
+    let tm = j_day(&[("09:20:30", "10m")]);
+    let out = tm.ok_at(&at("09:25"), &["break"]);
+    assert!(out.stdout.contains("re-timed to end at 09:24 (D147) · 4m of 10m"), "{}{}", out.stdout, out.stderr);
+    assert_eq!((review(&tm), cold(&tm).0), (115, 115), "20m to 09:20:30, 35m from 09:24:30, ^t4's 60m");
+}
+
+/// **D141 says the end its line gives, too** (README gap 6053).
+#[test]
+fn the_d141_reply_prints_the_end_the_line_gives() {
+    let tm = j_day(&[("09:30:30", "")]);
+    let out = tm.ok_at(&at("09:45"), &["break"]);
+    assert!(out.stderr.contains("ends here, at 09:44"), "{}{}", out.stdout, out.stderr);
 }
