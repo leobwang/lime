@@ -378,6 +378,25 @@ fn an_instant_with_seconds_reads_the_end_its_line_gives() {
     reads(&tm, 116);
 }
 
+/// **Past the ends of two breaks, inside both widest ends** (`at_finished`'s last arm through the binary; until this repair the
+/// latest begun went out): `09:20 30m` to 09:25, `09:26 30m` to 09:28, then `--now 09:40`: refused, naming each.
+#[test]
+fn past_two_breaks_ends_inside_both_widest_ends_is_refused_naming_both() {
+    let tm = j_day(&[("09:20", "30m"), ("09:25", ""), ("09:26", "30m"), ("09:28", "")]);
+    let said = refused(&tm, "09:40");
+    assert!(said.contains("more than one logged break") && said.contains("09:20–09:25 (past its end") && said.contains("09:26–09:28 (past its end"), "{said}");
+}
+
+/// **A line whose whole minute another break holds** (`at_finished`'s seconds arm through the binary): `09:20 30m` to 09:30
+/// (widest 09:50), `09:35 5m`, then `--now 09:40:30`: no closed span holds the instant, but the line would end the 09:20
+/// break at 09:40, the 09:35 break's end. Refused, naming both.
+#[test]
+fn a_line_whose_whole_minute_another_break_holds_is_refused() {
+    let tm = j_day(&[("09:20", "30m"), ("09:30", ""), ("09:35", "5m")]);
+    let said = refused(&tm, "09:40:30");
+    assert!(said.contains("more than one logged break") && said.contains("09:20–09:30") && said.contains("09:35–09:40"), "{said}");
+}
+
 /// **A length is offered where it logs a finished break, and does it** (Many's advice, driven): nested at 09:32, `3m`, D143
 /// (the 10:10 start follows).
 #[test]

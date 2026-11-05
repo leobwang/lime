@@ -165,8 +165,8 @@ fn f2_at_the_start_of_a_break_that_nests_another_is_refused() {
 }
 
 /// **Adjoining** (`09:20 10m`, `09:30 10m`, then `--now 09:30`): one break's end and the other's start — refused by name.
-/// This is the AtEnd guard's binary row (README gap 5993): with `retime_in_the_way`'s AtEnd branch planted to `None` it
-/// says "already ends" and exits 0.
+/// This is the AtEnd guard's binary row (README gap 5993): with `at_finished`'s several-breaks arm planted to answer the one
+/// that ends here, it says "already ends" and exits 0.
 #[test]
 fn at_one_breaks_end_and_anothers_start_is_refused() {
     let tm = j_day(&[("09:20", "10m"), ("09:30", "10m")]);
@@ -179,8 +179,8 @@ fn at_one_breaks_end_and_anothers_start_is_refused() {
 // W-54 third repair they read off track K's fact, and their rows are `cli_w54r3_h.rs`'s.)
 
 /// **Nested at 09:32** (the critic's d9: inside both the outer and the nested break) — refused by name, naming both. The
-/// Inside guard's binary row once K's fact lists the outer break (README gap 5993): with `retime_in_the_way`'s Inside
-/// branch planted to `None` the outer break is re-timed to 09:32 while the nested one keeps the drawn break to 09:35.
+/// Inside guard's binary row (README gap 5993): with `at_finished`'s several-breaks arm planted to answer the latest begun,
+/// the verb re-times one of the two and the other keeps the drawn break.
 #[test]
 fn inside_a_break_and_the_break_it_nests_is_refused_naming_both() {
     let tm = j_day(&[("09:20", "30m"), ("09:30", "5m")]);

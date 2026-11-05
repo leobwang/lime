@@ -2511,14 +2511,15 @@ fn netted_closed_block(before: &tm_core::log::Replay, held: &tm_core::log::Repla
 }
 
 /// **The RUNNING block a backdated finished break lies inside** — the owner's **D152** (stage 6 W-54 repair track H,
-/// parity **P149**) as **D153** reads "already over" (stage 6 W-54 second repair track H): with a length typed, no later
-/// logged `start` (D143) and no closed block it would net (D149), a break typed at an instant at or after the open
-/// block's own `start` ([`OpenBlock::started`], the kernel's) whose typed end (`end`) the log has ALREADY passed — the
-/// LATEST stamp over the log's surviving lines, at or after `end` ([`Replay::latest_t`], track K's undo-masked maximum, wired at the W-54 second repair's land), never the last line in file order
-/// — is a break already over: the length typed is a fact. Answers the open block's item. `None` with no block open, an
-/// instant before its start, or a typed end no surviving line has reached (a break that may still be running: it
-/// begins as before — the owner's own D152 drive with nothing logged after the block's start, README gap 5892 as D153
-/// narrows it). `--now` is the verb's only clock, so "already over" is what the log witnesses.
+/// parity **P149**) as **D153** and **D154** read "already over": with a length typed, no later logged `start` (D143) and
+/// no closed block it would net (D149), a break typed at an instant at or after the open block's own `start`
+/// ([`OpenBlock::started`], the kernel's) whose typed end (`end`) the log has ALREADY passed — the latest of its TYPED-TIME
+/// lines, at or after `end` ([`Replay::latest_t`], the kernel's `log.latestTyped`: undone lines and undo lines count, and a
+/// `wake`, an `arrive`, an `energy` and a line past D18's fence do not, README gap 6031), never the last line in file order —
+/// is a break already over: the length typed is a fact. Answers the open block's item. `None` with no block open, an instant
+/// before its start, or a typed end no such line has reached (a break that may still be running: it begins as before — the
+/// owner's own D152 drive with nothing logged after the block's start, README gaps 5892 and 5998). `--now` is the verb's
+/// only clock, so "already over" is what the log witnesses.
 ///
 /// [`OpenBlock::started`]: tm_core::log::OpenBlock::started
 /// [`Replay::latest_t`]: tm_core::log::Replay::latest_t
@@ -2534,10 +2535,11 @@ fn inside_running_block(
 /// `tm break [20m] [--where walk]` — starts a break, or ends the running one.
 ///
 /// With no break running and no length typed, an instant at or inside a break the log already holds is read by the
-/// gate below (D141 for a break D129 ended; D147, D150 and the W-54 second repair's one rule for a finished one):
-/// it ends, re-times or re-times out exactly one held break, says that one already ends there, or is refused by name —
-/// never a new break inside a held break's span. A length typed for a break already over is logged finished (D143,
-/// D146, D148, D149, D152 as D153 reads "already over"); otherwise a break begins (D105's `break_start`).
+/// gate below (D141 for a break D129 ended, where the kernel's fact reads the line; D147, D150 and [`at_finished`] for every
+/// held break, over track K's fact): it ends, re-times or re-times out exactly one held break, says that one already ends
+/// there, or is refused by name — never a new break inside a held break's span. A length typed for a break already over is
+/// logged finished (D143, D146, D148, D149, D152 as D153 and D154 read "already over"); otherwise a break begins (D105's
+/// `break_start`), inside a held break too when nothing would end it (README gap 6044).
 pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError> {
     let mut ctx = Ctx::load(g, true)?;
     // **The arguments are read in both arms** (the owner's D20, gap 138). The
@@ -2666,21 +2668,21 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     // break, as P139 refuses at a D129-ended break's start). A LENGTH typed at or inside a finished break keeps
     // D143: a new finished break (README gap 5849). Outside every held break, a break begins as before (below).
     //
-    // **D150** (stage 6 W-54 track H, parity **P148**): past a finished break's CURRENT end but at or before the widest
-    // end the log has held for it (an earlier re-time shortened it), the instant re-times it OUT — the same one line,
-    // `actual_min` the typed instant less its start — after the at-start refusal and before a break begins
-    // ([`AtFinished::Out`], read off track K's fact, `EndedBreak::widest`).
+    // **D150** (stage 6 W-54 track H, parity **P148**): past a finished break's CURRENT end but at or before the end its own
+    // lines gave it (D151; an earlier re-time shortened it), the instant re-times it OUT — the same one line, `actual_min` the
+    // typed instant less its start ([`AtFinished::Out`]).
     //
     // **One instant, at most one held break — the gate's rule** (stage 6 W-54 second repair track H, the W-54 repair's
-    // verifiers' D-1 to D-3; the campaign's call, revisable by the owner). The verb reads every held break's span
-    // ([`held_spans`]: the fact's entries exact, each other record at its start) and decides per typed instant:
-    // inside exactly one break the fact lists, or at its end, D147 as before (re-time / "already ends"); past a listed
-    // break's current end inside its widest span, D150's Out, refused if it would swallow another logged break; at the
-    // start, end or inside of MORE than one held break (a twin pair is one), refused by name, naming them — never a
-    // "re-timed" that changes nothing ([`retime_in_the_way`]); at the start of every break holding it, refused (D147);
-    // and never a new break where any held break's closed span holds the instant ([`AtFinished::Held`]) — the loss
-    // gap 5810 named, which a break another overlaps reached until this repair (the fact omitted it, D-1). Outside
-    // every held break and every listed one's widest span a break begins as before. Nothing written on a refusal.
+    // verifiers' D-1 to D-3; the campaign's call, revisable by the owner; read since the W-54 third repair off track K's fact,
+    // [`Replay::held_breaks`], one entry per held break by its own span, [`at_finished`]). Inside exactly one held break at an
+    // instant its range reads, D147; past its end inside `out_to`, D150, over any break between; at its own end with no other
+    // break there, "already ends", nothing written, whether or not a line could be read; at its start, inside it at an instant
+    // the range does not read, past its end inside its widest end with no `out_to`, or meeting more than one break, refused by
+    // name, each break by its own span, nothing written; outside every closed span and widest end a break begins as before.
+    // A line that would draw the day as it is (a twin the fact merges, README gap 6045) is refused too ([`a_line_moves`]), so
+    // "re-timed" means moved. No log line is read here (§5.3).
+    //
+    // [`Replay::held_breaks`]: tm_core::log::Replay::held_breaks
     let retimed = if ended.is_none() && superseded.is_none() && asked.is_none() {
         let held = ctx.replay.held_breaks.clone();
         let segments: Vec<_> = ctx.replay.days.values().flat_map(|d| d.segments.iter()).cloned().collect();
