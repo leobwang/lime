@@ -106596,3 +106596,25 @@ log, or D130 skipping a block started after the week's close; the owner's call.
 2. Common.md's F5: refused as ambiguous, not re-timed (gap 5995).
 3. D-6 (d)'s "a plant of the Inside or AtEnd branch must fail a binary row after the land": AtEnd fails one now; Inside can
    fail none on 263010a's kernel and must be checked at the land (§4).
+
+### 7. Acceptance
+
+On `d228ca5` (this block's tree but for this section), every command capped at 40 GB (8 GB for the drives); Lean
+unchanged by this track.
+
+* `kernel/check.sh`: **17/17 `ok`** — axiom audit 7,154 theorems, FFI target 97, corpus 29/37 files and 4/5 whole plans,
+  stage goals 1, citations 70,559 (66,611 resolved), 969 new or changed definitions rostered and 0 owed, parity P1-P149
+  (next free **P150**), check 12 1,704 reachable and 1,095 exempt, 97 modules replayed.  After this section: checks 8 and
+  10 re-run alone, both `ok`.
+* `cargo test --workspace --no-fail-fast`, **three runs** over 192 result lines:
+
+  | run | load | passed | failed | ignored |
+  |---|---|---|---|---|
+  | 1 | 2.5 | 3,221 | 0 | 64 |
+  | 2 | 5.9 | 3,220 | 1 | 64 |
+  | 3 | 3.0 | 3,220 | 1 | 64 |
+
+  The one failure in runs 2 and 3 is gap 5541's row (`a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`),
+  which fails on the base too.  No `.proptest-regressions` file moved.  The 64 ignored are the land's 54 and this track's
+  10 (§1, §2).
+* `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**, 0 failed, over 5 result lines.
