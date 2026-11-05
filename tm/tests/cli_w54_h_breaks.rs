@@ -255,30 +255,40 @@ fn a_break_retimed_out_and_back_reads_its_last_end_p148() {
 /// 20m` (both D143), then `tm break --now 09:25`: since W-54 track K the fact lists only breaks a re-time line will
 /// re-time, the 09:20 break another overlaps is absent, and the instant is inside its drawn 09:20–09:40 — refused,
 /// nothing written. On the W-53 repair's kernel it said "re-timed" while the kernel added a zero-minute break.
+///
+/// *Restated at the W-54 second repair track H* (the verifiers' D-2, README gaps 5990 and 5991): 09:25 lies in the
+/// 09:20 break alone — its own drawn piece, 09:20–09:30, which no other break covers — so the re-time goes and the
+/// drawn union moves (`95`, `[5, 20]`). Track K's narrowed fact lists the 09:20 break; the land un-ignores this. On
+/// 263010a's kernel the fact omits it and the verb refuses by name, nothing written.
 #[test]
-fn inside_an_overlapped_break_the_verb_refuses_by_name() {
+#[ignore = "W-54 second repair: K's fact (own drawn piece)"]
+fn inside_an_overlapped_break_alone_the_verb_retimes_it() {
     let tm = j_tree();
     tm.ok_at(&at("09:20"), &["break", "20m"]);
     tm.ok_at(&at("09:30"), &["break", "20m"]);
-    let log = tm.read(".tm/log.jsonl");
-    let out = tm.run_at(&at("09:25"), &["break"]);
-    assert_ne!(out.code, 0, "{}", out.stdout);
-    assert!(out.stderr.contains("drawn 09:20–09:40") && out.stderr.contains("overlaps"), "{}", out.stderr);
-    assert_eq!(tm.read(".tm/log.jsonl"), log, "nothing written");
     assert_eq!(review(&tm), (90, vec![20, 10]));
+    let out = tm.ok_at(&at("09:25"), &["break"]);
+    assert!(out.stdout.contains("break 09:20–09:40 re-timed to end at 09:25 (D147)"), "{}{}", out.stdout, out.stderr);
+    let (block, mut b) = review(&tm);
+    b.sort_unstable();
+    assert_eq!((block, b), (95, vec![5, 20]));
 }
 
 /// **Nested: likewise** — `09:20 30m`, `09:30 5m`, then `tm break --now 09:45` inside the outer break's drawn span.
+///
+/// *Restated at the W-54 second repair track H* (D-2, the verifiers' C2 one instant on): 09:45 lies in the outer break
+/// alone, so it is re-timed to 09:45 (`95`; the nested break drawn nowhere). Ignored for track K's fact, as above.
 #[test]
-fn inside_a_break_another_nests_in_the_verb_refuses_by_name() {
+#[ignore = "W-54 second repair: K's fact (own drawn piece)"]
+fn inside_a_break_past_the_one_it_nests_the_verb_retimes_it() {
     let tm = j_tree();
     tm.ok_at(&at("09:20"), &["break", "30m"]);
     tm.ok_at(&at("09:30"), &["break", "5m"]);
-    let log = tm.read(".tm/log.jsonl");
-    let out = tm.run_at(&at("09:45"), &["break"]);
-    assert_ne!(out.code, 0, "{}", out.stdout);
-    assert!(out.stderr.contains("drawn 09:20–09:50"), "{}", out.stderr);
-    assert_eq!(tm.read(".tm/log.jsonl"), log, "nothing written");
+    let out = tm.ok_at(&at("09:45"), &["break"]);
+    assert!(out.stdout.contains("break 09:20–09:50 re-timed to end at 09:45 (D147)"), "{}{}", out.stdout, out.stderr);
+    let (block, mut b) = review(&tm);
+    b.sort_unstable();
+    assert_eq!((block, b), (95, vec![0, 25]));
 }
 
 /// The J day with a finished break 09:20–09:30 and a break running since 11:30.

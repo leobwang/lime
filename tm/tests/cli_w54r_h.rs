@@ -313,7 +313,8 @@ fn a_retime_inside_a_nested_break_is_refused() {
     tm.ok_at(&at("09:30"), &["break", "5m"]);
     let r0 = review(&tm);
     let said = refused(&tm, "09:32", &["break"]);
-    assert!(said.contains("a break is drawn 09:20–09:50 here (a break logged at 09:20)") && said.contains("(D147)"), "{said}");
+    // Restated at the W-54 second repair (README gap 5990): the refusal names each held break by its own span.
+    assert!(said.contains("more than one logged break — 09:20–09:50 (inside it), 09:30–09:35 (inside it)") && said.contains("(D147)"), "{said}");
     assert_eq!(review(&tm), r0);
 }
 
@@ -326,7 +327,8 @@ fn a_retime_inside_twins_at_one_stamp_is_refused() {
     tm.ok_at(&at("09:20"), &["break", "10m"]);
     let r0 = review(&tm);
     let said = refused(&tm, "09:25", &["break"]);
-    assert!(said.contains("a break is drawn 09:20–09:40 here") && said.contains("cannot re-time it"), "{said}");
+    // Restated at the W-54 second repair (README gap 5990): both breaks named by their own spans.
+    assert!(said.contains("more than one logged break") && said.contains("09:20–09:40 (inside it)"), "{said}");
     assert_eq!(review(&tm), r0);
 }
 
@@ -340,7 +342,8 @@ fn a_retime_the_shorter_twin_keeps_drawn_is_refused() {
     tm.ok_at(&at("10:30"), &["break", "15m"]);
     let r0 = review(&tm);
     let said = refused(&tm, "10:35", &["break"]);
-    assert!(said.contains("a break is drawn 10:30–10:40 here"), "{said}");
+    // Restated at the W-54 second repair (README gap 5990): the ten-minute break named by its own span.
+    assert!(said.contains("10:30–10:40 (inside it)") && said.contains("(D147)"), "{said}");
     assert_eq!(review(&tm), r0);
 }
 
@@ -353,7 +356,8 @@ fn a_retime_inside_an_overlapping_break_is_refused() {
     tm.ok_at(&at("10:31"), &["break", "10m"]);
     let r0 = review(&tm);
     let said = refused(&tm, "10:33", &["break"]);
-    assert!(said.contains("a break is drawn 10:30–10:40 here (a break logged at 10:30)"), "{said}");
+    // Restated at the W-54 second repair (README gap 5990): the 10:30 break named by its own span.
+    assert!(said.contains("10:30–10:40 (inside it)") && said.contains("(D147)"), "{said}");
     assert_eq!(review(&tm), r0);
 }
 
@@ -366,7 +370,8 @@ fn already_ends_here_inside_another_drawn_break_is_refused() {
     tm.ok_at(&at("09:20"), &["break", "30m"]);
     tm.ok_at(&at("09:25"), &["break", "5m"]);
     let said = refused(&tm, "09:30", &["break"]);
-    assert!(said.contains("a break is drawn 09:20–09:50 here") && !said.contains("already ends"), "{said}");
+    // Restated at the W-54 second repair (README gap 5990): both breaks named, the 09:25 one at its end.
+    assert!(said.contains("09:20–09:50 (inside it), 09:25–09:30 (its end)") && !said.contains("already ends"), "{said}");
 }
 
 /// **D150's Out never swallows another logged break** (the owner's shape under D151): `09:20 30m`, re-timed to 09:30,
@@ -382,7 +387,9 @@ fn a_retime_out_across_another_logged_break_is_refused() {
     assert_eq!(review(&tm), (105, vec![10, 5]));
     let said = refused(&tm, "09:45", &["break"]);
     assert!(
-        said.contains("would re-time the break 09:20–09:30 out across the break drawn 09:35–09:40 (a break logged at 09:35)")
+        // Restated at the W-54 second repair (README gap 5994): the break in the way named by its own span, not by a
+        // drawn piece's start read as a stamp.
+        said.contains("would re-time the break 09:20–09:30 out across the break drawn 09:35–09:40 (logged 09:35–09:40)")
             && said.contains("D150"),
         "{said}"
     );
@@ -402,9 +409,11 @@ fn a_retime_out_across_another_logged_break_is_refused() {
 ///
 /// *Ignored at the W-54 repair land* (README gap 5962): track K's filter (`Replay.otherMeets`, gap 5925) omits from the
 /// finished-break fact every break another held break overlaps at all, so the 09:25 break is absent and the verb refuses
-/// at 09:33 by name with nothing written — though the re-time would move its drawn piece. Owed to the next repair.
+/// at 09:33 by name with nothing written — though the re-time would move its drawn piece. *Still ignored at the W-54
+/// second repair track H*: the host's gate re-times it once the fact lists it (09:33 lies in the 09:25 break alone, its
+/// own drawn piece), and track K's narrowed fact (a break with an own drawn piece) lists it — the land un-ignores this.
 #[test]
-#[ignore = "W-54 repair land, README gap 5962: K's otherMeets omits a head-clipped break from the finished-break fact"]
+#[ignore = "W-54 second repair: K's fact (own drawn piece)"]
 fn a_retime_of_a_head_clipped_break_still_goes() {
     let tm = j_tree();
     tm.ok_at(&at("09:20"), &["break", "10m"]);

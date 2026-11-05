@@ -1274,6 +1274,15 @@ impl Ctx {
             // break the log holds NO line for is still kept: a binary before D105 began it, and the
             // cache is all there is (P73).
             let hhmm = |b: &BreakState| b.started.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+            // **Compared at the cache's resolution** (stage 6 W-54 second repair track H, the verifiers' D-5, README gap
+            // 5997): `.tm/state.json` holds a break's start as `HH:MM` ([`BreakState::started`], `opt_hhmm`), while the
+            // derivation reads the `break_start`'s instant, seconds and all — a break begun on the real clock (16:47:44)
+            // was never equal to its own cache, and every later verb said "a break began at 16:47 … and one began at
+            // 16:47 — the log decides" with nothing to decide. The two agree when they agree to the minute.
+            let at_cache = |b: &BreakState| BreakState {
+                started: b.started.and_then(|t| t.with_second(0)).and_then(|t| t.with_nanosecond(0)),
+                ..b.clone()
+            };
             match (self.state.break_.clone(), derived.break_.clone()) {
                 (None, Some(b)) => {
                     if loud {
@@ -1288,7 +1297,7 @@ impl Ctx {
                         a.paused = true;
                     }
                 }
-                (Some(here), Some(b)) if here != b => {
+                (Some(here), Some(b)) if at_cache(&here) != at_cache(&b) => {
                     if loud {
                         // The place is named too (W-51 repair track H, the W-50 repair critic's fourth finding,
                         // README gap 5561): a cache whose place the kernel's table does not know is logged
