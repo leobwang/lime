@@ -283,7 +283,7 @@ fn the_briefs_shapes_hold_the_invariant() {
 }
 
 /// **Every minute of the morning, against every shape** — no length and five minutes typed last. Run at acceptance
-/// (`--ignored`; about a minute per thread-core): the result is quoted in README gap 6040.
+/// (`--ignored`; about ten minutes on twelve threads): the result is quoted in the README, W-54 third repair track H, §2.
 #[test]
 #[ignore = "exhaustive: run at acceptance"]
 fn every_minute_against_every_shape_holds_the_invariant() {
