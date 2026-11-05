@@ -1485,9 +1485,22 @@ impl Ctx {
         self.replay
             .ended_breaks
             .iter()
-            .filter(|x| x.started < at && at < x.ended)
+            .filter(|x| x.started < at && at < x.ended && self.a_line_ends(x))
             .max_by_key(|x| x.started)
             .cloned()
+    }
+
+    /// **Whether a `break` line at this ending's stamp is read as its end, today** — the kernel's one-fact-per-held-break
+    /// ([`Replay::held_breaks`], `Replay.heldFacts`): [`Replay::ended_breaks`] is `Replay.endable`, which does not read
+    /// `Replay.frozen`, and a break held after this one that let go of a stretch meeting it has the line read as a break
+    /// of its own (W-54 third repair, README gap 6041). `true` when the fact holds no entry for it, which leaves
+    /// `endable` deciding as it did.
+    pub(crate) fn a_line_ends(&self, x: &EndedBreak) -> bool {
+        self.replay
+            .held_breaks
+            .iter()
+            .find(|h| h.started == x.started && h.ended == x.ended && h.planned_min == x.planned_min)
+            .map_or(true, |h| h.retime_from.is_some())
     }
 
     /// **The logged break D129 ended whose own start is `at`** (stage 6 W-52 repair track R, the campaign's

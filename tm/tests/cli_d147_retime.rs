@@ -120,7 +120,7 @@ fn a_no_length_break_at_a_finished_breaks_start_is_refused_p145() {
     let log = tm.read(".tm/log.jsonl");
     let out = tm.run_at(&at("09:20"), &["break"]);
     assert_ne!(out.code, 0, "{}", out.stdout);
-    assert!(out.stderr.contains("logged finished 09:20–09:30") && out.stderr.contains("(D147)"), "{}", out.stderr);
+    assert!(out.stderr.contains("a break is logged 09:20–09:30") && out.stderr.contains("(D147)"), "{}", out.stderr);
     assert_eq!(tm.read(".tm/log.jsonl"), log, "nothing written");
 }
 

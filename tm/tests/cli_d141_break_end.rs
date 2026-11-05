@@ -180,19 +180,25 @@ fn a_plain_break_end_carries_no_superseded_end() {
     assert!(ended.get("superseded_end").is_none(), "{ended}");
 }
 
-/// **At or after D129's end, the verb keeps its behaviour before D141.** Typed at 10:10 — the `start` that ended the
-/// break — or at 10:20, the instant lies outside the break, so `tm break` begins a break as it always has: a
-/// `break_start`, and no `break` line.
+/// **After D129's end the verb keeps its behaviour before D141; at it, the break already ends.** Typed at 10:20 the instant
+/// lies outside the break, so `tm break` begins a break as it always has: a `break_start`, and no `break` line. Typed at 10:10,
+/// the `start` that ended it: the break's own end, which no other break holds, so "already ends" and nothing written (restated
+/// at the W-54 third repair track H, README gap 6047: this row began a second break there, which the invariant's fourth clause
+/// forbids and K's fact now names, for `held_breaks` holds D129's endings).
 #[test]
-fn a_break_typed_at_or_after_the_end_d129_gave_begins_a_break() {
-    for hm in ["10:10", "10:20"] {
-        let tm = j_tree_with_the_late_break();
-        let out = tm.ok_at(&at(hm), &["break"]);
-        assert!(!out.stderr.contains("(D141)"), "{hm}: {}", out.stderr);
-        let b = breaks(&tm);
-        assert_eq!(evs(&b), ["break_start", "break_start"], "{hm}: {b:?}");
-        assert_eq!(b[1]["t"], format!("{TUE}T{hm}:00-05:00"), "{hm}: {b:?}");
-    }
+fn a_break_typed_after_the_end_d129_gave_begins_a_break_and_at_it_already_ends() {
+    let tm = j_tree_with_the_late_break();
+    let out = tm.ok_at(&at("10:20"), &["break"]);
+    assert!(!out.stderr.contains("(D141)"), "{}", out.stderr);
+    let b = breaks(&tm);
+    assert_eq!(evs(&b), ["break_start", "break_start"], "{b:?}");
+    assert_eq!(b[1]["t"], format!("{TUE}T10:20:00-05:00"), "{b:?}");
+
+    let tm = j_tree_with_the_late_break();
+    let log0 = tm.read(".tm/log.jsonl");
+    let out = tm.ok_at(&at("10:10"), &["break"]);
+    assert_eq!(out.stdout.trim(), "break 09:30–10:10 already ends at 10:10 — nothing written (D147)", "{}", out.stderr);
+    assert_eq!(tm.read(".tm/log.jsonl"), log0, "nothing logged");
 }
 
 // `a_break_typed_at_the_breaks_own_start_begins_a_break` pinned the behaviour before stage 6 W-52 repair track R:

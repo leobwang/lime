@@ -147,7 +147,7 @@ fn a_nested_finished_break_is_not_re_timed() {
     let day = review(&tm, "12:30");
     let out = tm.run_at(&at("09:32"), &["break"]);
     assert!(!out.stdout.contains("re-timed"), "{}", out.stdout);
-    assert!(out.stderr.contains("overlaps"), "{}", out.stderr);
+    assert!(out.stderr.contains("more than one logged break"), "{}", out.stderr);
     assert_eq!(tm.log().len(), before, "nothing written");
     assert_eq!(review(&tm, "12:30"), day);
 }
