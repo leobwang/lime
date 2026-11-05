@@ -1846,3 +1846,15 @@ with_minute
 1 Replay.arm_brk_of_endable_as_w53r_stated_it_is_refuted
 1 Replay.the_finished_breaks_are_the_ones_a_line_re_times
 3 a_break_line_ends_the_running_break_whatever_its_stamp
+# W-54 second repair track K (README gap 5970): the finished-break fact's filter `Replay.otherMeets` is replaced by
+# `Replay.ownDrawn`, and three theorems over it by restated ones under new names — the converse as
+# Replay.an_omitted_finished_break_draws_no_piece_of_its_own, the filter's comparison with `newerMeets` as
+# Replay.givesUp_of_ownDrawn, and the witness as Replay.a_finished_break_whose_drawn_piece_another_meets_is_omitted (its
+# old statement refuted by name); every counted citation is an append-only README block or a Negative.lean cheat banner
+# (CHEAT 815, whose block is never edited), and one is track H's `cli_w54r_h.rs` row of gap 5962, which the land restates.
+2 Replay.a_finished_break_another_overlaps_is_omitted
+1 Replay.an_omitted_finished_break_is_overlapped
+1 Replay.newerMeets_of_otherMeets
+4 Replay.otherMeets
+1 an_omitted_finished_break_is_overlapped
+2 otherMeets

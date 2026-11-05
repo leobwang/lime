@@ -1573,8 +1573,8 @@ impl ViewRow {
 /// fields [`PortedFacts`] names). The owner's D14 keeps every one: the kernel
 /// ports them, so nothing here may drop or stop deriving them before it does.
 ///
-/// `PartialEq` compares the facts and ignores the **four** derived fields
-/// (`rows`, `line_count`, `entry_count`, `done_date_totals`), as serialisation
+/// `PartialEq` compares the facts and ignores the **five** derived fields
+/// (`rows`, `line_count`, `entry_count`, `done_date_totals`, and `latest_t`, which `seams` decides), as serialisation
 /// does: two logs with the same survivors replay to equal facts whatever lines
 /// they were read from, and `replay(raw) == replay(masked)` holds although one
 /// entry list is twelve entries shorter than the other — which is exactly what
@@ -1649,8 +1649,13 @@ pub struct Replay {
     /// log line that holds it ([`EndedBreak::key`]). D147's gate reads this. Newest first, as the kernel holds
     /// them; an empty list is not written. **Since W-54 track K** (README gap 5874) only the breaks a `break`
     /// line stamped at their start with their planned minutes re-times (`Replay.a_finished_break_is_re_timed_by_its_line`):
-    /// none a break held after it overlaps, none at whose stamp a D129 ending begins, and nothing while a break
-    /// runs; each with the widest end the log held for it ([`EndedBreak::widest`], the owner's D150).
+    /// none at whose stamp a D129 ending begins, and nothing while a break runs; each with the widest end the log held
+    /// for it ([`EndedBreak::widest`], the owner's D150). **Since W-54 second repair track K** (README gap 5970;
+    /// `Replay.ownDrawn`) a break is listed when the piece it is drawn as (D142's union: from where the breaks begun
+    /// before it end, to its own end) is not empty and no other held break meets it — whatever its age, so a
+    /// head-clipped break whose tail is its own is listed; a line at its stamp re-times it when it ends in that piece,
+    /// at its end or past it (`Replay.givesUp`: it gives up nothing another break covers). W-54 omitted a break a
+    /// newer one overlapped, and W-54 repair track K every break another overlapped at all (README gap 5925).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub finished_breaks: Vec<EndedBreak>,
     /// Number of unknown events seen.
@@ -1672,6 +1677,15 @@ pub struct Replay {
     /// whatever the range (`tm idle`'s default length reads it). Not the
     /// latest instant: a hand-appended or retro line can be dated earlier.
     pub last_effective_t: Option<DateTime<FixedOffset>>,
+    /// **The latest stamp of a surviving entry, by instant** (stage 6 W-54 second repair track K, the owner's D153,
+    /// README gap 5972): the greatest [`DaySeam::last_t`] of the days this replay holds seams for — each the latest
+    /// stamp over that day's survivors, undone lines and undos excluded (`Replay.lastTOn`,
+    /// `a_days_last_t_is_the_latest_stamp_of_its_survivors`) — so a line stamped later than every other is counted
+    /// wherever it sits in the file, and a cancelled one never. [`Replay::last_effective_t`] is the last survivor in
+    /// file order and can be earlier. Derived from [`Replay::seams`] by the decoder, so it is not serialised (the
+    /// fork's `Replay` has no such key) and not compared: equal seams make it equal.
+    #[serde(skip)]
+    pub latest_t: Option<DateTime<FixedOffset>>,
     /// Every entry in file order with its line, day, mask bit and display
     /// text ([`Replay::view`]), whatever the range. Line bookkeeping, not a
     /// fact: not serialised (the kernel's `factsView` omits it too).
@@ -1746,6 +1760,7 @@ impl PartialEq for Replay {
             late_marks,
             seams,
             last_effective_t,
+            latest_t: _,
             entry_count: _,
             done_date_totals: _,
             rows: _,

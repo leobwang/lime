@@ -9326,11 +9326,11 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.BreakFold.stepWith_brks_of_brk_as_w54_stated_it_is_refuted
 #print axioms Tm.BreakFold.stepWith_brks_of_park
 #print axioms Tm.Replay.a_break_line_in_the_running_breaks_minute_ends_it
-#print axioms Tm.Replay.a_finished_break_another_overlaps_is_omitted
+#print axioms Tm.Replay.a_finished_break_whose_drawn_piece_another_meets_is_omitted
 #print axioms Tm.Replay.a_finished_break_inside_the_running_block_nets_it_and_leaves_it_running
 #print axioms Tm.Replay.a_finished_line_ends_only_its_own_break
 #print axioms Tm.Replay.all_machine
-#print axioms Tm.Replay.an_omitted_finished_break_is_overlapped
+#print axioms Tm.Replay.an_omitted_finished_break_draws_no_piece_of_its_own
 #print axioms Tm.Replay.a_parked_line_is_read_at_its_own_place
 #print axioms Tm.Replay.a_parked_line_leaves_the_running_break_running
 #print axioms Tm.Replay.a_parked_line_reads_as_if_logged_before_the_running_break
@@ -9342,7 +9342,7 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.brkPark_mem
 #print axioms Tm.Replay.lastMach_cases
 #print axioms Tm.Replay.lastMach_eq
-#print axioms Tm.Replay.newerMeets_of_otherMeets
+#print axioms Tm.Replay.givesUp_of_ownDrawn
 #print axioms Tm.Replay.the_finished_breaks_are_the_ones_a_line_re_times_as_w54_stated_it_is_refuted
 #print axioms Tm.Replay.the_widest_end_is_the_breaks_own_lines
 #print axioms Tm.Seal.arm_brk_machine_keeps
@@ -9360,3 +9360,25 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Seal.mi_upd
 #print axioms Tm.Seal.reopen_keeps
 #print axioms Tm.Seal.reopen_mi
+
+/-! APPENDED 2026-11-04, stage 6 W-54 second repair track K (README gaps 5970-5989): the finished-break fact lists a break
+   whose drawn piece is its own (`Replay.ownDrawn`, replacing otherMeets), and a re-time of a finished break is read where
+   it gives up nothing another held break covers (`Replay.givesUp`, `Replay.retimeBlocked`, replacing `newerMeets` for a
+   finished break in `d141Ok`).  Three entries above were renamed in place, one per theorem restated under a new name:
+   `an_omitted_finished_break_draws_no_piece_of_its_own`, `givesUp_of_ownDrawn` and
+   `a_finished_break_whose_drawn_piece_another_meets_is_omitted`. -/
+#print axioms Tm.Replay.retimeBlocked_of_ended
+#print axioms Tm.Replay.retimeBlocked_of_finished
+#print axioms Tm.Replay.a_retime_that_gives_up_another_breaks_stretch_is_not_read
+#print axioms Tm.Replay.ownDrawn_eq_false_iff
+#print axioms Tm.Replay.a_head_clipped_break_is_re_timed_in_its_own_piece
+#print axioms Tm.Replay.a_line_ending_inside_another_breaks_stretch_is_a_break_of_its_own
+#print axioms Tm.Replay.a_retime_of_a_covering_break_off_a_later_ones_head_is_a_break_of_its_own
+#print axioms Tm.Replay.a_retime_of_an_outer_break_past_a_nested_one_is_a_break_of_its_own
+#print axioms Tm.Replay.a_retime_giving_up_nothing_another_break_covers_is_read_over_a_newer_one
+#print axioms Tm.Replay.a_break_re_timed_out_over_a_nested_one_is_read
+#print axioms Tm.Replay.a_retime_over_an_overlapped_break_leaves_the_running_block_net_of_the_union
+#print axioms Tm.Replay.an_identical_line_re_times_a_break_a_newer_one_overlaps
+#print axioms Tm.Replay.a_finished_break_is_re_timed_by_its_line_as_w54_stated_it_is_refuted
+#print axioms Tm.Replay.a_finished_break_another_overlaps_is_omitted_as_w54r_stated_it_is_refuted
+#print axioms Tm.Replay.the_fact_omits_a_break_a_newer_one_overlaps_as_w54r_stated_it_is_refuted

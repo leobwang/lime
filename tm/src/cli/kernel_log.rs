@@ -2475,8 +2475,11 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         unknown: d_u32(v.get("unknown").unwrap_or(&Value::Null), "facts.unknown")?,
         warnings,
         late_marks,
-        seams,
         last_effective_t: d_opt(v.get("lastEffective").unwrap_or(&Value::Null), |x| d_when(x, "lastEffective"))?,
+        // D153 (W-54 second repair track K, README gap 5972): the latest surviving stamp, by instant — the greatest of
+        // the days' own `lastT`, each the latest over that day's survivors (`Replay.lastTOn`).
+        latest_t: seams.values().filter_map(|s| s.last_t).max(),
+        seams,
         rows,
         line_count: d_u64(answer.get("lines").unwrap_or(&Value::Null), "the answer's line count")?,
         // §11.4 step 5: `tm log`'s `total` is the log's all-time entry count,
