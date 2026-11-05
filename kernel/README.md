@@ -107360,3 +107360,19 @@ of the rule, an instant only one span holds moves that break, is false on one sh
 6. Item 1 names retime_in_the_way's plants; it is deleted, its arms folded into `at_finished`, and the plants are stated over what replaced them (§1).
 7. Not on the brief's list and needed: D141's arm reads the fact (gap 6041).
 
+### 7. Acceptance
+
+Every command run in this worktree, capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`).  The workspace runs began on `eef0aae`; `e7cb23c` then changed this block, `citations-allow.txt` and two test doc comments, and no code.
+
+* **`check.sh`**, on `e7cb23c`: every line `ok`, 36.2 s — axiom audit 7,210 theorems; FFI 97 tests (check 5); corpus 29/37 files and 4/5 whole plans; stage goals 1; citations 71,120, 67,121 resolved; check 9 997 new or changed, 997 rostered, 0 owed; parity P1-P149, next free P150; 97 modules replayed.  Its first run, on `eef0aae`, failed check 8 on 25 names this track retired, which is what `e7cb23c` answers.  Checks 8 and 10 re-run alone after this section.
+* **`cargo test --workspace --no-fail-fast`, three runs** (D46) over 196 result lines:
+
+  | run | load at its end | passed | failed | ignored |
+  |---|---|---|---|---|
+  | 1 | 5.5 | 3,331 | 1 | 54 |
+  | 2 | 8.8 | 3,332 | 0 | 54 |
+  | 3 | 9.5 | 3,331 | 1 | 54 |
+
+  The one failure in runs 1 and 3 is gap 5541's latency row (`a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`, `tm drop` past its 1 s bound).  **Not counted as clean, and measured as not this track's:** alone it failed 2 of 3 here at load 5.6-7.4.  At load 3.5-4 it passed 2 of 4 on K's tip.  Alternating K's tip and this one five times each at load 7.5-10.9, both failed all five, `tm drop ^z15` past 1 s each time.  Another workflow's Lean builds are the load.  No `.proptest-regressions` file moved beyond this track's new one, committed with its fix.  Ignored rises from 53 to 54 by the exhaustive row, which ran on its own (§2).
+* **FFI** (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed**, 0 failed, over 5 result lines.
+* **Warnings**: one, gap 6049's.
