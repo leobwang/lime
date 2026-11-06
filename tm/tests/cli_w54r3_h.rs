@@ -624,7 +624,7 @@ fn r_a_length_past_the_held_span_is_refused_and_its_advice_works() {
 fn r_a_length_with_the_breaks_own_start_and_planned_minutes_is_refused() {
     let tm = r_day(&[("10:15", ""), ("10:40", "")]);
     let said = refused_with(&tm, "10:15", &["break", "20m"]);
-    assert!(said.contains("10:15–10:40") && said.contains("re-times it (D147)") && said.contains("a different length"), "{said}");
+    assert!(said.contains("10:15–10:40") && said.contains("typed from 10:16 to 10:39 re-times it (D147)") && said.contains("at most 25m, not 20m"), "{said}");
     let other = copied(&tm).ok_at(&at("10:15"), &["break", "5m"]);
     assert!(other.stdout.contains("10:15–10:20 · logged finished"), "{}{}", other.stdout, other.stderr);
     assert!(copied(&tm).ok_at(&at("10:35"), &["break"]).stdout.contains("re-timed to end at 10:35"));
@@ -743,7 +743,7 @@ fn under_a_minute_past_a_d129_breaks_start_is_refused_as_at_its_start() {
     let tm = j_day(&[("09:20", "")]);
     reads(&tm, 80);
     let exactly = refused(&tm, "09:20");
-    assert!(exactly.contains("(D129)") && exactly.contains("give a later instant, before 10:10"), "{exactly}");
+    assert!(exactly.contains("(D129)") && exactly.contains("give an instant from 09:21 to 10:09"), "{exactly}");
     assert_eq!(refused(&tm, "09:20:30"), exactly);
     assert_eq!(refused_with(&tm, "09:20:30", &["break", "5m"]), exactly);
     reads(&tm, 80);
@@ -763,7 +763,7 @@ fn a_break_too_short_for_a_line_is_given_advice_that_works() {
     let said = refused(&tm, "09:20");
     assert!(!said.contains("give an instant inside it") && said.contains("no instant inside it"), "{said}");
     assert!(said.contains("type a length") && said.contains("`tm undo`"), "{said}");
-    assert_eq!(refused(&tm, "09:20:30"), said);
+    assert!(refused(&tm, "09:20:30").contains("no instant inside it"));
     let length = copied(&tm);
     let out = length.ok_at(&at("09:20"), &["break", "5m"]);
     assert!(out.stdout.contains("09:20–09:25 · logged finished"), "{}{}", out.stdout, out.stderr);
@@ -785,7 +785,7 @@ fn a_break_too_short_for_a_line_is_given_advice_that_works() {
     // Two minutes hold one, and the advice stands.
     let tm = j_day(&[("09:20", "2m")]);
     let said = refused(&tm, "09:20");
-    assert!(said.contains("give an instant inside it"), "{said}");
+    assert!(said.contains("give an instant at 09:21"), "{said}");
     assert!(tm.ok_at(&at("09:21"), &["break"]).stdout.contains("re-timed to end at 09:21 (D147) · 1m of 2m"));
     reads(&tm, 119);
 
@@ -1080,4 +1080,177 @@ fn the_clock_minute_of_the_end_already_ends_in_both_arms() {
         assert!(s.contains("already ends at 10:10 — nothing written"), "{len:?}: {s}");
         assert_eq!(tm.log().len(), n, "nothing written");
     }
+}
+
+// ---- The last host round: advice that works when followed (README gap 6065). Each sentence's advice is driven in its row. ----
+
+/// A finished line typed on a copy, its reply.
+fn logs_finished(tm: &Tm, hm: &str, len: &str) -> String {
+    let s = said(&copied(tm), hm, &["break", len]);
+    assert!(s.contains("logged finished"), "{hm} {len}: {s}");
+    s
+}
+
+/// **No whole minute fits: the refusal says so, to the second, and names the instant that works.** `10:39:30` is thirty seconds from
+/// 10:40. Until this row: "ends at 10:40, which neither that break nor the log has reached … type a length that ends by 10:40", naming
+/// one instant as both, with no length that fits. `0m` is never offered.
+#[test]
+fn a_past_refusal_where_no_length_fits_offers_none() {
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    for (len, end) in [("5m", "10:44:30"), ("1m", "10:40:30")] {
+        let s = refused_with(&tm, "10:39:30", &["break", len]);
+        assert!(s.contains("at 10:39:30 lies inside the logged break 10:15–10:40") && s.contains(&format!("ends at {end},")), "{s}");
+        assert!(s.contains("no whole-minute length") && s.contains("a length typed at 10:40 lies outside every logged break"), "{s}");
+        assert!(!s.contains("type a length") && !s.contains("0m"), "{s}");
+    }
+    let followed = copied(&tm);
+    let t = at("10:40");
+    followed.ok_at(&t, &["break", "5m"]);
+    let last = followed.last();
+    assert_eq!((last["ev"].as_str(), last["t"].as_str()), (Some("break_start"), Some(t.as_str())), "outside every span: {last}");
+}
+
+/// **The length a refusal names is one that fits**, with seconds on the instant: `10:20:30` has nineteen whole minutes to 10:40.
+#[test]
+fn a_past_refusal_names_the_longest_length_that_fits() {
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let s = refused_with(&tm, "10:20:30", &["break", "20m"]);
+    assert!(s.contains("ends at 10:40:30,") && s.contains("ends by 10:40, at most 19m"), "{s}");
+    logs_finished(&tm, "10:20:30", "19m");
+}
+
+/// **Not the length the guard refuses.** At a held break's own start, the length ending exactly at the limit is that break's own line.
+/// Until this row: "ends by 11:10", and `50m` refused "from this very instant".
+#[test]
+fn a_past_refusal_at_a_breaks_own_start_excludes_its_planned_minutes() {
+    let tm = j_day(&[("10:20", "50m")]);
+    let s = refused_with(&tm, "10:20", &["break", "60m"]);
+    assert!(s.contains("ends by 11:10, at most 49m"), "{s}");
+    logs_finished(&tm, "10:20", "49m");
+    let refused_again = refused_with(&tm, "10:20", &["break", "50m"]);
+    assert!(refused_again.contains("from this very instant"), "{refused_again}");
+}
+
+/// **`tm undo` is not offered where it brings the loss the refusal names, and is plain where it is offered.** Past: following "`tm undo`"
+/// used to set the 10:15 break running again (`paused · on break since 10:15`) with a reply saying only that it undid a break. Many: the
+/// sentence now says so, and two undos do it.
+#[test]
+fn the_undo_half_is_dropped_or_says_a_break_runs_again() {
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let s = refused_with(&tm, "10:20", &["break", "30m"]);
+    assert!(!s.contains("tm undo"), "{s}");
+    let tm = r_day(&[("10:15", ""), ("10:40", ""), ("10:20", "5m")]);
+    let s = refused(&tm, "10:22");
+    assert!(s.contains("`tm undo` takes the last line back, one line at a time (undoing the line that ended a running break sets it running again)"), "{s}");
+    tm.ok_at(&at("10:23"), &["undo"]);
+    tm.ok_at(&at("10:23"), &["undo"]);
+    let now = tm.ok_at(&at("10:24"), &["now"]).stdout;
+    assert!(now.contains("on break since 10:15"), "{now}");
+}
+
+/// **The own-stamp refusal names planned minutes as planned, and the instants and lengths that work** (11:30–11:40 is ten minutes, and
+/// the 20m is its planned default). Until this row "`tm break` at the instant it should end re-times it": at 11:50 that began a second
+/// running break, and every instant of a nested break was refused.
+#[test]
+fn the_own_stamp_refusal_names_what_works() {
+    let tm = j_day(&[("11:30", ""), ("11:40", "")]);
+    tm.ok_at(&at("12:00"), &["plan"]);
+    let s = refused_with(&tm, "11:30", &["break", "20m"]);
+    assert!(s.contains("a break planned 20m is logged 11:30–11:40"), "{s}");
+    assert!(s.contains("typed from 11:31 to 11:39 re-times it (D147)") && s.contains("ends by 12:00, at most 30m, not 20m"), "{s}");
+    for hm in ["11:31", "11:39"] {
+        assert!(said(&copied(&tm), hm, &["break"]).contains("re-timed to end at"), "{hm}");
+    }
+    logs_finished(&tm, "11:30", "30m");
+    logs_finished(&tm, "11:30", "19m");
+    // Nested, so no instant of the inner break is its alone: no re-time offered, and the length is driven.
+    let tm = r_day(&[("10:15", ""), ("10:40", ""), ("10:20", "5m")]);
+    let s = refused_with(&tm, "10:20", &["break", "5m"]);
+    assert!(!s.contains("re-times it") && s.contains("ends by 10:40, at most 20m, not 5m"), "{s}");
+    logs_finished(&tm, "10:20", "20m");
+    // Two at the stamp: neither's planned minutes, and no instant that names one.
+    let tm = j_day(&[("11:09", "20m")]);
+    tm.ok_at(&at("11:09"), &["break", "19m", "--where", "bed"]);
+    let s = refused_with(&tm, "11:09", &["break", "20m"]);
+    assert!(!s.contains("re-times it") && s.contains("ends by 11:29, at most 18m"), "{s}");
+    logs_finished(&tm, "11:09", "18m");
+}
+
+/// **A break running: `tm break` ends that one, so no re-time is offered** (until this row it was, and the keystroke ended the running
+/// break). The stopped day: `11:10 20m` runs, `11:00 40m` is logged beside it.
+#[test]
+fn the_own_stamp_refusal_offers_no_re_time_while_a_break_runs() {
+    let tm = fresh();
+    tm.ok_at(&at("09:00"), &["start", "^t1"]);
+    tm.ok_at(&at("10:00"), &["done"]);
+    tm.ok_at(&at("10:10"), &["start", "^t4"]);
+    tm.ok_at(&at("11:10"), &["stop"]);
+    tm.ok_at(&at("11:10"), &["break", "20m"]);
+    tm.ok_at(&at("11:00"), &["break", "40m"]);
+    let s = refused_with(&tm, "11:00", &["break", "40m"]);
+    assert!(s.contains("a break planned 40m is logged 11:00–11:40") && !s.contains("re-times it"), "{s}");
+    // With another place the kernel, a break running, reads the line as a break of its own: logged, and the first keeps its span.
+    let s = said(&tm, "11:00", &["break", "40m", "--where", "bed"]);
+    assert!(s.contains("11:00–11:40 · logged finished (it lies inside the break 11:00–11:40 the log holds)"), "{s}");
+    let (rows, _) = break_records(&tm);
+    assert!(rows.contains(&(40, 40, None)) && rows.contains(&(40, 0, Some("bed".to_string()))), "{rows:?}");
+}
+
+/// **A break one minute long, its own length guarded: only `tm undo`, then the first free instant** (until this row each refusal named
+/// the other: "a different length", and "ends by 11:10", whose only length is the guarded one).
+#[test]
+fn where_no_length_and_no_instant_works_neither_is_offered() {
+    let tm = fresh();
+    tm.ok_at(&at("09:00"), &["start", "^t1"]);
+    tm.ok_at(&at("10:00"), &["done"]);
+    tm.ok_at(&at("10:10"), &["start", "^t4"]);
+    tm.ok_at(&at("11:10"), &["stop"]);
+    tm.ok_at(&at("11:09"), &["break", "1m"]);
+    let s = refused_with(&tm, "11:09", &["break", "1m"]);
+    assert!(!s.contains("re-times it") && !s.contains("type a length") && s.contains("`tm undo`"), "{s}");
+    let s = refused_with(&tm, "11:09", &["break", "2m"]);
+    assert!(s.contains("no whole-minute length") && s.contains("a length typed at 11:10 lies outside every logged break"), "{s}");
+    let followed = copied(&tm);
+    followed.ok_at(&at("11:10"), &["break", "2m"]);
+    let tm = j_day(&[("11:09", "1m")]);
+    let s = refused(&tm, "11:09");
+    assert!(!s.contains("type a length") && s.contains("`tm undo`"), "{s}");
+}
+
+/// **The instants a refusal names are the ones that act** (until this row "give a later instant, before 10:10" where 30 of 39 were refused,
+/// "give an instant inside it" where 6 of 24 were, and at 09:40:30 "a later instant" whose next thirty seconds were refused the same way).
+#[test]
+fn the_refusals_name_the_range_of_instants_that_works() {
+    let tm = j_day(&[("09:40", ""), ("09:30", "")]);
+    let s = refused(&tm, "09:30");
+    assert!(s.contains("give an instant from 09:31 to 09:39 to end it there (D141)"), "{s}");
+    assert!(said(&copied(&tm), "09:39", &["break"]).contains("ends here, at 09:39"));
+    assert!(refused(&tm, "09:41").contains("meets more than one logged break"));
+
+    let tm = r_day(&[("10:15", ""), ("10:40", ""), ("10:20", "5m")]);
+    let s = refused(&tm, "10:15");
+    assert!(s.contains("give an instant from 10:16 to 10:19 or from 10:26 to 10:39 to end it there"), "{s}");
+    for hm in ["10:16", "10:19", "10:26", "10:39"] {
+        assert!(said(&copied(&tm), hm, &["break"]).contains("re-timed to end at"), "{hm}");
+    }
+    for hm in ["10:20", "10:22", "10:25"] {
+        assert!(refused(&tm, hm).contains("meets more than one logged break"), "{hm}");
+    }
+
+    let tm = j_day(&[("09:40", "")]);
+    let s = refused(&tm, "09:40:30");
+    assert!(s.contains("give an instant from 09:41 to 10:09 to end it there"), "{s}");
+    assert_eq!(refused(&tm, "09:40:45"), s);
+    assert!(said(&copied(&tm), "09:41", &["break"]).contains("ends here, at 09:41"));
+}
+
+/// **Every instant inside is another break's too: none is offered.** `09:30 30m`, `09:31 29m`: until this row "give an instant inside it",
+/// and each one was refused. A length is offered, and driven.
+#[test]
+fn an_at_start_refusal_offers_no_instant_when_none_exists() {
+    let tm = j_day(&[("09:30", "30m"), ("09:31", "29m")]);
+    let s = refused(&tm, "09:30");
+    assert!(!s.contains("give an instant") && s.contains("every instant inside it meets another logged break"), "{s}");
+    assert!(s.contains("type a length") && s.contains("(D143)"), "{s}");
+    logs_finished(&tm, "09:30", "5m");
 }
