@@ -926,3 +926,27 @@ fn also_holds_is_not_said_at_that_breaks_own_end() {
     let s = said(&tm, "09:47", &["break"]);
     assert!(s.contains("the logged break 09:45–09:50 also holds this instant, and stays"), "{s}");
 }
+
+/// **Under a minute past a D129 ending's start reads only inside its span** (README gap 6061). `10:09:30`, ended at 10:10 by `^t4`'s
+/// `start`, is thirty seconds long. Until this row `10:10`, `10:10:15` and `10:10:15 5m` were each refused as "at its own start",
+/// though the first is its end and the others lie outside it: at its end it already ends, and outside it a break begins.
+#[test]
+fn the_under_a_minute_rule_stops_at_a_short_d129_breaks_end() {
+    let day = || j_day(&[("10:09:30", "")]);
+    let tm = day();
+    let n0 = tm.log().len();
+    let s = said(&tm, "10:10", &["break"]);
+    assert!(s.contains("already ends at 10:10 — nothing written"), "{s}");
+    assert_eq!(tm.log().len(), n0, "nothing written");
+    let tm = day();
+    let t = at("10:10:15");
+    tm.ok_at(&t, &["break"]);
+    let last = tm.last();
+    assert_eq!((last["ev"].as_str(), last["t"].as_str()), (Some("break_start"), Some(t.as_str())), "{last}");
+    let tm = day();
+    let s = said(&tm, "10:10:15", &["break", "5m"]);
+    assert!(s.contains("logged finished"), "{s}");
+    // Inside it, the rule stands.
+    let s = refused_with(&day(), "10:09:50", &["break"]);
+    assert!(s.contains("own start"), "{s}");
+}

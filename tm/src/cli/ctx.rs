@@ -1508,12 +1508,13 @@ impl Ctx {
     /// which D141 forbids, so the verb refuses it by name. Read off the same fact as
     /// [`Ctx::break_a_start_ended_at`]. **Under a minute past its start is at its start** (the W-54 third repair, README gap
     /// 6056; `at_finished`'s rule for a logged break): a line carries whole minutes from the start, so D141's arm would write
-    /// `actual_min: 0` and the break would vanish under a reply saying it ended here.
+    /// `actual_min: 0` and the break would vanish under a reply saying it ended here. Inside its span only (README gap 6061): at a
+    /// break under a minute long an instant past its end lies outside it, where a break begins, and at its end it already ends.
     pub(crate) fn ended_break_starting_at(&self, at: DateTime<FixedOffset>) -> Option<EndedBreak> {
         self.replay
             .ended_breaks
             .iter()
-            .find(|x| x.started <= at && at - x.started < chrono::Duration::minutes(1))
+            .find(|x| x.started <= at && at < x.ended && at - x.started < chrono::Duration::minutes(1))
             .cloned()
     }
 
