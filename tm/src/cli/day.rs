@@ -2552,7 +2552,8 @@ enum LengthInHeld {
     /// (README gap 6044's shape, the owner's call). A break begins, as before.
     Begins,
     /// Its typed end lies at or before the span's end or the log's latest typed-time stamp: a break already over, logged
-    /// finished beside the one that holds it. The break that holds it, with the latest end, and that reach.
+    /// finished beside the one that holds it. The break that holds it, with the latest end, and that reach. A held span's end counts
+    /// even where it lies ahead of the clock, which the fact cannot tell from one behind it (README gap 6067, for the owner's D155).
     Over(HeldBreak, DateTime<FixedOffset>),
     /// Its typed end lies past both, so nothing says it is over; a break begun here would run on from inside the held break, and
     /// the minutes after that break's end would be gone (gap 5810's loss). Refused, with the latest end a length may reach.
