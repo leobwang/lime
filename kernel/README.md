@@ -107440,3 +107440,126 @@ The attackers' round on the binary at `86566a7` (`tm-final`), each finding re-dr
 **Gap 6068 — two refusals by name that stand for now.**  1. *What.*  (a) `09:40`, then `09:40:30 10m`: under a minute past a D129 ending's start, with a length, is refused as at its start, though D146 would end the break and log the length with nothing vanishing.  (b) `11:05 15m`, then `11:06 15m` on the J day: a length running past both the held span and the closing `done`, refused because an earlier break already netted that tail, so `netted_closed_block` answers `None` and D149's arm does not take it.  2. *Why.*  Each is safe: nothing is written, and neither arm is a loss.  (a) keeps one reading of "at its start" for both keystrokes; (b) needs a rule for a length whose overlap with the block is already netted, which is D149's to state.  3. *Cost.*  (a) the length must be typed at 09:41 or later; (b) the length is cut to `at most 14m`, or typed from 11:20.  The advice works when followed, and the rows drive it.  4. *Clears it.*  The owner, if the keystrokes matter; nothing is owed otherwise.
 
 **Acceptance of this round.**  One run each: `cli_w54r3_h` 63, `cli_w54r2_h` 16, `cli_w54r_h` 21, `cli_w54_h_breaks` 21, `cli_d144_now_break` 8, `cli_week_grid` 5, all passing, and the older break rows `cli_d141_break_end`, `cli_w53r_k_d147`, `cli_w52r_break_ends`, `cli_d147_retime`, `cli_d143_finished_break` on item 6's tree.  `cli_break_sweep` at its default 64 cases per proptest: 18 passed, 1 ignored (the exhaustive row, not run), 54 s, no new seed.  `check.sh` every line ok, 43 s.  Beside the rows, a throwaway driver followed each refusal's advice literally on copies, over 3,400 random sequences on the J, R and S days: 1,100 refusals (in the 3,000-sequence batch, 840 of its 963 are the older running-break refusals, which offer no length or instant), and 178 follow-ups of the at-most, any-length, instant and first-free sentences, 0 failed (one hit was the driver's own regex misreading the first-free sentence, re-read by hand).  The workspace's three runs and the exhaustive row are the land's.
+
+<!-- ======================================================================
+     Stage 6 — W-54 third repair land (2026-11-06): track H's tip 853da62, which sits on track K's 5edae1a, over 675953f, as one
+     measured commit (AGENTS §6.5 item 8). Gaps 6070-6083 are this block's. No Lean, no cheat, no parity number, no gate touched.
+     The owner's D155-D158 land with it (AGENTS §4). The tree cannot carry its own measurement: the acceptance as run is in the
+     land commit's message.
+     ====================================================================== -->
+
+## Stage 6 — W-54 third repair land: D155-D158, the kernel defects W-55 owes re-driven by name, three gate holes and one instrument failure
+
+**Composition.** The tracks ran in sequence, so nothing merges: this tree is H's tip plus four AGENTS rows, one `allow` and this block.
+
+**What the owner ruled (AGENTS §4).**
+* **D155**: a `break` line that ends a running `break_start` counts its END as a typed-time witness. Decided, not built: gap 6078.
+* **D156**: D154's two edges stand with their cost. Gap 6031 is that ruling, and its "marking the line is the owner's call" is answered: no.
+* **D157**: D150's re-time out over a logged break stands and names what it covers. Built, gap 6066.
+* **D158**: the order. This land, the rename, the regroup, W-55 (D155 and the defects below), the rename's step 2.
+
+**Gap 6049 closed.** `replay_scoped` is dead in the binary and read by this file's own tests and the `#[path]` suites (`support/replay.rs`, the door, T5), so it carries `#[allow(dead_code)]` with that reason, the way the file's other four do. `cargo build -p tm`: 0 warnings, fresh.
+
+**Row A's fourth keystroke is refused now** (J day: `09:20 30m`, `09:30`, `09:40 15m`, `--now 09:20 30m`): the planned-minutes guard, gap 6062. Nothing is written. The fifth, `--now 09:52`, re-times the 15m break to 09:52, so the day reads 98 on review, plan and cold (95 before it), where 213e827 read review 98 against plan 88. The refused shape reaches the kernel only as a line from elsewhere, where H's row still drives 85, then 88.
+
+**What this land makes false, superseded here by name; the older blocks are not rewritten.**
+* H's §10, "D155 and D157, whose rows land later": they have landed.
+* Gaps 6028 and 6041 say the land clears them. It cannot: this land has no Lean. Both are W-55's (gaps 6076, 6077).
+* Gap 6044's "the owner's call": D155 answers it, and its one exception goes when D155 is built (gap 6078). Gap 6055's "the owner, or the kernel": D155, the kernel.
+* AGENTS §10.2: read for rows on breaks, witnesses or the host's gate. None stands on anything this land moved, so no row is added.
+
+Every drive below is on the land binary (J, R, S, W, X days of `scratchpad/w54r3/att/invariant/d.sh`, `TMB` set to it; the transcripts are `scratchpad/w54r3l/dr/k1.out` and `k2.out`). Warm and cold agree on every one unless it says otherwise.
+
+### The kernel defects W-55 owes
+
+**Gap 6070 — D129 does not fire on a block another break already covers whole (D129, D143).**
+1. *What.* J day, `10:10 60m` (D149, the whole of `^t4`'s block), then `09:20`: the reply is `break 20m`, with no D129 notice, and a `break_start` is written that nothing ends. Review: block 20, breaks 60. Plan: `09:20–12:30` and `10:10–11:10`, breaks 250, `tm check` "no problems". In the other order (`09:20`, `10:10 60m`) D129 ends the first break at 10:10: review and plan both block 20, breaks 110. One log's two orders read two ways.
+2. *The two shapes filed beside it no longer reproduce through the verb, and the kernel's half does.* `09:19 120m` twice: the second is refused (gap 6062), and `09:19 121m` is refused too. `09:15 120m`, `09:40 15m --where walk`: logs finished, inside the held span, by `length_in_held`. A hand-written `break_start` at 09:19 after `09:19 120m` still draws `11:19–12:30`, plan breaks 191 against review 120.
+3. *Why not fixed.* A kernel change, and this land has no Lean. The cause is not traced past "the first `start` stamped after it" not answering when another break holds that start.
+4. *Cost.* Block minutes are 20 in both orders. The first order's break never ends: it runs on to `now`, review and plan disagree on breaks (60, 250), and `tm check` says nothing. **D155 removes `length_in_held`, so the nested shape comes back through the verb unless this is fixed in the same round.**
+5. *Clears it.* W-55.
+
+**Gap 6071 — a finished break is swallowed at a D129 ending's stamp (D146, D148).**
+1. *What.* J day, `10:09`, `09:43`, `10:09 5m`, and `09:50`, `09:30`, `09:50 30m`. The verb refuses both by name and writes nothing (review 103 and 90). With the line written by hand the length is dropped without a word: review 103 `[(20,27),(20,0)]` with no 5m record, and 90 `[(20,40),(20,0)]` with no 30m record, the plan agreeing. `Replay.letGo` reads the line as the ending's own (P127).
+2. *Why not fixed.* A kernel change.
+3. *Cost.* A refusal where D146 and D148 promise a finished break, and a silent loss on a log from another machine.
+4. *Clears it.* W-55, and then the host's refusal goes.
+
+**Gap 6072 — the plan draws a running break over a finished one (D142).**
+1. *What.* J day, `10:30 15m`, `10:29`: plan `10:29–12:30` (121) and `10:30–10:45` (15), breaks 136 over 121 minutes of wall time; review breaks 15. Gap 6070's first shape shows it too (250 over 190).
+2. *Why not fixed.* D142's union reaches the logged breaks and not the running one, in the kernel.
+3. *Cost.* One span read two ways, and the row list overlaps. Block minutes agree (79), so no block minute is lost.
+4. *Clears it.* W-55.
+
+**Gap 6073 — a finished line in the running break's minute ends it silently (D145).**
+1. *What.* W day, `10:20:30`, then `10:20 5m`: the reply is `logged finished`, and the break running since 10:20:30 is gone with no word, though its `break_start` stays in the log. `tm now` shows no break, the plan draws only `10:20–10:25`, and the next verb says `.tm/state.json said a break … is running and .tm/log.jsonl ended it`. X day, `10:40:30`, `10:40 30m`: the same.
+2. *Why not fixed.* D145 says a finished break's line ends only its own break. The kernel reads this one as ending the other; the cause is not traced past the two stamps sharing a minute.
+3. *Cost.* A running break vanishes, on a keystroke typed within a minute of it, with a reply that says something else happened.
+4. *Clears it.* W-55.
+
+**Gap 6074 — review and plan differ by one minute on seconds.**
+1. *What.* J day, `09:47:59`, `09:05:30 20m`, `09:27 10m`, `10:08:01 3m`: review block 73, plan block 74, warm and cold.
+2. *Why not fixed.* Filed as the kernel's; the cause is not traced. The sweep's grid is whole minutes, so no generated row reaches this shape.
+3. *Cost.* The invariant's first clause holds on the whole-minute grid only. One minute.
+4. *Clears it.* W-55, which also has to say what "minutes" means where a piece's stamps carry seconds.
+
+**Gap 6075 — a D129 end is named as a `start` the log does not hold.**
+1. *What.* J day, `09:40 40m`, `09:30`: `the break that began at 09:30 ended at 10:20, at the start the log already holds after it (D129)`. The log's `start` is at 10:10; 10:20 is where D148 nets it. `09:35` then says `the start the log holds at 10:20`, and `09:30` the same. The numbers are right (85 and 80).
+2. *Why not fixed.* The end is the kernel's, and the fact does not say what ended the break.
+3. *Cost.* A false sentence, on a shape the campaign's replies otherwise state truly (gap 6060).
+4. *Clears it.* W-55: the fact gives the line's own stamp, or the reply stops saying "start".
+
+**Gap 6076 — K's and H's kernel gaps, each W-55's, with what was re-measured here.**
+1. *What, and why not fixed: each is a Lean change, and each still stands.*
+   | gap | state on the land binary |
+   |---|---|
+   | 6041 | Read: `Replay.endable` has no `frozen` while `d141Ok` does. Driven: `09:35`, `09:20 30m`, `09:25`, `--now 09:40` refused by name, 90 (`Ctx::a_line_ends` is the host's half) |
+   | 6045 | Driven: `09:35 15m`, `09:15`, `09:35 15m`, `--now 09:40` refused by name, 85. `Replay.heldFacts` still holds the twin as one entry with a range |
+   | 6024 | Driven: `09:20 30m`, `09:30`, `09:40 15m`, `09:32`, `--now 09:45` refused by name, 93, though the line would be sound |
+   | 6026 | Carried, not re-driven: the fence past a folded far-future line |
+   | 6027 | Carried: the union's netting is witnessed and generated, not proved |
+   | 6029 | Carried, not re-driven: a hand-logged line a re-time froze |
+2. *Cost.* As each gap says. Every driven shape is a refusal by name or a carried subdomain, none a wrong number here.
+3. *Clears it.* W-55.
+
+**Gap 6077 — gap 6028's retirement, checked: the wire key has no reader in the binary.**
+1. *What.* `Replay::finished_breaks` is assigned by `tm/src/cli/kernel_log.rs`'s decoder and read by nothing else under `tm/src`. `tm-core` holds the field, its `PartialEq` and `planwire.rs`'s empty constructor. Its only readers are two test files, `kernel_w53r_k_finished.rs` and `kernel_w54_k_finished.rs`. So `Replay.finished`, `ownDrawn` and `givesUp` serve `open.finished` and those two files; in Lean they still have laws (`Replay.lean`, `Seal.lean`, `SealLaw.lean`, `SealResume.lean`, `SealLaw2D.lean`, `SealTwin.lean`, `Boundary.lean`).
+2. *Why not retired.* No Lean in this land.
+3. *Cost.* A wire key, three definitions and their laws with no answer a user sees.
+4. *Clears it.* W-55, moving what the two test files check onto `held_breaks`.
+
+**Gap 6078 — D155 is work owed, and what it retires.**
+1. *What.* R day, `10:30`, `10:40`, `--now 10:28 5m`: the reply is `break 5m`, a `break_start` at 10:28. At 12:30 `tm now` reads `18m of 60m · paused`, `on break since 10:28 · 122m of 5m`, and `tm stop` `stopped ^t4 after 18m · 42m left`: the 110 minutes after 10:40 are gone, `tm check` silent. J day, `11:30`, `11:40`, `11:35 5m`: a break that runs on, plan `11:40–12:30`, review breaks 10 against plan 60.
+2. *Why not built.* `Seal.typedAt?` counts a line at its stamp; reading a `break` line's end needs the fold to know it ended a running `break_start`. A kernel change (D158).
+3. *What goes when it is built.* `length_in_held`, gap 6050's span witness. Gap 6067's cost: R day, `10:05 30m`, `10:25 5m` logs finished with no running break and `10:27` is refused as meeting two breaks. Gap 6055. The sweep's clause-4 exception (gap 6044). And the three rows that pin the shape are restated: `cli_d144_now_break.rs::tm_now_reads_a_running_break_drawn_after_a_logged_one_gap_5775`, `cli_w54_h_breaks.rs::a_running_break_an_earlier_one_covers_ends_with_its_drawn_minutes`, `cli_week_grid.rs::overlapping_breaks_are_one_span_in_the_week_grid`.
+4. *Clears it.* W-55; gap 6070 has to go with it (its point 4).
+
+### Three gate holes and one instrument failure
+
+Measured by the rename's verifiers, none caused by this land. Each was re-measured here in a throwaway worktree at 853da62 unless it says otherwise; the gate scripts are unchanged by this land.
+
+**Gap 6079 — check 7 passes on deleting the last real goal.**
+1. *What.* `Goals.lean`'s one theorem deleted, check 7's reconciliation run as written: `goals=0`, `gone=[]`. It compares last segments, and `Tm.PlanCheck.plan_places_no_block_over_a_break`, a narrower statement, is audited under the goal's short name.
+2. *Why it stands.* The W-39 repair made the match exact on the segment, not on the statement. This land touches no gate.
+3. *Cost.* AGENTS §9.2's worst disguised gap, on the one goal left: the burn-down reads 0 and nothing is proved.
+4. *Clears it.* A gate change after the regroup: a goal leaves only under a name no other theorem already held at HEAD, or by a dated line naming its discharge.
+
+**Gap 6080 — `parity.py` misses a second issuance of a row-anchored number.**
+1. *What.* Appended to `README.md` at column zero, one at a time: `| P5 | … |`, `| **P5** | … |`, `**Parity P5 taken**: …`, and `| P149 | … |` over a `taken`-anchored number. Each rc 0. Controls: a second `**Parity P149 taken**` rc 1, an unregistered `| P150 | … |` rc 1.
+2. *Why it stands.* The duplicate check counts `taken` lines only, and 46 of the 149 numbers are `row`-anchored.
+3. *Cost.* The P32 and P38 class stays open for those numbers and for a row beside any taken line, which AGENTS §6.5 item 7 says must print once.
+4. *Clears it.* A gate change: a number's register row or issuance line, outside inline code and the `not-row` files, appears once.
+
+**Gap 6081 — `mutations.txt`'s baseline line is unratcheted.**
+1. *What.* A new `def` committed in `Emit.lean` and the `baseline 86c4dc6` line moved to that commit: `mutate.py --gate` prints `0 new or changed … 0 rostered … 0 owed`, rc 0, where it printed 997 rostered. No check compares the line with HEAD's; `check.sh` names it only in prose. The rename's plant (`scratchpad/rename/x/plants.sh`) is the control: the same `def` with the line unmoved is ABSENT and owed.
+2. *Why it stands.* D40 wrote the baseline as a decision, and the other exemption files got `ratchet.py` (D121) while this one line did not.
+3. *Cost.* One changed line turns check 9 off for the whole library, in a diff nothing flags.
+4. *Clears it.* A gate change: the baseline may only stay as HEAD has it, unless a dated grant says otherwise.
+
+**Gap 6082 — oracle input set 3 fails on the base, and `run-oracle.sh` stops there.**
+1. *What.* Oracle built fresh for this tree; `stage5_parity_the_kernel_replays_and_fits_as_the_fork_point_does` rc 101: **10 disagreements**, all `days.<date>.segments`, in triple 6 (close week; undone, without the command, before the undo), triple 41 (housekeeping close; the same three) and sequences 9, 19, 139, 234. They are on no list. Line for line the rename's run at 675953f. `run-oracle.sh`'s `set -euo pipefail` then ends the sweep before sets 4-7.
+2. *Why it stands.* Nothing in plain `cargo test --workspace` runs this arm, so nothing failed when it began. When is not measured: the rename's base already has it. The printed values are truncated to about 90 characters and read equal, so the report does not say what differs.
+3. *Cost.* AGENTS §8.3's "the measured disagreement is **P21 alone**" is not true of this tree, or of the base. Sets 4-7 run by default only if set 3 passes. **Run here: the build and set 3 only.** Sets 1, 2, 4, 5, 6 and 7 are carried from the rename's run with `set -e` lifted (`scratchpad/rename/x/run-oracle-all.log`, at 0c1d5e6): sets 1 and 2 at §7.3's figures, 4-6 pass, 7 failing only the latency row. This tree's break changes have not been through them.
+4. *Clears it.* W-55: print the first differing element, then register each as a parity number or fix it, and make the script report every set.
+
+**Gap 6083 — this land's cost: acceptance figures are not in this block.** The tree a block sits in cannot record its own run, so they are in the land commit's message, and in the workflow's return value. A reader of this file finds them with `git log -1 --format=%B` on the commit that added this heading.

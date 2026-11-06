@@ -53,8 +53,8 @@
 // attribute removed, `cargo check -p tm --all-targets` reported **92** unreachable items, and
 // the comment here promised the attribute would be deleted at S, "when `replay_scoped` becomes
 // the binary's one reader". S and S2 landed and it was not. Measured again now, the same
-// command reports **4**, with or without `--all-targets`; each of the four carries its own
-// `#[allow(dead_code)]` and says why it is kept. The cost the old comment named is paid off
+// command reports **4** (five since W-54's third repair, `replay_scoped`, gap 6049), with or
+// without `--all-targets`; each carries its own `#[allow(dead_code)]` and says why it is kept. The cost the old comment named is paid off
 // with it: `cargo test --workspace`'s "0 warnings" now does say that a function added to this
 // file is reachable or tested.
 //
@@ -3180,6 +3180,9 @@ fn resume_section_from(
 ///
 /// `want.headersFrom` is **not** asked: every row of the view comes from a day record's own
 /// header, and the answer's top-level headers would only repeat their displays.
+// Dead in the binary since W-54's third repair: `Ctx::replay_with` calls [`replay_scoped_at`] with the clock's fence. Kept
+// because this file's own tests and the `#[path]` suites (`support/replay.rs`, the door, T5) read through it (gap 6049).
+#[allow(dead_code)]
 pub fn replay_scoped(
     root: &Path,
     bytes: &[u8],
