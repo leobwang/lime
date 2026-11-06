@@ -2277,10 +2277,15 @@ pub struct FinishedBreak {
     /// replay nets the block by its minutes (D87, D100) and the block stays running, not paused. Absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inside_running: Option<String>,
-    /// **The held break it lies inside, by its own span** (`HH:MM–HH:MM`; the W-54 third repair, README gap 6050), when no
-    /// block names why it is over: the log's own stamps have passed its typed end. Absent otherwise.
+    /// **The held break it begins inside, by its own span** (`HH:MM–HH:MM`; the W-54 third repair, README gaps 6050 and 6060), when
+    /// none of D143, D148, D149 and D152 logged it: it ends inside that span, or runs past it to an end the log's own stamps have
+    /// passed ([`FinishedBreak::adds_min`] then says what it adds). Never beside `inside_running`: that one is D152's. Absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inside_break: Option<String>,
+    /// **The minutes the line adds to the breaks the day draws, when it runs past the end of `inside_break`** (README gap 6060): read
+    /// off the replay before and after the line. Absent when it ends inside that span, or lies inside none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adds_min: Option<u32>,
     /// **Whether the block it lies inside counts fewer minutes for it** (D149 or D152; stage 6 W-54 repair track H,
     /// the W-54 critic's fourth note) — read off the replay before and after the line, never re-derived: `false` when
     /// the break lies where the block was not running (a pause, or another break). Absent when it lies inside none.
@@ -2490,6 +2495,28 @@ fn the_day_drawn(r: &tm_core::log::Replay) -> Vec<tm_core::log::LogSegment> {
         }
     }
     drawn
+}
+
+/// **The wall-clock minutes the day's Break rows cover**, each minute once however many breaks draw it.
+fn break_minutes_drawn(r: &tm_core::log::Replay) -> i64 {
+    let mut spans: Vec<_> = r
+        .days
+        .values()
+        .flat_map(|d| d.segments.iter())
+        .filter(|s| matches!(s.kind, tm_core::log::SegmentKind::Break { .. }))
+        .map(|s| (s.start, s.end))
+        .collect();
+    spans.sort();
+    let mut total = chrono::Duration::zero();
+    let mut reach: Option<DateTime<FixedOffset>> = None;
+    for (from, to) in spans {
+        let from = reach.map_or(from, |r| r.max(from));
+        if to > from {
+            total += to - from;
+            reach = Some(to);
+        }
+    }
+    total.num_minutes()
 }
 
 /// **Whether the kernel, reading this line, draws another day** — asked over the line held, nothing reaching the disk (the
@@ -2955,6 +2982,10 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     let mut retimed_out = false;
     // The held break a finished break this run logs lies inside, when no block names why it is over (README gap 6050).
     let mut inside_break: Option<String> = None;
+    // Whether the log's latest typed-time stamp has reached that finished break's typed end (the reply says so only then), and whether
+    // the break runs past the end of the span named (README gap 6060).
+    let mut inside_passed = false;
+    let mut runs_past_held = false;
     // The block a finished break this run logs lies inside, that a later `done` or `stop` closed (D149).
     let mut inside_block: Option<String> = None;
     // The RUNNING block a finished break this run logs lies inside, its typed end already passed (D152).
@@ -2986,7 +3017,8 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             .replay
             .held_breaks
             .iter()
-            .filter(|h| h.started <= ctx.now && ctx.now <= h.ended)
+            // The half-open rule the gate's lengths read: at its own end a break no longer holds the instant (README gap 6060).
+            .filter(|h| h.started <= ctx.now && ctx.now < h.ended)
             .filter(|h| !(h.started == b.started && h.ended == b.ended && h.planned_min == b.planned_min))
             .map(|h| {
                 let hm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).format("%H:%M").to_string();
@@ -3095,15 +3127,19 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         };
         let hm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).format("%H:%M").to_string();
         if let LengthInHeld::Past(b, reach) = &in_held {
+            // The cost is said only when there are minutes to take: a block open past the span (README gap 6060).
+            let cost = match ctx.replay.open_block.as_ref().filter(|o| o.started <= ctx.now) {
+                Some(o) => format!("a break begun here would take every minute of ^{} after {}", o.id, hm(b.ended)),
+                None => "a break begun here would run on from inside that break".to_string(),
+            };
             return Err(CliError::msg(format!(
                 "`tm break {planned}m` at {} lies inside the logged break {}–{} and ends at {}, which neither that break nor the log \
-                 has reached: nothing says it is over, and a break begun here would take every minute after {} (D152); nothing \
-                 written: type a length that ends by {} to log a finished break beside it, or `tm undo` takes the last line back",
+                 has reached: nothing says it is over, and {cost}; nothing written: type a length that ends by {} to log a finished \
+                 break beside it, or `tm undo` takes the last line back",
                 ctx.now_tz.format("%H:%M"),
                 hm(b.started),
                 hm(b.ended),
                 hm(ctx.now + chrono::Duration::minutes(i64::from(planned))),
-                hm(b.ended),
                 hm(*reach),
             )));
         }
@@ -3141,14 +3177,15 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         match probed {
             Some((None, _)) if closed.is_some() || running_in.is_some() || matches!(in_held, LengthInHeld::Over(..)) => {
                 if let LengthInHeld::Over(b, _) = &in_held {
+                    let end = ctx.now + chrono::Duration::minutes(i64::from(planned));
                     inside_break = Some(format!("{}–{}", hm(b.started), hm(b.ended)));
+                    inside_passed = ctx.replay.latest_t.is_some_and(|t| t >= end);
+                    runs_past_held = end > b.ended;
                 }
                 finished = Some((planned, None));
                 inside_block = closed;
-                inside_running = running_in.or_else(|| {
-                    let open = ctx.replay.open_block.as_ref().filter(|b| b.started <= ctx.now)?;
-                    matches!(in_held, LengthInHeld::Over(..)).then(|| open.id.clone())
-                });
+                // D152's own name, and only D152's: this arm fired for a break it lies inside (README gap 6060).
+                inside_running = running_in;
                 BreakOut {
                     action: "finished".to_string(),
                     planned_min: planned,
@@ -3230,6 +3267,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                 inside_block: inside_block.clone(),
                 inside_running: inside_running.clone(),
                 inside_break: inside_break.clone(),
+                adds_min: None,
                 nets: None,
             };
             out.finished = Some(f.clone());
@@ -3259,6 +3297,9 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             ),
             (None, None) => None,
         };
+        if runs_past_held {
+            f.adds_min = Some((break_minutes_drawn(&ctx.replay) - break_minutes_drawn(&replay_before)).max(0) as u32);
+        }
     }
     // **A break a start already logged ends** (the owner's D129, README gap 5433): a break begun at an
     // instant before a block's `start` that the log already holds — a `--now` in the past after the
@@ -3344,10 +3385,19 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                         _ => format!("it lies inside ^{k}, which is running; it nets it, D152"),
                     }
                 }
-                (None, _) if f.inside_break.is_some() => format!(
-                    "it lies inside the break {} the log holds, and the log has passed its end",
-                    f.inside_break.as_deref().unwrap_or_default()
-                ),
+                // The reason that fired, and no other (README gap 6060): "the log has passed" only when its latest typed-time stamp
+                // has reached the typed end; a length past the named span says so, and what it adds.
+                (None, _) if f.inside_break.is_some() => {
+                    let b = f.inside_break.as_deref().unwrap_or_default();
+                    match (f.adds_min, inside_passed) {
+                        (Some(n), _) => format!(
+                            "it begins inside the break {b} the log holds and runs past its end, adding {n}m; the log has passed {}",
+                            f.end
+                        ),
+                        (None, true) => format!("it lies inside the break {b} the log holds, and the log has passed its end"),
+                        (None, false) => format!("it lies inside the break {b} the log holds"),
+                    }
+                }
                 (None, "ended") => "typed with its length inside the break it ended, D146".to_string(),
                 (None, _) => "a later start follows it, D143".to_string(),
             }

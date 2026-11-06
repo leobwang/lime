@@ -579,7 +579,7 @@ fn no_break_start_at(tm: &Tm, hm: &str) {
 fn r_a_length_ending_inside_the_held_span_is_logged_finished_and_the_block_keeps_running() {
     let tm = r_day(&[("10:15", ""), ("10:40", "")]);
     let out = tm.ok_at(&at("10:20"), &["break", "5m"]);
-    assert!(out.stdout.contains("logged finished (it lies inside ^t4, which is running; ^t4 was not running there"), "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("logged finished (it lies inside the break 10:15–10:40 the log holds)"), "{}{}", out.stdout, out.stderr);
     no_break_start_at(&tm, "10:20");
     let last = tm.last();
     assert_eq!((last["ev"].as_str(), last["actual_min"].as_u64()), (Some("break"), Some(5)), "{last}");
@@ -825,4 +825,104 @@ fn the_d141_reply_prints_the_end_the_line_gives() {
     let tm = j_day(&[("09:30:30", "")]);
     let out = tm.ok_at(&at("09:45"), &["break"]);
     assert!(out.stderr.contains("ends here, at 09:44"), "{}{}", out.stdout, out.stderr);
+}
+
+// ---- The last host round (README §10): replies that say what fired. ----
+
+/// `tm break --now <hm> <args>`, its stdout and stderr together.
+fn said(tm: &Tm, hm: &str, args: &[&str]) -> String {
+    let out = tm.ok_at(&at(hm), args);
+    format!("{}{}", out.stdout, out.stderr)
+}
+
+/// **"The log has passed" only when its latest typed-time stamp has reached the typed end** (README gap 6060). `11:05 60m`, `^t4`
+/// stopped at 11:10: `11:08 5m` ends at 11:13, inside the span, and no stamp has reached it. Until this row every such reply said
+/// the log had passed its end.
+#[test]
+fn a_reply_says_the_log_has_passed_only_when_it_has() {
+    let tm = fresh();
+    tm.ok_at(&at("09:00"), &["start", "^t1"]);
+    tm.ok_at(&at("10:00"), &["done"]);
+    tm.ok_at(&at("10:10"), &["start", "^t4"]);
+    tm.ok_at(&at("11:10"), &["stop"]);
+    tm.ok_at(&at("11:05"), &["break", "60m"]);
+    let s = said(&tm, "11:08", &["break", "5m"]);
+    assert!(s.contains("(it lies inside the break 11:05–12:05 the log holds)") && !s.contains("passed"), "{s}");
+    let tm = j_day(&[("11:30", ""), ("11:40", "")]);
+    tm.ok_at(&at("11:33"), &["plan"]);
+    let s = said(&tm, "11:32", &["break", "5m"]);
+    assert!(s.contains("(it lies inside the break 11:30–11:40 the log holds)") && !s.contains("passed"), "{s}");
+    let tm = j_day(&[("11:09", "20m")]);
+    let s = said(&tm, "11:09", &["break", "19m", "--where", "bed"]);
+    assert!(s.contains("(it lies inside the break 11:09–11:29 the log holds)") && !s.contains("passed"), "{s}");
+    // Where a stamp has reached it, the reply still says so: the `done` at 11:10 against 10:40.
+    let tm = j_day(&[("10:30", "90m")]);
+    let s = said(&tm, "10:35", &["break", "5m"]);
+    assert!(s.contains("(it lies inside the break 10:30–12:00 the log holds, and the log has passed its end)"), "{s}");
+}
+
+/// **A length past the named span says so, and what it adds** (README gap 6060). `11:35 15m` ends at 11:50, ten minutes past the
+/// 11:30–11:40 it begins inside: review 10 to 20. Until this row: "it lies inside the break 11:30–11:40", and no word of the ten.
+#[test]
+fn a_length_past_the_named_span_says_what_it_adds() {
+    let day = || {
+        let tm = j_day(&[("11:30", ""), ("11:40", "")]);
+        tm.ok_at(&at("12:00"), &["plan"]);
+        tm
+    };
+    let tm = day();
+    let s = said(&tm, "11:35", &["break", "15m"]);
+    assert!(s.contains("it begins inside the break 11:30–11:40 the log holds and runs past its end, adding 10m; the log has passed 11:50"), "{s}");
+    let v = copied(&tm).json_at(&at("12:30"), &["review", "day"]);
+    assert_eq!(v["review"]["breaks"]["actual_min"].as_u64(), Some(20), "{v}");
+    let v = day().json_at(&at("11:35"), &["break", "15m"]);
+    assert_eq!((v["finished"]["inside_break"].as_str(), v["finished"]["adds_min"].as_u64()), (Some("11:30–11:40"), Some(10)), "{v}");
+    // Read off the day and not off the arithmetic: what another logged break already covers it does not add.
+    let tm = day();
+    tm.ok_at(&at("11:35"), &["break", "15m"]);
+    let s = said(&tm, "11:32", &["break", "15m"]);
+    assert!(s.contains("it begins inside the break 11:30–11:40") && s.contains("adding 0m"), "{s}");
+}
+
+/// **D152 is cited only when D152 fired** (README gap 6060). `^t4` running, `10:15`, `10:40`, `10:20 5m`: gap 6050's rule logged it, no
+/// stamp has reached 10:25. Until this row the JSON carried `inside_running` beside `inside_break`, and the reply cited D152.
+#[test]
+fn d152_is_cited_only_when_it_fired() {
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let s = said(&tm, "10:20", &["break", "5m"]);
+    assert!(!s.contains("D152") && !s.contains("^t4"), "{s}");
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let v = tm.json_at(&at("10:20"), &["break", "5m"]);
+    let f = &v["finished"];
+    assert_eq!((f["inside_break"].as_str(), f.get("inside_running"), f.get("nets")), (Some("10:15–10:40"), None, None), "{v}");
+    // Where it did fire, it stays: a pause's stamp has passed 10:25, and the break lies inside ^t4.
+    let tm = r_day(&[]);
+    tm.ok_at(&at("10:50"), &["pause"]);
+    tm.ok_at(&at("10:50"), &["pause"]);
+    let s = said(&tm, "10:20", &["break", "5m"]);
+    assert!(s.contains("it lies inside ^t4, which is running; it nets it, D152"), "{s}");
+}
+
+/// **The cost sentence, only when a block is open past the span** (README gap 6060). `^t4` closed at 11:10 with `10:20 50m`
+/// holding the rest: no minute is left to take. Until this row: "would take every minute after 11:10 (D152)".
+#[test]
+fn a_past_refusal_states_a_cost_only_when_there_are_minutes_to_take() {
+    let tm = j_day(&[("10:20", "50m")]);
+    let s = refused_with(&tm, "10:25", &["break", "50m"]);
+    assert!(!s.contains("every minute") && !s.contains("D152") && s.contains("run on from inside that break"), "{s}");
+    let tm = r_day(&[("10:15", ""), ("10:40", "")]);
+    let s = refused_with(&tm, "10:20", &["break", "30m"]);
+    assert!(s.contains("would take every minute of ^t4 after 10:40") && !s.contains("D152"), "{s}");
+}
+
+/// **"Also holds" reads the half-open rule** (README gap 6060). At 09:50 the 09:45–09:50 break ends; it holds no instant there, and the
+/// plan draws nothing of its own. At 09:47 it does hold it, and the sentence stands.
+#[test]
+fn also_holds_is_not_said_at_that_breaks_own_end() {
+    let tm = j_day(&[("09:45", "5m"), ("09:40", "")]);
+    let s = said(&tm, "09:50", &["break"]);
+    assert!(s.contains("ends here, at 09:50") && !s.contains("also holds"), "{s}");
+    let tm = j_day(&[("09:45", "5m"), ("09:40", "")]);
+    let s = said(&tm, "09:47", &["break"]);
+    assert!(s.contains("the logged break 09:45–09:50 also holds this instant, and stays"), "{s}");
 }
