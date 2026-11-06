@@ -26,6 +26,8 @@ theorem ckpt_tagOverflow : (ckptOfEntries z T₀ L cut es er ws).tagOverflow
 theorem ckpt_settled : (ckptOfEntries z T₀ L cut es er ws).settled = settledOf es er := by simp only [ckptOfEntries]
 theorem ckpt_maxT : (ckptOfEntries z T₀ L cut es er ws).maxT
     = maxInstant? ((es.flatMap entryInstants).filter (fun q => !isFuture T₀ q)) := by simp only [ckptOfEntries]
+theorem ckpt_maxTyped : (ckptOfEntries z T₀ L cut es er ws).maxTyped
+    = maxInstant? ((typedOf es).filter (fun q => !isFuture T₀ q)) := by simp only [ckptOfEntries]
 theorem ckpt_futureFloor : (ckptOfEntries z T₀ L cut es er ws).futureFloor
     = minInstant? ((es.flatMap entryInstants).filter (isFuture T₀)) := by simp only [ckptOfEntries]
 theorem ckpt_wakes : (ckptOfEntries z T₀ L cut es er ws).wakes = storedWakes L (foldedIndex z es er) := by

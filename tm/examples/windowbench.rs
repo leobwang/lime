@@ -96,7 +96,7 @@ fn zone() -> serde_json::Value {
 }
 
 fn want() -> Want {
-    Want { facts: true, headers_from: None, render: vec![] }
+    Want { facts: true, headers_from: None, render: vec![], fence: None }
 }
 
 fn ms_since(s: Instant) -> f64 {

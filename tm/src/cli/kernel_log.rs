@@ -53,8 +53,8 @@
 // attribute removed, `cargo check -p tm --all-targets` reported **92** unreachable items, and
 // the comment here promised the attribute would be deleted at S, "when `replay_scoped` becomes
 // the binary's one reader". S and S2 landed and it was not. Measured again now, the same
-// command reports **4**, with or without `--all-targets`; each of the four carries its own
-// `#[allow(dead_code)]` and says why it is kept. The cost the old comment named is paid off
+// command reports **4** (five since W-54's third repair, `replay_scoped`, gap 6049), with or
+// without `--all-targets`; each carries its own `#[allow(dead_code)]` and says why it is kept. The cost the old comment named is paid off
 // with it: `cargo test --workspace`'s "0 warnings" now does say that a function added to this
 // file is reachable or tested.
 //
@@ -221,6 +221,9 @@ pub struct Want {
     pub facts: bool,
     pub headers_from: Option<u64>,
     pub render: Vec<u64>,
+    /// **D18's fence** (`[sec, ns]`; stage 6 W-54 third repair track K, the owner's D154): with one, a request's answer
+    /// carries `latestTyped`, the log's latest typed-time stamp at or before it (`Seal.latestTyped`).
+    pub fence: Option<(u64, u64)>,
 }
 
 /// **`meta`** (§9.2): the checkpoint's cut, horizons, reseal day and G2 instants (`[sec, ns]`).
@@ -375,6 +378,8 @@ pub struct LogAnswer {
     pub headers: Value,
     pub render: Value,
     pub reseal: Option<Resealed>,
+    /// `latestTyped` (`[sec, ns]` or `null`), when the request set [`Want::fence`].
+    pub latest_typed: Value,
 }
 
 /// **One `log` section** (§10.1), built as text so the checkpoint and the records go in byte for byte.
@@ -408,6 +413,9 @@ pub fn log_section(
         want.headers_from.map_or("null".to_string(), |h| h.to_string()),
         serde_json::to_string(&want.render).expect("render serialises")
     ));
+    if let Some((sec, ns)) = want.fence {
+        r.push_str(&format!(r#","fence":[{sec},{ns}]"#));
+    }
     r.push_str(r#","sealed":"#);
     match sealed {
         None => r.push_str("null"),
@@ -500,6 +508,10 @@ pub fn read_response(resp: &str) -> Result<Result<LogAnswer, Refusal>, String> {
         headers: val("headers")?,
         render: val("render")?,
         reseal,
+        latest_typed: match log.get("latestTyped") {
+            Some(r) => serde_json::from_str(r.get()).map_err(|e| e.to_string())?,
+            None => Value::Null,
+        },
     }))
 }
 
@@ -1572,7 +1584,7 @@ mod tests {
         let cdir = dir.path().join(CACHE_DIR);
         let tz: Tz = "America/Chicago".parse().expect("a zone");
         let tz_wire = super::super::tz_table::wire_for(Some(&cdir), tz);
-        let want = Want { facts: true, headers_from: None, render: vec![] };
+        let want = Want { facts: true, headers_from: None, render: vec![], fence: None };
         let mut cache = ReplayCache::new(Some(cdir.clone()));
         let day = |d: u32| day_of(chrono::NaiveDate::from_ymd_opt(2026, 9, d).expect("a date"));
         let first = cache.replay(wakes(45).as_bytes(), day(15), &tz_wire, None, &want).expect("genesis");
@@ -1640,7 +1652,7 @@ mod tests {
         let cdir = dir.path().join(CACHE_DIR);
         let tz: Tz = "America/Chicago".parse().expect("a zone");
         let tz_wire = super::super::tz_table::wire_for(Some(&cdir), tz);
-        let want = Want { facts: true, headers_from: None, render: vec![] };
+        let want = Want { facts: true, headers_from: None, render: vec![], fence: None };
         let today = day_of(chrono::NaiveDate::from_ymd_opt(2026, 9, 15).expect("a date"));
         let log = wakes(45);
         let mut cache = ReplayCache::new(Some(cdir.clone()));
@@ -1717,7 +1729,7 @@ mod tests {
         let cdir = dir.path().join(CACHE_DIR);
         let tz: Tz = "America/Chicago".parse().expect("a zone");
         let tz_wire = super::super::tz_table::wire_for(Some(&cdir), tz);
-        let want = Want { facts: true, headers_from: None, render: vec![] };
+        let want = Want { facts: true, headers_from: None, render: vec![], fence: None };
         let today = day_of(chrono::NaiveDate::from_ymd_opt(2026, 9, 15).expect("a date"));
         let log = wakes(45);
         let first = ReplayCache::new(Some(cdir.clone())).replay(log.as_bytes(), today, &tz_wire, None, &want).expect("genesis");
@@ -1770,7 +1782,7 @@ mod tests {
 // §11.1: the kernel's facts, decoded into Rust's `Replay`.
 
 use tm_core::log::{
-    fmt_timestamp, BreakRecord, CloseRecord, EndedBreak, DayReplay, DaySeam, Demotion, DurationObs, EnergyObs, IdleMark, IdleRecord, InstanceRecord, Interruption,
+    fmt_timestamp, BreakRecord, CloseRecord, EndedBreak, HeldBreak, DayReplay, DaySeam, Demotion, DurationObs, EnergyObs, IdleMark, IdleRecord, InstanceRecord, Interruption,
     ItemReplay, LeakRecord, LogSegment, LogWarning, NamedLatest, NamedRecord, OpenBlock, OpenBreak, Replay, SegmentKind, StartRecord, ViewRow,
 };
 use tm_core::model::InstanceStatus;
@@ -2398,12 +2410,12 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         })
     })?;
     // **The breaks a D141 line would end** — stage 6 W-52 repair track R, README gaps 5714 and 5730:
-    // `[start, end, planned, where?, day, key, widest]` (`Seal.cEnded`, `Replay.endable`), the kernel's own reading
+    // `[start, end, planned, where?, day, key, widest, rel]` (`Seal.cEnded`, `Replay.endable`), the kernel's own reading
     // (`widest` since W-54 track K, the owner's D150: for an ending, the end D129 gave it).
     let ended_breaks = d_arr(open.get("ended").unwrap_or(&Value::Null), "open.ended")?
         .iter()
         .map(|o| {
-            let o = d_tuple(o, 7, "an ended break")?;
+            let o = d_tuple(o, 8, "an ended break")?;
             Ok(EndedBreak {
                 started: d_when(d_at(o, 0, "an ended break's start")?, "an ended break's start")?,
                 ended: d_when(d_at(o, 1, "an ended break's end")?, "an ended break's end")?,
@@ -2416,14 +2428,14 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         })
         .collect::<D<Vec<_>>>()?;
     // **The breaks with their own `break` line** — stage 6 W-53 repair track K (D147's fact): the same
-    // `[start, end, planned, where?, day, key, widest]` shape (`Seal.cEnded`, `Replay.finished`), each break's own
+    // `[start, end, planned, where?, day, key, widest, rel]` shape (`Seal.cEnded`, `Replay.finished`), each break's own
     // end and, since W-54 track K (the owner's D150), the widest end any of its own lines gave it. Since W-54 the
     // list holds only the breaks a `break` line at their stamp with their planned minutes re-times (README gap 5874),
     // and nothing while a break runs.
     let finished_breaks = d_arr(open.get("finished").unwrap_or(&Value::Null), "open.finished")?
         .iter()
         .map(|o| {
-            let o = d_tuple(o, 7, "a finished break")?;
+            let o = d_tuple(o, 8, "a finished break")?;
             Ok(EndedBreak {
                 started: d_when(d_at(o, 0, "a finished break's start")?, "a finished break's start")?,
                 ended: d_when(d_at(o, 1, "a finished break's end")?, "a finished break's end")?,
@@ -2432,6 +2444,24 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
                 day: d_date(d_at(o, 4, "a finished break's day")?, "a finished break's day")?,
                 key: d_u64(d_at(o, 5, "a finished break's key")?, "a finished break's key")?,
                 widest: d_when(d_at(o, 6, "a finished break's widest end")?, "a finished break's widest end")?,
+            })
+        })
+        .collect::<D<Vec<_>>>()?;
+    // **Every break the log holds, one fact each** — stage 6 W-54 third repair track K, README gap 6022 (`Replay.heldFacts`,
+    // `Seal.heldJson`): `[start, end, planned, where?, widest, retimeFrom?, outTo?]`, each break's own span and the instants
+    // a `break` line at its stamp with its planned minutes is read as its re-time.
+    let held_breaks = d_arr(open.get("held").unwrap_or(&Value::Null), "open.held")?
+        .iter()
+        .map(|o| {
+            let o = d_tuple(o, 7, "a held break")?;
+            Ok(HeldBreak {
+                started: d_when(d_at(o, 0, "a held break's start")?, "a held break's start")?,
+                ended: d_when(d_at(o, 1, "a held break's end")?, "a held break's end")?,
+                planned_min: d_u32(d_at(o, 2, "a held break's planned minutes")?, "a held break's planned minutes")?,
+                place: d_opt(d_at(o, 3, "a held break's place")?, |x| d_str(x, "a held break's place"))?,
+                widest: d_when(d_at(o, 4, "a held break's widest end")?, "a held break's widest end")?,
+                retime_from: d_opt(d_at(o, 5, "a held break's retimeFrom")?, |x| d_when(x, "a held break's retimeFrom"))?,
+                out_to: d_opt(d_at(o, 6, "a held break's outTo")?, |x| d_when(x, "a held break's outTo"))?,
             })
         })
         .collect::<D<Vec<_>>>()?;
@@ -2472,13 +2502,22 @@ pub fn decode_facts(answer: &Value, tz: Tz) -> D<Replay> {
         open_break,
         ended_breaks,
         finished_breaks,
+        held_breaks,
         unknown: d_u32(v.get("unknown").unwrap_or(&Value::Null), "facts.unknown")?,
         warnings,
         late_marks,
         last_effective_t: d_opt(v.get("lastEffective").unwrap_or(&Value::Null), |x| d_when(x, "lastEffective"))?,
-        // D153 (W-54 second repair track K, README gap 5972): the latest surviving stamp, by instant — the greatest of
-        // the days' own `lastT`, each the latest over that day's survivors (`Replay.lastTOn`).
-        latest_t: seams.values().filter_map(|s| s.last_t).max(),
+        // D154 (W-54 third repair track K, README gap 6023): the kernel's `latestTyped`, the log's latest typed-time stamp
+        // at or before the request's fence (`Seal.latestTyped`), read as an instant in the plan's zone.
+        latest_t: match instant_of(answer.get("latestTyped").unwrap_or(&Value::Null)).map_err(|e| format!("latestTyped: {e}"))? {
+            None => None,
+            Some((sec, ns)) => Some(
+                DateTime::from_timestamp(sec as i64 - EPOCH_FROM_CE, ns as u32)
+                    .ok_or("latestTyped: an instant")?
+                    .with_timezone(&tz)
+                    .fixed_offset(),
+            ),
+        },
         seams,
         rows,
         line_count: d_u64(answer.get("lines").unwrap_or(&Value::Null), "the answer's line count")?,
@@ -2596,7 +2635,7 @@ pub fn replay_unsealed(
     };
     let facts = answer.facts.clone().ok_or_else(|| GenesisError::Fault("the answer carries no facts".into()))?;
     let merged = merge_records(&facts, &days, &window).map_err(GenesisError::Fault)?;
-    let answer = serde_json::json!({"lines": answer.lines, "facts": merged, "headers": answer.headers});
+    let answer = serde_json::json!({"lines": answer.lines, "facts": merged, "headers": answer.headers, "latestTyped": answer.latest_typed});
     let replay = decode_facts(&answer, tz).map_err(GenesisError::Fault)?;
     Ok(Some(Read { replay, outcome: Outcome::Hot, notices: vec![], ledger_day }))
 }
@@ -2763,7 +2802,7 @@ pub fn render_lines(bytes: &[u8], now: &str, tz: &Value, wanted: &[u64]) -> Resu
         if here.is_empty() {
             continue;
         }
-        let want = Want { facts: false, headers_from: None, render: here };
+        let want = Want { facts: false, headers_from: None, render: here, fence: None };
         let req = request(now, tz, None, a as u64 + 1, &s.lines[a..b], b < s.lines.len() || s.terminated, None, &want, None);
         let answer = log_call(&req)?.map_err(|r| format!("a render call was refused: {r:?}"))?;
         for r in answer.render.as_array().ok_or("render is not an array")? {
@@ -2891,7 +2930,7 @@ pub fn headers_after(bytes: &[u8], now: &str, tz: &Value, after: u64) -> Result<
     if tail.len() > RESEND_LINES || s.bytes_between(at, s.lines.len()) > RESEND_BYTES {
         return Err(format!("a tail of {} lines is past the resend cap", tail.len()));
     }
-    let want = Want { facts: false, headers_from: Some(1), render: vec![] };
+    let want = Want { facts: false, headers_from: Some(1), render: vec![], fence: None };
     let req = request(now, tz, None, 1, tail, s.terminated, None, &want, None);
     let answer = log_call(&req)?.map_err(|r| format!("a tail read was refused: {r:?}"))?;
     let mut out = Vec::new();
@@ -3036,7 +3075,7 @@ fn resume_section_from(
     sealed: Option<(u64, u64)>,
     ask: bool,
 ) -> Result<(String, Option<Snapshot>), GenesisError> {
-    let want = Want { facts: true, headers_from: None, render: vec![] };
+    let want = Want { facts: true, headers_from: None, render: vec![], fence: None };
     let s = split(bytes);
     let tz_key = zone_id(tz);
     let dir = root.join(CACHE_DIR);
@@ -3077,7 +3116,7 @@ fn resume_section_from(
             // timer (D81).
             let key = ask.then(|| accepted_key(&sn, bytes, now_day));
             if let Some(key) = key.filter(|k| cache.accepted.as_ref() != Some(k)) {
-                let probe = Want { facts: false, headers_from: None, render: vec![] };
+                let probe = Want { facts: false, headers_from: None, render: vec![], fence: None };
                 let section = log_section(Some(&sn.ckpt), cut as u64 + 1, &s.lines[cut..], s.terminated, None, &probe, None);
                 match log_call(&wrap_log(&date_of(now_day), tz, &section)).map_err(GenesisError::Fault)? {
                     Ok(_) => cache.accepted = Some(key),
@@ -3141,6 +3180,9 @@ fn resume_section_from(
 ///
 /// `want.headersFrom` is **not** asked: every row of the view comes from a day record's own
 /// header, and the answer's top-level headers would only repeat their displays.
+// Dead in the binary since W-54's third repair: `Ctx::replay_with` calls [`replay_scoped_at`] with the clock's fence. Kept
+// because this file's own tests and the `#[path]` suites (`support/replay.rs`, the door, T5) read through it (gap 6049).
+#[allow(dead_code)]
 pub fn replay_scoped(
     root: &Path,
     bytes: &[u8],
@@ -3150,10 +3192,29 @@ pub fn replay_scoped(
     scope: Scope,
     max_line: Option<u64>,
 ) -> Result<Read, GenesisError> {
+    // A caller with no clock but the date (the suites' door): D18's two days from the date's last second.
+    let end = today.succ_opt().and_then(|d| d.and_hms_opt(0, 0, 0)).map(|d| d.and_utc().timestamp() + 2 * 86400);
+    let fence = end.map(|sec| (sec.max(0) as u64 + EPOCH_FROM_CE as u64, 0));
+    replay_scoped_at(root, bytes, tz, tz_wire, today, fence, scope, max_line)
+}
+
+/// [`replay_scoped`] with D18's fence on the caller's clock (`now` plus [`validate::LOG_FUTURE_DAYS`], `[sec, ns]`), the
+/// instant [`Replay::latest_t`] counts up to (the owner's D154).
+#[allow(clippy::too_many_arguments)]
+pub fn replay_scoped_at(
+    root: &Path,
+    bytes: &[u8],
+    tz: Tz,
+    tz_wire: &Value,
+    today: NaiveDate,
+    fence: Option<(u64, u64)>,
+    scope: Scope,
+    max_line: Option<u64>,
+) -> Result<Read, GenesisError> {
     let dir = root.join(CACHE_DIR);
     let mut all = caches().lock().unwrap_or_else(|p| p.into_inner());
     let cache = all.entry(root.to_path_buf()).or_insert_with(|| ReplayCache::new(Some(dir)));
-    let want = Want { facts: true, headers_from: None, render: vec![] };
+    let want = Want { facts: true, headers_from: None, render: vec![], fence };
     let mut r = cache.replay(bytes, day_of(today), tz_wire, max_line, &want)?;
     let (days, window, notice) = match records_for(cache, &r, scope) {
         Some((d, w)) => (d, w, None),
@@ -3167,7 +3228,7 @@ pub fn replay_scoped(
     };
     let facts = r.answer.facts.clone().ok_or_else(|| GenesisError::Fault("the answer carries no facts".into()))?;
     let merged = merge_records(&facts, &days, &window).map_err(GenesisError::Fault)?;
-    let answer = serde_json::json!({"lines": r.answer.lines, "facts": merged, "headers": r.answer.headers});
+    let answer = serde_json::json!({"lines": r.answer.lines, "facts": merged, "headers": r.answer.headers, "latestTyped": r.answer.latest_typed});
     let replay = decode_facts(&answer, tz).map_err(GenesisError::Fault)?;
     let mut notices = r.notices.clone();
     notices.extend(notice);

@@ -162,7 +162,7 @@ theorem arm_pending (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      exact Or.inl (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm').2.2
+      exact Or.inl (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0, t0⟩ m' hm').2.2
     unfold Replay.brkStartArm at hm
     -- D105: the running break is set and the block, with its pending observation, untouched — settled over the
     -- running break and the held closed blocks netted by it since README gap 5180, neither of which moves it.

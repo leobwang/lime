@@ -106982,3 +106982,584 @@ No shape begins a break or loses a minute.
   which fails on the base too. No `.proptest-regressions` file moved. Every row either track left ignored now runs.
 * `kernel/tm-kernel-ffi`, `cargo test`: **105 passed**, 0 failed.
 
+<!-- ======================================================================
+     Stage 6 — W-54 third repair track K (2026-11-05): the kernel — a take put back whole (`Replay.Closed.restored`,
+     `Replay.joinIn`); a re-time letting go of a shared stretch read, the break it leaves short frozen (`Replay.frozen`,
+     `HeldBrk.rel`, replacing `givesUp` in the guard); one fact per held break (`Replay.heldFacts`, the wire's `open.held`,
+     `tm_core::log::HeldBreak`); the log's typed-time lines (the owner's D154: `Seal.typedAt?`, `Ckpt.maxTyped`,
+     `Seal.latestTyped`, the wire's `fence` and `latestTyped`).  Branch `w54r3-k` off 675953f.  Gaps 6020-6039 are this
+     block's (6020-6030 used); cheats 835-845 (832 and 834 restated); no new parity number — P137, P143 and P149 restated.
+     Track H branches off this tip and reads the fact as built.  Whoever merges renumbers (AGENTS §6.4).
+     ====================================================================== -->
+
+## Stage 6 — W-54 third repair track K: a take put back whole, a shared stretch let go, one fact per held break, the typed-time lines
+
+Scripts are this track's scratchpad `w54r3/k/d/`: `fz.py` appends generated `break` and `break_start` lines to a J day and
+checks the review against the plan, every minute of the blocks drawn, and a cold rebuild.
+
+### 1. The root of defect A: a drawn piece wider than a take (gap 6020)
+
+**The brief's reading and the code's.**  The brief's smallest repair for A was to make `givesUp` true for a lengthen another
+held break meets.  Working A's five lines through the takes by hand shows why the shared stretch stayed in the 15m break's take:
+`Closed.restored`, the block "as it would stand had this take never been taken", kept a drawn piece only if it met no taken piece,
+on the premise (true when it was written, D137) that a drawn piece meeting a taken one is a remainder inside it.  Since a re-time
+gives a take back, a drawn piece can be WIDER: `09:20 30m` re-timed to 09:30 gives back `[09:00, 09:40)`, which straddles the
+15m break's taken `[09:30, 10:00)`.  So `shadowNet` read a block missing `[09:00, 09:30)`, the later netting seemed to take less
+than it did, and the 15m break's take kept minutes for a stretch it no longer held.
+
+**The same root is a second, plainer defect the brief does not list, and the guard would not have touched it.**  Two breaks APART,
+each re-timed once: `09:20 10m`, `09:40 15m`, `--now 09:25`, `--now 09:50`.  On 213e827 the review says 105 and the plan draws 100,
+`09:25–09:30` drawn nowhere, `tm check` "no problems" (`d/g.sh`).  The give-back dropped the straddling piece from the drawing.
+
+**The fix.**  `Closed.restored` joins a drawn piece that meets a taken piece without lying inside it to that piece (`joinIn`, the
+hull of what it touches); with no such piece it is the list it always was, byte for byte.  `Seal.restored_starts` is re-proved (a
+hull begins where a piece began, so the day index is read at no new instant).  A's five lines read 88 on review and plan
+(`Replay.a_retime_out_over_a_later_break_keeps_the_takes_with_the_union`); the second shape 105 on both
+(`Replay.a_piece_wider_than_a_take_is_put_back_whole`).  **`givesUp` is not widened**: with the takes right a lengthen over another
+break is consistent, so D150's reading stands wherever the widest end reaches, and the brief's goal — every take consistent with the
+union whichever way the end moves — is met without taking a re-time away.  `fz.py --struct`, 300 generated days: 213e827 18 bad, this
+track 0.
+
+### 2. A shared stretch let go is read; the break it leaves short is frozen (gaps 6021, 5971, 5973)
+
+**What makes a let-go unsound is later, and elsewhere.**  What two breaks cover is in neither take (`reNetTake`).  Letting go of
+such a stretch is exact when it happens: the credit is the union's.  What goes wrong is the OTHER break's next re-time: it now
+covers the stretch alone with a take short of it (gap 5971's arithmetic; gap 5973's hole).  So the guard belongs on that break.
+
+**The rule.**  A break records the latest end it has ever had, D129's included (`HeldBrk.rel`, kept by `wideOf`; `wide` stays what
+its own lines gave it, D151).  `[j.e, j.rel)` is what `j` once covered and no longer does.  `Replay.frozen m x`: a break held AFTER
+`x` has such a stretch that meets `x`.  `retimeBlocked` is `frozen`, and for a D129 ending `newerMeets` as before; `givesUp` leaves
+the guard (it stays in `ownDrawn`).  A frozen break's line is a break of its own, D142's union, as any unread line is.  A frozen break
+stays frozen while it stands, because a re-time is what would move it after `j` and forget the stretch; `j` lengthened back over the
+stretch unfreezes it, for `j` covers it again.
+
+| shape (J day) | 213e827 | this track, replay level |
+|---|---|---|
+| B `09:20 10m`, `09:25 10m`, the first to 09:22 | not read, 105 | read, **108**; the 09:25 break frozen |
+| …then the 09:25 break to 09:28 | — | a break of its own, 108 (read, gap 5971's short take) |
+| C nested, the outer to 09:25 | not read, 90 | read, **110**; the inner frozen |
+| C2 nested, the outer to 09:40 | read, 100 | the same; the inner free |
+| D-3 `09:20 30m` → 09:40, `09:35 5m`, out to 09:45 | read, 95 | the same |
+| 09:25 break to 09:28, inside the 09:20 break | not read, 105 | read, **110**; the 09:20 break frozen |
+| gap 5973 `09:40 5m`, D129 from 09:30, D141 to 09:35 | read, 110 | the same; the 09:40 break frozen |
+| …then the 09:40 break to 09:42 | "re-timed", 110, 09:42–09:45 drawn nowhere | a break of its own, 110 |
+
+**Why not the guard the brief offered for gap 5973** (`givesUp` on an ending).  Built first, it refused the D141 end itself, and three of
+the campaign's own witnesses said why that is wrong: `a_block_is_netted_by_the_union_once_the_line_lets_the_ending_go`,
+`a_break_an_ending_covered_is_drawn_again_when_its_line_lets_it_go` and B2's `b2_two_breaks_at_one_stamp_end_by_identity`, all D141
+reads the owner asked for.  Freezing the older break keeps them, and the 09:42 re-time, which is the one that was wrong, is what is
+refused.
+
+**The take model, priced (the brief's item 3).**  A model where a block's credit and drawing are recomputed from the held breaks'
+union: a `base` on `Closed`, `netOne`, `giveOne` and the takes replaced.  It reads what `frozen` refuses.  It touches 627 references
+across 19 modules (`reNet`, `netOne`, `giveOne`, `giveBack`, `stash`, `netTake`, `runOne`, `ranMin`, `held`), 93 theorems named for
+them in `Replay`, `SealStep`, `BreakFold` and `SealResume`, and the checkpoint's machine codec: on this campaign's rate about 2,000-3,000
+proof lines and 5-8 agent-days.  Not small, and not needed for B and C, which `frozen` reads for about thirty lines.  Not built (gap 6024).
+
+### 3. One fact per held break (gaps 6022, 5974, 5996, 5992)
+
+`Replay.heldFacts`, `Facts.openHeld`, `Seal.Answer.openHeld`, the wire's `open.held`, `tm_core::log::Replay::held_breaks`:
+
+```rust
+pub struct HeldBreak {
+    pub started: DateTime<FixedOffset>,            // its own, never clipped by D142
+    pub ended: DateTime<FixedOffset>,
+    pub planned_min: u32,                          // what a re-timing line must carry
+    pub place: Option<String>,
+    pub widest: DateTime<FixedOffset>,             // the latest end its OWN lines gave it (D150, D151)
+    pub retime_from: Option<DateTime<FixedOffset>>,
+    pub out_to: Option<DateTime<FixedOffset>>,     // `widest`, a finished break past its end only
+}
+```
+
+Wire element: `[start, end, planned, where?, widest, retimeFrom?, outTo?]`.  Every break the machine holds, newest first, D129 endings
+among them, also while a break runs (then with no range).  A line stamped `started`, carrying `planned_min`, ending at `E` is read as
+the break's re-time iff `retime_from <= E < ended` or `ended < E <= out_to`.  `retime_from` is `started` or `None`: with the guard on
+the frozen break there is no partial range, so the brief's general shape is more than the rule needs and is kept because H codes
+against a `<=`.  `None` means a break runs, another break answers a line at this stamp (an older twin), a D129 ending a newer break
+overlaps, or `frozen`.
+
+**The law, over what the host decodes.**  `Replay.a_held_break_is_re_timed_in_its_range` (every instant in the range: `d141Ok` holds and
+the arm is `d141Arm`) and `Replay.a_held_break_is_re_timed_only_in_its_range` (a line that addresses the break and is read, ending
+before its end or inside its widest span, finds the range).  `a_finished_break_is_re_timed_by_its_line` is restated with hD, not
+`frozen`; W-54's form and W-54 second repair track K's are refuted by name.  **"Yields the union's netting" is not a general theorem**:
+a proof would carry the take invariant through every netting law, the price of §2.  It is witnessed per shape and held by two generated
+rows of `tm/tests/kernel_w54r3_k.rs` (gap 6027).
+
+**What the host must still decide** (for track H; the fact does not).  The kernel reads a line whose instant another break also holds,
+and it moves nothing there (a nested break's own re-time; the union does not change).  The gate's one rule — an instant more than one held
+break's closed span holds is refused — is what keeps "re-timed" meaning "moved".  An instant only `k` holds moves `k`.  `out_to` reaches over a
+break between, and the W-54 repair's host guard ("refused if a drawn break lies between") is no longer the kernel's need.  `open.finished` is
+unchanged for H's code as it stands; when H stops reading it nothing else does, and the land may retire it (gap 6028).
+
+### 4. D154: the log's typed-time lines (gaps 6023, 6026, 5972)
+
+**Which stamps.**  Read off the verbs: `tm wake` (`ctx.at`, a stated `HH:MM`), `tm arrive --at`, `tm energy --at` (D86) can run ahead of the
+clock.  `tm stop --at` and `tm done --at` are D79's latest instant at or before now; a backdated `tm break` is a past instant by its gate; D61's
+wall marks are bounded by `now` (`WallTimer.step`), D130's stop by the last activity; everything else is `ctx.now`.  `Seal.typedAt?` is the
+stamp of every line but a `wake`, an `arrive` or an `energy`, typed at that instant or not, because the log does not say which (the brief named
+`energy` and `arrive`; `wake` is this track's finding).
+
+**Where the whole-log maximum lives.**  The replay folds survivors only, so no seam or machine field can hold a cancelled line's stamp.  The
+checkpoint already keeps two instants over every folded entry (G2's `maxT`, `futureFloor`); `Ckpt.maxTyped` is the third, the latest typed stamp
+not future at the seal, resealed as `maxT` is (`Seal.resealed_maxTyped`, a typed stamp being one of `entryInstants`; law 6's `refine` gains its
+conjunct).  The answer is `Seal.latestTyped K tail f`: `K.maxTyped` and the tail's, each at or before the fence.
+
+**How D18 is applied when `now` moves.**  A maximum filtered after it was taken would let a far-future line hide the next-latest stamp, so the fence
+filters before the maximum, and the request carries it: `log.fence`, `[sec, ns]`, the host's `now` plus `LOG_FUTURE_DAYS` — the instant `tm check`'s
+warning compares against, which the `now` day cannot say.  Folded lines cannot be re-filtered, but they do not need to be: every folded line not
+future at the seal lies below the ledger day, and a future one was fenced out of `maxTyped`.
+`Seal.latestTyped_is_the_whole_logs` says it: where `f` separates the folded instants as the seal did, the answer is the whole log's, wherever the
+cut fell.  Answer key `log.latestTyped`, present only when the request set a fence, so every other request is byte-identical.
+
+**The name stands**: `Replay::latest_t`, `Option<DateTime<FixedOffset>>`, no shape change.  `replay_scoped_at` takes the fence; `replay_scoped`
+keeps its signature for the suites, with a fence two days past the date's end.
+
+**Gap 5972 closed** by D154: the seams are no longer read.
+
+### 5. The drives (§5.13)
+
+`TZ=America/Chicago`, every command capped at 8 GB, Tuesday 2026-09-08 on a fresh `init --example` tree woken at 07:00 and arrived home at 08:00;
+"J day" is `^t1` 09:00–10:00 and `^t4` 10:10–11:10 done.  Base is 213e827's binary (`tm-land`), "K" this track's, built fresh.  Both run 213e827's verb: track
+H's gate is not on this branch, so until it lands the host reads `open.finished` and refuses B, C, C2, E2 and D-3 by name, and says "re-timed" on gap 5973's last
+keystroke while the kernel reads a break of its own and nothing moves (`drv.sh`, row Y).  H's gate closes that; the kernel's half is below.
+
+| shape (`drv.sh`; review before → after; plan; cold) | base | K |
+|---|---|---|
+| A, `09:20 30m`, `09:30`, `09:40 15m`, `--now 09:20 30m`, `--now 09:52` | 85 → 98, plan 88, cold 98 | 85 → **88**, plan 88, cold 88 |
+| Z, `09:20 10m`, `09:40 15m`, `09:25`, then `09:50` | 100 → 105, plan **100**, cold 105 | 100 → 105, plan **105**, cold 105 |
+| E1, head-clipped, `--now 09:35` | "already ends", 105 | the same |
+| head-clipped, `--now 09:33` | re-timed, 107 | the same |
+| Y, `09:40 5m`, `09:30`, `09:35`, then `09:42` | "re-timed", 110 `[5, 2]`, a hole at 09:42–09:45 | the verb's "re-timed" until H, 110 `[5, 5, 0]`, plan 110, no hole |
+
+**The invariant, generated.**  `fz.py --struct` (appended lines; review against plan, no hole, no block over a break, cold rebuild the same): base **18 of 300 bad**
+(A's class and Z's), K **0 of 300**, and 0 of 300 on each of two more seeds, the last on the tip's kernel; `fz.py` with `break_start` lines, 500 sequences of up to 8 lines on the dense grid and 300 of up to 6 on the wide one, 0.
+`tm/tests/kernel_w54r3_k.rs` commits it at the replay level, with the stronger oracle the fact allows: the credit, the block rows and the break rows are the union of
+`Replay::held_breaks`, over 240 generated days; every instant of every range moves its break to it and keeps the invariant, over 60 more.
+
+**D154** (`e.sh`, through the binary):
+
+| drive | answer |
+|---|---|
+| `^t4` running, `tm energy 3 --at 18:00` at 10:12, `tm break 5m` at 10:15 | a running break (`break_start`), `tm now` agrees |
+| a `plan` line dated 2027-01-01 by hand, the same keystroke | a running break |
+| pause and unpause at 10:50, both undone at 10:51, `--now 10:15 5m`, `--now 10:40 5m`, `stop` at 11:10 | both logged finished, `stopped ^t4 after 50m · 10m left`, the week file `10m` |
+
+### 6. Records
+
+* **Parity.**  No new number.  P143's row restated (a re-time is read unless `frozen`; `open.held`), P137's (a D141 end freezes an older break it let go of), P149's (D154).
+* **Behaviour rows restated, each saying so in its doc.**  `kernel_w54r2_k.rs`: `a_retime_giving_up_another_breaks_stretch_is_read` (108, 110, 110), `latest_t_counts_a_cancelled_line_and_its_undo`.  `cli_w54r2_h.rs`: `d154_an_undone_line_past_the_typed_end_witnesses_it`.  `cli_w54r_h.rs`: `a_later_line_with_no_pause_marks_and_a_place_p149` (its witness a `tm plan`, gap 6031).  One snapshot gains `held_breaks` (`log_replay__three_days_replay`); FFI exact strings gain `"held":[]`, and `open.finished`'s entries an eighth element, `rel`.
+* **Cheats.**  835-845 appended; 832 and 834 restated in place, for what each claimed became the reading.  Each of 831-845 run alone fails at its `decide`, the proposition false (`Negative.lean` stops at 100 errors, so check 4 alone never reaches them; a scratch file holding the tail does).
+* **Line-neutral above the end.**  Every recorded pin site is where it was: `Replay.lean`, `Seal.lean`, `SealStep.lean` and `Boundary.lean` drop one blank line between declarations for each line added above a pin, and declarations are on their own lines, because the gates' scanners read column zero (a first version put several on one line and check 8, check 9 and check 11 could not see them).  New laws are at the ends of their modules; `restored_starts`'s proof is dense for the same reason.
+* **Census (check 12).**  `reach-exempt.txt`: `Replay.lean` 198 of 337, `Seal.lean` 76 of 244 (`cAt`, reached through `heldJson`, leaves the list), `SealResume.lean` 40 of 57, `Boundary.lean` 226 of 441.
+* **Citations (check 8).**  Five names this track renames or deletes, cited by append-only README blocks, are counted in `citations-allow.txt`.
+* **Check 3.**  Five `Check.lean` lines renamed in place, 41 appended under a new banner (7,169 → 7,210 audited).  Three of them are `runCap_reads_the_corpus_request`'s halves (gap 6030).
+* **Mutations (check 9).**  `mutate.py --write --only`, capped at 16 GB, in a `git clone --shared` sandbox, 50 definitions in all: new, or changed by the positional field or the field's reader.  Each PINNED or rostered by name as unfoldable, as its neighbours are.  Six came back ALONE on the first pass (`Seal.resealOfWith`, `LogField.name`, `readFenceField`, `LogReq.typedOf`, `logBodyV`, `LogReq.resumedV`) and each has a second witness now (`resealOfWith_answers_a_valid_cut`, `a_bad_fence_is_refused_by_its_name`, `readFenceField_of_a_string`, `typedOf_with_a_fence_keys_it`, `logBodyV_is_logBody`, `resumedV_is_resumed`).  `mutate.py`'s synthesised constants read a structure one field per line, so `Seal.Answer`, `Facts` and `HeldBrk` keep that shape.
+* **The checkpoint.**  `Ckpt` gains `maxTyped` (key `maxTyped`, after `futureFloor`), so a checkpoint written before this track is refused `badCkpt maxTyped` and rebuilt, as any cache another kernel wrote is (D93, D98).  The version number does not move: the kernel id already says so.
+
+### 7. Acceptance
+
+Every command run in this worktree, capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on the tree of the commit before this block's text.
+
+* **`check.sh`**: every line `ok`, 36.3 s on a built tree — axiom audit 7,210 theorems; FFI 97 tests (check 5); corpus 29/37 files and 4/5 whole plans; stage goals 1
+  (`plan_places_no_block_over_a_break`); citations 70,990, 67,021 resolved; check 9 997 new or changed since `86c4dc6`, 997 rostered, 0 owed; parity P1-P149, next free P150; 97 modules replayed.
+* **`cargo test --workspace --no-fail-fast`, three runs** (D46) over 194 result lines:
+
+  | run | load | passed | failed | ignored |
+  |---|---|---|---|---|
+  | 1 | 6.9 | 3,296 | 0 | 53 |
+  | 2 | 9.9 | 3,296 | 0 | 53 |
+  | 3 | 4.2 | 3,295 | 1 | 53 |
+
+  Run 3's failure is gap 5541's latency row (`a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`), which fails on the base too.  No `.proptest-regressions` file moved.
+* **FFI** (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed**, 0 failed, over 5 result lines.
+
+### Gaps (6020-)
+
+**Gap 6020 — a drawn piece wider than a take.**  Closed (§1).
+
+**Gap 6021 — the guard on the break a let-go leaves short.**  Closed (§2); closes gap 5971 and gap 5973 as defects of reading: B, C and gap 5973's D141 end
+read, the second-order re-time refused by the host through the fact.
+
+**Gap 6022 — one fact per held break.**  Closed (§3); closes gaps 5974, 5996 and 5992 once H reads it.
+
+**Gap 6023 — the log's typed-time lines.**  Closed (§4).
+
+**Gap 6024 — `frozen` is conservative, and what it costs.**  1. *What.*  A break `j` whose release came BEFORE `x` stepped, then re-timed again after `x`,
+freezes `x` though `x`'s take holds the stretch: `09:20 30m`, `--now 09:30`, `09:40 15m`, `--now 09:32`, then `--now 09:45` is refused where it would have been sound.  And a frozen break
+stays refused until the break that froze it lengthens back or is pruned.  2. *Why.*  The machine holds a span, not a history of releases.  3. *Cost.*  A refusal by name on
+second-order keystrokes, never a wrong number; `tm undo` is the way back.  4. *Clears it.*  §2's take model.
+
+**Gap 6025 — a name false as it stood.**  Closed: the_finished_breaks_are_the_ones_no_other_break_overlaps is renamed `the_fact_holds_no_break_on_the_col3_log`, and `finished`'s doc comment brought to the code.
+
+**Gap 6026 — the fence past a folded future line.**  1. *What.*  A typed line future when it was folded (`K.futureFloor`) is outside `maxTyped`; once `f` reaches it the fact is short of it, and a cold
+rebuild is not.  2. *Why.*  Holding every folded future stamp is a list in the checkpoint for a hand edit; `migrationOk` already stops resealing there.  3. *Cost.*  A D152 length whose typed end only that
+line has passed begins a running break (D153's safe reading), warm; `latestTyped_is_the_whole_logs` names the subdomain.  4. *Clears it.*  A rebuild when `migrationOk` fails, which nothing does today: such a tree also stops resealing.
+
+**Gap 6027 — "the union's netting" is witnessed and generated, not proved.**  §3.  Two generated rows, 240 and 60 days, deterministic.
+
+**Gap 6028 — `open.finished` and `HeldBrk.rel` beside `wide`.**  1. *What.*  `Replay.finished`, `ownDrawn` and `givesUp` remain for H's code as it stands.  2. *Why.*  K first, H next; removing them under H is the failure this sequence exists to avoid.  3. *Cost.*  A wire key with no reader once H moves.  4. *Clears it.*  The land, after H.
+
+**Gap 6029 — the kernel's D141 read on a hand-logged line.**  A log written before this track holding a line this kernel now reads differently (a line re-timing a break another's let-go froze, read by 213e827) reads as a break of its own here: a replay change under P143, on the campaign's own logs only; nothing shipped wrote one except through the shapes §2 lists.
+
+**Gap 6031 — a plain `tm energy` is no witness.**  1. *What.*  `Seal.typedAt?` excludes by kind, so `tm energy 3` typed at 10:50, stamped when its verb ran, does not count, though D154's words would count it.  2. *Why.*  The log does not say which `energy`, `arrive` or `wake` line was typed with a stated instant; marking them is a log-grammar change, and reading them all as witnesses is the reading D154 declined.  3. *Cost.*  A D152 length whose typed end only such a line has passed begins a running break, the safe reading (`cli_w54r_h.rs`'s row restated: its later line is a `tm plan` now).  4. *Clears it.*  A mark on the line, if the owner wants it.
+
+**Gap 6030 — `runCap_reads_the_corpus_request` split.**  The `rfl` stood at about 205,000 of its 200,000 heartbeats once the answer gained a field; it was near the limit before.  Its three halves are three declarations (`corpus_request_day_one`, `corpus_request_too_long`, `corpus_request_without_a_zone`), each one budget, the statement unchanged; `maxHeartbeats` not raised.
+
+<!-- ======================================================================
+     Stage 6 — W-54 third repair track H (2026-11-05): the host, on track K's tip 5edae1a — the break gate reads the kernel's
+     fact per typed instant (`Replay::held_breaks`), the invariant committed as a generated test (`tm/tests/cli_break_sweep.rs`),
+     D154 through the verb.  Branch `w54r3-h`.  Gaps 6040-6068 are this block's (§10 is the last host round).  No Lean, no cheat, no parity
+     number; `tm-core/src/log.rs` and `tm/src/cli/kernel_log.rs` untouched.  Whoever merges renumbers (AGENTS §6.4).
+     ====================================================================== -->
+
+## Stage 6 — W-54 third repair track H: the break gate reads one fact per held break; the invariant as a committed test
+
+### 1. The gate (defects B, C, D, E2, F; `tm/src/cli/day.rs`)
+
+**What went.**  held_spans, HeldSpan, typed_end, FinishedSpan, finished_breaks, spans_of, retime_in_the_way and InTheWay.  The gate reads no
+break record and no finished-break fact: `at_finished(&ctx.replay.held_breaks, ctx.now)` answers one arm per typed instant, each break by its own span.  **The host no
+longer reads `Replay::finished_breaks`**, so the land may retire `Replay.finished`, `ownDrawn` and `givesUp` (gap 6028).
+
+**Gap 5990's table, restated to the fact** (the campaign's call, revisable by the owner, as gap 5990 says):
+
+| the instant, over `held_breaks`' closed spans | arm | answer |
+|---|---|---|
+| inside exactly one, `retime_from` reads it | Inside | D147: re-timed, one line |
+| at the end of exactly one | AtEnd | "already ends", nothing written, no fact needed |
+| at the start of every one holding it | AtStart | refused, naming each |
+| inside exactly one, no `retime_from` | NotRead | refused, saying what is in the way |
+| held by more than one, otherwise | Many | refused, naming each by its own span and relation |
+| none; past the end of exactly one, inside `out_to` | Out | D150: re-timed out, over a break between (gap 6046) |
+| none; past the end of exactly one, inside `widest`, no `out_to` | OutNotRead | refused, saying what is in the way |
+| none; past the ends of more than one, inside each widest end | Many | refused, naming each |
+| outside every closed span and widest end | None | a break begins (D147, D151) |
+
+**"Re-timed" means moved.**  Track K's note is kept: the kernel reads a line at an instant another break also holds, and it may move nothing, so an instant more than one
+closed span holds is refused.  So E1's day at 09:28, which K's table reads at replay level as 110, stays refused at the verb: the line may mean either break.  The second half
+of the rule, an instant only one span holds moves that break, is false on one shape (gap 6045), and `a_line_moves` asks the kernel over the line held before saying so.
+
+**D141's arm reads the fact too (gap 6041).**  `Replay.endable` does not read `frozen` while `d141Ok` does (`d141_reads_iff_endable`'s right side names `frozen m x = false`), so
+`Replay::ended_breaks` lists an ending a line will not end.  `Ctx::a_line_ends` is the host's half: that ending is answered by the gate, and P139's refusal at its start does not offer a later instant.
+
+**Every shape, through the binary** (`tm/tests/cli_w54r3_h.rs`; J day, review before → after, plan and cold rebuild the same; `shapes.sh`, on this branch's fresh build; 213e827 from its block and the drives in `common.md`):
+
+| shape | 213e827 | this branch |
+|---|---|---|
+| A, `09:20 30m`, `09:30`, `09:40 15m`, `--now 09:20 30m`, `--now 09:52` | 98, plan 88 | re-timed 09:40–09:55 to 09:52, 85 → **88**, plan 88, cold 88 |
+| B `09:35 5m`, `09:30`, `09:45`, `--now 09:47` | refused "inside the length typed for it" | a break begins, D129 to 10:10, 105 → 92 |
+| B `09:20 10m`, `09:25 10m`, `09:31 2m`, `--now 09:37` | refused, naming a phantom | a break begins, 105 → 82 |
+| C d5 `09:27 10m`, `09:30`, `09:20 10m`, `09:25 10m`, `--now 09:33` | refused, naming a phantom 09:30–09:35 | re-timed 09:25–09:35, 105 → 107 |
+| C2 `09:20 30m`, `09:30 5m`, `--now 09:40` | refused (gap 5974) | re-timed, 90 → 100 |
+| D-3 `09:20 30m`, `09:40`, `09:35 5m`, `--now 09:45` | refused (gap 6010) | re-timed out (D150), 100 → 95 |
+| E2 nested, `--now 09:50` | refused | "already ends", 90 |
+| gap 5971 B `09:20 10m`, `09:25 10m`, `--now 09:22` | refused | re-timed, 105 → 108 |
+| …then `--now 09:28` | — | refused (the 09:25 break frozen), 108; `tm undo` back to 105 |
+| gap 5971 C nested, `--now 09:25` | refused | re-timed, 90 → 110 |
+| E1's day, `--now 09:28` | refused | refused, naming both |
+| gap 5973 `09:40 5m`, `09:30`, `09:42`, `--now 09:43` | "re-timed", 105, nothing moved | refused by name, 105 |
+| gap 5973 K's `09:40 5m`, `09:30`, `09:35`, `--now 09:42` | "re-timed", 110 | refused by name, 110 |
+| gap 6024 `09:20 30m`, `09:30`, `09:40 15m`, `09:32`, `--now 09:45` | — | refused by name, 93; a length logs finished, `tm undo` then 09:45 re-times, 105 |
+| hidden twin `09:35 15m`, `09:15`, `09:35 15m`, `--now 09:40` | "re-timed", 85, nothing moved | refused by name, 85 (gap 6045) |
+| past a frozen break's end `09:40 15m`, `09:45`, `09:30`, `09:33`, `--now 09:50` | — | refused (OutNotRead), 112 |
+| frozen ending `09:35`, `09:20 30m`, `09:25`, `--now 09:40` | "ends here", nothing moved | refused by name; two undos, then it ends there |
+
+**Each refusal's advice is driven, not only said.**  `a_length_here` asks the kernel, over the held `break_start`, what a length does at that instant and offers it only when it logs a finished break, naming the rule (D143, D149, D152's "already passed").  `tm undo`'s sentence is "takes the last line back, one line at a time, until the lines that overlap are gone"; rows: gap 6024 and the frozen ending.  A refusal past the last block offers no length (`past_the_last_block_the_refusal_offers_no_length`).
+
+**Rows restated, each saying so in its doc.**
+- `cli_w54r2_h.rs`: E2, B, C, C2 and D-3 moved to `cli_w54r3_h.rs` with their new answers; F1 and F2 read "a break is logged" (a held break may be a D129 ending, not "finished"); the two guard docs name `at_finished`.  The dead helpers K_FACT, rows, has_row and retimed are gone.
+- `cli_w54r_h.rs`: a_retime_out_across_another_logged_break_is_refused is now `a_retime_out_runs_across_another_logged_break` (gap 6046).
+- `cli_w54_h_breaks.rs`: inside_an_overlapped_break_alone_the_verb_refuses_it and inside_a_break_past_the_one_it_nests_the_verb_refuses_it are now `…_re_times_it`, 95 each.
+- `cli_d141_break_end.rs`: a_break_typed_at_or_after_the_end_d129_gave_begins_a_break is now `a_break_typed_after_the_end_d129_gave_begins_a_break_and_at_it_already_ends` (gap 6047).
+- `cli_d147_retime.rs` and `cli_w54r_k_breaks.rs`: the message's words.
+
+**Plants** (`plants.py` in the track's scratchpad: each applied alone, then the unit tests, the six gate suites, `cli_d141_break_end`, `cli_d143_finished_break`, `cli_w52r_break_ends`, `cli_w53r_k_d147` and `cli_break_sweep` with 4 cases; failing rows by name there).  retime_in_the_way is deleted, so its three branches are stated over what replaced them.
+
+| plant | rows that fail through the binary |
+|---|---|
+| old Inside guard off: several hold it, the latest begun is re-timed | 12, among them `inside_a_break_and_the_break_it_nests_is_refused_naming_both`, `e_inside_near_twins_is_refused`, `an_instant_two_spans_hold_stays_refused` |
+| old AtEnd guard off: several hold it, the one ending here "already ends" | `at_one_breaks_end_and_anothers_start_is_refused`, `f5_…`, `already_ends_here_inside_another_drawn_break_is_refused` |
+| old Out guard | deleted: the correction says the kernel no longer needs it (gap 6046); no plant |
+| AtEnd arm off | 8, among them `e1_…`, `e2_…`, `e3_…`, `a_no_length_break_at_a_finished_breaks_end_changes_nothing_p145` |
+| Inside arm off | 33 |
+| NotRead to Inside | `gap_5971_b_…`, `gap_5973_…`, `gap_6024_…`, `past_the_last_block_…`, the frozen ending's |
+| AtStart, one | `f1_…`, `f2_…`, `a_no_length_break_at_a_finished_breaks_start_is_refused_p145`, the seconds row |
+| AtStart, several | `f3_at_the_start_of_two_breaks_is_refused` |
+| Out arm off | 10, among them `d3_…`, `a_retime_out_runs_across_another_logged_break`, `past_a_frozen_breaks_end_…` |
+| OutNotRead to Out | `past_a_frozen_breaks_end_inside_its_widest_end_is_refused` |
+| Many, past two ends, to Out | `past_two_breaks_ends_inside_both_widest_ends_is_refused_naming_both`, added after the first pass found none, then re-planted |
+| seconds: past the end under a minute | `an_instant_with_seconds_reads_the_end_its_line_gives` |
+| seconds: another span at the whole minute | `a_line_whose_whole_minute_another_break_holds_is_refused`, added after the first pass found none, then re-planted |
+| `a_line_moves` off | `a_hidden_twin_…`, `the_briefs_shapes_hold_the_invariant`, the proptest's seed |
+| `a_line_ends` off | `a_frozen_ending_is_refused_at_d141s_instant_and_at_its_start` |
+| `drawn_break_at` guard off | `a_break_past_the_bound_of_held_breaks_is_refused_by_what_is_drawn` |
+| a length always offered | `past_the_last_block_the_refusal_offers_no_length` |
+| `in_the_way`'s twin branch off | the unit test only: a twin with no `retime_from` needs K's older twin, whose keystrokes the sweep did not draw; recorded (gap 6048) |
+
+### 2. The invariant as a committed test (gap 6040)
+
+`tm/tests/cli_break_sweep.rs`: common.md's four clauses through the binary, the held list read off the log's text before each keystroke, every read on a copy because `tm plan` logs a line.  Clause 3 also reads "ended", D141's reply.  Clause 1 also holds K's: every minute of the blocks drawn once.
+
+**Shown failing first.**  `TM_SWEEP_BIN=<213e827's binary>`, `the_briefs_shapes_hold_the_invariant`: `A: …: the review says 98 and the plan draws 88`.
+
+**What it found.**  One seed, on its first 1,500-case run (committed in `cli_break_sweep.proptest-regressions`): the hidden twin (gap 6045), fixed in the host.  **A second finding before it ran**, from writing clause 4: gap 6044, which is this brief's rule answering a shape badly, so the test states the exception and the shape goes to the owner.
+
+**The runs.**  Proptest at its default 64 cases: about 48 s beside the other rows of the binary.  1,500 cases on 3-6 keystrokes, on this branch's gate: **0 disagree** (26 m 52 s, under load).  The `#[ignore]`d exhaustive row (every minute 09:00-11:30 against 17 shapes, no length and `5m`): **5,134 sequences, 0 disagree** (9 m 11 s, twelve threads).  Those two figures are `d0d1fd1`'s; §7 has the runs on the tree the fix round left.
+
+### 3. D154 through the verb
+
+`inside_running_block` reads `Replay::latest_t`, the kernel's `log.latestTyped`; the code did not change, its doc did.  Rows (`cli_w54r3_h.rs`): `tm energy 3 --at 18:00` at 10:12 then `tm break 5m` at 10:15 begins a running break and `tm now` agrees; a `plan` line dated 2027-01-01 the same; pause and unpause at 10:50 undone at 10:51, `10:15 5m` and `10:40 5m` logged finished, `stop` at 11:10 writes `10m`.  Gap 6031's narrowing: a plain `tm energy` is no witness; a `tm plan` is.
+
+**Gap 5998, its cost restated.**  A length typed inside the running block whose typed end no typed-time line has reached begins a running break.  A later verb helps only if it logs a line stamped past the typed end.  **The brief's sentence is half right, and the row says which half:** `tm now` at 14:10 writes D61's marks stamped 12:50 and 13:50, and they DO witness a typed end at or before 13:50 (`--now 10:20 10m` is logged finished); they do not witness a later one although the verb ran at 14:10 (`--now 13:55 10m` begins a running break).  `tm now` with no mark to write logs nothing and witnesses nothing (`d154_d61s_marks_witness_their_own_stamps_and_no_later`, `d154_which_later_verbs_witness_the_typed_end`).
+
+**Gap 5940, restated.**  Closed.  No line order hides the latest stamp since D153, and D154's fact counts undone lines and undo lines and drops `wake`, `arrive`, `energy` and lines past the fence (gaps 6023, 6031).
+
+### 4. Gaps restated
+
+- **Gap 5990**: its table is §1's.  F5 and the near-twins stay refused as ambiguous; E1, E3 and adjoining as there.
+- **Gap 5992**: closed.  `HeldBreak::widest` is on the wire for every held break; D-3 goes out.
+- **Gap 5993**: closed by §1's plants; the drawn halves of the Inside and AtEnd guards went with retime_in_the_way.
+- **Gap 5994**: its "Done" was false for an unlisted break and is true now: every name is a `HeldBreak`'s own span.
+- **Gap 5995** (F5): still the campaign's call.
+- **Gap 5996**: closed.  No span is read off a record; its premise, that an unlisted break is one the others cover wholly, was false.
+- **Gap 5941**: its first half stands as §1's rule and `a_line_moves`; its second half ("D150's Out never crosses another logged break") is withdrawn (gap 6046).
+- **Gap 6010**: closed.  typed_end is deleted; defect B was its cost: a re-time through a D141 ending has no typed length to bound.
+- **Gap 6011**: closed.  The text is gone; `in_the_way` says what the fact can.
+- **Gap 5971, 5973**: closed through the verb, §1's table.
+- **Gap 5921**: K's gap 5975 records that the W-54 repair land's commit message (`ba525fa`) names it as landed while it is open.  **213e827's message does not name it** (`git log -1 213e827`), so the brief's "and 213e827's" is one commit too many; nothing to add.
+
+### 5. Gaps (6040-6059; 6040-6049 here, 6050-6055 in §8, 6056-6059 in §9)
+
+**Gap 6040 — the invariant, generated.**  §2.  1. *What.*  It covers `tm break` keystrokes on the J day only: no running block, no interrupt, no other day.  2. *Why.*  The brief's scope; the rows and K's `kernel_w54r3_k.rs` hold the rest at their own levels.  3. *Cost.*  A sequence crossing a running block is not generated.  4. *Clears it.*  A second day in `shapes()` and `a_key()`.
+
+**Gap 6041 — `open.ended` lists an ending a line will not end** (§1).  1. *What.*  `Replay.endable` does not read `frozen`, so `ended_breaks` offers a frozen ending; `Ctx::a_line_ends` subtracts it through `held_breaks`.  2. *Why.*  Lean is not this track's, and K's law already says it.  3. *Cost.*  Two facts for one question until the land narrows `endable`; driven, 213e827-era keystrokes said "ends here" and nothing moved.  4. *Clears it.*  `endable` reading `frozen`.
+
+**Gap 6042 — an instant with seconds is read at the end its line gives.**  Closed by `line_end` and `an_instant_with_seconds_reads_the_end_its_line_gives`: under a minute past a start is its start, under a minute past an end is its end, and a whole minute another span holds is refused.
+
+**Gap 6043 — what `drawn_break_at` still guards.**  1. *What.*  A break past D94's bound (`Replay.pruneBrks`) is drawn in the replay's rows and absent from `held_breaks`.  Driven: 07-01, then 08-20 and 08-21, `--now 07-01 09:10`.  2. *Why.*  The kernel lets go of the break; the instant must not begin one.  3. *Cost.*  That break cannot be re-timed; the refusal says so.  4. *Clears it.*  Nothing owed.
+
+**Gap 6044 — the invariant's fourth clause and a length with nothing to end it: stopped on this shape, the owner's call (narrowed by §8's gap 6050: the words below were wider than the code should be).**  1. *What.*  common.md says no `break_start` at an instant inside a held break's closed span.  `tm break --now 11:25 5m` inside 11:20–11:30, with no later start, closed block or passed end, writes one, and it runs, drawn after the held break.  2. *Why.*  I built the refusal the clause asks for, and three rows that predate it failed: `cli_d144_now_break.rs`'s gap 5775, `cli_w54_h_breaks.rs`'s F3 and `cli_week_grid.rs`'s union.  They pin this as behaviour, and gap 5810's loss cannot happen here, because no start follows for D129 to run it to.  So the guard is removed, and `cli_break_sweep.rs`'s clause 4 names the exception.  3. *Cost.*  The clause is narrower than common.md's words on this one shape: a length, nothing to end it.  No clause 1, 2 or 3 disagreement in 6,634 sequences.  4. *Clears it.*  The owner: keep it, or refuse it and restate the three rows.
+
+**Gap 6045 — a kernel finding: a twin the fact merges.**  1. *What.*  `09:35 15m`, `09:15` (D129 to 10:10), `09:35 15m`: D146's second line is read as a break of its own, because `frozen` refuses it as the first's re-time, so the machine holds two identical breaks and `heldFacts` one entry, the newest, with a range.  A line at 09:40 moves only the newest: 85 before and after.  So K's "an instant only `k` holds moves `k`" is false on this shape.  2. *Why.*  Identical twins are one entry by K's contract.  3. *Cost.*  The verb refuses by name (`a_line_moves`, one held replay on a re-time), and the refusal's words assume a twin is why, since the probe cannot say otherwise.  The break stays un-re-timable until `tm undo`.  4. *Clears it.*  `retime_from` None for a break with a twin the line leaves standing, in `Replay.heldFacts`.
+
+**Gap 6046 — D150 runs over a break between.**  1. *What.*  `09:20 30m` → 09:30, `09:35 5m`, `--now 09:45`: re-timed out, 95, the 09:35 break drawn 0.  Refused from the W-54 repair until now (gap 5941's second half).  2. *Why.*  The brief's correction: `out_to` reaches over it because the kernel reads that soundly.  3. *Cost.*  A user lengthening a break swallows the break between; the review and the plan agree.  4. *Clears it.*  Nothing owed unless the owner rules.
+
+**Gap 6047 — at D129's own end, "already ends".**  `--now 10:10` at a break D129 ended at 10:10 began a second break of no minutes; since `held_breaks` holds D129's endings it is that break's end.  Row restated; a behaviour move inside the rule, no parity number (nothing written, and fork 4748911 has no such break).
+
+**Gap 6048 — `in_the_way`'s twin branch has a unit test and no binary row.**  1. *What.*  The branch answers for a break alone holding the instant, with no `retime_from`, because an older twin at its stamp and length loses the line to a newer one.  2. *Why.*  Worked by hand, no keystroke sequence gets there: the newer break must end before the older, and since a re-time needs an instant only one span holds, and the newer's whole span lies inside the older's, the verb refuses it as Many; lengths typed at a D129 ending's own start are refused by P139.  It is kept because K's fact lists that reason, and a log from elsewhere is not bound by the verb.  3. *Cost.*  Its wording is unit-tested only; the arm refuses either way.  4. *Clears it.*  A log shape that reaches it, or deleting the branch.
+
+**Gap 6049 — `replay_scoped` is dead in the binary.**  `cargo build -p tm` warns `function replay_scoped is never used`, in `tm/src/cli/kernel_log.rs`, since track K moved `Ctx::replay_with` to `replay_scoped_at`.  The suites use it through `#[path]`.  K's file, so left; the land adds an `allow` with its reason or moves it.
+
+### 6. brief_corrections
+
+1. Item 3's "`tm now` writing D61's marks at 12:50 and 13:50 does not" is half right (§3).
+2. The correction's "the 09:28 line 110": K's replay-level figure; the verb refuses that instant by the same correction's rule (§1).
+3. Common's clause 4, read literally, refuses what three older rows pin (gap 6044).
+4. The correction's "An instant only one closed span holds does move that break" has one counterexample (gap 6045).
+5. "213e827's commit message" does not name gap 5921 (§4).
+6. Item 1 names retime_in_the_way's plants; it is deleted, its arms folded into `at_finished`, and the plants are stated over what replaced them (§1).
+7. Not on the brief's list and needed: D141's arm reads the fact (gap 6041).
+
+### 7. Acceptance
+
+Every command run in this worktree, capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on **`3677262`**, the tree the fix round left (§8, §9).  The commits after it change this README only.  The figures this section held until now described `e7cb23c`, before §8's and §9's code.
+
+* **`check.sh`**: every line `ok`, 37.3 s — axiom audit 7,210 theorems; FFI 97 tests (check 5); corpus 29/37 files and 4/5 whole plans; stage goals 1; citations 71,168, 67,169 resolved, 0 allow entries unused; check 9 997 new or changed, 997 rostered, 0 owed; parity P1-P149; 97 modules replayed.  No allow-list entry was needed for §8's or §9's new names.
+* **`cargo test --workspace --no-fail-fast`, three runs** (D46) over 196 result lines, about 18 minutes each:
+
+  | run | load at its start | load at its end | passed | failed | ignored |
+  |---|---|---|---|---|---|
+  | 1 | 2.55 | 2.60 | 3,348 | 1 | 54 |
+  | 2 | 2.60 | 6.02 | 3,349 | 0 | 54 |
+  | 3 | 6.02 | 2.80 | 3,349 | 0 | 54 |
+
+  The failure in run 1 is gap 5541's latency row, `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`: `tm drop ^z15` was still running after 1 s.  **Not counted as clean.**  The start and end loads above do not bracket the moment it failed: another workflow's Lean builds were running, and the load read 8.95 at one point during that run.  Runs 2 and 3 passed it.  No `.proptest-regressions` file moved in any run.
+* **FFI** (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed**, 0 failed, over 5 result lines, load 2.74.
+* **The sweep file, to completion** (`TM_PROPTEST_CASES=1500 cargo test -p tm --test cli_break_sweep -- --include-ignored`; 23 m 39 s, load up to 15.7): 19 passed, 0 failed.  The `#[ignore]`d exhaustive row: **9,362 sequences, 0 disagree**.  Each of the file's two proptests, `the_invariant_holds_after_any_break_keystrokes` and `the_invariant_holds_after_any_break_keystrokes_on_a_running_block`, ran its committed seeds and 1,500 cases: **0 disagree, no new seed.**
+* **Warnings**: one, gap 6049's.
+
+### 8. The attackers' five (gaps 6050-6055)
+
+Independent attackers reproduced five defects on `a2759a1`.  Each was re-driven on that binary and each reproduced as reported.  **All thirteen new rows, run on `a2759a1`'s binary (swapped in as `target/debug/tm`, the test binary run directly): twelve fail and one passes.**  `d141_still_ends_a_break_no_other_span_holds` passes there, and that is what it is for: it guards over-refusal, the fix's own risk, and cannot show the fix.  `r_a_length_with_the_breaks_own_start_and_planned_minutes_is_refused` fails there on `refused: break 20m`, and `d141_that_moves_with_another_span_holding_says_so` on a reply with no `also holds`; those two and the passing one had been added after the first unfixed run, and this sentence said all three had failed until they were run.  Gap 6054's row is older than the thirteen and is green on `a2759a1` by design; its result on 213e827's binary is in its paragraph.  Rows are in `tm/tests/cli_w54r3_h.rs`.
+
+**Gap 6050 — clause 4 and a length inside a closed span: a blocker, and gap 6044's "gap 5810's loss cannot happen here" was false.**  1. *What.*  R day (`^t4` running since 10:10): `10:15`, `10:40`, `--now 10:20 5m` wrote a `break_start` at 10:20, inside 10:15–10:40.  `tm now` at 12:30 read `5m of 60m · paused` and `on break since 10:20 · 110m of 5m`, and `tm stop` wrote `after 5m · 55m left`: the 110 minutes after the user ended the break were gone, `tm check` silent.  J day: `10:30 90m`, `--now 10:35 5m` did the same over a closed block, `netted_closed_block` seeing nothing further to net.  **The committed sweep could not see either:** its exception, `len.is_some() && open_break.is_some()`, was true of every length that begins a break, and it never ran a day with a block open.  2. *Why.*  `Seal.typedAt?` counts a `break` line at its start stamp, so `Replay::latest_t` never reaches the end of a break the user ended.  3. *The fix, `length_in_held`, in the host, asked only when D143, D149 and D152 did not take the length.*  A length typed strictly inside a held span:
+
+   | the keystroke's typed end | with a block open at the instant, or a typed-time line at or past the instant | with neither (gap 6044's shape) |
+   |---|---|---|
+   | at or before the span's end or `latest_t` | logged finished, one plain `break` line | a running break begins, the owner's call |
+   | past both | refused by name; the advice, a length that ends by that reach, is driven | a running break begins, the owner's call |
+
+   At a held break's very end the instant is outside it and a break begins after it, with nothing lost.  At its own start with its planned minutes the kernel reads the line as that break's own, so the verb refuses rather than say "finished" of a line that moves it (`10:15 20m` over 10:15–10:40); a different length, or `tm break` at the instant it should end, does what the refusal says, both driven.  R drives now: 10:20 5m logs finished, `tm now` `115m of 60m`, `tm stop` `after 115m · 5m left`, warm and cold.  J: 10:35 5m logs finished, review 80 before and after, `tm now` reads no break.  `FinishedBreak` gains `inside_break`.  **The sweep's exception now states gap 6044's words from the log** (a length, no block open at the instant, no typed-time line at or past it), **and it runs the R day too**, read after a `tm stop` on the copy because the review counts closed blocks.  4. *Cost.*  D153's letter says a typed end no line has passed begins a running break; inside a held span clause 4 overrides it, because the span's own end says the stretch is over.  A D148 break's end can run ahead of the clock, so that witness is used only for an instant the same span holds (gap 6055 is the case outside).  `10:35 90m` is refused where D149 would log it, because the block is no longer visible once netted; a length ending by 12:00 logs.
+
+**Gap 6051 — a length at a D129 ending's own start was swallowed under "logged finished": a blocker.**  1. *What.*  J day: `09:42`, `09:25 30m`, `09:42 60m` replied `logged finished (it runs past the start at 10:10, whose block it nets, D148)` and wrote the line.  Review 85 before and after, warm and cold; the length gone, `^t4` not netted.  It reproduces on 213e827, so it is not new here, but this track's refusal advised exactly that keystroke, and following the advice (`09:42 5m`) drew `09:42 break 28m` after the outer re-time.  2. *Why.*  The kernel takes a `break` line at a D129 ending's stamp it does not read as D141 as P127's own line and keeps D129's span.  `ended_breaks` omits that ending once a newer break overlaps it, so P139's guard does not fire.  3. *The fix, `a_finished_line_is_read`.*  Every arm that logs a finished line asks the kernel first, over the line held, whether it then holds a break with exactly that span, and only where a held break already starts at the stamp, so a break past D94's bound cannot be over-refused.  Refused by name; `a_length_here` asks the same and no longer offers the length.  Another instant, the refusal's advice, is driven: `09:43 5m` logs finished, review 85.  The alternative, netting `^t4` to 53, is the kernel's `letGo` arm and is not built.
+
+**Gap 6052 — D141's arm skipped the one-instant rule.**  1. *What.*  `09:40`, `09:30`, `--now 09:45`, and `09:40 30m`, `09:30`, `--now 09:45`: the reply said the 09:30 break ends here, review 90 before and after, 09:45–10:10 still drawn.  2. *Why.*  `superseded` runs before `at_finished`, and `a_line_moves` compared rows a cut break changes.  3. *The fix.*  **Refusing every instant two spans hold was built first and was wrong:** it refused common.md's own 5973 setup (`09:40 5m`, `09:30`, `--now 09:42`, 90 to 105) and the hidden twin's D146, both of which do give minutes back.  So where more than one span holds the instant the arm asks the kernel: a line that moves nothing stands aside, the gate refuses it naming both breaks, and a length logs a break of its own (`09:45 5m`, driven); one that moves ends the break, and the reply says `the logged break 09:40–09:45 also holds this instant, and stays`.  `the_day_drawn` merges touching Break pieces, so a cut row is not a move; `a_line_moves` reads it for the re-time arm too.  **The sweep's clause 3 had the same blind spot** and now compares merged spans; on its first run it drew a seed for this shape.  The same comparison exempts an ended reply with a length typed: D146 may refill the stretch exactly (`09:15`, `09:55 15m` up to 10:10), and the reply is true.  4. *Cost.*  With both breaks holding the instant and no minute to move, the user has `tm undo` or an instant only one span holds.
+
+**Gap 6053 — "re-timed" with seconds read as a no-op and lost a minute.**  1. *What.*  `11:30:30`, `11:40:45`, `--now 11:40`: `break 11:30–11:40 re-timed to end at 11:40 · 9m of 20m`, writing `actual_min: 9`, the plan drawing `11:30 break 9m`.  A wall-clock break has seconds on both ends, so typing the displayed end reaches this.  Gap 6042 covered only under a minute past a start or end.  2. *The fix, both of the finding's answers.*  Under a minute before the end `at_finished` answers "already ends", nothing written; `re-timed` prints the end its line gives, never the typed instant (`--now 09:25` in a break begun 09:20:30 says 09:24).  D141's `ends here` prints it too.  3. *Cost.*  A user at 11:39:50 who means it cannot shorten that break by the minute; typing 11:39:00 does.  **The review and the plan's rows differ by a minute on seconds-stamped days,** review counting whole minutes of the true spans and the plan printing `HH:MM`: this is older than this track, and the rows there assert the review and the cold rebuild only.
+
+**Gap 6054 — D154's far-future row could not fail.**  `d154_a_far_future_line_is_no_witness` wrote a line the reader refuses (`missing field replans_today`), so it was never read as a far-future line, it passed on 213e827, and its doc sentence was false.  The binary was correct; the guard was vacuous (AGENTS §5.2, §9.2).  It now writes the valid line and asserts `tm check` says `warning[log-future]` and not `warning[log-line]`.  Run on 213e827's binary (`w54r2l/tm-land`, swapped in as `target/debug/tm`): the row fails, at `begins_a_running_break`'s first assertion, the verb replying `break 5m · 10:15–10:20 · logged finished (it lies inside ^t4, which is running; it nets it, D152)` over the far-future line.
+
+**Gap 6055 — the same loss one minute outside a span, not built: D154's wording or the kernel's.**  1. *What.*  R day: `10:30`, `10:40`, `--now 10:28 5m` begins a running break at 10:28 (typed end 10:33, inside 10:30–10:40), and `tm now` at 12:30 reads `18m of 60m · paused`, `on break since 10:28 · 122m of 5m`, `tm stop` `after 18m`: 110 minutes gone, `tm check` silent.  2. *Why not built.*  10:28 lies in no closed span, so clause 4 does not reach it, and D153 and D154 say a typed end no typed-time line has passed begins a running break.  `length_in_held` could read a span holding the typed end as a witness, but that is a wider reading than the owner took.  3. *Cost.*  A backdated length beginning just before a break the user ended loses the time after it.  4. *Clears it.*  The owner, or the kernel: a `break` line that ends a running `break_start` proves its end was reached, which `Seal.typedAt?` could count, unlike a finished line's end.  That would also retire gap 6050's span witness.
+
+### 9. The finish round (gaps 6056-6059)
+
+Three host notes the attackers filed are fixed, and three more are recorded and not fixed.  The land's block carries the kernel findings and the owner's questions.  The rows are in `tm/tests/cli_w54r3_h.rs`.
+
+**Gap 6056 — the three fixed notes.**  Each row below failed on the binary before its fix, except the third's, as it says.
+
+1. *Under a minute past a D129 ending's start.*  `09:20`, then `--now 09:20:30`: D141's arm wrote `actual_min: 0`, the reply said `ends here, at 09:20`, and the break was gone (review 80 to 120).  With a length, D146 lost it the same way.  The start's instant is now the whole first minute: the verb refuses as P139 refuses 09:20 exactly, by the same words, with or without a length.  `--now 09:21` still ends it (review 119).  Row: `under_a_minute_past_a_d129_breaks_start_is_refused_as_at_its_start`.  *Cost:* none measured; `09:20:30 5m` is refused where it wrote a zero-minute end, and a length at any other instant logs.
+2. *Advice on a break too short for a line.*  `09:20 1m`, then `09:20` or `09:20:30`: the refusal said "give an instant inside it", and none exists.  The rule is wider than the note: under a minute past the start is at the start and under a minute before the end is at the end, so a logged break **under two minutes** has no instant that re-times it.  The refusal now says so and offers what a keystroke does, both driven: a length where the kernel logs one finished, and `tm undo`.  Past the blocks at 11:20:30 a length would begin a running break, so only `tm undo` is offered.  A D129 ending a minute long had the same defect in P139's "give a later instant" (`10:09`, J day) and the same fix.  A two-minute break keeps the old advice, and following it moves the break.  Row: `a_break_too_short_for_a_line_is_given_advice_that_works`.
+3. *A row's doc that claimed a result nobody drove.*  `past_a_frozen_breaks_end_inside_its_widest_end_is_refused` said `tm undo` of the 09:33 line un-freezes the break and "D150 re-times it out".  Driven: after that one undo the 09:30 break is open again, 09:50 lies inside it, and D141 ends THAT break (review 100).  A second undo takes the 09:30 break off the log, and only then does D150 re-time the 09:40 one out (review 110).  The doc says so and the row drives both.  The verb did not change, so this row passes on the earlier binary; asserting the old sentence fails.
+
+**Gap 6057 — D126's rewrite adds the given-back minutes to a floored remainder.**  1. *What.*  S day (`^t4` 10:10–11:10, `tm stop` writes the floor, `5m`), then `--now 10:40 10m`: D126 writes `15m`.  The same minutes in order (R day, break 10:40–10:50, `tm stop` at 11:10) write `10m`, from `after 50m · 10m left`.  Driven on this branch and on 213e827's binary, with the same result on both.  2. *Why.*  `d126_expected` reads `written + (at_close − now)`, and `written` is already the floor, so the minutes the floor added are counted again.  Not fixed here: the brief records it.  3. *Cost.*  The Markdown's remainder reads up to the floor's minutes too high after a late break on a block stopped at or past its estimate, and the planner gives the item those minutes.  Review and log are right.  4. *Clears it.*  `d126_expected` computing from the estimate the closing verb read, which the log's `stop` would have to carry or the replay derive; a host step of stage 6.
+
+**Gap 6058 — a refusal on an earlier day prints "nothing written" while `Ctx::load`'s rollback rewrites `.tm/state.json`.**  1. *What.*  J day with `09:20 10m`, then 09-09's `wake`, `arrive` and `plan`; `tm break --now 2026-09-08T09:20` exits 1 saying "nothing written".  The log is byte-identical, and `.tm/state.json` now holds `date` 2026-09-08.  The next verb on 09-09 rolls it forward with `arrival`, `window` and `budget` null where they held `08:00`, `08:00–17:20` and `6`.  2. *Why.*  Gap 139's class: `--now` at an instant before the stored runtime day rolls the cache back on load, before the verb decides anything.  Whether `--now` should be read-only is the question gap 139 leaves to the §5.13 drive.  3. *Cost.*  The sentence is true of the plan's files and the log, and false of the cache.  The cache is derived (D42): `tm plan` on 09-09 still prints `window 08:00–17:20 · budget 6 blocks`.  A reader of `.tm/state.json` itself sees nulls.  The rows' `refused_with` asserts an untouched cache on one day only, so they do not reach this.  4. *Clears it.*  Gap 139's answer; or the refusal path saving nothing, which is `Ctx::load`'s and wider than this verb.
+
+**Gap 6059 — a re-time leaves the day file's old `break ended` journal line standing.**  1. *What.*  J day, `09:20 30m`, `09:30`: `day/2026-09-08.md` reads `09:20 break 30m`, `09:50 break ended 30m/30m`, `09:30 break ended 10m/30m`.  The first `break ended` is false once the second is written, and they sit out of time order.  2. *Why.*  The journal is append-only, written by the verb; D147 specified the log's line and said nothing of the journal.  3. *Cost.*  A reader of the day file sees two ends for one break; nothing reads the journal back, and the review and the plan read the log.  4. *Clears it.*  The owner: rewrite the earlier journal line, or write a `re-timed` line in place of a second `break ended`.
+
+### 10. The last host round (gaps 6060-6068)
+
+The attackers' round on the binary at `86566a7` (`tm-final`), each finding re-driven first; all of them reproduced.  Seven items, each its own commit; the owner's rulings of 2026-11-05/06 are cited as D155 and D157, whose rows land later.  Each fix has a row in `tm/tests/cli_w54r3_h.rs` through the binary.  Run against `tm-final`, the 21 new rows and the 5 restated ones fail, 26 of 63; the 37 others pass, on purpose (older behaviour that stands).
+
+**Gap 6060 — replies that said something false.**  The reason that fired is now the reason said.  "the log has passed its end" only when `Replay::latest_t` has reached the typed end (S day, `11:05 60m`, `11:08 5m`: `it lies inside the break 11:05–12:05 the log holds`).  A length past the named span says so and what it adds, read off the drawn rows before and after (`FinishedBreak.adds_min`; `11:35 15m` over 11:30–11:40 with the log at 12:00: `it begins inside … and runs past its end, adding 10m; the log has passed 11:50`).  D152 is cited only when `inside_running_block` answered: gap 6050's arm no longer sets `inside_running` or `nets`, so `inside_break` and `inside_running` are never both set.  The Past refusal's cost sentence names the block and appears only with a block open at the instant; with none it says the break would run on from inside the held one.  "also holds" reads the half-open rule, so at that break's own end it is left out.
+
+**Gap 6061 — a wrong refusal.**  `ended_break_starting_at` claimed instants past the end of a D129 ending under a minute long (`10:09:30`, then `10:10`, `10:10:15`, `10:10:15 5m`).  It now needs `at < ended`: at its end the break already ends, and outside it a break begins.
+
+**Gap 6062 — one question for "will the kernel read this line as a break of its own".**  `a_finished_line_is_read` compares the fact before and after: every held break at the stamp still stands as it stood (span, planned minutes, place), and one new entry has the line's.  So a length landing exactly on a D129 ending's end (`09:42 28m --where walk`, which passed the old check and lost its minutes and place) and a held break's own stamp and planned minutes are both refused by name, in the D143, D148, D149 and D152 arms as well as gap 6050's; one guard where there were two, and the two wordings are chosen by what it answers.  **Row A moved:** its fourth keystroke (`09:20 30m` over a break planned 30m) was accepted under a reply saying "logged finished" while the kernel re-timed the break out.  It is refused now, 95 stands, and the next re-time reads 98 on review, plan and a cold rebuild.  The kernel's shape stays covered, with the same line appended to the log as a line from elsewhere: 85, then 88, as before.  While a break runs the kernel reads such a line with another place as a break of its own, so it is logged, and the row says so.
+
+**Gap 6063 — a line that moves only a place.**  `the_day_drawn` merges touching Break pieces of one place only, so `a_line_moves` sees `by_where` move: `09:40 --where walk`, `09:30 --where bed`, `09:45` ends the 09:30 break, `bed [1,15]`, `walk [1,25]`.  With no places it still moves nothing and stays refused.
+
+**Gap 6064 — under a minute before the end.**  `AtFinished::AtEnd` holds only where the clock reads the instant as the end (`at_its_end_on_the_clock`, same `HH:MM`), which keeps gap 6053's drive (`11:30:30`, `11:40:45`, `--now 11:40`) and gives back gap 6053's cost: `09:29:01` in 09:20–09:30 re-times to 09:29 (review 111), where it used to keep a whole minute under "already ends".  D141's arm reads the same: with no length typed it stands aside at that instant, so 09:30–10:10 logged finished and the same span by D129 answer one way at 10:09:30 (both end at 10:09, 90) and one way at the end's own minute.  A length there keeps D146.  Gaps 6053's and 6056's "under a minute before the end" and "under two minutes" are read through this; a break with seconds under two minutes long can now hold an instant, and §10's advice asks rather than assumes.
+
+**Gap 6065 — advice that fails when followed.**  A refusal now offers only what the verb does, asked of the verb's own arms over the line held.  `lengths_here` runs the ladder (`length_arms`, one definition with the starting arm) and `a_finished_line_is_read`, and names the longest length that fits and any it excludes (`ends by 11:10, at most 49m`; `ends by 12:00, at most 30m, not 20m`); a length is not offered where none fits or where the kernel would read it as a held break's own, and `0m` is never offered.  `instants_for` walks a break's instants against `at_finished`, D141's arm and `a_line_moves`, and the refusal names the runs that act (`give an instant from 10:16 to 10:19 or from 10:26 to 10:39`); none while a break runs.  Every instant another break's: `every instant inside it meets another logged break, so none ends it`.  Where nothing works it says `tm undo`, or for Past the first instant no span holds (`first_free`).  Instants and ends carry seconds where they have them (`clock`), so 10:40 is no longer named both reached and not.  Planned minutes are named as planned (`a break planned 20m is logged 11:30–11:40`).  The undo half: dropped from Past, and everywhere else it says that undoing the line that ended a running break sets it running again.  Rows drive the advice.  *Cost, and not fixed:* `tm undo`'s own reply stays `undid break (break ended)`, with `tm now` the place the running break shows; a typed `0m` inside a held span is still accepted, drawn as nothing.
+
+**Gap 6066 — the owner's D157.**  D150's re-time out over a logged break stands, and the reply names each logged break it now covers, by its own span: `… re-timed out to end at 09:45 (D150) · 25m of 30m · it now covers the logged breaks 09:35–09:40, 09:42–09:44`; `BreakOut.covers` carries them in `--json`.  **Gap 6046 is restated to this ruling:** its cost ("swallows the break between") is what the owner accepted with the naming, and nothing is owed.  Row `a_retime_out_runs_across_another_logged_break` is restated with it.
+
+**Gap 6067 — a held span's end counts as a witness even when it lies ahead of the clock.**  1. *What.*  `length_in_held` counts the end of a held span as saying a length inside it is over.  R day: `10:05 30m` (D148, to 10:35), then at 10:25 `tm break 5m` replies `logged finished (it lies inside the break 10:05–10:35 the log holds)`, `tm now` shows no break, and `10:27` is refused as meeting two breaks.  `10:25 20m` is refused, with a length that ends by 10:35 as the way out, and that length logs finished too.  2. *Why.*  The host cannot tell the two cases from the fact: a span's end behind the clock and one ahead of it read the same, and `--now` is the only clock.  The reply says only what is true (it lies inside that span), since gap 6060.  3. *Cost.*  A user typing a break live inside a break already logged ahead of the clock gets no running break, and the route to one is `tm break` at the span's end.  The review and the plan agree with each other throughout.  4. *Clears it.*  The owner's D155 in W-55: a `break` line that ends a running `break_start` counts its END as a typed-time witness, in the kernel, replacing this span witness.
+
+**Gap 6068 — two refusals by name that stand for now.**  1. *What.*  (a) `09:40`, then `09:40:30 10m`: under a minute past a D129 ending's start, with a length, is refused as at its start, though D146 would end the break and log the length with nothing vanishing.  (b) `11:05 15m`, then `11:06 15m` on the J day: a length running past both the held span and the closing `done`, refused because an earlier break already netted that tail, so `netted_closed_block` answers `None` and D149's arm does not take it.  2. *Why.*  Each is safe: nothing is written, and neither arm is a loss.  (a) keeps one reading of "at its start" for both keystrokes; (b) needs a rule for a length whose overlap with the block is already netted, which is D149's to state.  3. *Cost.*  (a) the length must be typed at 09:41 or later; (b) the length is cut to `at most 14m`, or typed from 11:20.  The advice works when followed, and the rows drive it.  4. *Clears it.*  The owner, if the keystrokes matter; nothing is owed otherwise.
+
+**Acceptance of this round.**  One run each: `cli_w54r3_h` 63, `cli_w54r2_h` 16, `cli_w54r_h` 21, `cli_w54_h_breaks` 21, `cli_d144_now_break` 8, `cli_week_grid` 5, all passing, and the older break rows `cli_d141_break_end`, `cli_w53r_k_d147`, `cli_w52r_break_ends`, `cli_d147_retime`, `cli_d143_finished_break` on item 6's tree.  `cli_break_sweep` at its default 64 cases per proptest: 18 passed, 1 ignored (the exhaustive row, not run), 54 s, no new seed.  `check.sh` every line ok, 43 s.  Beside the rows, a throwaway driver followed each refusal's advice literally on copies, over 3,400 random sequences on the J, R and S days: 1,100 refusals (in the 3,000-sequence batch, 840 of its 963 are the older running-break refusals, which offer no length or instant), and 178 follow-ups of the at-most, any-length, instant and first-free sentences, 0 failed (one hit was the driver's own regex misreading the first-free sentence, re-read by hand).  The workspace's three runs and the exhaustive row are the land's.
+
+<!-- ======================================================================
+     Stage 6 — W-54 third repair land (2026-11-06): track H's tip 853da62, which sits on track K's 5edae1a, over 675953f, as one
+     measured commit (AGENTS §6.5 item 8). Gaps 6070-6083 are this block's. No Lean, no cheat, no parity number, no gate touched.
+     The owner's D155-D158 land with it (AGENTS §4). The tree cannot carry its own measurement: the acceptance as run is in the
+     land commit's message.
+     ====================================================================== -->
+
+## Stage 6 — W-54 third repair land: D155-D158, the kernel defects W-55 owes re-driven by name, three gate holes and one instrument failure
+
+**Composition.** The tracks ran in sequence, so nothing merges: this tree is H's tip plus four AGENTS rows, one `allow` and this block.
+
+**What the owner ruled (AGENTS §4).**
+* **D155**: a `break` line that ends a running `break_start` counts its END as a typed-time witness. Decided, not built: gap 6078.
+* **D156**: D154's two edges stand with their cost. Gap 6031 is that ruling, and its "marking the line is the owner's call" is answered: no.
+* **D157**: D150's re-time out over a logged break stands and names what it covers. Built, gap 6066.
+* **D158**: the order. This land, the rename, the regroup, W-55 (D155 and the defects below), the rename's step 2.
+
+**Gap 6049 closed.** `replay_scoped` is dead in the binary and read by this file's own tests and the `#[path]` suites (`support/replay.rs`, the door, T5), so it carries `#[allow(dead_code)]` with that reason, the way the file's other four do. `cargo build -p tm`: 0 warnings, fresh.
+
+**Row A's fourth keystroke is refused now** (J day: `09:20 30m`, `09:30`, `09:40 15m`, `--now 09:20 30m`): the planned-minutes guard, gap 6062. Nothing is written. The fifth, `--now 09:52`, re-times the 15m break to 09:52, so the day reads 98 on review, plan and cold (95 before it), where 213e827 read review 98 against plan 88. The refused shape reaches the kernel only as a line from elsewhere, where H's row still drives 85, then 88.
+
+**What this land makes false, superseded here by name; the older blocks are not rewritten.**
+* H's §10, "D155 and D157, whose rows land later": they have landed.
+* Gaps 6028 and 6041 say the land clears them. It cannot: this land has no Lean. Both are W-55's (gaps 6076, 6077).
+* Gap 6044's "the owner's call": D155 answers it, and its one exception goes when D155 is built (gap 6078). Gap 6055's "the owner, or the kernel": D155, the kernel.
+* AGENTS §10.2: read for rows on breaks, witnesses or the host's gate. None stands on anything this land moved, so no row is added.
+
+Every drive below is on the land binary (J, R, S, W, X days of `scratchpad/w54r3/att/invariant/d.sh`, `TMB` set to it; the transcripts are `scratchpad/w54r3l/dr/k1.out` and `k2.out`). Warm and cold agree on every one unless it says otherwise.
+
+### The kernel defects W-55 owes
+
+**Gap 6070 — D129 does not fire on a block another break already covers whole (D129, D143).**
+1. *What.* J day, `10:10 60m` (D149, the whole of `^t4`'s block), then `09:20`: the reply is `break 20m`, with no D129 notice, and a `break_start` is written that nothing ends. Review: block 20, breaks 60. Plan: `09:20–12:30` and `10:10–11:10`, breaks 250, `tm check` "no problems". In the other order (`09:20`, `10:10 60m`) D129 ends the first break at 10:10: review and plan both block 20, breaks 110. One log's two orders read two ways.
+2. *The two shapes filed beside it no longer reproduce through the verb, and the kernel's half does.* `09:19 120m` twice: the second is refused (gap 6062), and `09:19 121m` is refused too. `09:15 120m`, `09:40 15m --where walk`: logs finished, inside the held span, by `length_in_held`. A hand-written `break_start` at 09:19 after `09:19 120m` still draws `11:19–12:30`, plan breaks 191 against review 120.
+3. *Why not fixed.* A kernel change, and this land has no Lean. The cause is not traced past "the first `start` stamped after it" not answering when another break holds that start.
+4. *Cost.* Block minutes are 20 in both orders. The first order's break never ends: it runs on to `now`, review and plan disagree on breaks (60, 250), and `tm check` says nothing. **D155 removes `length_in_held`, so the nested shape comes back through the verb unless this is fixed in the same round.**
+5. *Clears it.* W-55.
+
+**Gap 6071 — a finished break is swallowed at a D129 ending's stamp (D146, D148).**
+1. *What.* J day, `10:09`, `09:43`, `10:09 5m`, and `09:50`, `09:30`, `09:50 30m`. The verb refuses both by name and writes nothing (review 103 and 90). With the line written by hand the length is dropped without a word: review 103 `[(20,27),(20,0)]` with no 5m record, and 90 `[(20,40),(20,0)]` with no 30m record, the plan agreeing. `Replay.letGo` reads the line as the ending's own (P127).
+2. *Why not fixed.* A kernel change.
+3. *Cost.* A refusal where D146 and D148 promise a finished break, and a silent loss on a log from another machine.
+4. *Clears it.* W-55, and then the host's refusal goes.
+
+**Gap 6072 — the plan draws a running break over a finished one (D142).**
+1. *What.* J day, `10:30 15m`, `10:29`: plan `10:29–12:30` (121) and `10:30–10:45` (15), breaks 136 over 121 minutes of wall time; review breaks 15. Gap 6070's first shape shows it too (250 over 190).
+2. *Why not fixed.* D142's union reaches the logged breaks and not the running one, in the kernel.
+3. *Cost.* One span read two ways, and the row list overlaps. Block minutes agree (79), so no block minute is lost.
+4. *Clears it.* W-55.
+
+**Gap 6073 — a finished line in the running break's minute ends it silently (D145).**
+1. *What.* W day, `10:20:30`, then `10:20 5m`: the reply is `logged finished`, and the break running since 10:20:30 is gone with no word, though its `break_start` stays in the log. `tm now` shows no break, the plan draws only `10:20–10:25`, and the next verb says `.tm/state.json said a break … is running and .tm/log.jsonl ended it`. X day, `10:40:30`, `10:40 30m`: the same.
+2. *Why not fixed.* D145 says a finished break's line ends only its own break. The kernel reads this one as ending the other; the cause is not traced past the two stamps sharing a minute.
+3. *Cost.* A running break vanishes, on a keystroke typed within a minute of it, with a reply that says something else happened.
+4. *Clears it.* W-55.
+
+**Gap 6074 — review and plan differ by one minute on seconds.**
+1. *What.* J day, `09:47:59`, `09:05:30 20m`, `09:27 10m`, `10:08:01 3m`: review block 73, plan block 74, warm and cold.
+2. *Why not fixed.* Filed as the kernel's; the cause is not traced. The sweep's grid is whole minutes, so no generated row reaches this shape.
+3. *Cost.* The invariant's first clause holds on the whole-minute grid only. One minute.
+4. *Clears it.* W-55, which also has to say what "minutes" means where a piece's stamps carry seconds.
+
+**Gap 6075 — a D129 end is named as a `start` the log does not hold.**
+1. *What.* J day, `09:40 40m`, `09:30`: `the break that began at 09:30 ended at 10:20, at the start the log already holds after it (D129)`. The log's `start` is at 10:10; 10:20 is where D148 nets it. `09:35` then says `the start the log holds at 10:20`, and `09:30` the same. The numbers are right (85 and 80).
+2. *Why not fixed.* The end is the kernel's, and the fact does not say what ended the break.
+3. *Cost.* A false sentence, on a shape the campaign's replies otherwise state truly (gap 6060).
+4. *Clears it.* W-55: the fact gives the line's own stamp, or the reply stops saying "start".
+
+**Gap 6076 — K's and H's kernel gaps, each W-55's, with what was re-measured here.**
+1. *What, and why not fixed: each is a Lean change, and each still stands.*
+   | gap | state on the land binary |
+   |---|---|
+   | 6041 | Read: `Replay.endable` has no `frozen` while `d141Ok` does. Driven: `09:35`, `09:20 30m`, `09:25`, `--now 09:40` refused by name, 90 (`Ctx::a_line_ends` is the host's half) |
+   | 6045 | Driven: `09:35 15m`, `09:15`, `09:35 15m`, `--now 09:40` refused by name, 85. `Replay.heldFacts` still holds the twin as one entry with a range |
+   | 6024 | Driven: `09:20 30m`, `09:30`, `09:40 15m`, `09:32`, `--now 09:45` refused by name, 93, though the line would be sound |
+   | 6026 | Carried, not re-driven: the fence past a folded far-future line |
+   | 6027 | Carried: the union's netting is witnessed and generated, not proved |
+   | 6029 | Carried, not re-driven: a hand-logged line a re-time froze |
+2. *Cost.* As each gap says. Every driven shape is a refusal by name or a carried subdomain, none a wrong number here.
+3. *Clears it.* W-55.
+
+**Gap 6077 — gap 6028's retirement, checked: the wire key has no reader in the binary.**
+1. *What.* `Replay::finished_breaks` is assigned by `tm/src/cli/kernel_log.rs`'s decoder and read by nothing else under `tm/src`. `tm-core` holds the field, its `PartialEq` and `planwire.rs`'s empty constructor. Its only readers are two test files, `kernel_w53r_k_finished.rs` and `kernel_w54_k_finished.rs`. So `Replay.finished`, `ownDrawn` and `givesUp` serve `open.finished` and those two files; in Lean they still have laws (`Replay.lean`, `Seal.lean`, `SealLaw.lean`, `SealResume.lean`, `SealLaw2D.lean`, `SealTwin.lean`, `Boundary.lean`).
+2. *Why not retired.* No Lean in this land.
+3. *Cost.* A wire key, three definitions and their laws with no answer a user sees.
+4. *Clears it.* W-55, moving what the two test files check onto `held_breaks`.
+
+**Gap 6078 — D155 is work owed, and what it retires.**
+1. *What.* R day, `10:30`, `10:40`, `--now 10:28 5m`: the reply is `break 5m`, a `break_start` at 10:28. At 12:30 `tm now` reads `18m of 60m · paused`, `on break since 10:28 · 122m of 5m`, and `tm stop` `stopped ^t4 after 18m · 42m left`: the 110 minutes after 10:40 are gone, `tm check` silent. J day, `11:30`, `11:40`, `11:35 5m`: a break that runs on, plan `11:40–12:30`, review breaks 10 against plan 60.
+2. *Why not built.* `Seal.typedAt?` counts a line at its stamp; reading a `break` line's end needs the fold to know it ended a running `break_start`. A kernel change (D158).
+3. *What goes when it is built.* `length_in_held`, gap 6050's span witness. Gap 6067's cost: R day, `10:05 30m`, `10:25 5m` logs finished with no running break and `10:27` is refused as meeting two breaks. Gap 6055. The sweep's clause-4 exception (gap 6044). And the three rows that pin the shape are restated: `cli_d144_now_break.rs::tm_now_reads_a_running_break_drawn_after_a_logged_one_gap_5775`, `cli_w54_h_breaks.rs::a_running_break_an_earlier_one_covers_ends_with_its_drawn_minutes`, `cli_week_grid.rs::overlapping_breaks_are_one_span_in_the_week_grid`.
+4. *Clears it.* W-55; gap 6070 has to go with it (its point 4).
+
+### Three gate holes and one instrument failure
+
+Measured by the rename's verifiers, none caused by this land. Each was re-measured here in a throwaway worktree at 853da62 unless it says otherwise; the gate scripts are unchanged by this land.
+
+**Gap 6079 — check 7 passes on deleting the last real goal.**
+1. *What.* `Goals.lean`'s one theorem deleted, check 7's reconciliation run as written: `goals=0`, `gone=[]`. It compares last segments, and `Tm.PlanCheck.plan_places_no_block_over_a_break`, a narrower statement, is audited under the goal's short name.
+2. *Why it stands.* The W-39 repair made the match exact on the segment, not on the statement. This land touches no gate.
+3. *Cost.* AGENTS §9.2's worst disguised gap, on the one goal left: the burn-down reads 0 and nothing is proved.
+4. *Clears it.* A gate change after the regroup: a goal leaves only under a name no other theorem already held at HEAD, or by a dated line naming its discharge.
+
+**Gap 6080 — `parity.py` misses a second issuance of a row-anchored number.**
+1. *What.* Appended to `README.md` at column zero, one at a time: `| P5 | … |`, `| **P5** | … |`, `**Parity P5 taken**: …`, and `| P149 | … |` over a `taken`-anchored number. Each rc 0. Controls: a second `**Parity P149 taken**` rc 1, an unregistered `| P150 | … |` rc 1.
+2. *Why it stands.* The duplicate check counts `taken` lines only, and 46 of the 149 numbers are `row`-anchored.
+3. *Cost.* The P32 and P38 class stays open for those numbers and for a row beside any taken line, which AGENTS §6.5 item 7 says must print once.
+4. *Clears it.* A gate change: a number's register row or issuance line, outside inline code and the `not-row` files, appears once.
+
+**Gap 6081 — `mutations.txt`'s baseline line is unratcheted.**
+1. *What.* A new `def` committed in `Emit.lean` and the `baseline 86c4dc6` line moved to that commit: `mutate.py --gate` prints `0 new or changed … 0 rostered … 0 owed`, rc 0, where it printed 997 rostered. No check compares the line with HEAD's; `check.sh` names it only in prose. The rename's plant (`scratchpad/rename/x/plants.sh`) is the control: the same `def` with the line unmoved is ABSENT and owed.
+2. *Why it stands.* D40 wrote the baseline as a decision, and the other exemption files got `ratchet.py` (D121) while this one line did not.
+3. *Cost.* One changed line turns check 9 off for the whole library, in a diff nothing flags.
+4. *Clears it.* A gate change: the baseline may only stay as HEAD has it, unless a dated grant says otherwise.
+
+**Gap 6082 — oracle input set 3 fails on the base, and `run-oracle.sh` stops there.**
+1. *What.* Oracle built fresh for this tree; `stage5_parity_the_kernel_replays_and_fits_as_the_fork_point_does` rc 101: **10 disagreements**, all `days.<date>.segments`, in triple 6 (close week; undone, without the command, before the undo), triple 41 (housekeeping close; the same three) and sequences 9, 19, 139, 234. They are on no list. Line for line the rename's run at 675953f. `run-oracle.sh`'s `set -euo pipefail` then ends the sweep before sets 4-7.
+2. *Why it stands.* Nothing in plain `cargo test --workspace` runs this arm, so nothing failed when it began. When is not measured: the rename's base already has it. The printed values are truncated to about 90 characters and read equal, so the report does not say what differs.
+3. *Cost.* AGENTS §8.3's "the measured disagreement is **P21 alone**" is not true of this tree, or of the base. Sets 4-7 run by default only if set 3 passes. **Run here: the build and set 3 only.** Sets 1, 2, 4, 5, 6 and 7 are carried from the rename's run with `set -e` lifted (`scratchpad/rename/x/run-oracle-all.log`, at 0c1d5e6): sets 1 and 2 at §7.3's figures, 4-6 pass, 7 failing only the latency row. This tree's break changes have not been through them.
+4. *Clears it.* W-55: print the first differing element, then register each as a parity number or fix it, and make the script report every set.
+
+**Gap 6083 — this land's cost: acceptance figures are not in this block.** The tree a block sits in cannot record its own run, so they are in the land commit's message, and in the workflow's return value. A reader of this file finds them with `git log -1 --format=%B` on the commit that added this heading.

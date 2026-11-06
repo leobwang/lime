@@ -137,6 +137,29 @@ theorem resealed_maxT (T₀ T : Nat) (QA QB : List Cal.Instant) (K : Ckpt)
     List.filter_congr (fun q hq => by rw [isFuture_migrates T₀ T QA K hmaxT hff hmig q hq])
   rw [List.filter_append, maxInstant?_append, hfe, ← hmaxT]
 
+/-- **The resealed `maxTyped`** (the owner's D154): a typed stamp is one of the entry's instants, so the classification `isFuture_migrates` holds it too. -/
+theorem resealed_maxTyped (T₀ T : Nat) (QA TA TB : List Cal.Instant) (K : Ckpt) (hsub : ∀ q ∈ TA, q ∈ QA)
+    (hmaxT : K.maxT = maxInstant? (QA.filter (fun q => !isFuture T₀ q)))
+    (hff : K.futureFloor = minInstant? (QA.filter (isFuture T₀))) (hmig : migrationOk K T = true)
+    (hty : K.maxTyped = maxInstant? (TA.filter (fun q => !isFuture T₀ q))) :
+    maxOptI K.maxTyped (maxInstant? (TB.filter (fun q => !isFuture T q)))
+      = maxInstant? ((TA ++ TB).filter (fun q => !isFuture T q)) := by
+  have hfe : TA.filter (fun q => !isFuture T q) = TA.filter (fun q => !isFuture T₀ q) :=
+    List.filter_congr (fun q hq => by rw [isFuture_migrates T₀ T QA K hmaxT hff hmig q (hsub q hq)])
+  rw [List.filter_append, maxInstant?_append, hfe, ← hty]
+
+/-- The typed stamps of a concatenation. -/
+theorem typedOf_append (a b : List Entry) : typedOf (a ++ b) = typedOf a ++ typedOf b := by
+  unfold typedOf; exact List.filterMap_append
+
+/-- **A typed stamp is one of its entry's instants.** -/
+theorem typedOf_sub (es : List Entry) : ∀ q ∈ typedOf es, q ∈ es.flatMap entryInstants := by
+  intro q hq
+  obtain ⟨e, he, hq⟩ := List.mem_filterMap.1 hq
+  refine List.mem_flatMap.2 ⟨e, he, ?_⟩
+  unfold typedAt? at hq
+  split at hq <;> simp_all [entryInstants]
+
 /-- **The resealed `futureFloor`.** -/
 theorem resealed_futureFloor (T₀ T : Nat) (QA QB : List Cal.Instant) (K : Ckpt)
     (hmaxT : K.maxT = maxInstant? (QA.filter (fun q => !isFuture T₀ q)))

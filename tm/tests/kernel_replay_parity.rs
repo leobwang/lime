@@ -2503,7 +2503,7 @@ fn displays_and_warnings(s: &kernel_log::Split, table: &Value) -> (BTreeMap<u64,
     let mut k = 0;
     while k < n {
         let m = (n - k).min(4096);
-        let want = kernel_log::Want { facts: false, headers_from: None, render: (k as u64 + 1..=(k + m) as u64).collect() };
+        let want = kernel_log::Want { facts: false, headers_from: None, render: (k as u64 + 1..=(k + m) as u64).collect(), fence: None };
         let req = kernel_log::request("2026-09-15", table, None, k as u64 + 1, &s.lines[k..k + m], k + m < n || s.terminated, None, &want, None);
         let a = kernel_log::log_call(&req).expect("the kernel answers").expect("a render-only call is not refused");
         for r in a.render.as_array().expect("render") {
@@ -2579,7 +2579,7 @@ fn t5_windowed_genesis_hot_reseal_old_date_and_fallbacks_replay_as_the_fork_does
     let dir = tempfile::tempdir().expect("a temp dir");
     let cdir = dir.path().join(kernel_log::CACHE_DIR);
     let mut cache = kernel_log::ReplayCache::new(Some(cdir.clone()));
-    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![] };
+    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None };
     let start = std::time::Instant::now();
 
     // Genesis over eleven months.
@@ -2709,7 +2709,7 @@ fn t0b_genesis_over_200000_lines_in_chunks_runs_on_a_2mib_thread() {
         .spawn(move || {
             let s = kernel_log::split(text.as_bytes());
             let policy = kernel_log::Policy { keep_days: kernel_log::KEEP_DAYS, max_line: None };
-            let facts = kernel_log::Want { facts: true, headers_from: None, render: vec![] };
+            let facts = kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None };
             let t = std::time::Instant::now();
             let g = kernel_log::genesis(&now, &table, &s, policy, &facts).expect("genesis answers");
             let genesis_ms = t.elapsed().as_secs_f64() * 1000.0;
@@ -2768,7 +2768,7 @@ fn t0b_a_hand_edit_no_window_can_reach_is_the_named_fault_reach_too_far() {
     assert!(lines.len() > kernel_log::RESEND_LINES + 4_096, "the resend must be able to pass the cap: {} lines", lines.len());
     let now = kernel_log::date_of(day_after(&lines));
     let policy = kernel_log::Policy { keep_days: kernel_log::KEEP_DAYS, max_line: None };
-    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![] };
+    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None };
 
     // The control: the log as the CLI wrote it is answered, in chunks, with no pop and no call past the cap.
     let clean = loggen::text(&lines);
@@ -2820,7 +2820,7 @@ fn t5_a_tail_past_the_resend_cap_rebuilds_instead_of_resending() {
     let dir = tempfile::tempdir().expect("a temp dir");
     let cdir = dir.path().join(kernel_log::CACHE_DIR);
     let mut cache = kernel_log::ReplayCache::new(Some(cdir));
-    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![] };
+    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None };
 
     // A checkpoint over the first 150 days.
     let head = &lines[..40 * 150];
@@ -2875,7 +2875,7 @@ fn t5_a_changed_zone_key_is_refused_by_the_host_and_by_the_kernel_behind_it() {
     let dir = tempfile::tempdir().expect("a temp dir");
     let cdir = dir.path().join(kernel_log::CACHE_DIR);
     let mut cache = kernel_log::ReplayCache::new(Some(cdir));
-    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![] };
+    let want = kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None };
 
     // A checkpoint under the first zone, with something actually sealed under it.
     let ra = cache.replay(text.as_bytes(), now, &table(from), None, &want).expect("genesis answers");

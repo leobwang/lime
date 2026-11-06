@@ -94,6 +94,19 @@ fn has_row(rows: &[String], row: &str) {
     assert!(rows.iter().any(|r| r == row), "the plan draws {row:?}: {rows:#?}");
 }
 
+/// The minutes of `^t1`'s and `^t4`'s block rows `tm plan` draws at 12:30.
+fn rows_minutes(tm: &Tm) -> u64 {
+    let v = tm.json_at(&at("12:30"), &["plan"]);
+    let hm = |s: &str| s[..2].parse::<u64>().expect("an hour") * 60 + s[3..5].parse::<u64>().expect("a minute");
+    v["segments"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{v}"))
+        .iter()
+        .filter(|s| s["kind"] == "block" && (s["item"] == "t1" || s["item"] == "t4"))
+        .map(|s| hm(s["end"].as_str().expect("an end")) - hm(s["start"].as_str().expect("a start")))
+        .sum()
+}
+
 /// `tm now`'s first two lines at `hm`.
 fn now_at(tm: &Tm, hm: &str) -> String {
     tm.ok_at(&at(hm), &["now"]).stdout.lines().take(2).collect::<Vec<_>>().join("\n")
@@ -163,12 +176,14 @@ fn a_d152_break_reports_the_running_block_it_lies_inside_p149() {
 }
 
 /// **With no pause marks, a later line is what says the break is over** (P149): `^t4` runs since 10:10 with no mark;
-/// an energy report at 10:50 is the log's last line, so `tm break --now 10:20 10m --where walk` is logged finished,
-/// its place on the line and in the reply; `tm now` at 10:55 reads `35m of 60m`.
+/// a `tm plan` at 10:50 is the log's last line, so `tm break --now 10:20 10m --where walk` is logged finished,
+/// its place on the line and in the reply; `tm now` at 10:55 reads `35m of 60m`. (Restated at W-54 third repair track K for the
+/// owner's D154: the later line was a plain `tm energy`, and no `energy` line witnesses an instant since the log cannot say
+/// which were typed with `--at`; README gap 6031.)
 #[test]
 fn a_later_line_with_no_pause_marks_and_a_place_p149() {
     let tm = running_t4();
-    tm.ok_at(&at("10:50"), &["energy", "3"]);
+    tm.ok_at(&at("10:50"), &["plan"]);
     let out = tm.ok_at(&at("10:20"), &["break", "10m", "--where", "walk"]);
     assert_eq!(
         out.stdout.trim(),
@@ -374,27 +389,31 @@ fn already_ends_here_inside_another_drawn_break_is_refused() {
     assert!(said.contains("09:20–09:50 (inside it), 09:25–09:30 (its end)") && !said.contains("already ends"), "{said}");
 }
 
-/// **D150's Out never swallows another logged break** (the owner's shape under D151): `09:20 30m`, re-timed to 09:30,
-/// `09:35 5m`, then `--now 09:45` — the 09:20 break's widest end is its own 09:50, but re-timing it out to 09:45 would
-/// run across the 09:35 break: refused, naming it; nothing written. Until this repair: "re-timed out to end at 09:45
-/// (D150)", the 09:35 break drawn 0 (`95`, `[25, 0]`).
+/// **D150's Out runs across another logged break** (the owner's shape under D151): `09:20 30m`, re-timed to 09:30, `09:35
+/// 5m`, then `--now 09:45` — the 09:20 break's widest end is its own 09:50.
+///
+/// *Restated at the W-54 third repair track H* (README gap 6046; it read a_retime_out_across_another_logged_break_is_refused
+/// from the W-54 repair until then, gap 5941's host guard): `out_to` reaches over a break between because the kernel reads that
+/// soundly now (track K, gap 6022), so the host keeps no rule of its own: re-timed out to 09:45, the 09:35 break drawn 0, `95`.
+/// Before the other break it goes as it always did. **Restated to the owner's D157** (README gap 6046 as gap 6066 restates it): the
+/// re-time stands, and the reply names what it now covers.
 #[test]
-fn a_retime_out_across_another_logged_break_is_refused() {
+fn a_retime_out_runs_across_another_logged_break() {
     let tm = j_tree();
     tm.ok_at(&at("09:20"), &["break", "30m"]);
     tm.ok_at(&at("09:30"), &["break"]);
     tm.ok_at(&at("09:35"), &["break", "5m"]);
     assert_eq!(review(&tm), (105, vec![10, 5]));
-    let said = refused(&tm, "09:45", &["break"]);
-    assert!(
-        // Restated at the W-54 second repair (README gap 5994): the break in the way named by its own span, not by a
-        // drawn piece's start read as a stamp.
-        said.contains("would re-time the break 09:20–09:30 out across the break drawn 09:35–09:40 (logged 09:35–09:40)")
-            && said.contains("D150"),
-        "{said}"
-    );
-    assert_eq!(review(&tm), (105, vec![10, 5]));
-    // Before the other break, the re-time out still goes (D150's arm stands).
+    let out = tm.ok_at(&at("09:45"), &["break"]);
+    assert!(out.stdout.contains("re-timed out to end at 09:45 (D150) · 25m of 30m · it now covers the logged break 09:35–09:40"), "{}{}", out.stdout, out.stderr);
+    let (block, mut b) = review(&tm);
+    b.sort_unstable();
+    assert_eq!((block, b), (95, vec![0, 25]));
+    assert_eq!(block, rows_minutes(&tm));
+    let tm = j_tree();
+    tm.ok_at(&at("09:20"), &["break", "30m"]);
+    tm.ok_at(&at("09:30"), &["break"]);
+    tm.ok_at(&at("09:35"), &["break", "5m"]);
     let out = tm.ok_at(&at("09:33"), &["break"]);
     assert!(out.stdout.contains("re-timed out to end at 09:33 (D150)"), "{}{}", out.stdout, out.stderr);
     let (block, mut b) = review(&tm);

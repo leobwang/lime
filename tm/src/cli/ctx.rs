@@ -1485,17 +1485,37 @@ impl Ctx {
         self.replay
             .ended_breaks
             .iter()
-            .filter(|x| x.started < at && at < x.ended)
+            .filter(|x| x.started < at && at < x.ended && self.a_line_ends(x))
             .max_by_key(|x| x.started)
             .cloned()
+    }
+
+    /// **Whether a `break` line at this ending's stamp is read as its end, today** — the kernel's one-fact-per-held-break
+    /// ([`Replay::held_breaks`], `Replay.heldFacts`): [`Replay::ended_breaks`] is `Replay.endable`, which does not read
+    /// `Replay.frozen`, and a break held after this one that let go of a stretch meeting it has the line read as a break
+    /// of its own (W-54 third repair, README gap 6041). `true` when the fact holds no entry for it, which leaves
+    /// `endable` deciding as it did.
+    pub(crate) fn a_line_ends(&self, x: &EndedBreak) -> bool {
+        self.replay
+            .held_breaks
+            .iter()
+            .find(|h| h.started == x.started && h.ended == x.ended && h.planned_min == x.planned_min)
+            .map_or(true, |h| h.retime_from.is_some())
     }
 
     /// **The logged break D129 ended whose own start is `at`** (stage 6 W-52 repair track R, the campaign's
     /// call, parity **P139**): `tm break --now <that start>` would open a second break wholly inside it,
     /// which D141 forbids, so the verb refuses it by name. Read off the same fact as
-    /// [`Ctx::break_a_start_ended_at`].
+    /// [`Ctx::break_a_start_ended_at`]. **Under a minute past its start is at its start** (the W-54 third repair, README gap
+    /// 6056; `at_finished`'s rule for a logged break): a line carries whole minutes from the start, so D141's arm would write
+    /// `actual_min: 0` and the break would vanish under a reply saying it ended here. Inside its span only (README gap 6061): at a
+    /// break under a minute long an instant past its end lies outside it, where a break begins, and at its end it already ends.
     pub(crate) fn ended_break_starting_at(&self, at: DateTime<FixedOffset>) -> Option<EndedBreak> {
-        self.replay.ended_breaks.iter().find(|x| x.started == at).cloned()
+        self.replay
+            .ended_breaks
+            .iter()
+            .find(|x| x.started <= at && at < x.ended && at - x.started < chrono::Duration::minutes(1))
+            .cloned()
     }
 
     /// **Whether the log ENDED the running break `.tm/state.json` holds** (the W-46 audit, README gap
@@ -1869,12 +1889,15 @@ impl Ctx {
             &store.read_text(super::undo::UNDO_PATH).unwrap_or_default(),
             now,
         );
-        let read = kernel_log::replay_scoped(
+        // D18's fence on this clock (the owner's D154): what `Replay::latest_t` counts up to.
+        let fence = now + chrono::Duration::days(tm_core::check::LOG_FUTURE_DAYS);
+        let read = kernel_log::replay_scoped_at(
             store.root(),
             &bytes,
             cfg.tz,
             &tz,
             today,
+            kernel_log::instant_wire(fence).as_array().and_then(|a| Some((a[0].as_u64()?, a[1].as_u64()?))),
             scope.to_kernel(),
             pin,
         )
@@ -2043,7 +2066,7 @@ impl Ctx {
     /// a second reader of the same concept. It never touches the checkpoint on
     /// disk, because genesis over zero lines seals nothing.
     fn empty_replay(cfg: &Config, tz: &Value, today: NaiveDate) -> Result<Replay, CliError> {
-        let want = kernel_log::Want { facts: true, headers_from: None, render: vec![] };
+        let want = kernel_log::Want { facts: true, headers_from: None, render: vec![], fence: None };
         let policy = kernel_log::Policy { keep_days: kernel_log::KEEP_DAYS, max_line: None };
         let now = today.format("%Y-%m-%d").to_string();
         let g = kernel_log::genesis(&now, tz, &kernel_log::split(&[]), policy, &want)

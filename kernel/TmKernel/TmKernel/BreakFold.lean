@@ -729,7 +729,7 @@ theorem stepWith_brks_of_start (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat
     {id : Log.Id} {pred : Log.U8} {rep : Option Log.U8} {hsw : Log.Num} {sleptMin : Log.U32} {loc : List Char}
     {b1 b2 : Log.U32} (hev : e.ev = .start id pred rep hsw sleptMin loc b1 b2) {o : Replay.OpenBrk}
     (hE : endsBrk st.machine (e.t.val, e.off.val) = some o) :
-    (stepWith z dy sl st e).machine.brks = pruneBrks (⟨o.s, (e.t.val, e.off.val), o.day, e.line, o.planned, o.where_, (e.t.val, e.off.val)⟩ :: st.machine.brks) := by
+    (stepWith z dy sl st e).machine.brks = pruneBrks (⟨o.s, (e.t.val, e.off.val), o.day, e.line, o.planned, o.where_, (e.t.val, e.off.val), (e.t.val, e.off.val)⟩ :: st.machine.brks) := by
   rw [Seal.stepWith_machine_eq]
   have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
       endRecs st.machine.brks o (e.t.val, e.off.val) e.line ++ startArm dy (endMachine st.machine o (e.t.val, e.off.val) e.line) e.line
@@ -748,10 +748,10 @@ theorem stepWith_brks_as_w53_stated_it_is_refuted :
         d141Ok st.machine x (brkEnd (e.t.val, e.off.val) p.val (a.map (·.val))) (dy e.t.val) = true) ∧
         (stepWith z dy sl st e).machine.brks = pruneBrks (k :: st.machine.brks.erase x.hb) := by
   intro h
-  let x0 : HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩), 739865, 1, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
+  let x0 : HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩), 739865, 1, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
   let st : State := { State.init 2 with machine := ⟨none, none, none, [x0], none, [], []⟩ }
   let e := bE 2 63924370200 (.brk 10 (some 4) none)
-  let k1 : HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370440, 0⟩, ⟨false, 0⟩), 739865, 2, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
+  let k1 : HeldBrk := ⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370440, 0⟩, ⟨false, 0⟩), 739865, 2, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩
   have hb : (stepWith utcZone (fun _ => 739865) (fun _ => none) st e).machine.brks = [k1] := by decide
   have hE : findEnded st.machine (e.t.val, e.off.val) = none := by decide
   rcases h utcZone (fun _ => 739865) (fun _ => none) st e with h1 | ⟨k, h2⟩ | ⟨k, x, ⟨p, a, w, -, hf, -⟩, -⟩
@@ -764,7 +764,7 @@ theorem stepWith_brks_of_brk_as_w53_stated_it_is_refuted :
       e.ev = .brk p a w → findEnded st.machine (e.t.val, e.off.val) = none →
       (stepWith z dy sl st e).machine.brks = pruneBrks (heldOf st.machine e (e.t.val, e.off.val) (dy e.t.val) p.val (a.map (·.val)) :: st.machine.brks) := by
   intro h
-  have := h utcZone (fun _ => 739865) (fun _ => none) { State.init 2 with machine := ⟨none, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩), 739865, 1, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩ } (bE 2 63924370200 (.brk 10 (some 4) none)) 10 (some 4) none rfl (by decide)
+  have := h utcZone (fun _ => 739865) (fun _ => none) { State.init 2 with machine := ⟨none, none, none, [⟨(⟨63924370200, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩), 739865, 1, 10, none, (⟨63924370800, 0⟩, ⟨false, 0⟩), (⟨63924370800, 0⟩, ⟨false, 0⟩)⟩], none, [], []⟩ } (bE 2 63924370200 (.brk 10 (some 4) none)) 10 (some 4) none rfl (by decide)
   revert this; decide
 /-- **`stepWith_brks_of_brk` as W-54 track K stated it, refuted by the owner's D145** (W-54 repair track K, parity **P142**): a
 line with no ending at its stamp held its break, read at the running break's place, beside the old ones; with a break running
@@ -817,14 +817,14 @@ theorem stepWith_brks_of_park (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat 
 theorem stepWith_brks_of_brkStart (z : Cal.Tz) (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (st : State)
     (e : Entry) {p : Log.U32} {w : Option (List Char)} (hev : e.ev = .brkStart p w) {t0 : At}
     (hF : firstStart (e.t.val, e.off.val) (dy e.t.val) st.machine = some t0) :
-    (stepWith z dy sl st e).machine.brks = pruneBrks (⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, p.val, w, t0⟩ :: st.machine.brks) := by
+    (stepWith z dy sl st e).machine.brks = pruneBrks (⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, p.val, w, t0, t0⟩ :: st.machine.brks) := by
   rw [Seal.stepWith_machine_eq]
   have harm : arm dy sl st.machine e (e.t.val, e.off.val) (dy e.t.val) =
       endBrkFx dy st.machine ⟨(e.t.val, e.off.val), p.val, w, dy e.t.val⟩ t0 e.line := by
     unfold Replay.arm; simp only [hev, hF]
   rw [harm]
   have hm := Replay.brkFx_brk dy { forget st.machine with ended := pushEnded (endingOf ⟨(e.t.val, e.off.val), p.val, w, dy e.t.val⟩ t0 e.line) st.machine }
-    ⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, p.val, w, t0⟩
+    ⟨(e.t.val, e.off.val), t0, dy e.t.val, e.line, p.val, w, t0, t0⟩
   revert hm
   unfold endBrkFx brkFx netTake
   simp only [List.filterMap_append, (settle_fx_obs dy _).2.2, (netClosed_obs dy _ _ _ _).2.2, List.nil_append, (Replay.endRecs_obs _ _ _ _).2.2,
@@ -1290,7 +1290,7 @@ theorem stepWith_brks_of_brk_as_w49_stated_it_is_refuted :
             st.machine.brks) := by
   intro h
   let st : State := { Replay.State.init 1 with
-    machine := ⟨none, none, none, [], none, [], [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924364800, 0⟩, ⟨false, 0⟩), 739865, 0, 20, none, (⟨63924364800, 0⟩, ⟨false, 0⟩)⟩]⟩ }
+    machine := ⟨none, none, none, [], none, [], [⟨(⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924364800, 0⟩, ⟨false, 0⟩), 739865, 0, 20, none, (⟨63924364800, 0⟩, ⟨false, 0⟩), (⟨63924364800, 0⟩, ⟨false, 0⟩)⟩]⟩ }
   have := congrArg List.length (h Replay.utcZone (fun _ => 739865) (fun _ => none) st
     (Replay.bE 4 63924364800 (.brk 20 (some 90) none)) 20 (some 90) none rfl)
   revert this

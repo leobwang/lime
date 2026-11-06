@@ -1,16 +1,15 @@
 //! **Stage 6 W-54 second repair track H, through the binary** — the W-54 repair's verifiers' defects on the host:
 //!
 //! * **The gate's one rule** (D-1, D-2, D-3; README gaps 5990-5992, the campaign's call, revisable by the owner): a
-//!   no-length `tm break --now <t>` reads every held break's span. Inside exactly one break the fact lists, or at its
-//!   end: D147 (re-time / "already ends"); past a listed break's current end inside its widest span: D150's Out; at the
-//!   start, end or inside of MORE than one held break: refused by name, naming them; at the start of every break
-//!   holding the instant: refused (D147); and never a new break where a held break's closed span holds the instant.
+//!   no-length `tm break --now <t>` reads every held break's span. Inside exactly one break at an instant the kernel reads,
+//!   or at its end: D147 (re-time / "already ends"); past its current end inside `out_to`: D150's Out; at the start, end or
+//!   inside of MORE than one held break: refused by name, naming them; at the start of every break holding the instant:
+//!   refused (D147); and never a new break where a held break's closed span holds the instant. Since the W-54 third repair
+//!   the spans and ranges are track K's fact, `Replay::held_breaks`; `cli_w54r3_h.rs` carries what that moved.
 //! * **D153** (D-4, parity P149 restated): D152's "already over" is the log's LATEST surviving stamp, never the last
 //!   line in file order.
 //! * **D-5** (README gap 5997): a running break's cache is compared with the log at the cache's resolution, the minute.
 //!
-//! Rows that need track K's narrowed fact (`Replay.finished` lists every break with an own drawn piece) or its
-//! Replay::latest_t (D153) are ignored here, each named; the land un-ignores them. The rest hold on 263010a's kernel.
 //!
 //! The day is the example tree, woken 07:00, home 08:00, `TZ` the plan's (America/Chicago), Tuesday 2026-09-08; the
 //! "J day" adds `^t1` 09:00–10:00 and `^t4` 10:10–11:10, both done (`tm review day` 120 with no break).
@@ -22,7 +21,6 @@ use serde_json::Value;
 
 const TUE: &str = "2026-09-08";
 const WEEK: &str = "week/2026-W37.md";
-const K_FACT: &str = "W-54 second repair: K's fact (own drawn piece)";
 
 fn at(hm: &str) -> String {
     if hm.len() == 5 {
@@ -71,20 +69,6 @@ fn review(tm: &Tm) -> (u64, Vec<u64>) {
     (r["block_min"].as_u64().unwrap_or_else(|| panic!("{v}")), breaks)
 }
 
-/// `tm plan`'s rows at 12:30 between 09:00 and 11:59, each with its runs of spaces collapsed to one.
-fn rows(tm: &Tm) -> Vec<String> {
-    tm.ok_at(&at("12:30"), &["plan"])
-        .stdout
-        .lines()
-        .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
-        .filter(|l| ["09:", "10:", "11:"].iter().any(|h| l.starts_with(h)))
-        .collect()
-}
-
-fn has_row(rows: &[String], row: &str) {
-    assert!(rows.iter().any(|r| r == row), "the plan draws {row:?}: {rows:#?}");
-}
-
 /// Nothing written: the log, the day file and `.tm/state.json` byte for byte as they were around `f`.
 fn unchanged<T>(tm: &Tm, f: impl FnOnce() -> T) -> T {
     let (log0, day0, state0) = (tm.read(".tm/log.jsonl"), tm.read(&format!("day/{TUE}.md")), tm.read(".tm/state.json"));
@@ -110,17 +94,6 @@ fn already_ends(tm: &Tm, hm: &str) -> String {
     let out = unchanged(tm, || tm.ok_at(&at(hm), &["break"]));
     assert_eq!(review(tm), r0, "the review unchanged");
     out.stdout.trim().to_string()
-}
-
-/// A no-length `tm break --now <hm>` that re-times a break: one plain `break` line at the break's own start. Its reply.
-fn retimed(tm: &Tm, hm: &str, from: &str) -> String {
-    let n0 = tm.log().len();
-    let out = tm.ok_at(&at(hm), &["break"]);
-    let log = tm.log();
-    assert_eq!(log.len(), n0 + 1, "one line: {}{}", out.stdout, out.stderr);
-    let last: &Value = &log[n0];
-    assert_eq!((last["ev"].as_str(), last["t"].as_str()), (Some("break"), Some(at(from).as_str())), "{last}");
-    format!("{}{}", out.stdout, out.stderr)
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -180,7 +153,7 @@ fn f5_at_one_breaks_end_inside_another_is_refused_as_ambiguous() {
 fn f1_at_the_start_of_an_overlapped_break_is_refused() {
     let tm = j_day(&[("09:20", "10m"), ("09:25", "10m")]);
     let said = refused(&tm, "09:20");
-    assert!(said.contains("a break was logged finished 09:20–09:30") && said.contains("own start"), "{said}");
+    assert!(said.contains("a break is logged 09:20–09:30") && said.contains("own start"), "{said}");
 }
 
 /// **F2** (nested: `09:20 30m`, `09:30 5m`, then `--now 09:20`): the outer break's own start — refused (D147).
@@ -188,23 +161,12 @@ fn f1_at_the_start_of_an_overlapped_break_is_refused() {
 fn f2_at_the_start_of_a_break_that_nests_another_is_refused() {
     let tm = j_day(&[("09:20", "30m"), ("09:30", "5m")]);
     let said = refused(&tm, "09:20");
-    assert!(said.contains("a break was logged finished 09:20–09:50") && said.contains("own start"), "{said}");
-}
-
-/// **E2** (nested, `--now 09:50`): the outer break's end. Restated at the W-54 second repair's land: track K's fact lists a break only where no other held break meets the piece it draws (`Replay.ownDrawn`, README gaps 5970, 5971 and 5974), so the outer
-/// break, which the nested one meets, is unlisted — refused by name, nothing written, `90` (never the new break ba525fa
-/// began). The brief's "already ends" needs the fact to list it.
-#[test]
-fn e2_at_the_end_of_a_break_that_nests_another_is_refused() {
-    let tm = j_day(&[("09:20", "30m"), ("09:30", "5m")]);
-    assert_eq!(review(&tm), (90, vec![0, 30]));
-    let said = refused(&tm, "09:50");
-    assert!(said.contains("09:20–09:50 (its end)") && said.contains("(D147)"), "{said}");
+    assert!(said.contains("a break is logged 09:20–09:50") && said.contains("own start"), "{said}");
 }
 
 /// **Adjoining** (`09:20 10m`, `09:30 10m`, then `--now 09:30`): one break's end and the other's start — refused by name.
-/// This is the AtEnd guard's binary row (README gap 5993): with `retime_in_the_way`'s AtEnd branch planted to `None` it
-/// says "already ends" and exits 0.
+/// This is the AtEnd guard's binary row (README gap 5993): with `at_finished`'s several-breaks arm planted to answer the one
+/// that ends here, it says "already ends" and exits 0.
 #[test]
 fn at_one_breaks_end_and_anothers_start_is_refused() {
     let tm = j_day(&[("09:20", "10m"), ("09:30", "10m")]);
@@ -213,44 +175,12 @@ fn at_one_breaks_end_and_anothers_start_is_refused() {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// D-2: re-times that change the drawn union go; ambiguous ones are refused
-
-/// **B** (E1's day, `--now 09:22`): inside the 09:20 break alone. Restated at the W-54 second repair's land: track K's fact lists a break only where no other held break meets the piece it draws (`Replay.ownDrawn`, README gaps 5970, 5971 and 5974), so the
-/// 09:20 break (the 09:25 one meets its piece) is unlisted, and a re-time giving up the stretch the 09:25 break shares is
-/// not read (gap 5971) — refused by name, nothing written, `105`. The brief's re-time (`108`) needs a new take model.
-#[test]
-fn b_inside_the_covering_break_alone_is_refused() {
-    let tm = j_day(&[("09:20", "10m"), ("09:25", "10m")]);
-    let said = refused(&tm, "09:22");
-    assert!(said.contains("the break 09:20–09:30 (inside it)") && said.contains("overlaps the piece it draws"), "{said}");
-    assert_eq!(review(&tm), (105, vec![5, 10]));
-}
-
-/// **C** (nested, `--now 09:25`): inside the outer break alone. Restated at the W-54 second repair's land: track K's fact lists a break only where no other held break meets the piece it draws (`Replay.ownDrawn`, README gaps 5970, 5971 and 5974), so the
-/// outer break is unlisted and its re-time to 09:25 would give up the stretch the nested one shares (gap 5971) — refused
-/// by name, nothing written, `90`.
-#[test]
-fn c_inside_the_outer_break_before_the_nested_one_is_refused() {
-    let tm = j_day(&[("09:20", "30m"), ("09:30", "5m")]);
-    let said = refused(&tm, "09:25");
-    assert!(said.contains("the break 09:20–09:50 (inside it)"), "{said}");
-    assert_eq!(review(&tm), (90, vec![0, 30]));
-}
-
-/// **C2** (nested, `--now 09:40`): inside the outer break past the nested one. Restated at the W-54 second repair's land:
-/// the kernel READS a re-time line here (track K's drive, `100`), but track K's fact lists a break only where no other held break meets the piece it draws (`Replay.ownDrawn`, README gaps 5970, 5971 and 5974), so the fact does not list the outer break and
-/// the host cannot write it (gap 5974, no per-break "re-timeable from" on the wire) — refused by name, nothing written.
-#[test]
-fn c2_inside_the_outer_break_past_the_nested_one_is_refused() {
-    let tm = j_day(&[("09:20", "30m"), ("09:30", "5m")]);
-    let said = refused(&tm, "09:40");
-    assert!(said.contains("the break 09:20–09:50 (inside it)"), "{said}");
-    assert_eq!(review(&tm), (90, vec![0, 30]));
-}
+// D-2: ambiguous instants are refused. (E2, B, C, C2 and D-3 were refused here from the W-54 second repair's land; since the
+// W-54 third repair they read off track K's fact, and their rows are `cli_w54r3_h.rs`'s.)
 
 /// **Nested at 09:32** (the critic's d9: inside both the outer and the nested break) — refused by name, naming both. The
-/// Inside guard's binary row once K's fact lists the outer break (README gap 5993): with `retime_in_the_way`'s Inside
-/// branch planted to `None` the outer break is re-timed to 09:32 while the nested one keeps the drawn break to 09:35.
+/// Inside guard's binary row (README gap 5993): with `at_finished`'s several-breaks arm planted to answer the latest begun,
+/// the verb re-times one of the two and the other keeps the drawn break.
 #[test]
 fn inside_a_break_and_the_break_it_nests_is_refused_naming_both() {
     let tm = j_day(&[("09:20", "30m"), ("09:30", "5m")]);
@@ -264,23 +194,6 @@ fn e_inside_near_twins_is_refused() {
     let tm = j_day(&[("09:20", "10m"), ("09:21", "10m")]);
     let said = refused(&tm, "09:27");
     assert!(said.contains("09:20–09:30 (inside it)") && said.contains("(D147)"), "{said}");
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// D-3: D150 reaches a break a nested one overlaps
-
-/// **D-3** (`09:20 30m`, re-timed to 09:40 — its widest end 09:50 — then `09:35 5m`, then `--now 09:45`): past the
-/// 09:20 break's current end, inside the length typed for it. On ba525fa, 418e5d5 and both tracks' branches a new break
-/// D129 ran to 10:10 (`85`, `tm check` silent). Since the W-54 second repair's land (README gap 6010) the gate never
-/// begins a break inside an unlisted break's typed length: refused by name, nothing written, `100`. The kernel reads the
-/// D150 line (track K's drive, `95`), but track K's fact lists a break only where no other held break meets the piece it draws (`Replay.ownDrawn`, README gaps 5970, 5971 and 5974), so the fact does not list the 09:20 break (gap 5974).
-#[test]
-fn d3_past_a_nested_breaks_cover_inside_the_typed_length_is_refused() {
-    let tm = j_day(&[("09:20", "30m"), ("09:40", ""), ("09:35", "5m")]);
-    assert_eq!(review(&tm), (100, vec![0, 20]));
-    let said = refused(&tm, "09:45");
-    assert!(said.contains("09:20–09:40 (past its end, inside the length typed for it)") && !said.contains("(D129)"), "{said}");
-    assert_eq!(review(&tm), (100, vec![0, 20]));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -338,19 +251,19 @@ fn d153_with_nothing_logged_past_the_typed_end_a_break_begins() {
     assert_eq!(tm.last()["ev"], "break_start");
 }
 
-/// **A cancelled line does not witness "already over"** (D153: the latest stamp over SURVIVING lines): `^t4` running
-/// since 10:10, a `pause` at 10:50 undone (the `undo` typed at 10:21), then `tm break --now 10:20 10m` — the one line
-/// past 10:30 is cancelled, so the break begins.
+/// **An undone line witnesses "already over"** (restated at W-54 third repair track K for the owner's D154, which reverses D153
+/// here: the instant was reached either way): `^t4` running since 10:10, a `pause` at 10:50 undone (the `undo` typed at 10:21),
+/// then `tm break --now 10:20 10m` — the cancelled line is past 10:30, so the break is logged finished.
 #[test]
-fn d153_an_undone_line_past_the_typed_end_does_not_witness_it() {
+fn d154_an_undone_line_past_the_typed_end_witnesses_it() {
     let tm = fresh();
     tm.ok_at(&at("10:10"), &["start", "^t4"]);
     tm.ok_at(&at("10:50"), &["pause"]);
     tm.ok_at(&at("10:21"), &["undo"]);
     assert_eq!(tm.last()["ev"], "undo");
     let out = tm.ok_at(&at("10:20"), &["break", "10m"]);
-    assert!(!out.stdout.contains("logged finished"), "{}", out.stdout);
-    assert_eq!(tm.last()["ev"], "break_start");
+    assert!(out.stdout.contains("logged finished"), "{}", out.stdout);
+    assert_eq!(tm.last()["ev"], "break");
 }
 
 // ---------------------------------------------------------------------------------------------------------------

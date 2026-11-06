@@ -159,10 +159,11 @@ theorem rs_state_parts (z : Cal.Tz) (T₀ T L : Nat) (a r b : List Log.Line) (te
   · unfold ckptOfEntries
     dsimp only
     rw [Ckpt.mk.injEq]
-    refine ⟨rfl, hz, by rw [hKcut], rfl, rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hAgree.machine, ?_, ?_, ?_, ?_, ?_, ?_,
+    refine ⟨rfl, hz, by rw [hKcut], rfl, rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hAgree.machine, ?_, ?_, ?_, ?_, ?_, ?_,
       hAgree.lastEff, ?_, hAgree.unknown, hAgree.longestLeak, by rw [hAgree.rwarns], ?_, ?_⟩
     · rw [List.flatMap_append]; exact resealed_maxT T₀ T _ _ _ hmaxT hff hmig
     · rw [List.flatMap_append]; exact resealed_futureFloor T₀ T _ _ _ hmaxT hff hmig
+    · rw [typedOf_append]; exact resealed_maxTyped T₀ T _ _ _ _ (typedOf_sub _) hmaxT hff hmig (ckpt_maxTyped z T₀ L a.length _ _ _)
     · -- the stored wakes
       have hKw : (ckptOf z T₀ L a r).wakes
           = storedWakes L (keptWakes z (wakeInstants (foldedSurvivors (Log.lineEntries a) (Log.lineEntries r)))) :=
@@ -202,6 +203,54 @@ theorem rs_state_parts (z : Cal.Tz) (T₀ T L : Nat) (a r b : List Log.Line) (te
       hAgree.machine]
   · unfold windowRecordsOfEntries
     rw [hKL, hcongrS, windowsIn_eq_filter, windowsIn_eq_filter, windowsFrom_eq hxk hyk hAgree]
+
+/-- **The fact across a checkpoint and a resume is the whole log's** (the owner's D154, W-54 third repair track K, README gap 6023): where the fence `f` separates the folded instants as the seal did — every one not future at the seal at or before it, every future one after it (`K.maxT`, `K.futureFloor`) — the checkpoint's latest typed stamp and the tail's are the whole log's latest at or before `f`, wherever the cut fell.  So a far-future line hides nothing, and a cold rebuild answers what a resume does.  Past that subdomain `f` has reached a line fenced as future when it was folded, and the fact is short of it until a rebuild (gap 6026). -/
+theorem latestTyped_is_the_whole_logs (z : Cal.Tz) (T₀ L cut : Nat) (es er bs : List Entry) (ws : List (Nat × Log.LWarn)) (f : Cal.Instant)
+    (hm : (ckptOfEntries z T₀ L cut es er ws).maxT.all (fun q => decide (q ≤ f)) = true)
+    (hff : (ckptOfEntries z T₀ L cut es er ws).futureFloor.all (fun q => decide (f < q)) = true) :
+    latestTyped (ckptOfEntries z T₀ L cut es er ws) bs f = maxInstant? ((typedOf (es ++ bs)).filter (fun q => decide (q ≤ f))) := by
+  have h1 : ∀ q ∈ typedOf es, decide (q ≤ f) = !isFuture T₀ q := by
+    intro q hq
+    have hQ := typedOf_sub es q hq
+    cases hc : isFuture T₀ q
+    · have hmem : q ∈ (es.flatMap entryInstants).filter (fun q => !isFuture T₀ q) := List.mem_filter.2 ⟨hQ, by simp [hc]⟩
+      rw [ckpt_maxT] at hm
+      cases hmx : maxInstant? ((es.flatMap entryInstants).filter (fun q => !isFuture T₀ q)) with
+      | none => rw [maxInstant?_none _ hmx] at hmem; cases hmem
+      | some m =>
+        rw [hmx] at hm
+        have hle := maxInstant?_spec _ m hmx q hmem
+        simp only [Option.all_some, decide_eq_true_eq] at hm
+        have : q ≤ f := by rw [Cal.Instant.le_iff] at hle hm ⊢; omega
+        simp [this]
+    · have hmem : q ∈ (es.flatMap entryInstants).filter (isFuture T₀) := List.mem_filter.2 ⟨hQ, hc⟩
+      rw [ckpt_futureFloor] at hff
+      cases hmn : minInstant? ((es.flatMap entryInstants).filter (isFuture T₀)) with
+      | none => rw [minInstant?_none _ hmn] at hmem; cases hmem
+      | some m =>
+        rw [hmn] at hff
+        have hle := minInstant?_spec _ m hmn q hmem
+        simp only [Option.all_some, decide_eq_true_eq] at hff
+        have : ¬ q ≤ f := by rw [Cal.Instant.le_iff] at hle ⊢; rw [Cal.Instant.lt_iff] at hff; omega
+        simp [this]
+  have h2 : (typedOf es).filter (fun q => decide (q ≤ f)) = (typedOf es).filter (fun q => !isFuture T₀ q) :=
+    List.filter_congr h1
+  unfold latestTyped
+  rw [ckpt_maxTyped, typedOf_append, List.filter_append, maxInstant?_append, h2]
+  congr 1
+  cases hmx : maxInstant? ((typedOf es).filter (fun q => !isFuture T₀ q)) with
+  | none => rfl
+  | some m =>
+    have hmem := maxInstant?_mem _ m hmx
+    have hl := (List.mem_filter.1 hmem)
+    have : decide (m ≤ f) = true := by rw [h1 m hl.1]; exact hl.2
+    simp [Option.filter, this]
+
+set_option maxRecDepth 8000 in
+/-- **The fact skips a far-future line and counts an undone one** (the owner's D154, README gap 6023): a `note` at 09:00 undone at 09:01, an `energy` line ahead, a `note` in 2028 past the fence: 09:01. -/
+theorem latestTyped_skips_a_far_future_line_and_counts_an_undone_one :
+    latestTyped (Ckpt.empty Replay.utcZone) [Replay.bE 1 63924368400 (.note ['n']), Replay.bE 2 63924368460 (.undo ['n', 'o', 't', 'e'] none), Replay.bE 3 63924400000 (.energy 3 4 (.nat 2) ['h']), Replay.bE 4 63987526800 (.note ['f'])] ⟨63924454800, 0⟩ = some ⟨63924368460, 0⟩ := by
+  decide
 
 end Seal
 end Tm

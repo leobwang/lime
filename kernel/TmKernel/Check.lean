@@ -9298,7 +9298,7 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_finished_break_is_re_timed_by_its_line
 #print axioms Tm.Replay.pruneBrks_pair_ne
 #print axioms Tm.Replay.arm_brk_of_endable_as_w54_stated_it_is_refuted
-#print axioms Tm.Replay.the_finished_breaks_are_the_ones_no_other_break_overlaps
+#print axioms Tm.Replay.the_fact_holds_no_break_on_the_col3_log
 #print axioms Tm.Replay.the_finished_breaks_are_the_held_breaks_with_their_own_line_as_w53r_stated_it_is_refuted
 #print axioms Tm.Seal.openTakes_mi
 #print axioms Tm.Seal.arm_brks_as_w53_stated_it_is_refuted
@@ -9369,12 +9369,12 @@ seal laws re-proved over the instants they read. -/
    `a_finished_break_whose_drawn_piece_another_meets_is_omitted`. -/
 #print axioms Tm.Replay.retimeBlocked_of_ended
 #print axioms Tm.Replay.retimeBlocked_of_finished
-#print axioms Tm.Replay.a_retime_that_gives_up_another_breaks_stretch_is_not_read
+#print axioms Tm.Replay.a_frozen_break_is_not_re_timed
 #print axioms Tm.Replay.ownDrawn_eq_false_iff
 #print axioms Tm.Replay.a_head_clipped_break_is_re_timed_in_its_own_piece
-#print axioms Tm.Replay.a_line_ending_inside_another_breaks_stretch_is_a_break_of_its_own
-#print axioms Tm.Replay.a_retime_of_a_covering_break_off_a_later_ones_head_is_a_break_of_its_own
-#print axioms Tm.Replay.a_retime_of_an_outer_break_past_a_nested_one_is_a_break_of_its_own
+#print axioms Tm.Replay.a_line_ending_inside_another_breaks_stretch_re_times_it
+#print axioms Tm.Replay.a_retime_of_a_covering_break_off_a_later_ones_head_is_read
+#print axioms Tm.Replay.a_retime_of_an_outer_break_past_a_nested_one_is_read
 #print axioms Tm.Replay.a_retime_giving_up_nothing_another_break_covers_is_read_over_a_newer_one
 #print axioms Tm.Replay.a_break_re_timed_out_over_a_nested_one_is_read
 #print axioms Tm.Replay.a_retime_over_an_overlapped_break_leaves_the_running_block_net_of_the_union
@@ -9382,3 +9382,47 @@ seal laws re-proved over the instants they read. -/
 #print axioms Tm.Replay.a_finished_break_is_re_timed_by_its_line_as_w54_stated_it_is_refuted
 #print axioms Tm.Replay.a_finished_break_another_overlaps_is_omitted_as_w54r_stated_it_is_refuted
 #print axioms Tm.Replay.the_fact_omits_a_break_a_newer_one_overlaps_as_w54r_stated_it_is_refuted
+
+/-! APPENDED 2026-11-05, stage 6 W-54 third repair track K (README gaps 6020-6039): a take put back whole, a shared stretch let
+go read and the break it leaves short frozen, one fact per held break, the log's typed-time lines (the owner's D154). -/
+#print axioms Tm.Replay.endOf_hb
+#print axioms Tm.Replay.heldFact_retimeFrom
+#print axioms Tm.Replay.heldFact_outTo
+#print axioms Tm.Replay.a_held_break_is_re_timed_in_its_range
+#print axioms Tm.Replay.a_held_break_is_re_timed_only_in_its_range
+#print axioms Tm.Replay.a_piece_wider_than_a_take_is_put_back_whole
+#print axioms Tm.Replay.a_retime_out_over_a_later_break_keeps_the_takes_with_the_union
+#print axioms Tm.Replay.the_fact_holds_every_held_break_unclipped
+#print axioms Tm.Replay.a_retime_letting_go_of_a_shared_stretch_freezes_the_other
+#print axioms Tm.Replay.a_frozen_break_is_not_re_timed_on_the_log
+#print axioms Tm.Replay.the_outer_break_is_re_timed_past_a_nested_one_and_freezes_it
+#print axioms Tm.Replay.c2_and_d3_are_in_range
+#print axioms Tm.Replay.gap_5973s_day_freezes_the_older_break
+#print axioms Tm.Replay.the_fact_is_empty_of_ranges_while_a_break_runs
+#print axioms Tm.Replay.a_retime_that_gives_up_another_breaks_stretch_is_not_read_as_w54r2_stated_it_is_refuted
+#print axioms Tm.Replay.a_finished_break_is_re_timed_by_its_line_as_w54r2_stated_it_is_refuted
+#print axioms Tm.Seal.maxTyped_is_the_latest_typed_stamp
+#print axioms Tm.Seal.heldJson_shape
+#print axioms Tm.Seal.openHeld_reads_state
+#print axioms Tm.Seal.answer_openHeld
+#print axioms Tm.Seal.ckpt_maxTyped
+#print axioms Tm.Seal.resealed_maxTyped
+#print axioms Tm.Seal.typedOf_append
+#print axioms Tm.Seal.typedOf_sub
+#print axioms Tm.Seal.latestTyped_is_the_whole_logs
+#print axioms Tm.Seal.latestTyped_skips_a_far_future_line_and_counts_an_undone_one
+#print axioms Tm.typedOf_without_a_fence
+#print axioms Tm.typedOf_with_a_fence
+#print axioms Tm.readFenceField_reads_and_refuses
+#print axioms Tm.CapWire.corpus_request_day_one
+#print axioms Tm.CapWire.corpus_request_too_long
+#print axioms Tm.CapWire.corpus_request_without_a_zone
+#print axioms Tm.the_fence_is_named_on_the_wire
+#print axioms Tm.Seal.kMaxTyped_is_its_key
+#print axioms Tm.Seal.maxTyped_is_named_on_the_wire
+#print axioms Tm.a_bad_fence_is_refused_by_its_name
+#print axioms Tm.typedOf_with_a_fence_keys_it
+#print axioms Tm.readFenceField_of_a_string
+#print axioms Tm.logBodyV_is_logBody
+#print axioms Tm.resumedV_is_resumed
+#print axioms Tm.Seal.resealOfWith_answers_a_valid_cut

@@ -546,9 +546,15 @@ theorem cOpenInt_nonnull : cOpenInt.NonNull := fun _ => nofun
 key, widest]` (`widest` since W-54: the latest end any of the break's own lines gave it, the owner's D150) — what the checkpoint's machine carries across a cut (`cMachine`'s seventh element) and what the `log` answer's
 `open.ended` says (`emitAnswer`, of the endings a `break` line would end now, `Replay.endable`): ONE codec for both, as
 `cOptOpenBrk` is (AGENTS §5.3). -/
-def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cOptStr <| tCons cNat <| tCons cNat <| tCons cAt <| tNil)
-    (fun (x : Replay.Ending) => (x.s, x.e, x.planned, x.where_, x.day, x.key, x.wide, ()))
-    (fun p => ⟨p.1, p.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl))
+def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cOptStr <| tCons cNat <| tCons cNat <| tCons cAt <| tCons cAt <| tNil)
+    (fun (x : Replay.Ending) => (x.s, x.e, x.planned, x.where_, x.day, x.key, x.wide, x.rel, ()))
+    (fun p => ⟨p.1, p.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1⟩) (fun _ => rfl))
+
+/-- **One held break's fact on the wire** (W-54 third repair track K, README gap 6022; `Replay.HeldFact`): `[start, end, planned, where?, widest, retimeFrom?, outTo?]`, read-only, so an encoder alone. -/
+def heldJson (f : Replay.HeldFact) : JVal := .arr [cAt.enc f.s, cAt.enc f.e, cNat.enc f.planned, cOptStr.enc f.where_, cAt.enc f.wide, cOptAt.enc f.retimeFrom, cOptAt.enc f.outTo]
+
+/-- **The fact's seven elements, in their order** (README gap 6022). -/
+theorem heldJson_shape (f : Replay.HeldFact) : heldJson f = .arr [cAt.enc f.s, cAt.enc f.e, .num f.planned, cOptStr.enc f.where_, cAt.enc f.wide, cOptAt.enc f.retimeFrom, cOptAt.enc f.outTo] := rfl
 
 /-! A held closed block (the owner's D100, `Replay.Closed`, README gap 4520b) is written in place in `cMachine`, as the open block's pieces are in `cBlock`: a separate codec was folded by the compiler into the machine's and called by nothing, so check 12 found it emitted and unreached (W-47 track K, README "Stage 6 — W-47 track K" §11.6). -/
 
@@ -556,8 +562,8 @@ def cEnded : Codec (List Replay.Ending) := cList maxList (cIso (cTuple <| tCons 
 def cMachine : Codec Machine :=
   cIso (cTuple <| tCons (cOpt cBlock cBlock_nonnull) <| tCons (cOpt cCut cCut_nonnull)
       <| tCons (cOpt cOpenInt cOpenInt_nonnull)
-      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr <| tCons cAt <| tNil)
-          (fun (k : Replay.HeldBrk) => (k.s, k.e, k.day, k.key, k.planned, k.where_, k.wide, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
+      <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tCons cNat <| tCons cNat <| tCons cOptStr <| tCons cAt <| tCons cAt <| tNil)
+          (fun (k : Replay.HeldBrk) => (k.s, k.e, k.day, k.key, k.planned, k.where_, k.wide, k.rel, ())) (fun p => ⟨p.1, p.2.1, p.2.2.1, p.2.2.2.1, p.2.2.2.2.1, p.2.2.2.2.2.1, p.2.2.2.2.2.2.1, p.2.2.2.2.2.2.2.1⟩) (fun _ => rfl)))
       <| tCons cOptOpenBrk
       <| tCons (cList maxList (cIso (cTuple <| tCons cStr <| tCons cNat <| tCons cNat <| tCons cOptU8 <| tCons cNat
           <| tCons (cList maxList (cIso (cTuple <| tCons cAt <| tCons cAt <| tCons cNat <| tNil)
@@ -792,6 +798,8 @@ structure Ckpt where
   maxT : Option Cal.Instant
   /-- the earliest of the folded entries' instants that are future at `resealDay` (G2) -/
   futureFloor : Option Cal.Instant
+  /-- the latest typed-time stamp of the folded entries (`typedOf`, the owner's D154) that is not future at `resealDay`: cancelled lines and undo lines count, so no survivor's seam can hold it -/
+  maxTyped : Option Cal.Instant
   /-- the last kept wake before `headSec ledgerDay`, then every kept wake at or after it, in the index's order -/
   wakes : List Cal.Instant
   /-- fork `slept_by_day` for days `≥ L`: the first surviving wake in file order of each day, sorted by day -/
@@ -862,7 +870,7 @@ deriving DecidableEq, Repr
 
 /-- The field a stored checkpoint or record is refused at (`badCkpt <field>`, §10.3–§10.4). -/
 inductive CkField
-  | shape | v | tzKey | cut | ledgerDay | resealDay | maxT | futureFloor | wakes | sleptByDay | tagLast
+  | shape | v | tzKey | cut | ledgerDay | resealDay | maxT | futureFloor | maxTyped | wakes | sleptByDay | tagLast
   | tagOverflow | settled | machine | items | window | instOther | named | openDays | lastDay | lastEff
   | entryCount | unknown | longestLeak | rwarns | warnings | warnOverflow
   | day | record | seam | energy | durations | interrupts | demotions | closes | headers | itemMin | doneIds | inst
@@ -908,6 +916,7 @@ structure Answer where
   openBreak : Option Replay.OpenBrk
   openEnded : List Replay.Ending
   openFinished : List Replay.Ending
+  openHeld : List Replay.HeldFact
   lastDay : Option Nat
   lastEffective : Option At
   entryCount : Nat
@@ -1223,6 +1232,7 @@ def kLedgerDay : List Char := ['l','e','d','g','e','r','D','a','y']
 def kResealDay : List Char := ['r','e','s','e','a','l','D','a','y']
 def kMaxT : List Char := ['m','a','x','T']
 def kFutureFloor : List Char := ['f','u','t','u','r','e','F','l','o','o','r']
+def kMaxTyped : List Char := ['m','a','x','T','y','p','e','d']
 def kWakes : List Char := ['w','a','k','e','s']
 def kSleptByDay : List Char := ['s','l','e','p','t','B','y','D','a','y']
 def kTagLast : List Char := ['t','a','g','L','a','s','t']
@@ -1246,7 +1256,7 @@ def kWarnOverflow : List Char := ['w','a','r','n','O','v','e','r','f','l','o','w
 /-- The checkpoint's pairs, in build order. -/
 def ckptPairs (k : Ckpt) : List (List Char × JVal) :=
   [(kV, cNat.enc k.v), (kTzKey, cStr.enc k.tzKey), (kCut, cNat.enc k.cut), (kLedgerDay, cNat.enc k.ledgerDay),
-   (kResealDay, cNat.enc k.resealDay), (kMaxT, cOptInstant.enc k.maxT), (kFutureFloor, cOptInstant.enc k.futureFloor),
+   (kResealDay, cNat.enc k.resealDay), (kMaxT, cOptInstant.enc k.maxT), (kFutureFloor, cOptInstant.enc k.futureFloor), (kMaxTyped, cOptInstant.enc k.maxTyped),
    (kWakes, cWakes.enc k.wakes), (kSleptByDay, cSlept.enc k.sleptByDay), (kTagLast, cTagLast.enc k.tagLast),
    (kTagOverflow, cBool.enc k.tagOverflow), (kSettled, cSettled.enc k.settled), (kMachine, cMachine.enc k.machine),
    (kItems, cItems.enc k.items), (kWindow, cWindow.enc k.window), (kInstOther, cInstOther.enc k.instOther),
@@ -1267,6 +1277,7 @@ def readCkptFields (kvs : List (List Char × JVal)) : Except CkErr Ckpt := do
   let (resealDay, kvs) ← key kResealDay cNat .resealDay kvs
   let (maxT, kvs) ← key kMaxT cOptInstant .maxT kvs
   let (futureFloor, kvs) ← key kFutureFloor cOptInstant .futureFloor kvs
+  let (maxTyped, kvs) ← key kMaxTyped cOptInstant .maxTyped kvs
   let (wakes, kvs) ← key kWakes cWakes .wakes kvs
   let (sleptByDay, kvs) ← key kSleptByDay cSlept .sleptByDay kvs
   let (tagLast, kvs) ← key kTagLast cTagLast .tagLast kvs
@@ -1287,11 +1298,10 @@ def readCkptFields (kvs : List (List Char × JVal)) : Except CkErr Ckpt := do
   let (warnings, kvs) ← key kWarnings cWarnings .warnings kvs
   let (warnOverflow, kvs) ← key kWarnOverflow cNat .warnOverflow kvs
   match kvs with
-  | [] => pure ⟨v, tzKey, cut, ledgerDay, resealDay, maxT, futureFloor, wakes, sleptByDay, tagLast, tagOverflow, settled,
+  | [] => pure ⟨v, tzKey, cut, ledgerDay, resealDay, maxT, futureFloor, maxTyped, wakes, sleptByDay, tagLast, tagOverflow, settled,
       machine, items, window, instOther, named, openDays, lastDay, lastEff, entryCount, unknown, longestLeak, rwarns,
       warnings, warnOverflow⟩
   | _ => throw (.badCkpt .shape)
-
 /-- **The smart decoder of a checkpoint** (R10): key by key, in build order, refusing `badCkpt <field>` at the first key
 that is absent, out of order or of the wrong shape; then every bound (`Ckpt.fault`).  A missing field is never
 defaulted. -/
@@ -1495,6 +1505,15 @@ a break's end (W2; D87).  The open block's instants are instants of earlier entr
 — the end of a break that fell inside the block, where its clock restarted (`Replay.brkFx`). -/
 def entryInstants (e : Entry) : List Cal.Instant := e.t.val :: ((gapStart? e).toList ++ (brkEndAt? e e.t.val).toList)
 
+/-- **A line's typed-time stamp** (the owner's **D154**, W-54 third repair track K, README gap 6023): the instant its verb ran, or an instant the verb stated that cannot run ahead of the clock (`tm stop --at`, `tm done --at`, D79's latest instant at or before now; a backdated `tm break`; D61's wall marks and D130's stop, each at or before now).  A `wake`, an `arrive` and an `energy` line carry a stated instant that can run ahead (`tm wake <hh:mm>`, `tm arrive --at`, `tm energy --at`, D86), so none of them is one, typed at that instant or not: the kinds are what the log says. -/
+def typedAt? (e : Entry) : Option Cal.Instant :=
+  match e.ev with
+  | .wake .. | .arrive .. | .energy .. => none
+  | _ => some e.t.val
+
+/-- The typed-time stamps of entries, undone lines and undo lines among them (D154: the instant was reached either way). -/
+def typedOf (es : List Entry) : List Cal.Instant := es.filterMap typedAt?
+
 /-- **The head second of a ledger day** (W2): an instant before `(L − 1)` UTC days has a day before `L` on every index
 (its local date, and every wake's at or before it, is below `L`), so a tail reading it is refused without computing
 it. -/
@@ -1552,6 +1571,7 @@ def ckptOfEntries (z : Cal.Tz) (T₀ L cut : Nat) (es er : List Entry) (ws : Lis
   ⟨ckptVersion, z.val.key, cut, L, T₀,
    maxInstant? ((es.flatMap entryInstants).filter (fun q => !isFuture T₀ q)),
    minInstant? ((es.flatMap entryInstants).filter (isFuture T₀)),
+   maxInstant? ((typedOf es).filter (fun q => !isFuture T₀ q)),
    storedWakes L kw, storedSlept (Replay.sleptByDay z kw sv) L, keptTags sv, decide ((keptTags sv).length < tags.length),
    settledOf es er, st.machine, (itemIds st).map (itemAggOf st), windowsFrom st (horizonOf L), instOtherOf st,
    namedOf st, daysFrom st hs L, Replay.maxDay? (st.days.pairs.map Prod.fst), st.global.lastEffective, es.length,
@@ -1561,32 +1581,24 @@ def ckptOfEntries (z : Cal.Tz) (T₀ L cut : Nat) (es er : List Entry) (ws : Lis
 specification: `resume` builds checkpoints, and `reseal_is_seal` (W2) says they are these. -/
 def ckptOf (z : Cal.Tz) (T₀ L : Nat) (ls r : List Log.Line) : Ckpt :=
   ckptOfEntries z T₀ L ls.length (Log.lineEntries ls) (Log.lineEntries r) (Log.lineWarnings ls)
-
 /-- The day records of entries in `[lo, hi)`: every day with a reading, finished. -/
 def dayRecordsOfEntries (z : Cal.Tz) (lo hi : Nat) (es : List Entry) : List DayRecord :=
   (daysIn (foldedState z es []) (foldedHeaders z es []) lo hi).map (OpenDay.finish (foldedState z es []).machine)
-
 def windowRecordsOfEntries (z : Cal.Tz) (lo hi : Nat) (es : List Entry) : List WindowRecord :=
   windowsIn (foldedState z es []) lo hi
-
 /-- **The day records of `[lo, hi)`** of lines `ls` (§9.4): every day in the range with a reading. -/
 def dayRecordsBetween (z : Cal.Tz) (_T lo hi : Nat) (ls : List Log.Line) : List DayRecord :=
   dayRecordsOfEntries z lo hi (Log.lineEntries ls)
-
 /-- **The window records of `[lo, hi)`** of lines `ls`. -/
 def windowRecordsBetween (z : Cal.Tz) (_T lo hi : Nat) (ls : List Log.Line) : List WindowRecord :=
   windowRecordsOfEntries z lo hi (Log.lineEntries ls)
-
 /-- **The day records below the ledger day `L`**: what Rust stored. -/
 def dayRecordsBelow (z : Cal.Tz) (T₀ L : Nat) (ls : List Log.Line) : List DayRecord := dayRecordsBetween z T₀ 0 L ls
-
 /-- **The window records below the horizon of `L`.** -/
 def windowRecordsBelow (z : Cal.Tz) (T₀ L : Nat) (ls : List Log.Line) : List WindowRecord :=
   windowRecordsBetween z T₀ 0 (horizonOf L) ls
-
 /-- An item's facts, finished. -/
 def ItemAgg.finish (a : ItemAgg) : ItemAgg := { a with acc := a.acc.map ItemAcc.finish }
-
 /-- **The answer of a checkpoint** (§11.1's `Hot`): its all-time facts, window and open days, finished as the replay
 finishes them. -/
 def answer (k : Ckpt) : Seal.Answer :=
@@ -1594,14 +1606,11 @@ def answer (k : Ckpt) : Seal.Answer :=
    k.openDays.map (OpenDay.finish k.machine),
    Replay.openOf k.machine,
    k.machine.interrupt.map (fun i => ⟨0, some i.1, none, i.2.1, i.2.2, 0, []⟩),
-   k.machine.brkOpen, Replay.endable k.machine, Replay.finished k.machine,
+   k.machine.brkOpen, Replay.endable k.machine, Replay.finished k.machine, Replay.heldFacts k.machine,
    k.lastDay, k.lastEff, k.entryCount, k.unknown, k.longestLeak, k.rwarns, k.warnings, k.warnOverflow⟩
-
 /-- The answer's observations (law 11): each open day's, energy then durations. -/
 def DayRecord.obs (r : DayRecord) : List Obs := r.energy.map Obs.energy ++ r.durations.map Obs.duration
-
 def Answer.obs (v : Seal.Answer) : List Obs := v.days.flatMap DayRecord.obs
-
 /-- **One day's reading** from its record, if it has one (a day without a record reads empty, as the replay does). -/
 def dayRead (r : Option DayRecord) : DayQ → Replay.Answer
   | .record => .dayRecord (r.bind (·.record))
@@ -1612,18 +1621,15 @@ def dayRead (r : Option DayRecord) : DayQ → Replay.Answer
   | .demotions => .demotions ((r.map (·.demotions)).getD [])
   | .closes => .closes ((r.map (·.closes)).getD [])
   | .headers => .headers ((r.map (·.headers)).getD [])
-
 /-- **One date's window reading** from its record. -/
 def winRead (w : Option WindowRecord) (d : Nat) : WinQ → Replay.Answer
   | .itemMin i => .minutes ((w.bind (fun w => w.itemMin.find? (fun p => decide (p.1 = i)))).map Prod.snd)
   | .done i => .bool ((w.map (fun w => w.doneIds.contains i)).getD false)
   | .inst item inst => .inst (if Log.instDate? inst = some d then
       (w.bind (fun w => w.inst.find? (fun p => decide (p.1 = (item, inst))))).map Prod.snd else none)
-
 def findDay (rs : List DayRecord) (d : Nat) : Option DayRecord := rs.find? (fun r => decide (r.day = d))
 def findWin (ws : List WindowRecord) (d : Nat) : Option WindowRecord := ws.find? (fun w => decide (w.day = d))
 def findItem (is : List ItemAgg) (i : Log.Id) : Option ItemAgg := is.find? (fun a => decide (a.id = i))
-
 /-- **A query on the answer**: `none` below its horizons, where the sealed records answer instead. -/
 def askAnswer (v : Seal.Answer) : Q → Option Replay.Answer
   | .day d q => if d < v.ledgerDay then none else some (dayRead (findDay v.days d) q)
@@ -1639,20 +1645,17 @@ def askAnswer (v : Seal.Answer) : Q → Option Replay.Answer
   | .openBlock => some (.openBlock v.openBlock)
   | .openInterrupt => some (.openInterrupt v.openInterrupt)
   | .openBreak => some (.openBreak v.openBreak)
-  | .openEnded => some (.openEnded v.openEnded) | .openFinished => some (.openFinished v.openFinished)
+  | .openEnded => some (.openEnded v.openEnded) | .openFinished => some (.openFinished v.openFinished) | .openHeld => some (.openHeld v.openHeld)
   | .lastDay => some (.date v.lastDay)
   | .lastEffective => some (.stamp v.lastEffective)
   | .unknown => some (.count v.unknown)
   | .longestLeak => some (.leak v.longestLeak)
   | .replayWarnings => some (.warnings v.rwarns)
   | .entryCount => some (.count v.entryCount)
-
 /-- A day query on sealed day records. -/
 def askDayRecords (rs : List DayRecord) (d : Nat) (q : DayQ) : Replay.Answer := dayRead (findDay rs d) q
-
 /-- A window query on sealed window records. -/
 def askWindowRecords (ws : List WindowRecord) (d : Nat) (q : WinQ) : Replay.Answer := winRead (findWin ws d) d q
-
 /-- **The merged reading** (§11.1): the answer at or above its horizons, the sealed records below. -/
 def askMerged (ds : List DayRecord) (ws : List WindowRecord) (v : Seal.Answer) (q : Q) : Replay.Answer :=
   match askAnswer v q with
@@ -1662,15 +1665,12 @@ def askMerged (ds : List DayRecord) (ws : List WindowRecord) (v : Seal.Answer) (
     | .day d dq => askDayRecords ds d dq
     | .win d wq => askWindowRecords ws d wq
     | _ => .lines
-
 /-! ### `sealable`: what every checkpoint `resume` builds satisfies (§9.5, CRIT 3) -/
-
 /-- A key at or above the horizons: a day key at `d ≥ L`, a window key at `d ≥ H`. -/
 def keyAtOrAbove (L H : Nat) : Replay.Key → Bool
   | .day d => decide (L ≤ d)
   | .itemDay _ d | .doneDate _ d | .instDate _ _ d => decide (H ≤ d)
   | _ => true
-
 /-- The days the machine can still write (§9.4's `L'` rule): the pending observation's, the last cut's and the open interruption's — and, since the owner's D105, the running break's: the `break` line that ends it is stamped at its
 start, so it writes the day the `break_start` was stepped on, and the ledger day may not pass it. -/
 def machineDays (m : Machine) : List Nat :=
@@ -1714,7 +1714,7 @@ def sealable (z : Cal.Tz) (T₀ L : Nat) (ls r : List Log.Line) : Bool :=
 
 /-- **The empty checkpoint** (§9.2): nothing folded, cut 0, ledger day 0. -/
 def Ckpt.empty (z : Cal.Tz) : Ckpt :=
-  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, [], [], [], false, [], ⟨none, none, none, [], none, [], []⟩, [], [], [], [], [], none,
+  ⟨ckptVersion, z.val.key, 0, 0, 0, none, none, none, [], [], [], false, [], ⟨none, none, none, [], none, [], []⟩, [], [], [], [], [], none,
    none, 0, 0, none, [], [], 0⟩
 
 /-- The meta the host reads beside a checkpoint. -/
@@ -2215,4 +2215,16 @@ theorem the_fact_omits_a_break_a_newer_one_overlaps_as_w54r_stated_it_is_refuted
 end W54KWitnesses
 
 end Replay
+namespace Seal
+/-- The checkpoint's key for it. -/
+theorem kMaxTyped_is_its_key : kMaxTyped = "maxTyped".toList := rfl
+section
+open Replay (bE utcZone)
+/-- **`maxTyped` skips a stated instant and a line future at the seal, and counts an undone line and its undo** (the owner's D154): an `energy` report stamped 18:00, a `note` in 2028, and a `note` at 09:00 undone at 09:01. -/
+theorem maxTyped_is_the_latest_typed_stamp :
+    (ckptOfEntries utcZone 739865 739865 4 [bE 1 63924368400 (.note ['n']), bE 2 63924400000 (.energy 3 4 (.nat 2) ['h']), bE 3 63987526800 (.note ['f']), bE 4 63924368460 (.undo ['n', 'o', 't', 'e'] none)] [] []).maxTyped = some ⟨63924368460, 0⟩ := by
+  decide
+end
+end Seal
+
 end Tm

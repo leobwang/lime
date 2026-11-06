@@ -264,18 +264,21 @@ fn a_break_retimed_out_and_back_reads_its_last_end_p148() {
 /// the piece it draws (`Replay.ownDrawn`, README gaps 5970 and 5971) — the 09:30 break meets the 09:20 one's — so the
 /// 09:20 break stays unlisted and the re-time, which would give up the stretch the two share, is not read: refused by
 /// name, nothing written, `90`.
+///
+/// *Restated at the W-54 third repair track H*: track K reads the line (`Replay.frozen`, README gap 6021) and its fact gives
+/// the 09:20 break a range, so 09:25, which that break's closed span alone holds, re-times it (`95`), as the second repair's
+/// track H first wrote this row. Renamed for it.
 #[test]
-fn inside_an_overlapped_break_alone_the_verb_refuses_it() {
+fn inside_an_overlapped_break_alone_the_verb_re_times_it() {
     let tm = j_tree();
     tm.ok_at(&at("09:20"), &["break", "20m"]);
     tm.ok_at(&at("09:30"), &["break", "20m"]);
     assert_eq!(review(&tm), (90, vec![20, 10]));
-    let (log0, day0) = (tm.read(".tm/log.jsonl"), tm.read("day/2026-09-08.md"));
-    let out = tm.run_at(&at("09:25"), &["break"]);
-    assert_ne!(out.code, 0, "{}", out.stdout);
-    assert!(out.stderr.contains("the break 09:20–09:40 (inside it)") && out.stderr.contains("(D147)"), "{}", out.stderr);
-    assert_eq!((tm.read(".tm/log.jsonl"), tm.read("day/2026-09-08.md")), (log0, day0), "nothing written");
-    assert_eq!(review(&tm), (90, vec![20, 10]));
+    let out = tm.ok_at(&at("09:25"), &["break"]);
+    assert!(out.stdout.contains("break 09:20–09:40 re-timed to end at 09:25 (D147)"), "{}{}", out.stdout, out.stderr);
+    let (block, mut b) = review(&tm);
+    b.sort_unstable();
+    assert_eq!((block, b), (95, vec![5, 20]));
 }
 
 /// **Nested: likewise** — `09:20 30m`, `09:30 5m`, then `tm break --now 09:45` inside the outer break's drawn span.
@@ -286,19 +289,19 @@ fn inside_an_overlapped_break_alone_the_verb_refuses_it() {
 /// *Restated again at the W-54 second repair's land*: the kernel reads that line (track K's C2 drive), but its fact does
 /// not list the outer break, which the nested one meets, and the wire carries no per-break "re-timeable from" (README
 /// gap 5974) — refused by name, nothing written, `90`.
+///
+/// *Restated at the W-54 third repair track H*: the fact gives the outer break a range (gap 6022), so the re-time goes, `95`.
+/// Renamed for it.
 #[test]
-fn inside_a_break_past_the_one_it_nests_the_verb_refuses_it() {
+fn inside_a_break_past_the_one_it_nests_the_verb_re_times_it() {
     let tm = j_tree();
     tm.ok_at(&at("09:20"), &["break", "30m"]);
     tm.ok_at(&at("09:30"), &["break", "5m"]);
-    let log0 = tm.read(".tm/log.jsonl");
-    let out = tm.run_at(&at("09:45"), &["break"]);
-    assert_ne!(out.code, 0, "{}", out.stdout);
-    assert!(out.stderr.contains("the break 09:20–09:50 (inside it)"), "{}", out.stderr);
-    assert_eq!(tm.read(".tm/log.jsonl"), log0, "nothing logged");
+    let out = tm.ok_at(&at("09:45"), &["break"]);
+    assert!(out.stdout.contains("break 09:20–09:50 re-timed to end at 09:45 (D147)"), "{}{}", out.stdout, out.stderr);
     let (block, mut b) = review(&tm);
     b.sort_unstable();
-    assert_eq!((block, b), (90, vec![0, 30]));
+    assert_eq!((block, b), (95, vec![0, 25]));
 }
 
 /// The J day with a finished break 09:20–09:30 and a break running since 11:30.

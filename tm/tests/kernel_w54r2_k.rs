@@ -90,13 +90,14 @@ fn a_head_clipped_break_is_re_timed_in_its_own_piece() {
     assert_eq!(recs, vec![(at("09:20"), 10, Some(10)), (at("09:30"), 10, Some(3))]);
 }
 
-/// The critic's B and C, and a line ending inside another break's stretch (README gaps 5970 and 5971): each would give
-/// up a stretch another held break also covers, so the kernel reads the line as a break of its own and nothing moves.
+/// The critic's B and C, and a line ending inside another break's stretch (README gaps 5970, 5971 and 6021): restated at W-54
+/// third repair track K, which reads them: each lets go of a stretch another held break also covers, the review reads the
+/// union, and the other break is frozen (`tm/tests/kernel_w54r3_k.rs`).
 #[test]
-fn a_retime_giving_up_another_breaks_stretch_is_a_break_of_its_own() {
-    assert_eq!(block_min(&with(&[("09:20", 10, 10), ("09:25", 10, 10), ("09:20", 10, 2)])), 105, "B");
-    assert_eq!(block_min(&with(&[("09:20", 30, 30), ("09:30", 5, 5), ("09:20", 30, 5)])), 90, "C");
-    assert_eq!(block_min(&with(&[("09:20", 10, 10), ("09:25", 10, 10), ("09:25", 10, 3)])), 105, "inside the 09:20 break");
+fn a_retime_giving_up_another_breaks_stretch_is_read() {
+    assert_eq!(block_min(&with(&[("09:20", 10, 10), ("09:25", 10, 10), ("09:20", 10, 2)])), 108, "B");
+    assert_eq!(block_min(&with(&[("09:20", 30, 30), ("09:30", 5, 5), ("09:20", 30, 5)])), 110, "C");
+    assert_eq!(block_min(&with(&[("09:20", 10, 10), ("09:25", 10, 10), ("09:25", 10, 3)])), 110, "inside the 09:20 break");
 }
 
 /// The critic's C2 and D-3 (README gap 5970): a re-time giving up nothing another break covers is read over a newer
@@ -127,7 +128,7 @@ fn a_stop_after_a_retime_over_an_overlapped_break_reads_the_union() {
 /// logged after it, stamped 10:15 and 10:40 — in either order the latest surviving stamp is 10:50, where the last line in
 /// file order is the second break's.
 #[test]
-fn latest_t_is_the_latest_surviving_stamp_in_either_order() {
+fn latest_t_is_the_latest_stamp_in_either_order() {
     let head: Vec<String> = vec![
         r#"{"t":"2026-09-08T10:10:00-05:00","ev":"start","id":"t4","pred":3,"hsw":2.0,"slept_min":0,"loc":"home","blocks_done":0,"since_break_min":0}"#.into(),
         r#"{"t":"2026-09-08T10:50:00-05:00","ev":"pause","id":"t4"}"#.into(),
@@ -143,10 +144,10 @@ fn latest_t_is_the_latest_surviving_stamp_in_either_order() {
     }
 }
 
-/// D153: a cancelled line is no witness — `tm undo` of a line stamped 11:00 leaves the latest surviving stamp at 10:50,
-/// though the undo line itself is stamped later still.
+/// Restated at W-54 third repair track K for the owner's D154, which reverses D153 here: a cancelled line and its undo are
+/// witnesses, the instant was reached either way (`tm/tests/kernel_w54r3_k.rs` has the rest of D154).
 #[test]
-fn latest_t_never_counts_a_cancelled_line_or_an_undo() {
+fn latest_t_counts_a_cancelled_line_and_its_undo() {
     let l: Vec<String> = vec![
         r#"{"t":"2026-09-08T10:10:00-05:00","ev":"start","id":"t4","pred":3,"hsw":2.0,"slept_min":0,"loc":"home","blocks_done":0,"since_break_min":0}"#.into(),
         r#"{"t":"2026-09-08T10:50:00-05:00","ev":"pause","id":"t4"}"#.into(),
@@ -154,5 +155,5 @@ fn latest_t_never_counts_a_cancelled_line_or_an_undo() {
         r#"{"t":"2026-09-08T11:05:00-05:00","ev":"undo","of":"unpause","id":"t4"}"#.into(),
     ];
     let r = chokepoint::replay_of_text(&log(&l), TZ);
-    assert_eq!(r.latest_t, Some(at("10:50")));
+    assert_eq!(r.latest_t, Some(at("11:05")));
 }

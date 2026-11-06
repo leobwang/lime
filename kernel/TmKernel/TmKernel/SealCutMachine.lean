@@ -172,7 +172,7 @@ theorem arm_lastCut (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
       have h := congrArg (Option.map (fun x => x.2.2))
-        (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm').1
+        (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0, t0⟩ m' hm').1
       simp only [Option.map_map, Function.comp_def] at h
       exact Or.inl h
     · unfold Replay.brkStartArm at hm
@@ -279,7 +279,7 @@ theorem arm_interrupt (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : 
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      exact Or.inl (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm').2.1
+      exact Or.inl (Replay.brkFx_machine dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0, t0⟩ m' hm').2.1
     · unfold Replay.brkStartArm at hm
       simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
         List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm
@@ -377,7 +377,7 @@ theorem arm_brkOpen (dy : Cal.Instant → Nat) (sl : Nat → Option Nat) (m : Ma
     split at hm
     · rename_i t0 _
       have hm' := Replay.endBrkFx_mem dy m ⟨t, pl.val, w, d⟩ t0 e.line m' hm
-      exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0⟩ m' hm'))
+      exact Or.inr (Or.inl (Replay.brkFx_brkOpen dy { Replay.forget m with ended := Replay.pushEnded (Replay.endingOf ⟨t, pl.val, w, d⟩ t0 e.line) m } ⟨t, t0, d, e.line, pl.val, w, t0, t0⟩ m' hm'))
     · unfold Replay.brkStartArm at hm
       simp only [List.filterMap_append, Replay.settle_machines, Replay.runNet_machines, Effect.machineOf?,
         List.filterMap_cons, List.filterMap_nil, List.nil_append, List.mem_singleton] at hm

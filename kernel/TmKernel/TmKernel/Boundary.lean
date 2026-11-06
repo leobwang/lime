@@ -2963,14 +2963,14 @@ def TzWhy.name : TzWhy → String
 `keepDays` and `maxLine` (the reseal policy). -/
 inductive LogField
   | log | ckpt | from_ | lines | terminated | reseal | want | facts | headersFrom | render | sealed
-  | now | keepDays | maxLine
+  | now | keepDays | maxLine | fence
 deriving DecidableEq, Repr
 
 def LogField.name : LogField → String
   | .log => "log" | .ckpt => "ckpt" | .from_ => "from" | .lines => "lines"
   | .terminated => "terminated" | .reseal => "reseal" | .want => "want" | .facts => "facts"
   | .headersFrom => "headersFrom" | .render => "render" | .sealed => "sealed"
-  | .now => "now" | .keepDays => "keepDays" | .maxLine => "maxLine"
+  | .now => "now" | .keepDays => "keepDays" | .maxLine => "maxLine" | .fence => "fence"
 
 /-- **A resume's refusal on the wire** (design §10.3, W3): each guard names its bound, so the host pops exactly to it
 (§9.7); an instant is `[sec, ns]` (`Seal.cInstant`), a field its `badCkpt` name. -/
@@ -3113,6 +3113,8 @@ structure LogReq where
   reseal : Option Seal.Policy
   /-- W3: sealed records for a query naming an old date (§10.1) -/
   sealed : Option Seal.SealedIn
+  /-- **D18's fence on the host's clock** (W-54 third repair track K, the owner's D154, README gap 6023): `now` plus its two days, an instant the day `now` above cannot say.  With one, the answer carries `latestTyped`. -/
+  fence : Option Cal.Instant
 deriving DecidableEq, Repr
 
 /-- Line numbers on the wire are below `2^40` (§10.4). -/
@@ -3270,6 +3272,15 @@ def readSealedField (j : JVal) : Except LogRefusal (Option Seal.SealedIn) :=
     | _, _ => .error (.badLogReq .sealed)
   | _ => .error (.badLogReq .sealed)
 
+/-- **`fence`** (W-54 third repair track K): absent or `null`, or an instant `[sec, ns]` read by `Seal.cInstant`, the one reader of an instant on the checkpoint's wire. -/
+def readFenceField (j : JVal) : Except LogRefusal (Option Cal.Instant) :=
+  match jget j "fence" with
+  | .ok none | .ok (some .null) => .ok none
+  | .ok (some v) => match Seal.cInstant.dec v with
+    | some i => .ok (some i)
+    | none => .error (.badLogReq .fence)
+  | .error _ => .error (.badLogReq .fence)
+
 /-- **The `log` section**, field by field, then `mkLogReq?`.  `lines` is measured before its
 elements are read.  `z` is the request's zone, already read (stage 5 D9 C2); `now` the request's
 clock reading (W3). -/
@@ -3298,7 +3309,10 @@ def readLogReq (z : Cal.Tz) (now : Option Nat) (j : JVal) : Except LogRefusal VL
                 match jget j "want" with
                 | .ok w =>
                   match readWant w with
-                  | .ok (fa, hf, rn) => mkLogReq? ⟨from_, rev.reverse, term, hf, rn, fa, z, now, ck, rs, sd⟩
+                  | .ok (fa, hf, rn) =>
+                    match readFenceField j with
+                    | .ok fc => mkLogReq? ⟨from_, rev.reverse, term, hf, rn, fa, z, now, ck, rs, sd, fc⟩
+                    | .error e => .error e
                   | .error e => .error e
                 | .error _ => .error (.badLogReq .want)
           | _ => .error (.badLogReq .terminated)
@@ -3394,7 +3408,7 @@ def emitAnswer (a : Seal.Answer) : JVal :=
         ("open".toList, .obj [("block".toList, Seal.cOptOpenBlock.enc a.openBlock),
           ("interrupt".toList, Seal.cOptInterruption.enc a.openInterrupt),
           ("break".toList, Seal.cOptOpenBrk.enc a.openBreak),
-          ("ended".toList, Seal.cEnded.enc a.openEnded), ("finished".toList, Seal.cEnded.enc a.openFinished)]),
+          ("ended".toList, Seal.cEnded.enc a.openEnded), ("finished".toList, Seal.cEnded.enc a.openFinished), ("held".toList, .arr (a.openHeld.map Seal.heldJson))]),
         ("lastDay".toList, Seal.cOptNat.enc a.lastDay), ("lastEffective".toList, Seal.cOptAt.enc a.lastEffective),
         ("entryCount".toList, .num a.entryCount), ("unknown".toList, .num a.unknown),
         ("longestLeak".toList, Seal.cOptLeak.enc a.longestLeak), ("replayWarnings".toList, Seal.cRWarns.enc a.rwarns),
@@ -3402,15 +3416,15 @@ def emitAnswer (a : Seal.Answer) : JVal :=
           ("overflow".toList, .num a.warnOverflow)])]
 
 /-- **The `log` answer** (§10.2): `lines` (the last physical line seen), `warnings` (this call's tail), `facts`, `headers`, `render` and `reseal`, keys in build order.  `render` looks its lines up in an array. -/
-def logBody (r : LogReq) (facts : JVal) (headers : List JVal) (reseal : JVal) : JVal :=
+def logBody (r : LogReq) (facts : JVal) (headers : List JVal) (reseal : JVal) (typed : List (List Char × JVal) := []) : JVal :=
   let vs := logVerdicts r
   let arr := vs.toArray
-  .obj [("lines".toList, .num (r.from_ + r.lines.length - 1)),
+  .obj ([("lines".toList, .num (r.from_ + r.lines.length - 1)),
         ("warnings".toList, .arr (vs.filterMap warningOf)),
         ("facts".toList, facts),
         ("headers".toList, .arr headers),
         ("render".toList, .arr (r.render.map (fun n => renderJson n arr[n - r.from_]?))),
-        ("reseal".toList, reseal)]
+        ("reseal".toList, reseal)] ++ typed)
 
 /-- The checkpoint a request resumes: its own, or its zone's empty one (genesis, §9.7). -/
 def LogReq.start (r : LogReq) : Seal.Ckpt := r.ckpt.getD (Seal.Ckpt.empty r.tz)
@@ -3428,9 +3442,29 @@ def LogReq.headersOf (r : LogReq) (run : Seal.Run) : List JVal :=
   | none => []
   | some hf => (run.headers.filter (fun p => decide (r.from_ ≤ p.2.line ∧ hf ≤ p.2.line))).map headerJson
 
+/-- **`latestTyped`, when the request set a fence** (the owner's D154): the log's latest typed-time stamp at or before it, the checkpoint's and the tail's (`Seal.latestTyped`, `Seal.latestTyped_is_the_whole_logs`), `null` when there is none — every entry of the tail, cancelled or not, for a run keeps them (`Seal.trimRun`). -/
+def LogReq.typedOf (r : LogReq) (run : Seal.Run) : List (List Char × JVal) :=
+  match r.fence with
+  | some f => [("latestTyped".toList, Seal.cOptInstant.enc (Seal.latestTyped r.start run.entries f))]
+  | none => []
+
 /-- **The answer of an accepted resume**, before law 13's check. -/
 def LogReq.resumed (r : LogReq) (run : Seal.Run) (rs : Option Seal.Resealed) : JVal :=
-  logBody r (if r.facts then emitAnswer (r.merged run.answer) else .null) (r.headersOf run) (optJson Seal.emitResealed rs)
+  logBody r (if r.facts then emitAnswer (r.merged run.answer) else .null) (r.headersOf run) (optJson Seal.emitResealed rs) (r.typedOf run)
+
+/-- **A request with no fence answers as it did; one with a fence carries the fact** (README gap 6023). -/
+theorem typedOf_without_a_fence (r : LogReq) (run : Seal.Run) (h : r.fence = none) : r.typedOf run = [] := by simp [LogReq.typedOf, h]
+theorem typedOf_with_a_fence (r : LogReq) (run : Seal.Run) (f : Cal.Instant) (h : r.fence = some f) :
+    r.typedOf run = [("latestTyped".toList, Seal.cOptInstant.enc (Seal.latestTyped r.start run.entries f))] := by simp [LogReq.typedOf, h]
+theorem the_fence_is_named_on_the_wire : LogField.name .fence = "fence" := rfl
+theorem a_bad_fence_is_refused_by_its_name : (LogRefusal.badLogReq .fence).json = jone "err" (jone "log" (jone "badLogReq" (.str "fence".toList))) := rfl
+theorem typedOf_with_a_fence_keys_it (r : LogReq) (run : Seal.Run) (f : Cal.Instant) (h : r.fence = some f) : (r.typedOf run).map Prod.fst = ["latestTyped".toList] := by simp [LogReq.typedOf, h]
+theorem readFenceField_of_a_string : readFenceField (.obj [("fence".toList, .str [])]) = .error (.badLogReq .fence) := rfl
+/-- **`fence`, read and refused** (R10, README gap 6023): absent and `null` are none, `[sec, ns]` an instant, anything else `badLogReq fence`. -/
+theorem readFenceField_reads_and_refuses :
+    readFenceField (.obj []) = .ok none ∧ readFenceField (.obj [("fence".toList, .null)]) = .ok none ∧
+    readFenceField (.obj [("fence".toList, .arr [.num 5, .num 0])]) = .ok (some ⟨5, 0⟩) ∧
+    readFenceField (.obj [("fence".toList, .str [])]) = .error (.badLogReq .fence) := ⟨rfl, rfl, rfl, rfl⟩
 
 /-- **Law 13's check** (CRIT 14, §10.4): the answer when every numeral in it is below `2^53`, else
 `counterOverflow <field>` naming the first key path holding one. -/
@@ -3556,18 +3590,20 @@ theorem lineWarnings_eq_verdicts (ls : List Log.Line) :
   unfold Log.lineWarnings; rw [List.filterMap_map]; rfl
 
 /-- `logBody` over verdicts already read. -/
-def logBodyV (r : LogReq) (vs : List Log.Verdict) (facts : JVal) (headers : List JVal) (reseal : JVal) : JVal :=
+def logBodyV (r : LogReq) (vs : List Log.Verdict) (facts : JVal) (headers : List JVal) (reseal : JVal) (typed : List (List Char × JVal) := []) : JVal :=
   let arr := vs.toArray
-  .obj [("lines".toList, .num (r.from_ + r.lines.length - 1)),
+  .obj ([("lines".toList, .num (r.from_ + r.lines.length - 1)),
         ("warnings".toList, .arr (vs.filterMap warningOf)),
         ("facts".toList, facts),
         ("headers".toList, .arr headers),
         ("render".toList, .arr (r.render.map (fun n => renderJson n arr[n - r.from_]?))),
-        ("reseal".toList, reseal)]
+        ("reseal".toList, reseal)] ++ typed)
 
 def LogReq.resumedV (r : LogReq) (vs : List Log.Verdict) (run : Seal.Run) (rs : Option Seal.Resealed) : JVal :=
-  logBodyV r vs (if r.facts then emitAnswer (r.merged run.answer) else .null) (r.headersOf run) (optJson Seal.emitResealed rs)
-
+  logBodyV r vs (if r.facts then emitAnswer (r.merged run.answer) else .null) (r.headersOf run) (optJson Seal.emitResealed rs) (r.typedOf run)
+/-- **The twin that reads each line once is the op's body** (README gap 6023's rows). -/
+theorem logBodyV_is_logBody (r : LogReq) (f : JVal) (h : List JVal) (rs : JVal) (t : List (List Char × JVal)) : logBodyV r (logVerdicts r) f h rs t = logBody r f h rs t := rfl
+theorem resumedV_is_resumed (r : LogReq) (run : Seal.Run) (rs : Option Seal.Resealed) : r.resumedV (logVerdicts r) run rs = r.resumed run rs := rfl
 /-- The log op with its resume, reseal, seam and answer given. -/
 def logOpCore (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : Seal.Policy → Seal.Run → Option Seal.Resealed)
     (fac : Seal.Run → Option Seal.Answer) (rn : Seal.Run → Option Seal.Run)
@@ -3586,13 +3622,11 @@ def logOpCore (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : Seal.Poli
         match rs.bind Seal.Resealed.fault with
         | some f => .error (.seal (.counterOverflow f))
         | none => within53A (fac run) (rn run) (body run rs)
-
 theorem logOpZ_core (r : VLogReq) :
     logOpZ r = logOpCore r.val (Seal.resumeRun r.val.tz (r.val.now.getD 0) r.val.start (logLines r.val))
       (fun p run => Seal.resealOf r.val.tz (r.val.now.getD 0) r.val.start (logLines r.val) r.val.terminated p run)
       (fun run => r.val.seamFacts run) (fun run => r.val.seamRun run)
       (fun run rs => r.val.resumed run rs) := rfl
-
 /-- A resume's run mapped is the run read through the map — the seam's replay included. -/
 theorem logOpCore_map (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : Seal.Policy → Seal.Run → Option Seal.Resealed)
     (fac : Seal.Run → Option Seal.Answer) (rn : Seal.Run → Option Seal.Run)
@@ -3601,7 +3635,6 @@ theorem logOpCore_map (q : LogReq) (res : Except Seal.Refusal Seal.Run) (rsf : S
       = logOpCore q res (fun p run => rsf p (g run)) (fun run => fac (g run)) (fun run => rn (g run))
           (fun run rs => body (g run) rs) := by
   cases res <;> rfl
-
 /-- **The `log` op with its seam, compiled (W4)**: the resume builds its answer and headers only when the request wants them
 (`Seal.resumeRunW`), and each tail line is read once (`Log.readLine`), its verdicts giving the resume's entries,
 the resume's and the reseal's line warnings and the answer's `warnings` and `render`.  The specification reads every line
@@ -3625,7 +3658,6 @@ def logOpZFast (r : VLogReq) : Except LogRefusal LogAnswer :=
         match rs.bind Seal.Resealed.fault with
         | some f => .error (.seal (.counterOverflow f))
         | none => within53A (q.seamFacts run) (q.seamRun run) (q.resumedV vs run rs)
-
 theorem logOpZFast_core (r : VLogReq) :
     logOpZFast r = logOpCore r.val
       (Seal.resumeRunW r.val.facts r.val.headersFrom.isSome r.val.tz (r.val.now.getD 0) r.val.start (logLines r.val)
@@ -3635,7 +3667,6 @@ theorem logOpZFast_core (r : VLogReq) :
         (((logLines r.val).map Log.Line.verdict).filterMap verdictWarn) r.val.terminated p run)
       (fun run => r.val.seamFacts run) (fun run => r.val.seamRun run)
       (fun run rs => r.val.resumedV ((logLines r.val).map Log.Line.verdict) run rs) := rfl
-
 /-- **The op reading each line once is the op** (`@[csimp]`).  D24 added the seam's fourth
 argument, and with it `h4`: the trimmed run's answer is the run's answer whenever the request asked
 for facts, and when it did not there is no answer on either side — so the compiled op carries
@@ -3657,7 +3688,7 @@ exactly the replay the specification does. -/
       = (fun run rs => r.val.resumed run rs) := by
     funext run rs
     rw [logLines_map_verdict]
-    unfold LogReq.resumedV LogReq.resumed LogReq.headersOf
+    unfold LogReq.resumedV LogReq.resumed LogReq.headersOf LogReq.typedOf
     cases hf : r.val.facts <;> cases hh : r.val.headersFrom <;> simp [Seal.trimRun] <;> rfl
   have h4 : (fun run => r.val.seamFacts (Seal.trimRun r.val.facts r.val.headersFrom.isSome run))
       = (fun run => r.val.seamFacts run) := by
@@ -3672,18 +3703,15 @@ exactly the replay the specification does. -/
     · simp [hf]
     · simp [hf, Seal.trimRun_of_wanted_facts]
   rw [logOpZ_core, logOpZFast_core, Seal.resumeRunW_eq, logOpCore_map, h1, h2, h3, h4, h5]
-
 /-- The op's result as a plain value, for decided witnesses (`Except` has no decidable equality). -/
 def logAnswered : Except LogRefusal JVal → Sum LogRefusal JVal
   | .ok v => .inr v
   | .error e => .inl e
-
 /-- The request's `now` as the `log` section reads it (§9.1's `T`): the clock's reading, when it reads. -/
 def nowOf (j : JVal) : Option Nat :=
   match parseClock j with
   | .ok c => c.now
   | .error _ => none
-
 /-- **The `log` section over a zone**: read, then answered by the op; either refusal in the `log`
 shape.  **D24**: it answers a `LogAnswer`, not a `JVal` — the bytes *and* the replay behind them
 (gap 210).  Every caller that wants only the bytes reads `.wire`, and the section's refusals and
@@ -3695,7 +3723,6 @@ def logAnswerOf (z : Cal.Tz) (now : Option Nat) (l : JVal) : Except JVal (Option
     | .ok a => .ok (some a)
     | .error e => .error e.json
   | .error e => .error e.json
-
 /-- **The two sections of a request.**  Not an object: nothing (`run` refuses it as before).
 `tz` is read when present; `log` needs it.  An accepted `log` section is answered here, so its
 refusals, the resume's included, come before the plan is loaded. -/
@@ -3716,12 +3743,10 @@ def readLogSection (j : JVal) : Except JVal (Option LogAnswer) :=
           | _ => .error LogRefusal.tzAbsent.json
         | .error _ => .error (LogRefusal.badLogReq .log).json
   | _ => .ok none
-
 /-- The `log` answer after `report` in the `ok` object. -/
 def withLog (a : JVal) : JVal → JVal
   | .obj [(k, .obj kvs)] => .obj [(k, .obj (kvs ++ [("log".toList, a)]))]
   | r => r
-
 /-- **The request, with its `log` section.**  Without one it is `run` (definitionally).  The
 response carries the seam's **bytes** (`LogAnswer.wire`); its replay is read inside the kernel
 (`runCapZ`), never emitted twice. -/
@@ -3730,7 +3755,6 @@ def runWithLog (j : JVal) : Except JVal JVal :=
   | .error e => .error e
   | .ok none => run j
   | .ok (some a) => (run j).map (withLog a.wire)
-
 /-! ### `emit`: the kernel writes the line (stage 5, W-12, step S2; owner decision D16)
 
 INSERTED 2026-09-16 (design §22.1's "a new step after S (§14.6), under D16"; §14.7 F5; AGENTS §4
@@ -3761,7 +3785,6 @@ is the live instance that measured it.)*
 `Cal.mkInstant?` and `Cal.mkOffset?`; a pair either constructor refuses is `badAt <item>`.
 
 **D9-21.**  `emitStep` is a `foldl`, run at most `maxEmitItems` times. -/
-
 /-- **The `emit` op's refusals** (§10.3's shape, `{"err":{"emit":…}}`).  Each names the item it is
 about, because a call may carry several and only one of them is wrong. -/
 inductive EmitRefusal
@@ -3779,7 +3802,6 @@ inductive EmitRefusal
   /-- the reader refuses these values, by its own name -/
   | refused (item : Nat) (w : Log.LWarn)
 deriving DecidableEq, Repr
-
 /-- Keys in build order: `{"err":{"emit":…}}`. -/
 def EmitRefusal.json : EmitRefusal → JVal
   | .shape => jone "err" (jone "emit" (.str "shape".toList))
@@ -3788,17 +3810,14 @@ def EmitRefusal.json : EmitRefusal → JVal
   | .badEv i => jone "err" (jone "emit" (jone "badEv" (jone "item" (.num i))))
   | .badFields i => jone "err" (jone "emit" (jone "badFields" (jone "item" (.num i))))
   | .refused i w => jone "err" (jone "emit" (jone "refused" (lwarnJsonAt "item" i w)))
-
 /-- One event the host wants written. -/
 structure EmitItem where
   t : Cal.VInstant
   off : Cal.VOffset
   tag : List Char
   fields : List (List Char × JVal)
-
 /-- Events per call.  An append writes one; a close writes a handful. -/
 def maxEmitItems : Nat := 256
-
 /-- **`at`, through the only constructors there are** (R10). -/
 def readEmitAt (i : Nat) (v : Option JVal) : Except EmitRefusal (Cal.VInstant × Cal.VOffset) :=
   match v with
@@ -3807,7 +3826,6 @@ def readEmitAt (i : Nat) (v : Option JVal) : Except EmitRefusal (Cal.VInstant ×
     | some t, some o => .ok (t, o)
     | _, _ => .error (.badAt i)
   | _ => .error (.badAt i)
-
 /-- One item: the instant, the tag, and the field values (an absent `f` is no fields). -/
 def readEmitItem (i : Nat) (v : JVal) : Except EmitRefusal EmitItem :=
   match v with
@@ -3826,7 +3844,6 @@ def readEmitItem (i : Nat) (v : JVal) : Except EmitRefusal EmitItem :=
           | _ => .error (.badFields i)
         | _ => .error (.badEv i)
   | _ => .error .shape
-
 /-- One step of writing the items, reversed; a `foldl` (D9-21), run only below `maxEmitItems`. -/
 def emitStep (acc : Except EmitRefusal (List (List Char) × Nat)) (v : JVal) :
     Except EmitRefusal (List (List Char) × Nat) :=
@@ -3839,7 +3856,6 @@ def emitStep (acc : Except EmitRefusal (List (List Char) × Nat)) (v : JVal) :
       match Log.emitLine it.t it.off it.tag it.fields with
       | .ok l => .ok (l :: ls, i + 1)
       | .error w => .error (.refused i w)
-
 /-- **The walls form** (W-37 track T, README gap 3139; D61, D65): `emit` as `{"walls": …}` asks what the day's walls
 write — `GridCut.answer`, `WallTimer.answer` over this replay, plan, zone and clock, and a `week`'s cut (W-39). -/
 def wallsEmit (j v : JVal) : Except JVal (Option JVal) :=
@@ -3850,7 +3866,6 @@ def wallsEmit (j v : JVal) : Except JVal (Option JVal) :=
     match GridCut.answer v zo (lg.bind LogAnswer.facts) (Look.wallIndex · · p.val) cmds.length c.now (c.blockMin.map (·.val)) with
     | .ok a => .ok (some a)
     | .error r => .error r.json
-
 /-- **The `emit` section**: absent or `null` asks for nothing; an array, each item's line in the order
 sent; an object, the lines the day's walls write (`wallsEmit`, W-37).  A request that is not an
 object is left to `run` to refuse, exactly as `readLogSection` leaves it. -/
@@ -3868,12 +3883,10 @@ def readEmitSection (j : JVal) : Except JVal (Option JVal) :=
     | .ok (some v@(.obj _)) => wallsEmit j v
     | _ => .error EmitRefusal.shape.json
   | _ => .ok none
-
 /-- The `emit` answer after `log` in the `ok` object. -/
 def withEmit (a : JVal) : JVal → JVal
   | .obj [(k, .obj kvs)] => .obj [(k, .obj (kvs ++ [("emit".toList, a)]))]
   | r => r
-
 /-- **The request, with its `emit` section.**  Without one it is `runWithLog` (definitionally), so
 every theorem above about `run` and the `log` section holds of it unchanged. -/
 def runWithEmit (j : JVal) : Except JVal JVal :=
@@ -3881,14 +3894,12 @@ def runWithEmit (j : JVal) : Except JVal JVal :=
   | .error e => .error e
   | .ok none => runWithLog j
   | .ok (some a) => (runWithLog j).map (withEmit a)
-
 /-- **A request without an `emit` section is read exactly as before** — definitionally
 `runWithLog`, so every law above about `run` and the `log` section holds of the new entry point
 unchanged.  This is what keeps S2 from touching the switch's proved surface. -/
 theorem runWithEmit_without_an_emit_is_runWithLog (j : JVal) (h : readEmitSection j = .ok none) :
     runWithEmit j = runWithLog j := by
   simp [runWithEmit, h]
-
 
 /-! ### The round trip is not vacuous
 
@@ -3897,29 +3908,23 @@ remove, so the witness is here and not only in the Rust suite: a concrete
 request — a heading and an item line in a week file, a heading in a month file —
 that `loadPlan` accepts, and the round trip for its first document written out in
 bytes. -/
-
 def sampleWeekDoc : ReqDoc :=
   ⟨"week/2026-W37.md", some ⟨week, 35⟩,
     ["# Tasks".toList, "- [ ] 5 6b Finish the report ^m1".toList]⟩
-
 def sampleRequest : List ReqDoc :=
   [sampleWeekDoc, ⟨"month/2026-09.md", some ⟨month, 8⟩, ["# Outcomes".toList]⟩]
-
 def loadsOk (docs : List ReqDoc) : Bool :=
   match loadPlan docs with
   | .ok _    => true
   | .error _ => false
-
 /-- The hypothesis of `the_kernel_reads_back_what_it_writes` is satisfiable, by
 decision. -/
 theorem the_round_trip_is_not_vacuous : loadsOk sampleRequest = true := by decide
-
 /-- And its conclusion at that request is a statement about bytes. -/
 theorem the_round_trip_fires (p : WfPlan) (h : loadPlan sampleRequest = .ok p) :
     renderDocAt p.val 0 (mkDoc sampleWeekDoc)
       = ["# Tasks".toList, "- [ ] 5 6b Finish the report ^m1".toList] :=
   (the_kernel_reads_back_what_it_writes sampleRequest p h 0 sampleWeekDoc rfl).2
-
 /-! ### §4.3's own demotion pair, loaded and rendered back
 
 The two documents above have one line between them.  These two are the pair the
@@ -3939,21 +3944,17 @@ comes back byte for byte.
 Without it the request is refused `itemCheck: danglingParent` (README gap 22,
 closed), as every tree whose parent link names an id it does not carry is; so
 the entity list has two members, the outcome and the pair. -/
-
 def specWeekDoc : ReqDoc :=
   ⟨"week/2026-W37.md", some ⟨week, 35⟩,
     ["# Milestones".toList,
      "- [ ] 4 6b Rollback path passes tests   @O2 ^m2".toList]⟩
-
 def specMonthDoc : ReqDoc :=
   ⟨"month/2026-09.md", some ⟨month, 8⟩,
     ["# Outcomes".toList,
      "- [ ] 4 !1 Soundcode: end-to-end demo runs             ^O2".toList,
      "# Demoted".toList,
      "- [-] 4 3b Rollback path passes tests @O2 est:3b demoted:W37 ^m2".toList]⟩
-
 def specDemotionRequest : List ReqDoc := [specWeekDoc, specMonthDoc]
-
 /-- The entity the loader builds for `^m2` from that request, if it builds exactly
 two — `^m2` and its parent `^O2`. -/
 def specPairEntity : Option Entity :=
@@ -3982,7 +3983,6 @@ and the kernel rechecks it on every build. -/
 theorem the_spec_pair_puts_the_tombstone_in_the_month :
     specPairEntity.map (fun e => (e.val.live.doc, e.val.archiveSite.map Site.doc))
       = some (0, some 1) := by decide
-
 set_option maxRecDepth 40000 in
 /-- **The pair loads.**  Under the old orientation the tombstone was the line in
 the earlier horizon — the week — which reads `[ ]`, so this request was
@@ -5399,7 +5399,7 @@ theorem the_response_shapes_emit_in_build_order :
     -- (`withLog_jone`), the answer's value with its keys in order, and the warning's bytes.
     jemit (withLog .null (jone "ok" (.obj [("docs".toList, .arr []), ("report".toList, reportJson Report.empty)])))
       = "{\"ok\":{\"docs\":[],\"report\":{\"closes\":[]},\"log\":null}}".toList ∧
-    logAnswered (logOp ⟨⟨17, [none], true, none, [17], false, Replay.utcZone, none, none, none, none⟩, by decide⟩)
+    logAnswered (logOp ⟨⟨17, [none], true, none, [17], false, Replay.utcZone, none, none, none, none, none⟩, by decide⟩)
       = .inr (.obj [("lines".toList, .num 17), ("warnings".toList, .arr [lwarnJson 17 .invalidUtf8]),
           ("facts".toList, .null), ("headers".toList, .arr []), ("render".toList, .arr [.arr [.num 17, .null, .null]]),
           ("reseal".toList, .null)]) ∧
@@ -9154,7 +9154,7 @@ theorem readLogReq_reads_the_lines_as_sent (z : Cal.Tz) (now : Option Nat) (j : 
   all_goals first
     | (cases h; done)
     | skip
-  rename_i _ _ _ _ xs hl _ _ rev hfold _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  rename_i _ _ _ _ xs hl _ _ rev hfold _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
   refine ⟨xs, hl, ?_⟩
   rw [mkLogReq?_keeps_the_request _ _ h, lineStep_fold xs [] rev hfold]
   simp
@@ -11964,11 +11964,8 @@ theorem the_capacity_section_reads_the_corpus_model :
   rfl
 
 end CapWire
-
 namespace CapWire
-
 open Look
-
 /-- **The response's bytes, in build order** (design §10.2; D17's digit strings): `den`, then
 `days`; a day's `day`, then `numAt`, level 0 first, every unit count a JSON string. -/
 theorem the_lookahead_response_emits_in_build_order :
@@ -11982,13 +11979,11 @@ theorem the_lookahead_response_emits_in_build_order :
        '0', '"', ',', '"', '6', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0',
        '0', '"', ']', '}'] := by
   decide
-
 /-- The corpus section with `days` replaced. -/
 def sectionWithDays (days : Nat) : JVal :=
   match corpusSectionJ with
   | .obj kvs => .obj (kvs.map fun kv => if kv.1 = ['d', 'a', 'y', 's'] then (kv.1, .num days) else kv)
   | v => v
-
 /-- A whole request: no documents, `now` 2026-09-07 (a Monday), 60-minute blocks, Chicago's 2026
 table, the corpus section. -/
 def corpusRequestJ (tz : Bool) (days : Nat) : JVal :=
@@ -11997,7 +11992,6 @@ def corpusRequestJ (tz : Bool) (days : Nat) : JVal :=
     (if tz then [(['t', 'z'], chicagoTzJ springJ fallJ)] else []) ++
     [("log".toList, logFromGenesisJ []),
      (['c', 'a', 'p', 'a', 'c', 'i', 't', 'y'], sectionWithDays days)])
-
 /-- A response's `lookahead`, for a decided witness: the whole `ok` object now also carries the
 `log` answer the seam ran, which is `the_log_op_reads_a_four_line_tail`'s business, not this
 theorem's. -/
@@ -12010,7 +12004,13 @@ def lookaheadOf : Except JVal JVal → Sum JVal JVal
        | .ok (some l) => .inr l
        | _ => .inl .null)
     | _ => .inl .null
-
+set_option maxRecDepth 20000 in
+/-- **The corpus request's day** (`runCap_reads_the_corpus_request`'s first half, its own declaration since W-54 third repair track K, README gap 6030: each half is one budget). -/
+theorem corpus_request_day_one : lookaheadOf (runCap (corpusRequestJ true 1)) = .inr (lookaheadJson [ofHist 739865 (histOf [0, 0, 0, 60, 180, 180])]) := rfl
+set_option maxRecDepth 20000 in
+theorem corpus_request_too_long : runCap (corpusRequestJ true 3661) = .error (refusalJson .lookaheadTooLong) := rfl
+set_option maxRecDepth 20000 in
+theorem corpus_request_without_a_zone : runCap (corpusRequestJ false 1) = .error LogRefusal.tzAbsent.json := rfl
 set_option maxRecDepth 20000 in
 /-- **End to end at `runCap`**: the corpus request for one day carries a `log` section beside its
 `capacity` section (step L9: day 0 is derived from the replay, so every capacity request carries
@@ -12024,8 +12024,8 @@ theorem runCap_reads_the_corpus_request :
     lookaheadOf (runCap (corpusRequestJ true 1))
       = .inr (lookaheadJson [ofHist 739865 (histOf [0, 0, 0, 60, 180, 180])]) ∧
     runCap (corpusRequestJ true 3661) = .error (refusalJson .lookaheadTooLong) ∧
-    runCap (corpusRequestJ false 1) = .error LogRefusal.tzAbsent.json := by
-  refine ⟨rfl, rfl, rfl⟩
+    runCap (corpusRequestJ false 1) = .error LogRefusal.tzAbsent.json :=
+  ⟨corpus_request_day_one, corpus_request_too_long, corpus_request_without_a_zone⟩
 
 end CapWire
 
@@ -12871,15 +12871,15 @@ theorem the_log_op_facts_from_a_stored_checkpoint_are_the_replays (z : Cal.Tz) (
 
 set_option maxRecDepth 8000 in
 theorem the_log_op_names_its_resume_refusals :
-    logAnswered (logOp ⟨⟨2, [some logWitnessLine], true, none, [], true, Replay.utcZone, some 739900, none, none, none⟩,
+    logAnswered (logOp ⟨⟨2, [some logWitnessLine], true, none, [], true, Replay.utcZone, some 739900, none, none, none, none⟩,
       by decide⟩) = .inl (.seal .cutMismatch) ∧
     logAnswered (logOp ⟨⟨1, [], true, none, [], true, Replay.utcZone, some 739900,
-      some { Seal.Ckpt.empty Replay.utcZone with tzKey := ['X'] }, none, none⟩, by decide⟩) = .inl (.seal .zone) ∧
+      some { Seal.Ckpt.empty Replay.utcZone with tzKey := ['X'] }, none, none, none⟩, by decide⟩) = .inl (.seal .zone) ∧
     logAnswered (logOp ⟨⟨1, [], true, none, [], true, Replay.utcZone, some 739899,
-      some { Seal.Ckpt.empty Replay.utcZone with ledgerDay := 739900 }, none, none⟩, by decide⟩)
+      some { Seal.Ckpt.empty Replay.utcZone with ledgerDay := 739900 }, none, none, none⟩, by decide⟩)
       = .inl (.seal (.nowBelowLedger 739899 739900)) ∧
-    LogReq.fault ⟨1, [], true, none, [], true, Replay.utcZone, none, none, none, none⟩ = some (.badLogReq .now) ∧
-    LogReq.fault ⟨1, [], true, none, [], false, Replay.utcZone, some 1, none, some ⟨32, none⟩, none⟩
+    LogReq.fault ⟨1, [], true, none, [], true, Replay.utcZone, none, none, none, none, none⟩ = some (.badLogReq .now) ∧
+    LogReq.fault ⟨1, [], true, none, [], false, Replay.utcZone, some 1, none, some ⟨32, none⟩, none, none⟩
       = some (.badLogReq .keepDays) :=
   ⟨by decide, by decide, by decide, by decide, by decide⟩
 
@@ -12887,7 +12887,7 @@ set_option maxRecDepth 8000 in
 theorem the_log_op_refuses_a_count_past_2_53_by_its_key :
     logAnswered (logOp ⟨⟨1, [], true, none, [], true, Replay.utcZone, some 739900,
       some { Seal.Ckpt.empty Replay.utcZone with
-        items := [⟨['a'], some ⟨9007199254740992, 0, [], [], 0, 0⟩, none, false, none, 0⟩] }, none, none⟩, by decide⟩)
+        items := [⟨['a'], some ⟨9007199254740992, 0, [], [], 0, 0⟩, none, false, none, 0⟩] }, none, none, none⟩, by decide⟩)
       = .inl (.counterOverflow ['f', 'a', 'c', 't', 's', '.', 'i', 't', 'e', 'm', 's']) := by
   decide
 
@@ -12895,11 +12895,11 @@ set_option maxRecDepth 8000 in
 theorem the_log_op_merges_a_sealed_day_below_its_ledger_day :
     logAnswered (logOp ⟨⟨1, [], true, none, [], true, Replay.utcZone, some 739900,
       some { Seal.Ckpt.empty Replay.utcZone with ledgerDay := 5 }, none,
-      some ⟨[⟨3, none, none, [], [], [], [], [], []⟩, ⟨7, none, none, [], [], [], [], [], []⟩], []⟩⟩, by decide⟩)
+      some ⟨[⟨3, none, none, [], [], [], [], [], []⟩, ⟨7, none, none, [], [], [], [], [], []⟩], []⟩, none⟩, by decide⟩)
       = .inr (logBody ⟨1, [], true, none, [], true, Replay.utcZone, some 739900,
           some { Seal.Ckpt.empty Replay.utcZone with ledgerDay := 5 }, none,
-          some ⟨[⟨3, none, none, [], [], [], [], [], []⟩, ⟨7, none, none, [], [], [], [], [], []⟩], []⟩⟩
-        (emitAnswer ⟨5, 0, [], [], [], [], [⟨3, none, none, [], [], [], [], [], []⟩], none, none, none, [], [], none, none, 0, 0,
+          some ⟨[⟨3, none, none, [], [], [], [], [], []⟩, ⟨7, none, none, [], [], [], [], [], []⟩], []⟩, none⟩
+        (emitAnswer ⟨5, 0, [], [], [], [], [⟨3, none, none, [], [], [], [], [], []⟩], none, none, none, [], [], [], none, none, 0, 0,
           none, [], [], 0⟩) [] .null) := by
   decide
 
