@@ -1019,3 +1019,21 @@ fn a_length_with_a_held_breaks_stamp_and_planned_minutes_is_refused_in_every_arm
     let (rows, _) = break_records(&tm);
     assert_eq!(rows, vec![(30, 30, Some("walk".to_string()))]);
 }
+
+/// **A D141 line that moves only a place is a line that moves** (README gap 6063). Two D129 endings to 10:10, `walk` and `bed`, and
+/// `--now 09:45`: no drawn minute moves, but the review's `by_where` does. Until this row: refused "meets more than one logged break",
+/// because the merged spans discarded each piece's place. With no place on either, it still moves nothing and stays refused.
+#[test]
+fn a_d141_line_that_moves_only_a_place_ends_the_break() {
+    let tm = j_day(&[]);
+    tm.ok_at(&at("09:40"), &["break", "--where", "walk"]);
+    tm.ok_at(&at("09:30"), &["break", "--where", "bed"]);
+    let s = said(&tm, "09:45", &["break"]);
+    assert!(s.contains("the break that began at 09:30 ends here, at 09:45") && s.contains("09:40–10:10 also holds this instant"), "{s}");
+    let (_, by) = break_records(&tm);
+    assert_eq!((by["bed"].clone(), by["walk"].clone()), (serde_json::json!([1, 15]), serde_json::json!([1, 25])), "{by}");
+    reads(&tm, 90);
+    let tm = j_day(&[("09:40", ""), ("09:30", "")]);
+    let s = refused(&tm, "09:45");
+    assert!(s.contains("meets more than one logged break"), "{s}");
+}

@@ -2479,8 +2479,9 @@ fn ending_line(b: &tm_core::log::EndedBreak, at: DateTime<FixedOffset>) -> log::
     )
 }
 
-/// **The day as a line can move it**: every segment the kernel draws, its touching Break pieces merged, because a break's row cut
-/// in two where the union stands is the same wall clock (README gap 6052).
+/// **The day as a line can move it**: every segment the kernel draws, its touching Break pieces of ONE place merged, because a break's row
+/// cut in two where the union stands is the same wall clock (README gap 6052), and a stretch that changes place moves the review's
+/// `by_where` though no wall clock moves (README gap 6063).
 fn the_day_drawn(r: &tm_core::log::Replay) -> Vec<tm_core::log::LogSegment> {
     let mut drawn: Vec<tm_core::log::LogSegment> = vec![];
     let mut all: Vec<_> = r.days.values().flat_map(|d| d.segments.iter().cloned()).collect();
@@ -2488,9 +2489,7 @@ fn the_day_drawn(r: &tm_core::log::Replay) -> Vec<tm_core::log::LogSegment> {
     for s in all {
         let is_break = matches!(s.kind, tm_core::log::SegmentKind::Break { .. });
         match drawn.last_mut() {
-            Some(l) if is_break && matches!(l.kind, tm_core::log::SegmentKind::Break { .. }) && s.start <= l.end => {
-                l.end = l.end.max(s.end);
-            }
+            Some(l) if is_break && l.kind == s.kind && s.start <= l.end => l.end = l.end.max(s.end),
             _ => drawn.push(s),
         }
     }
