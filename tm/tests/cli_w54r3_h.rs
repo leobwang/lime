@@ -1037,3 +1037,47 @@ fn a_d141_line_that_moves_only_a_place_ends_the_break() {
     let s = refused(&tm, "09:45");
     assert!(s.contains("meets more than one logged break"), "{s}");
 }
+
+/// **One instant, one answer, a whole minute before the end** (README gap 6064). 09:30–10:10 logged finished and the same span by D129:
+/// at 10:09:30 both now end at 10:09. Until this row the finished one "already ended at 10:10". And `09:29:01` in 09:20–09:30 is inside
+/// by 59 seconds: until this row "already ends", a whole minute kept the instant did not ask for.
+#[test]
+fn an_instant_a_clock_minute_before_the_end_re_times_in_both_arms() {
+    let tm = j_day(&[("09:30", "")]);
+    let s = said(&tm, "10:09:30", &["break"]);
+    assert!(s.contains("ends here, at 10:09"), "{s}");
+    reads(&tm, 90);
+    let tm = j_day(&[("09:30", "40m")]);
+    let s = said(&tm, "10:09:30", &["break"]);
+    assert!(s.contains("re-timed to end at 10:09 (D147)"), "{s}");
+    reads(&tm, 90);
+    let tm = j_day(&[("09:20", "10m")]);
+    let s = said(&tm, "09:29:01", &["break"]);
+    assert!(s.contains("re-timed to end at 09:29 (D147) · 9m of 10m"), "{s}");
+    assert_eq!(review(&tm), 111);
+}
+
+/// **The clock's minute of the end is one answer in both arms** (README gaps 6053 and 6064): `^t4` started 10:10:30, so 09:30:30–10:10:30
+/// by D129 and by a typed length read the same at `--now 10:10`: it already ends there, nothing written.
+#[test]
+fn the_clock_minute_of_the_end_already_ends_in_both_arms() {
+    let day = || {
+        let tm = fresh();
+        tm.ok_at(&at("09:00"), &["start", "^t1"]);
+        tm.ok_at(&at("10:00"), &["done"]);
+        tm.ok_at(&at("10:10:30"), &["start", "^t4"]);
+        tm.ok_at(&at("11:10"), &["done"]);
+        tm
+    };
+    for len in [None, Some("40m")] {
+        let tm = day();
+        match len {
+            Some(l) => tm.ok_at(&at("09:30:30"), &["break", l]),
+            None => tm.ok_at(&at("09:30:30"), &["break"]),
+        };
+        let n = tm.log().len();
+        let s = said(&tm, "10:10", &["break"]);
+        assert!(s.contains("already ends at 10:10 — nothing written"), "{len:?}: {s}");
+        assert_eq!(tm.log().len(), n, "nothing written");
+    }
+}

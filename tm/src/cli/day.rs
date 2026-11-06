@@ -2334,8 +2334,8 @@ enum AtFinished {
     /// Strictly inside exactly one held break, at an instant the kernel reads as its re-time (D147). An instant only
     /// one closed span holds moves that break, so "re-timed" means moved.
     Inside(HeldBreak),
-    /// At the end of a held break, or under a minute before it, no other break holding the instant: it already ends
-    /// there (D147). No fact is needed, for nothing is written.
+    /// At the end of a held break, or in the minute its end displays as ([`at_its_end_on_the_clock`], README gap 6053), no other
+    /// break holding the instant: it already ends there (D147). No fact is needed, for nothing is written.
     AtEnd(HeldBreak),
     /// At the start of every break holding the instant: refused by name (the campaign's call inside D147, as P139 at
     /// a D129-ended break's start: a re-time there would leave no minutes).
@@ -2359,6 +2359,13 @@ fn line_end(b: &HeldBreak, at: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
     b.started + chrono::Duration::minutes((at - b.started).num_minutes().max(0))
 }
 
+/// **Whether `at`, before `b`'s end, reads on the clock as that end** (README gaps 6053 and 6064): `HH:MM` the same. A break has seconds on
+/// both ends, so a user typing the end they see lands just before it, and a line would take off a minute under a reply that reads as
+/// no change. Anywhere earlier, `09:29:01` in a break ending 09:30, the instant is inside the break and re-times it.
+fn at_its_end_on_the_clock(b: &HeldBreak, at: DateTime<FixedOffset>) -> bool {
+    at.timestamp().div_euclid(60) == b.ended.timestamp().div_euclid(60)
+}
+
 /// The one `break` line that re-times `b` to `at`, in the fork's shape: `t` its own start, its planned minutes, `actual_min`
 /// the whole minutes from its start, its place — what the kernel reads as its re-time ([`HeldBreak::retime_from`]).
 fn retiming_line(b: &HeldBreak, at: DateTime<FixedOffset>) -> log::LogEntry {
@@ -2378,8 +2385,8 @@ fn retiming_line(b: &HeldBreak, at: DateTime<FixedOffset>) -> log::LogEntry {
 ///
 /// * One closed span holds `at`: at its end [`AtFinished::AtEnd`]; at its start [`AtFinished::AtStart`]; inside it
 ///   [`AtFinished::Inside`] when `retime_from` reads the line, else [`AtFinished::NotRead`]. A line typed under a minute past
-///   the start would end the break at its start, so it is at its start; an instant under a minute before the end is at its end
-///   (a line carries whole minutes from the start, and would take a minute off a reply that reads as no change, README gap 6053).
+///   the start would end the break at its start, so it is at its start; an instant the clock reads as the end is at its end
+///   ([`at_its_end_on_the_clock`]).
 /// * Several hold it: [`AtFinished::AtStart`] at the start of all of them, else [`AtFinished::Many`].
 /// * None holds it: the breaks past whose end it lies inside their widest end. One: [`AtFinished::Out`] when `out_to` reaches
 ///   it, else [`AtFinished::OutNotRead`]; a line typed under a minute past its end changes nothing ([`AtFinished::AtEnd`]),
@@ -2415,7 +2422,7 @@ fn at_finished(held: &[HeldBreak], at: DateTime<FixedOffset>) -> Option<AtFinish
         }
         [b] if at == b.ended => Some(AtFinished::AtEnd(b.clone())),
         [b] if line_end(b, at) == b.started => Some(AtFinished::AtStart(vec![b.clone()])),
-        [b] if b.ended - at < chrono::Duration::minutes(1) => Some(AtFinished::AtEnd(b.clone())),
+        [b] if at_its_end_on_the_clock(b, at) => Some(AtFinished::AtEnd(b.clone())),
         [b] if b.retime_from.is_some_and(|r| r <= at) => Some(AtFinished::Inside(b.clone())),
         [b] => Some(AtFinished::NotRead(b.clone())),
         many if many.iter().all(|b| b.started == at) => Some(AtFinished::AtStart(holding)),
@@ -2805,6 +2812,8 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
     // shorter break nested inside, `09:40 5m`) ends the break, and the reply says what still holds the instant.
     let superseded = if ended.is_none() {
         match ctx.break_a_start_ended_at(ctx.now) {
+            // One instant, one answer (README gap 6064): the clock reads it as a D129 ending's end as it does a finished break's.
+            Some(_) if asked.is_none() && matches!(at_finished(&ctx.replay.held_breaks, ctx.now), Some(AtFinished::AtEnd(_))) => None,
             Some(b) if matches!(at_finished(&ctx.replay.held_breaks, ctx.now), Some(AtFinished::Many(_))) => {
                 let line = ending_line(&b, ctx.now);
                 if a_line_moves(&mut ctx, &line)? { Some(b) } else { None }
