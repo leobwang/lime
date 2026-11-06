@@ -148,10 +148,21 @@ fn already_ends(tm: &Tm, hm: &str) -> String {
 // The defects' shapes
 
 /// **A** (blocker; K's `Closed.restored`): the fifth line re-times the 09:40 break alone. Review 88, plan 88, cold 88. On
-/// 213e827: review 98, plan 88, `tm check` "no problems"; on ba525fa refused.
+/// 213e827: review 98, plan 88, `tm check` "no problems"; on ba525fa refused. **Since README gap 6062 the verb refuses the fourth
+/// keystroke** (a length with the break's own stamp and planned minutes is that break's own line, not "logged finished"), so the shape
+/// reaches the kernel as a line from elsewhere; and with the keystroke refused the day reads 98 on all three.
 #[test]
 fn a_reads_88_on_the_review_the_plan_and_a_cold_rebuild() {
-    let tm = j_day(&[("09:20", "30m"), ("09:30", ""), ("09:40", "15m"), ("09:20", "30m")]);
+    let tm = j_day(&[("09:20", "30m"), ("09:30", ""), ("09:40", "15m")]);
+    reads(&tm, 95);
+    let s = refused_with(&tm, "09:20", &["break", "30m"]);
+    assert!(s.contains("09:20–09:30") && s.contains("from this very instant"), "{s}");
+    let refused_day = copied(&tm);
+    assert!(retimes(&refused_day, "09:52", "09:40").contains("re-timed to end at 09:52 (D147)"));
+    reads(&refused_day, 98);
+    let mut log = fs::read_to_string(tm.plan.join(".tm/log.jsonl")).expect("the log");
+    log.push_str(&format!("{{\"t\":\"{}\",\"ev\":\"break\",\"planned_min\":30,\"actual_min\":30}}\n", at("09:20")));
+    fs::write(tm.plan.join(".tm/log.jsonl"), log).expect("the log");
     reads(&tm, 85);
     assert!(retimes(&tm, "09:52", "09:40").contains("break 09:40–09:55 re-timed to end at 09:52 (D147)"));
     reads(&tm, 88);
@@ -949,4 +960,62 @@ fn the_under_a_minute_rule_stops_at_a_short_d129_breaks_end() {
     // Inside it, the rule stands.
     let s = refused_with(&day(), "10:09:50", &["break"]);
     assert!(s.contains("own start"), "{s}");
+}
+
+/// `tm review day`'s break records at 12:30, on a copy: `(planned, actual, place)`, and the place table.
+fn break_records(tm: &Tm) -> (Vec<(u64, u64, Option<String>)>, serde_json::Value) {
+    let v = copied(tm).json_at(&at("12:30"), &["review", "day"]);
+    let rows = v["review"]["breaks"]["breaks"].as_array().unwrap_or_else(|| panic!("{v}"));
+    let rows = rows
+        .iter()
+        .map(|b| (b["planned_min"].as_u64().expect("planned"), b["actual_min"].as_u64().expect("actual"), b["place"].as_str().map(str::to_string)))
+        .collect();
+    (rows, v["review"]["breaks"]["by_where"].clone())
+}
+
+/// **One question: is the line read as a break of its own?** (README gap 6062). A length landing exactly on a D129 ending's own end
+/// passed the old check, for a held break already ended there: `09:42 28m --where walk` said "logged finished", place walk, and the
+/// kernel kept D129's span and dropped both. Refused now, by name. A stamp a minute on is a break of its own.
+#[test]
+fn a_length_landing_on_a_d129_endings_own_end_is_refused() {
+    let tm = j_day(&[("09:42", ""), ("09:25", "30m")]);
+    let s = refused_with(&tm, "09:42", &["break", "28m", "--where", "walk"]);
+    assert!(s.contains("09:42–10:10") && s.contains("own line"), "{s}");
+    let tm = j_day(&[("09:40", ""), ("09:30", "")]);
+    let s = refused_with(&tm, "09:40", &["break", "30m", "--where", "walk"]);
+    assert!(s.contains("09:40–10:10") && s.contains("own line"), "{s}");
+    let tm = j_day(&[("09:42", ""), ("09:25", "30m")]);
+    let s = said(&tm, "09:43", &["break", "27m", "--where", "walk"]);
+    assert!(s.contains("09:43–10:10 · logged finished"), "{s}");
+    let (rows, _) = break_records(&tm);
+    assert!(rows.iter().any(|r| r.0 == 27 && r.2.as_deref() == Some("walk")), "{rows:?}");
+}
+
+/// **The own-stamp guard covers every arm that logs a length finished** (README gap 6062). Each of these is D149, D143 or D152: the
+/// kernel reads the line as the held break's own, so the reply said "logged finished" while the break fell, the block's minutes came
+/// back, or its place went. One guard now, and the review stands.
+#[test]
+fn a_length_with_a_held_breaks_stamp_and_planned_minutes_is_refused_in_every_arm() {
+    // D149: `10:15` (ended at 11:09), its planned 20m at its own stamp.
+    let tm = j_day(&[("10:15", ""), ("11:09", "")]);
+    let s = refused_with(&tm, "10:15", &["break", "20m", "--where", "bed"]);
+    assert!(s.contains("10:15–11:09") && s.contains("from this very instant"), "{s}");
+    // D143: `09:20` ended at 09:50, with `^t4`'s `start` after it.
+    let tm = j_day(&[("09:20", ""), ("09:50", "")]);
+    let s = refused_with(&tm, "09:20", &["break", "20m"]);
+    assert!(s.contains("09:20–09:50") && s.contains("from this very instant"), "{s}");
+    // D152: `^t4` running, its pause's stamps past the typed end.
+    let tm = r_day(&[]);
+    tm.ok_at(&at("10:50"), &["pause"]);
+    tm.ok_at(&at("10:50"), &["pause"]);
+    typed(&tm, &[("10:15", ""), ("10:40", "")]);
+    let s = refused_with(&tm, "10:15", &["break", "20m"]);
+    assert!(s.contains("10:15–10:40") && s.contains("from this very instant"), "{s}");
+    // The place alone: the second line's span and minutes are the first's, and it would erase `walk`.
+    let tm = j_day(&[]);
+    tm.ok_at(&at("09:50"), &["break", "30m", "--where", "walk"]);
+    let s = refused_with(&tm, "09:50", &["break", "30m"]);
+    assert!(s.contains("09:50–10:20") && s.contains("from this very instant"), "{s}");
+    let (rows, _) = break_records(&tm);
+    assert_eq!(rows, vec![(30, 30, Some("walk".to_string()))]);
 }
