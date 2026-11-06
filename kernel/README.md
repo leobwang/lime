@@ -107304,7 +107304,7 @@ of the rule, an instant only one span holds moves that break, is false on one sh
 
 **What it found.**  One seed, on its first 1,500-case run (committed in `cli_break_sweep.proptest-regressions`): the hidden twin (gap 6045), fixed in the host.  **A second finding before it ran**, from writing clause 4: gap 6044, which is this brief's rule answering a shape badly, so the test states the exception and the shape goes to the owner.
 
-**The runs.**  Proptest at its default 64 cases: about 48 s beside the other rows of the binary.  1,500 cases on 3-6 keystrokes, on this branch's gate: **0 disagree** (26 m 52 s, under load).  The `#[ignore]`d exhaustive row (every minute 09:00-11:30 against 17 shapes, no length and `5m`): **5,134 sequences, 0 disagree** (9 m 11 s, twelve threads).
+**The runs.**  Proptest at its default 64 cases: about 48 s beside the other rows of the binary.  1,500 cases on 3-6 keystrokes, on this branch's gate: **0 disagree** (26 m 52 s, under load).  The `#[ignore]`d exhaustive row (every minute 09:00-11:30 against 17 shapes, no length and `5m`): **5,134 sequences, 0 disagree** (9 m 11 s, twelve threads).  Those two figures are `d0d1fd1`'s; §7 has the runs on the tree the fix round left.
 
 ### 3. D154 through the verb
 
@@ -107362,19 +107362,20 @@ of the rule, an instant only one span holds moves that break, is false on one sh
 
 ### 7. Acceptance
 
-Every command run in this worktree, capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`).  The workspace runs began on `eef0aae`; `e7cb23c` then changed this block, `citations-allow.txt` and two test doc comments, and no code.
+Every command run in this worktree, capped (`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`), on **`3677262`**, the tree the fix round left (§8, §9).  The commits after it change this README only.  The figures this section held until now described `e7cb23c`, before §8's and §9's code.
 
-* **`check.sh`**, on `e7cb23c`: every line `ok`, 36.2 s — axiom audit 7,210 theorems; FFI 97 tests (check 5); corpus 29/37 files and 4/5 whole plans; stage goals 1; citations 71,120, 67,121 resolved; check 9 997 new or changed, 997 rostered, 0 owed; parity P1-P149, next free P150; 97 modules replayed.  Its first run, on `eef0aae`, failed check 8 on 25 names this track retired, which is what `e7cb23c` answers.  Checks 8 and 10 re-run alone after this section.
-* **`cargo test --workspace --no-fail-fast`, three runs** (D46) over 196 result lines:
+* **`check.sh`**: every line `ok`, 37.3 s — axiom audit 7,210 theorems; FFI 97 tests (check 5); corpus 29/37 files and 4/5 whole plans; stage goals 1; citations 71,168, 67,169 resolved, 0 allow entries unused; check 9 997 new or changed, 997 rostered, 0 owed; parity P1-P149; 97 modules replayed.  No allow-list entry was needed for §8's or §9's new names.
+* **`cargo test --workspace --no-fail-fast`, three runs** (D46) over 196 result lines, about 18 minutes each:
 
-  | run | load at its end | passed | failed | ignored |
-  |---|---|---|---|---|
-  | 1 | 5.5 | 3,331 | 1 | 54 |
-  | 2 | 8.8 | 3,332 | 0 | 54 |
-  | 3 | 9.5 | 3,331 | 1 | 54 |
+  | run | load at its start | load at its end | passed | failed | ignored |
+  |---|---|---|---|---|---|
+  | 1 | 2.55 | 2.60 | 3,348 | 1 | 54 |
+  | 2 | 2.60 | 6.02 | 3,349 | 0 | 54 |
+  | 3 | 6.02 | 2.80 | 3,349 | 0 | 54 |
 
-  The one failure in runs 1 and 3 is gap 5541's latency row (`a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`, `tm drop` past its 1 s bound).  **Not counted as clean, and measured as not this track's:** alone it failed 2 of 3 here at load 5.6-7.4.  At load 3.5-4 it passed 2 of 4 on K's tip.  Alternating K's tip and this one five times each at load 7.5-10.9, both failed all five, `tm drop ^z15` past 1 s each time.  Another workflow's Lean builds are the load.  No `.proptest-regressions` file moved beyond this track's new one, committed with its fix.  Ignored rises from 53 to 54 by the exhaustive row, which ran on its own (§2).
-* **FFI** (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed**, 0 failed, over 5 result lines.
+  The failure in run 1 is gap 5541's latency row, `a_verb_on_a_tree_with_three_years_of_log_takes_well_under_a_second`: `tm drop ^z15` was still running after 1 s.  **Not counted as clean.**  The start and end loads above do not bracket the moment it failed: another workflow's Lean builds were running, and the load read 8.95 at one point during that run.  Runs 2 and 3 passed it.  No `.proptest-regressions` file moved in any run.
+* **FFI** (`kernel/tm-kernel-ffi`, `cargo test`): **105 passed**, 0 failed, over 5 result lines, load 2.74.
+* **The sweep file, to completion** (`TM_PROPTEST_CASES=1500 cargo test -p tm --test cli_break_sweep -- --include-ignored`; 23 m 39 s, load up to 15.7): 19 passed, 0 failed.  The `#[ignore]`d exhaustive row: **9,362 sequences, 0 disagree**.  Each of the file's two proptests, `the_invariant_holds_after_any_break_keystrokes` and `the_invariant_holds_after_any_break_keystrokes_on_a_running_block`, ran its committed seeds and 1,500 cases: **0 disagree, no new seed.**
 * **Warnings**: one, gap 6049's.
 
 ### 8. The attackers' five (gaps 6050-6055)
