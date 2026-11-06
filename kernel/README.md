@@ -107563,3 +107563,79 @@ Measured by the rename's verifiers, none caused by this land. Each was re-measur
 4. *Clears it.* W-55: print the first differing element, then register each as a parity number or fix it, and make the script report every set.
 
 **Gap 6083 — this land's cost: acceptance figures are not in this block.** The tree a block sits in cannot record its own run, so they are in the land commit's message, and in the workflow's return value. A reader of this file finds them with `git log -1 --format=%B` on the commit that added this heading.
+
+<!-- ======================================================================
+     Stage 6 — W-54 third repair, verified (2026-11-06): an independent auditor and critic over 675953f..d085d0a, before the
+     rename, as D158 orders. Neither found a blocker. Gaps 6084-6095 are this block's, each W-55's unless it says otherwise.
+     A documentation-only commit: check.sh once, no workspace run. No code moved.
+     ====================================================================== -->
+
+## Stage 6 — W-54 third repair, verified: nothing to repair before the rename, twelve findings for W-55
+
+**Verdict.** Both reports say nothing must be repaired before the rename. The main session re-drove gaps 6089, 6091's first figure, 6092 and 6095 on its own rebuild of the land (sha `9a1cd9ec`), each marked Driven. The rest are as the reports measured them.
+
+**What held.** Law 1 and resume, warm against cold, 460 cases over the whole `Replay` with `held_breaks`: 0 disagreements. 23 plants of the gate: every arm has a row that fails. Off the sweep's grid, up to 1,200 sequences with seconds, `--where` and `tm undo`: no block-minute disagreement over one minute, no cold difference, no fault, no refusal that wrote. `tm undo` after every outcome that wrote returned the prior reading. Row A re-driven by both: the fourth keystroke refused, the fifth re-times, 98 on review, plan and cold.
+
+**Gap 6084 — five old cheats fail for a reason other than the one they state.**
+1. *What.* CHEAT 132, 138, 145, 248 and 277 have one error only, `Insufficient number of fields`: their literals went stale when the structures widened, so what they claim is never evaluated. Read off a run of `Negative.lean` with `-DmaxErrors=1000000`, by the auditor. Not this repair's: track K's diff of that file touches other blocks.
+2. *Why not fixed.* Found after the land, and no Lean moves before the rename.
+3. *Cost.* AGENTS §7.4 item 10: a law these cheats guard could be weakened and check 4 stays `ok`.
+4. *Clears it.* W-55: fill the five literals, then make check 4 fail on a field-count error outside blocks that claim one (a gate change, after the regroup).
+
+**Gap 6085 — "read iff" in the fact's documentation is false past the widest end.**
+1. *What.* For a finished break the kernel also reads a line ending past `widest`: `d141Ok` has `(instLt E x.e || !decide (x ∈ m.ended))`. Auditor's 297 probes over 14 generated J days: 143 of `in_range=false read=true`, all on that side, none the other way. `tm-core`'s doc comment on the fact and `Replay.heldFacts`' comment say otherwise; track K's README block too.
+2. *Why not fixed.* A comment; the theorems limit themselves to `E ≤ wide` and are true.
+3. *Cost.* None today: the host never writes such a line, and `out_to` bounds it.
+4. *Clears it.* W-55, one sentence each.
+
+**Gap 6086 — a frozen D129 ending's line is swallowed, and gap 6029 misstates it.**
+1. *What.* Track K's §2 says a frozen break's line is a break of its own. For a frozen D129 ending the line is let go with no record and the ending forgotten: only the finished arm falls through. Auditor, J day: `09:35`, `09:20 30m`, `09:25`, then a hand line at 09:35 of planned 20, actual 5: review 90, no 5-minute record, no error.
+2. *Why not fixed.* A Lean change, and the verb refuses the shape (gap 6076's frozen ending), so only a sync or a hand edit reaches it.
+3. *Cost.* A logged line read as nothing. Block minutes do not move.
+4. *Clears it.* W-55, with gap 6071's list.
+
+**Gap 6087 — track K's §6 misdescribes check 4.** It says `Negative.lean` stops at 100 errors. `check.sh` passes `-DmaxErrors=1000000`, fails on hitting the cap and needs an error in every block; the auditor's run has no heartbeat or recursion error in the file. No cost but a reader believing the gate weaker than it is. This sentence supersedes it (§6.4).
+
+**Gap 6088 — the generated invariant is blind to over-refusal and to a false "logged finished".**
+1. *What.* With 24 cases plus the fixed shapes, `cli_break_sweep` stays green with the Inside arm planted off, the Out arm planted to begin a break, the OutNotRead arm off, or `a_finished_line_is_read` planted off. Clause 3 reads only "re-timed" and "ended", and a refusal always passes it. Re-times are thin too: 62 of 2,299 keystrokes on the auditor's instrumented run.
+2. *Why it stands.* The named rows catch every one of those plants, so no behaviour is unguarded.
+3. *Cost.* The sweep's "0 disagree" does not cover them; do not read it as if it did.
+4. *Clears it.* W-55: a clause that a shape the fact reads is re-timed, not refused.
+
+**Gap 6089 — correcting a length by retyping it is accepted, changes nothing, says nothing, then blocks the re-time. Driven.**
+1. *What.* J day, `09:20 30m`, then `09:20 20m`: `break 20m · 09:20–09:40 · logged finished (a later start follows it, D143)`, and the day still reads 30 (review 90, breaks 30). `--now 09:30` is then refused, "meets more than one logged break". The refusal of a same-length retype tells the user to type a length other than 30m, which is this keystroke. `tm undo` then `--now 09:40`, or `--now 09:40` in its place, gives what was meant (100, 20).
+2. *Why not fixed.* Found after the land; the host's D143 arm has no `adds_min` clause, which gap 6060 set only on gap 6050's arm.
+3. *Cost.* A reply that says a thing the day does not show: the silent-wrong-answer class, on an ordinary correction.
+4. *Clears it.* W-55, host: the arm says when the line adds nothing; stop offering "a length other than N" for a shorter one, or name `--now <end>`.
+
+**Gap 6090 — advice that logs a finished break often moves nothing.**
+1. *What.* The critic followed each refusal's advice on a copy, over 1,600 random sequences and 311 refusals. True: the instant ranges 12 of 12, `tm undo` 7 of 7, "at most N+1" refused 21 of 21, "end the running break first" 274 of 277 (the other 3 a second refusal by name). **"At most Nm" moved nothing on 20 of 21; Many's "type a length" moved nothing on 13 of 14.** R day: `10:03 20m`, `10:14 20m` refused "at most 9m", and `10:14 9m` logs and neither reading moves. What was meant there is `--now 10:23 11m`.
+2. *Why it stands.* Gap 6065 says a refusal offers only what the verb does. True, and it does not say the offer can be empty.
+3. *Cost.* A keystroke taken on the verb's advice that does nothing. 34 of the 1,600 sequences reach these refusals.
+4. *Clears it.* W-55, with gap 6089.
+
+**Gap 6091 — D156 and gap 6031 understate what was accepted, and the record has holes.**
+1. *What.* (a) *Driven.* R day, `tm energy 3` at 10:50, `--now 10:15 5m`, `tm stop` at 11:10: `break ended · 55m of 5m · stopped ^t4 after 5m · 55m left`, the week file reads `55m`, the review block 65, `tm check` "no problems". With a pause pair at 10:50 as witness: `stopped ^t4 after 55m · 5m left`, week file `5m`. So **50 worked minutes are lost and a wrong estimate is written**; gap 6031 calls this the safe reading and D156's row prices only its second edge. (b) The fence edge has no gap here; the figure lives in D156 alone. The critic's drive: `start` 09-08 10:00, `--now 09-08T10:10 5m`, stop at 09-11 11:02 gives `4372m of 5m · stopped ^t4 after 10m`, `tm check` silent. (c) D156's `tm wake` half cannot bite D152: D76 refuses a wake over a running block. Whether it bites through gap 6050's span witness was not checked. (d) The critic's `tm arrive home` at 10:50 witnesses in effect, though `take_break`'s docs, P149 and the sweep's filter say an `arrive` does not count; the likely cause is its replan's `plan` line, not read.
+2. *Why it stands.* D156 is the owner's; this is the figure beside it. The owner is told.
+3. *Cost.* (a) as driven.
+4. *Clears it.* The owner may revisit (a) with this figure; W-55 corrects the records.
+
+**Gap 6092 — D154 has an edge D156 does not name: a forward line inside the fence. Driven.**
+1. *What.* R day, `--now 2026-09-09T09:00 plan`, then `--now 10:15 break 5m`: `logged finished (it lies inside ^t4, which is running; it nets it, D152)`, and `tm now` at 10:20 shows no break where the control reads `on break since 10:15`. This is the symptom D154 was written to remove, through a line stamped when its verb ran on a clock ahead. A synced machine ahead by at least the typed length (D78's skew) is the plausible case; not driven.
+2. *Why it stands.* D154's words cover it, and any reading of it is the owner's.
+3. *Cost.* A typed break logged finished when the user's reading is that it is running.
+4. *Clears it.* An owner question at W-55, beside D155.
+
+**Gap 6093 — lengths are unbounded and the reply's span has no date.** The critic: `--now 09:20 2000m` replies `09:20–18:40`, review breaks 2000, heat `break 33h20m`, `tm check` "no problems", the journal line in the next day's file. `100000m` reads `break 1666h40m` in a 168-hour week. `4294967295m` creates `day/+10192-10-23.md`, which `tm check` warns is an unknown file kind. D148's arm predates this repair. Not re-driven on the base, and a narrow grep found no record; W-55 decides a bound, or the reply's date.
+
+**Gap 6094 — `--where` on a re-time or a re-time out is dropped with no word.** The critic: `09:20 30m`, `--now 09:30 --where walk` replies `re-timed to end at 09:30`, place empty. This block's predecessors record it for D141's ending under D20, and D146 treated the same silent drop of a length and a place as a defect; neither names D147 or D150. W-55: the reply says the place was not applied.
+
+**Gap 6095 — a break taken inside an open interruption is read as both lost and break. Driven.**
+1. *What.* R day, `interrupt` 10:30, `--now 10:40 5m`, `resume` 11:00: `break ended · 20m of 5m · resumed · lost 30m`; review lost 30, breaks 20, over 30 minutes of wall clock. The base gives the same, so this repair did not cause it. D90 closed the reverse order.
+2. *Why not fixed.* A reading the owner has not given; a narrow grep found no record.
+3. *Cost.* One span read two ways (§5.3).
+4. *Clears it.* An owner question at W-55.
+
+**Smaller, for W-55's records.** `cli_break_sweep.proptest-regressions` holds three seeds; this document's H block says one and gap 6052 accounts for a second, so the third (`09:30`, `09:15`, `09:30`) wants a name (D46). Three doc comments still call gap 6044 the owner's call, in `take_break`'s file and the sweep's, where D155 answered it.
+
+**Gap 5541's row, measured.** This document calls the three-year row's failures load. Alternating the land and the base at load 2.1-2.6, eight runs each, one test binary at a time: **land failed 4 of 8, base 5 of 8**, on the same two assertions (`tm drop ^z15` still running after 1 s; a stalled day at 1.0026-1.0029 s). So it fails about half the time on a nearly idle machine, which makes a green workspace run partly chance. The bound is not raised (D18). W-55 looks at the cost, or the owner rules on the bound.
