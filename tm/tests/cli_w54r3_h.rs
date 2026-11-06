@@ -1254,3 +1254,29 @@ fn an_at_start_refusal_offers_no_instant_when_none_exists() {
     assert!(s.contains("type a length") && s.contains("(D143)"), "{s}");
     logs_finished(&tm, "09:30", "5m");
 }
+
+/// **D157: a re-time out over a logged break stands, and the reply names what it covers**, each by its own span, `--json` too (README
+/// gap 6066). Until this row a user lengthening a break swallowed the break between with no word of it. A re-time out over nothing and
+/// a re-time in name nothing.
+#[test]
+fn a_re_time_out_names_each_logged_break_it_covers() {
+    let day = || {
+        let tm = j_day(&[("09:20", "30m"), ("09:30", ""), ("09:35", "5m")]);
+        tm.ok_at(&at("09:42"), &["break", "2m"]);
+        tm
+    };
+    let s = said(&day(), "09:45", &["break"]);
+    assert!(s.contains("re-timed out to end at 09:45 (D150) · 25m of 30m · it now covers the logged breaks 09:35–09:40, 09:42–09:44"), "{s}");
+    let v = day().json_at(&at("09:45"), &["break"]);
+    assert_eq!(v["covers"], serde_json::json!(["09:35–09:40", "09:42–09:44"]), "{v}");
+    let tm = day();
+    tm.ok_at(&at("09:45"), &["break"]);
+    reads(&tm, 95);
+    // Up to the break between and no further: nothing covered, nothing said, no key.
+    let tm = j_day(&[("09:20", "30m"), ("09:30", ""), ("09:45", "5m")]);
+    let v = tm.json_at(&at("09:40"), &["break"]);
+    assert_eq!((v["action"].as_str(), v.get("covers")), (Some("retimed"), None), "{v}");
+    let tm = j_day(&[("09:20", "30m")]);
+    let s = said(&tm, "09:30", &["break"]);
+    assert!(s.contains("re-timed to end at 09:30") && !s.contains("covers"), "{s}");
+}

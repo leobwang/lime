@@ -2239,6 +2239,10 @@ pub struct BreakOut {
     /// a later start ends it at the typed instant, and this is the end it replaced. Absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub superseded_end: Option<String>,
+    /// **The logged breaks a re-time out now covers, each by its own span** (`HH:MM–HH:MM`; the owner's **D157**, README gap 6066): D150's
+    /// re-time over a logged break stands, and the reply names what it covers. Empty otherwise.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub covers: Vec<String>,
     /// **The finished break this run logged** — the owner's **D143** (a backdated break with its length
     /// typed that a later logged `start` follows, `action` `finished`), **D148** (its length running past
     /// that start, `into_start` naming it) and **D146** (a length typed inside a break D129 ended: that
@@ -3167,6 +3171,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                     superseded_end: None,
                     finished: None,
                     ended_from: None,
+                    covers: vec![],
                 };
                 emit(
                     ctx.json,
@@ -3225,6 +3230,17 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
         retimed_from = Some(f.started.with_timezone(&tz).format("%H:%M").to_string());
         retimed_to = Some(line_end(&f, ctx.now).with_timezone(&tz).format("%H:%M").to_string());
         retimed_out = out_;
+        // What the longer break now runs across, read off the fact before the line (D157): only a re-time out reaches past its own end.
+        let covers: Vec<String> = if out_ {
+            let end = line_end(&f, ctx.now);
+            let mut over: Vec<&HeldBreak> =
+                ctx.replay.held_breaks.iter().filter(|o| **o != f && o.started < end && f.ended < o.ended).collect();
+            over.sort_by_key(|o| (o.started, o.ended));
+            let hm = |t: DateTime<FixedOffset>| t.with_timezone(&tz).format("%H:%M").to_string();
+            over.into_iter().map(|o| format!("{}–{}", hm(o.started), hm(o.ended))).collect()
+        } else {
+            vec![]
+        };
         ctx.append_entry(&retiming_line(&f, ctx.now))?;
         BreakOut {
             action: "retimed".to_string(),
@@ -3234,6 +3250,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             superseded_end: Some(f.ended.with_timezone(&tz).format("%H:%M").to_string()),
             finished: None,
             ended_from: None,
+            covers,
         }
     } else if let Some(b) = superseded {
         let actual = (ctx.now - b.started).num_minutes().max(0) as u32;
@@ -3275,6 +3292,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             superseded_end: Some(until.format("%H:%M").to_string()),
             finished: None,
             ended_from: None,
+            covers: vec![],
         }
     } else {
         let planned = asked.unwrap_or(ctx.cfg.day.break_min);
@@ -3425,6 +3443,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                     superseded_end: None,
                     finished: None,
                     ended_from: None,
+                    covers: vec![],
                 }
             }
             Some((Some((_, until)), _)) => {
@@ -3438,6 +3457,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                     superseded_end: None,
                     finished: None,
                     ended_from: None,
+                    covers: vec![],
                 }
             }
             probed => {
@@ -3471,6 +3491,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
                     superseded_end: None,
                     finished: None,
                     ended_from: None,
+                    covers: vec![],
                 }
             }
         }
@@ -3579,6 +3600,7 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             superseded_end: None,
             finished: None,
             ended_from: None,
+            covers: vec![],
         };
         note_break_ended(&ctx, &mut as_ended, *end)?;
     }
@@ -3646,14 +3668,19 @@ pub fn take_break(g: &Globals, args: &super::BreakArgs) -> Result<i32, CliError>
             ("ended", None) => break_ended_line(out.actual_min.unwrap_or(0), out.planned_min),
             // D147: the finished break's old span and its new end.
             ("retimed", _) => format!(
-                "break {}–{} re-timed {}to end at {} ({}) · {}m of {}m",
+                "break {}–{} re-timed {}to end at {} ({}) · {}m of {}m{}",
                 retimed_from.as_deref().unwrap_or_default(),
                 out.superseded_end.as_deref().unwrap_or_default(),
                 if retimed_out { "out " } else { "" },
                 retimed_to.as_deref().unwrap_or_default(),
                 if retimed_out { "D150" } else { "D147" },
                 out.actual_min.unwrap_or(0),
-                out.planned_min
+                out.planned_min,
+                match out.covers.as_slice() {
+                    [] => String::new(),
+                    [one] => format!(" · it now covers the logged break {one}"),
+                    many => format!(" · it now covers the logged breaks {}", many.join(", ")),
+                },
             ),
             _ => format!(
                 "break {}m{}",
@@ -3762,6 +3789,7 @@ fn ended_report(
             superseded_end: None,
             finished: None,
             ended_from: from,
+            covers: vec![],
         }),
         _ => None,
     }

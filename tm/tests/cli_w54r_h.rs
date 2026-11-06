@@ -395,7 +395,8 @@ fn already_ends_here_inside_another_drawn_break_is_refused() {
 /// *Restated at the W-54 third repair track H* (README gap 6046; it read a_retime_out_across_another_logged_break_is_refused
 /// from the W-54 repair until then, gap 5941's host guard): `out_to` reaches over a break between because the kernel reads that
 /// soundly now (track K, gap 6022), so the host keeps no rule of its own: re-timed out to 09:45, the 09:35 break drawn 0, `95`.
-/// Before the other break it goes as it always did.
+/// Before the other break it goes as it always did. **Restated to the owner's D157** (README gap 6046 as gap 6066 restates it): the
+/// re-time stands, and the reply names what it now covers.
 #[test]
 fn a_retime_out_runs_across_another_logged_break() {
     let tm = j_tree();
@@ -404,7 +405,7 @@ fn a_retime_out_runs_across_another_logged_break() {
     tm.ok_at(&at("09:35"), &["break", "5m"]);
     assert_eq!(review(&tm), (105, vec![10, 5]));
     let out = tm.ok_at(&at("09:45"), &["break"]);
-    assert!(out.stdout.contains("re-timed out to end at 09:45 (D150)"), "{}{}", out.stdout, out.stderr);
+    assert!(out.stdout.contains("re-timed out to end at 09:45 (D150) · 25m of 30m · it now covers the logged break 09:35–09:40"), "{}{}", out.stdout, out.stderr);
     let (block, mut b) = review(&tm);
     b.sort_unstable();
     assert_eq!((block, b), (95, vec![0, 25]));
