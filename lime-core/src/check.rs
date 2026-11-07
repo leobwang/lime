@@ -231,6 +231,16 @@ pub const LOG_STALE_EST: &str = "log-stale-est";
 /// since as work until it is ended.
 pub const LOG_TAKEN_BLOCK: &str = "log-taken-block";
 
+/// **A hook of this tree still calls the command's old name** — the owner's D160
+/// (parity P151). A tree the binary wrote while it was called `tm` holds hooks that
+/// run `tm check`: with only `lime` on `PATH` the pre-commit hook skips the check and
+/// lets the commit through, and the Claude Code hook exits 0 in silence, so the
+/// validation net is off with nothing to find. `lime check` itself still runs, and this
+/// names the file and its fix, `lime init <the tree> --force`. A warning (D18's family: the tree is
+/// well formed and the exit code does not move). Like [`LOG_CODES`] it is added by the
+/// **CLI** and is deliberately not in [`CODES`]: [`check`] reads no hook.
+pub const OLD_HOOK: &str = "old-hook";
+
 /// **The kernel refused to load the tree** (the owner's D32, README gap 476).
 ///
 /// Since D31 a box-less, id-less line is a real entity keyed by its title, so

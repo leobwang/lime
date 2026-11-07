@@ -107704,3 +107704,53 @@ Measured by the rename's verifiers, none caused by this land. Each was re-measur
 3. *Cost.* One `git bisect skip`.
 4. *Clears it.* Nothing; `git bisect start --first-parent` never sees it.
 
+<!-- ======================================================================
+     The rename's old trees (2026-11-06): the owner's D160, on the rename. Gaps 6100-6104 are this block's. The figures are in this
+     commit's message, for gap 6083's reason.
+     ====================================================================== -->
+
+## The rename's old trees: `lime check` names a hook that calls the old command, and `lime init --force` removes the old script
+
+**Driven on the rename's tip, by the critic.** A tree the old binary wrote, with only `lime` on `PATH`: `git commit` of a broken tree, rc 0, `pre-commit: tm is not on PATH — skipping tm check`; `.claude/hooks/tm-check.sh` exits 0 silently; `lime check` still reads the tree and names its faults; `lime init --force` rewrites the settings, `CLAUDE.md`, the skills and the pre-commit and leaves `tm-check.sh` beside `lime-check.sh`.
+
+**Parity P151 taken**: `lime check` names a hook that still calls the command's old name, by the code `old-hook`, a warning with the exit code unchanged, and `lime init --force` removes `.claude/hooks/tm-check.sh` when it is the script the old `init` wrote, and says so; fork 4748911's command is `tm`, so it has neither. A tree `lime init` wrote, or one with no hooks, reads and writes as before.
+
+**What matches.** `init::old_hooks` reads the two paths the old `init` wrote, `.claude/hooks/tm-check.sh` and `.githooks/pre-commit`, and names one when a line of it runs the old command: `tm` then `check` as words, where the shell starts a command (`init::calls_old_command`). A comment, a word in an `echo`, a quoted string, `lime check`, `tm-check` and `tm checkout` are not matches. So a user's hook that mentions the letters is silent, and a user's hook that runs `tm check` is named at its line.
+
+**What `--force` removes.** Only `.claude/hooks/tm-check.sh`, only a regular file, and only when `init::is_old_generated_hook` holds: byte for byte blob `c13343c`, the one version that file ever had in this repository's history (`git log --all` holds two commits naming the path and one blob), but for CRLF line endings, which a checkout can write on its own. `lime/src/init/old-tm-check.sh` is that blob, and a row holds it there by hash. Anything else is left, the reply and `--json`'s `left_edited` say so, and `lime check` keeps naming it while it runs the old command, with a message that says `--force` will not clear it. `--json` gains `removed` and `left_edited` only when one is non-empty, so `init --json` on any other tree is byte-identical.
+
+**The root `README.md`.** An upgrade note in the install section, `$TM_DIR` in "Finding your plan directory", and the banner rewritten: it said this branch has no working binary, that the Rust kernel was removed, and that the manual describes `main`. All three were false, and `main` is discarded (AGENTS §2.2).
+
+**The command to type names the tree.** `lime init --force` in D160, in P151's line and in this block's narrative is the verb and its flag. Typed bare it does not reach the tree: `init` reads `--dir` and else `./plan`, and reads neither `$LIME_DIR` nor the walk up. The verifiers drove it on a tree the base binary wrote, in `repo/plan`, with only `lime` on `PATH`: `created 20 file(s) in plan`, rc 0, `?? plan/plan/`, `tm-check.sh` still there, both warnings unchanged; the same under `$TM_DIR` from elsewhere and from `repo/src/deep`. The land did not see it because `cli_common` passes `--dir` on every call and its old-tree drive typed `init plan --force` from the parent. So the warning prints `init::force_command`, the tree's path absolute and quoted for a shell, and the root README's note says `lime init "$PWD" --force`. Absolute and not `.`: driven in `repo/plan`, `lime init . --force` prints `git config core.hooksPath ./.githooks`, git reads that from the repository's top where no such directory is, and following it lets a duplicate id commit at rc 0 without a word (gap 6104). With the absolute form the same commit is refused, rc 1.
+
+**Rows** (`lime/tests/cli_old_hooks.rs`, P151, through the binary): the warning's advice typed with no `--dir` from inside the tree, below it, above it, and under `$LIME_DIR` and `$TM_DIR` from elsewhere, each bringing the tree up to date with no second tree; the advice pasted away from a relative `--dir`; a path a shell would split; an edited script; the README's fenced command as the file holds it, in a tree called `plan` and one called `notes`; the net back on after the note and the reply's hint, at a tree below the repository's top and at its top; both hooks named with their lines, the exit code unmoved and the JSON's code; silent on a tree `init` wrote and on one with no hooks; a hook that merely mentions the letters silent at both paths; each shape that runs the command named; `--force` removes the generated script, says so, and `check` goes silent; the removal in `--json`; CRLF removed; an edit left, byte for byte, and said; only that file; no old script, nothing said; a plain `init` still refuses. The old bytes are held to their blobs.
+
+**Gap 6100 — `lime check` names the hooks and not the rest of an old tree's Claude Code files.**
+1. *What.* An old tree's `CLAUDE.md` and skills still tell the agent to run `tm`, and a hand-deleted `tm-check.sh` leaves `.claude/settings.json` calling a script that is gone. `old-hook` reads the two hook paths and nothing else.
+2. *Why.* The brief named the shipped hook shapes, because those are what turn the validation net off without a word. The text files are a stale instruction, not a net that is off. `lime init <dir> --force` rewrites all of them.
+3. *Cost.* A tree whose hooks a user fixed by hand still tells Claude Code the old name, and nothing says so. A hook that fails to find its script is not silent in Claude Code, so that case is seen.
+4. *Clears it.* `lime init <dir> --force`; the name itself goes with step 2's migration (D161), if the owner wants it named sooner.
+
+**Gap 6101 — `core.hooksPath` is not read.**
+1. *What.* `old-hook` looks at `<plan>/.githooks/pre-commit`, where `init` writes it. A repository whose `core.hooksPath` points elsewhere, at a copy that calls `tm check`, is not named.
+2. *Why.* §1.3 has `init` never touch or read the user's git config, and the copy is the user's own file by then.
+3. *Cost.* That copy skips its check with `pre-commit: tm is not on PATH`, which is printed on every commit, so it is findable.
+4. *Clears it.* Nothing owed.
+
+**Gap 6102 — the root `README.md`'s install section says a Rust toolchain is enough.**
+1. *What.* "To build it from source you need a Rust toolchain" and "`lime` is a Rust workspace": `lime-kernel-ffi`'s `build.rs` runs `lake build`, so a build needs elan and the pinned Lean toolchain too, and the binary's rpath points at that toolchain. Found reading the first screen for the banner's fault. Not rewritten: the brief asked for the banner and the note, and said not to rewrite the manual.
+2. *Why.* The manual predates the rebuild. It has not been re-read against the shipped binary as a whole, so how much more of it is stale is not measured.
+3. *Cost.* A reader following the install section gets a failed build naming `lake`.
+4. *Clears it.* The owner: a pass over the manual, which is not a rename's job.
+
+**Gap 6103 — a bare `lime init --force` does not look for the plan.**
+1. *What.* Typed inside a tree, below one, or under `$LIME_DIR` or `$TM_DIR` from elsewhere, it makes a second tree at `./plan`, says `created 20 file(s) in plan`, exits 0 and leaves the real tree and its warnings as they were. With a tree at a repository's top the reply's hint then points `core.hooksPath` at the new empty tree, whose hook passes, so a broken commit of the real tree goes through with `no problems`.
+2. *Why.* Following the lookup, or refusing inside a plan root, changes what `init` does on every tree, and the rename does not need it: that is the owner's call. The fork's `init` reads the same two places.
+3. *Cost.* A user who types it without reading the note or the warning gets a stray tree and no upgrade. Both the note and the warning now give the form that works, and the note says what the bare form does. `a_bare_force_inside_a_tree_makes_a_new_tree_as_the_note_warns` holds the sentence to the binary.
+4. *Clears it.* The owner. That row flips with the change, and the note's sentence goes.
+
+**Gap 6104 — the `git config` line `init` prints is wrong for a tree named from below the repository's top.**
+1. *What.* `init::hook_hint` prints the tree's path as given, joined to `.githooks`. Git reads a relative `core.hooksPath` from the repository's top, so `lime init . --force` in `repo/plan` and `lime init ../plan --force` print a line that points at nothing, and following it turns the pre-commit hook off without a word. The fork prints the same line.
+2. *Why.* It is the reply of every `init` and not what D160 asked for, so the note and the warning stay clear of it by naming the tree absolutely, where the line is right.
+3. *Cost.* A user who names a tree relatively from below the top and follows the reply loses the hook. `lime check` does not read `core.hooksPath` (gap 6101), so nothing says so.
+4. *Clears it.* The owner or W-55: the line printed absolute, or from the repository's top, moving the reply the differential's `init` rows allow by name.

@@ -999,6 +999,27 @@ fn line_warnings(ctx: &Ctx) -> (Vec<lime_core::log::LogWarning>, Option<String>)
 /// damaged log, because it is how the bad line is found. Before this repair
 /// it said `no problems` about a log holding a truncated line and a line of
 /// nonsense, and a line dated next year went unmentioned.
+fn old_hook_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
+    let force = crate::init::force_command(ctx.store.root());
+    crate::init::old_hooks(ctx.store.root())
+        .into_iter()
+        .map(|hook| {
+            let fix = if hook.force_clears {
+                format!("run `{force}`")
+            } else {
+                format!("you edited this file, so `{force}` stops calling it and leaves it: change or delete it yourself")
+            };
+            validate::CheckProblem::warning(
+                validate::OLD_HOOK,
+                &hook.path,
+                hook.line,
+                None,
+                format!("this hook still calls `tm check`, the command's old name, and with only `lime` on PATH it checks nothing: {fix}"),
+            )
+        })
+        .collect()
+}
+
 fn log_problems(ctx: &Ctx) -> Vec<validate::CheckProblem> {
     let (warnings, swept) = line_warnings(ctx);
     let quote = |text: &str| {
@@ -1709,6 +1730,8 @@ pub fn check(g: &Globals, args: &super::CheckArgs) -> Result<i32, CliError> {
     // sort by `(file, line)` merges the log's problems into that order
     // without disturbing it inside a line.
     problems.extend(log_problems(&ctx));
+    // D160: and a hook of this tree that still calls the command's old name.
+    problems.extend(old_hook_problems(&ctx));
     // D32, gap 476: and what the kernel says about the same tree — after
     // `--fix-ids` has written, so the kernel is asked about the tree that is
     // now on disk and not the one that was.

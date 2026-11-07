@@ -241,11 +241,149 @@ impl InitFile {
     }
 }
 
+/// Where `init` wrote its Claude Code hook while the command was called `tm` (D160).
+pub const OLD_HOOK_SCRIPT_PATH: &str = ".claude/hooks/tm-check.sh";
+
+/// That hook's bytes as the old `init` wrote them: blob `c13343c`, the one version the file ever
+/// had in this repository's history. `lime/tests/cli_old_hooks.rs` holds this copy to that blob.
+const OLD_HOOK_SCRIPT: &[u8] = include_bytes!("old-tm-check.sh");
+
+/// **The script the old `init` wrote, or that script with nothing a user wrote in it.** Byte for
+/// byte, but for line endings, which a checkout can turn to CRLF on its own. The name alone is not
+/// enough: a user's edit to the file is theirs.
+pub fn is_old_generated_hook(bytes: &[u8]) -> bool {
+    let lf: Vec<u8> = bytes.iter().enumerate().filter(|&(i, b)| !(*b == b'\r' && bytes.get(i + 1) == Some(&b'\n'))).map(|(_, b)| *b).collect();
+    lf == OLD_HOOK_SCRIPT
+}
+
+/// **Does this line of a shell script run `tm check`?** The old command, as a command: the word
+/// `tm` then the word `check`, where the shell would start a command — the line's start, after
+/// `exec`, `if`, `then`, `do`, `else`, `!`, or a `;`, `|`, `&` or `(` outside quotes, or just inside a
+/// `"$(`. A comment, a word in an `echo`, `lime check`, `tm-check` and `tm checkout` are not
+/// matches: a user's hook that merely mentions the letters is left alone.
+pub fn calls_old_command(line: &str) -> bool {
+    let line = line.trim_start();
+    if line.starts_with('#') {
+        return false;
+    }
+    let (mut single, mut double) = (false, false);
+    let mut chars = line.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '\\' if !single => {
+                chars.next();
+                continue;
+            }
+            '\'' if !double => single = !single,
+            '"' if !single => double = !double,
+            '#' if !single && !double && line[..i].ends_with(char::is_whitespace) => return false,
+            _ => {}
+        }
+        if !single && line[i..].starts_with("tm") && runs_check(&line[i + 2..]) && command_position(&line[..i], double) {
+            return true;
+        }
+    }
+    false
+}
+
+/// `check` as the next word.
+fn runs_check(rest: &str) -> bool {
+    let word = rest.trim_start();
+    word.len() < rest.len()
+        && word.strip_prefix("check").is_some_and(|after| !after.starts_with(|c: char| c.is_ascii_alphanumeric() || "_-.".contains(c)))
+}
+
+/// Whether what stands before a word leaves it where the shell starts a command.
+fn command_position(before: &str, in_double_quotes: bool) -> bool {
+    if in_double_quotes {
+        return before.ends_with("$(");
+    }
+    let before = before.trim_end();
+    if before.is_empty() || before.ends_with(['(', ';', '|', '&', '!', '{']) {
+        return true;
+    }
+    matches!(before.rsplit(|c: char| c.is_whitespace()).next(), Some("exec" | "then" | "do" | "else" | "if" | "while" | "until"))
+}
+
+/// **The command that brings the tree at `root` up to date, with the tree named** (D160). `init` does
+/// not look for the plan as every other verb does (`--dir`, else `./plan`), so a bare `lime init --force`
+/// typed inside a tree makes a second tree at `./plan` and leaves this one as it was. The path is
+/// absolute, so the command works pasted anywhere, and so is the path in the `git config` line the
+/// reply prints ([`hook_hint`]), which git reads from the repository's top and not from where it was typed.
+pub fn force_command(root: &Path) -> String {
+    let root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    format!("lime init {} --force", shell_word(&root.display().to_string()))
+}
+
+/// `word` as one word of a POSIX shell: as it stands if nothing in it is special, else single-quoted.
+fn shell_word(word: &str) -> String {
+    if !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || "/._-+=:@%,".contains(c)) {
+        return word.to_string();
+    }
+    format!("'{}'", word.replace('\'', "'\\''"))
+}
+
+/// One hook of a tree that still runs the old command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OldHook {
+    /// Its path under the plan root.
+    pub path: String,
+    /// The 1-based line that runs it.
+    pub line: usize,
+    /// True when [`force_command`] can bring it up to date: the pre-commit, which it rewrites, or
+    /// the old script as generated, which it removes. False for the old script with a user's edit.
+    pub force_clears: bool,
+}
+
+/// **The hooks under `root` that still call the old command** (D160): the two paths the old `init`
+/// wrote, [`OLD_HOOK_SCRIPT_PATH`] and `.githooks/pre-commit`, each only when a line of it runs the old
+/// command ([`calls_old_command`]). A file absent, or not text, is no match.
+pub fn old_hooks(root: &Path) -> Vec<OldHook> {
+    let pre_commit = format!("{HOOKS_DIR}/pre-commit");
+    let mut out = Vec::new();
+    for rel in [OLD_HOOK_SCRIPT_PATH, pre_commit.as_str()] {
+        let Ok(bytes) = fs::read(root.join(rel)) else { continue };
+        let Ok(text) = std::str::from_utf8(&bytes) else { continue };
+        if let Some(at) = text.lines().position(calls_old_command) {
+            out.push(OldHook {
+                path: rel.to_string(),
+                line: at + 1,
+                force_clears: rel != OLD_HOOK_SCRIPT_PATH || is_old_generated_hook(&bytes),
+            });
+        }
+    }
+    out
+}
+
+/// `--force`'s one removal (D160): [`OLD_HOOK_SCRIPT_PATH`], only a regular file, and only as generated.
+fn remove_old_hook(root: &Path, written: &mut Written) -> Result<(), InitError> {
+    let path = root.join(OLD_HOOK_SCRIPT_PATH);
+    let is_file = fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_file());
+    if !is_file {
+        if path.symlink_metadata().is_ok() {
+            written.old_hook_left.push(OLD_HOOK_SCRIPT_PATH.to_string());
+        }
+        return Ok(());
+    }
+    let bytes = fs::read(&path).map_err(|e| InitError::io(path.display().to_string(), e))?;
+    if is_old_generated_hook(&bytes) {
+        fs::remove_file(&path).map_err(|e| InitError::io(path.display().to_string(), e))?;
+        written.old_hook_removed.push(OLD_HOOK_SCRIPT_PATH.to_string());
+    } else {
+        written.old_hook_left.push(OLD_HOOK_SCRIPT_PATH.to_string());
+    }
+    Ok(())
+}
+
 /// What [`write`] did.
 #[derive(Debug, Clone, Default)]
 pub struct Written {
     /// Files created (or, for `.gitignore`, extended), in generation order.
     pub created: Vec<String>,
+    /// Under `--force`: the old command's generated hook, removed (D160).
+    pub old_hook_removed: Vec<String>,
+    /// Under `--force`: the old command's hook, left because it is not as generated (D160).
+    pub old_hook_left: Vec<String>,
     /// Files that were already there and were left byte for byte as they
     /// were: every [`Mode::Preserve`] file that exists (the §2 content files
     /// and `config.toml` under `--force`) and a [`Mode::Merge`] file that
@@ -486,6 +624,9 @@ pub fn write(root: &Path, opts: &Options) -> Result<Written, InitError> {
             make_executable(&path)?;
         }
         written.created.push(file.path.clone());
+    }
+    if opts.force {
+        remove_old_hook(root, &mut written)?;
     }
     Ok(written)
 }

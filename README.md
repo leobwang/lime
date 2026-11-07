@@ -1,10 +1,9 @@
 # lime
 
-> **This branch has no working `lime`.** `rebuild-on-lean` removed the Rust
-> kernel (`lime-core`) in favour of the Lean 4 kernel under `kernel/`, which
-> covers a fraction of it so far. The manual below describes the tool as it
-> exists on `main`. See `PLAN-lean-kernel.md` for what is being built here and
-> `lime/DORMANT.md` for the frontend's status.
+> **`lime` works here, on `rebuild-on-lean`; `main` was discarded.** The
+> planner, the log and the lifecycle verbs run on the Lean 4 kernel under
+> `kernel/`; the terminal UI and the rest are Rust. The record of the rebuild is
+> `kernel/README.md`, and `AGENTS.md` says how to work on it.
 
 `lime` is a personal planner for people who think in plain text. You keep a small
 tree of Markdown files — a month of outcomes, a week of milestones and tasks, a
@@ -103,13 +102,41 @@ exits 0 **silently**, and the git pre-commit hook prints `pre-commit: lime is no
 on PATH — skipping lime check` on stderr and lets the commit through. Either way
 your validation net is off.
 
+### Upgrading a tree from `tm`
+
+The command used to be called `tm`. Your plan does not move: `.tm/`, your files
+and your log stay as they are. Only the hooks and the Claude Code files in each
+plan directory still name the old command. To bring a tree up to date, put `lime`
+on your `PATH` and run this in each plan directory:
+
+```sh
+lime init "$PWD" --force
+```
+
+It rewrites `CLAUDE.md`, the skills and both hooks, leaves your files alone, and
+removes `.claude/hooks/tm-check.sh` unless you edited it (it says which). Name the
+directory, as here: `init` does not look for your plan as the other verbs do, so a
+bare `lime init --force` makes a new tree at `./plan` and leaves this one as it was.
+`lime check` prints the same command with the tree's path filled in.
+
+Until you do, with only `lime` on your `PATH`, that tree's validation net is off:
+its pre-commit hook prints `pre-commit: tm is not on PATH — skipping tm check` and
+lets the commit through, and its Claude Code hook exits 0 silently. `lime check`
+still reads the tree and names each such hook (`old-hook`), from wherever it finds
+the tree. If you have scripts
+that call `tm`, keep a symlink, which also keeps the old hooks working:
+
+```sh
+ln -s "$(command -v lime)" ~/.local/bin/tm
+```
+
 ### Finding your plan directory
 
 Every command needs to know which plan directory to work on. It looks, in this
 order:
 
 1. `--dir <path>` (a global flag; it works before or after the verb)
-2. `$LIME_DIR`
+2. `$LIME_DIR`, or `$TM_DIR`, its old name, when `$LIME_DIR` is unset
 3. by walking up from the working directory for a directory holding a
    `config.toml` **next to `.tm/`, `backlog.md`, `week/` or `month/`** — or one
    with a `plan/` child that does

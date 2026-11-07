@@ -33,6 +33,13 @@ pub struct InitOut {
     /// generated integration (`CLAUDE.md`, the skills, the hooks) without
     /// touching the database.
     pub skipped: Vec<String>,
+    /// Under `--force`: the old command's generated hook, removed (D160). Absent when there was none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub removed: Vec<String>,
+    /// Under `--force`: the old command's hook, left because it is not the script the old `init`
+    /// wrote (D160). Absent when there was none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub left_edited: Vec<String>,
     /// How to enable the git pre-commit hook (§1.3).
     pub hook_hint: String,
 }
@@ -71,6 +78,8 @@ pub fn run(g: &Globals, args: &super::InitArgs) -> Result<i32, CliError> {
         dir: root.display().to_string(),
         created: written.created,
         skipped: written.unchanged,
+        removed: written.old_hook_removed,
+        left_edited: written.old_hook_left,
         hook_hint: init::hook_hint(&root),
     };
     let example = args.example;
@@ -86,6 +95,14 @@ pub fn run(g: &Globals, args: &super::InitArgs) -> Result<i32, CliError> {
                     "\nleft alone, already there ({}): {}",
                     out.skipped.len(),
                     out.skipped.join(", ")
+                ));
+            }
+            for path in &out.removed {
+                s.push_str(&format!("\nremoved {path}: the old command's generated hook; {} replaces it", init::HOOK_SCRIPT_PATH));
+            }
+            for path in &out.left_edited {
+                s.push_str(&format!(
+                    "\nleft {path}: it is not the script the old command's init wrote, so it may be yours, and nothing runs it now; delete it when you are done with it"
                 ));
             }
             s.push_str(&format!(
