@@ -64,6 +64,18 @@ import subprocess
 #: changed its spelling is the key its parent held; a key the parent held under NO spelling is still growth.
 #: `old_path` answers the second half.  Checked by planting a real new exempt line in a scratch copy of each
 #: file (kernel/README.md's rename block): every plant still FAILS.
+#:
+#: **AND THE REGROUP IS A SECOND STEP OF THE SAME CHAIN** (the owner's folder move, queued 2026-11-05).  A library
+#: module under one folder, `kernel/LimeKernel/LimeKernel/Seal/SealLaw.lean`, was `kernel/LimeKernel/LimeKernel/SealLaw.lean`
+#: between the rename and the move and `kernel/TmKernel/TmKernel/SealLaw.lean` before the rename, and no single row of
+#: `RENAMED_PATHS` says both: a row beside the rename's answers the commits between and misses every commit before them, so
+#: `mutate.at_commit` read a pre-rename baseline as "absent" and every definition of a moved module as new.  So `old_path`
+#: answers the CANDIDATES IN ORDER, newest first, and `show` takes the first one the commit holds.  The folder step is a
+#: PROPERTY of the path, one directory under the library, and not a list of folders: the table of folders is check 15's,
+#: and a second copy of it here would be AGENTS 5.3's bug.  WHAT THAT COSTS, declared: a NEW module in a folder whose name
+#: is another module's old flat name reads that module's old text as its own past, which can only make a definition with
+#: an unchanged body count as unchanged; and a module moved between two folders after the regroup is read as absent at
+#: the commits before that move, loudly, as the chain's first miss was.
 RENAMED_PATHS = (
     ("kernel/LimeKernel/LimeKernel/", "kernel/TmKernel/TmKernel/"),
     ("kernel/LimeKernel/LimeKernel.lean", "kernel/TmKernel/TmKernel.lean"),
@@ -72,6 +84,7 @@ RENAMED_PATHS = (
     ("lime-core/", "tm-core/"),
     ("lime/", "tm/"),
 )
+_UNDER_A_FOLDER = re.compile(r"(kernel/LimeKernel/LimeKernel/)[^/]+/([^/]+)")
 _ATOM = re.compile(r"TmKernel|TmArch|(?<![A-Za-z0-9])(?:tm|Tm|TM)(?![A-Za-z0-9])")
 _IDENTISH = re.compile(r"[A-Za-z0-9_)\]>]")
 _REV_BEFORE = re.compile(r"(?:\b[0-9a-f]{7,40}|<[A-Za-z_-]+>):$")
@@ -117,11 +130,18 @@ def respell(text):
 
 
 def old_path(rel):
-    """The repository-relative path `rel` had before the rename, or None when it has not moved."""
+    """The repository-relative paths `rel` had before it was where it is, newest first: the flat path a module under one
+    folder had before the regroup, then the path before the rename.  `[]` when it has not moved."""
+    out = []
+    flat = _UNDER_A_FOLDER.fullmatch(rel)
+    if flat:
+        rel = flat.group(1) + flat.group(2)
+        out.append(rel)
     for new, old in RENAMED_PATHS:
         if rel == new or (new.endswith("/") and rel.startswith(new)):
-            return old + rel[len(new):]
-    return None
+            out.append(old + rel[len(new):])
+            break
+    return out
 
 
 #: **GROWTH THE OWNER GRANTED, NAMED** (W-49 track P; the owner's D124, README gap 5130).
@@ -180,26 +200,24 @@ def _git(path, *args):
 
 def show(path, rev):
     """`path`'s text at `rev`, IN THE NEW SPELLING and read from the path the file had in that commit (`respell`,
-    `old_path`): `""` when the file is not in that commit under either path, `None` when git cannot say."""
+    `old_path`): `""` when the file is not in that commit under any of its paths, `None` when git cannot say."""
     listed = _git(path, "ls-tree", rev, "--", path.name)
     if listed is None:
         return None
     if listed.strip():
         text = _git(path, "show", "%s:./%s" % (rev, path.name))
-    else:
-        prefix = _git(path, "rev-parse", "--show-prefix")
-        if prefix is None:
-            return None
-        old = old_path(prefix.strip() + path.name)
-        if old is None:
-            return ""
+        return None if text is None else respell(text)
+    prefix = _git(path, "rev-parse", "--show-prefix")
+    if prefix is None:
+        return None
+    for old in old_path(prefix.strip() + path.name):
         listed = _git(path, "ls-tree", "--full-tree", rev, "--", old)
         if listed is None:
             return None
-        if not listed.strip():
-            return ""
-        text = _git(path, "show", "%s:%s" % (rev, old))
-    return None if text is None else respell(text)
+        if listed.strip():
+            text = _git(path, "show", "%s:%s" % (rev, old))
+            return None if text is None else respell(text)
+    return ""
 
 
 def committed(path, rev="HEAD"):
