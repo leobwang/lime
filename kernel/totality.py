@@ -14,7 +14,7 @@ Usage: `totality.py <dir> [<dir> ...]`.  Each directory is scanned
 RECURSIVELY, with build and tooling entries pruned on the PROPERTY
 `leanfiles.is_derived` states and never on a name (the sentence here said
 ".lake, target and .git" until W-29, which is the name list W-22 deleted).  `check.sh` passes both
-`TmKernel/TmKernel` (the library) and `TmKernel` (the package root, which holds
+`LimeKernel/LimeKernel` (the library) and `LimeKernel` (the package root, which holds
 `Check.lean`, `Negative.lean` and `Goals.lean`), so the exemption below is
 load-bearing rather than decorative.
 
@@ -22,8 +22,8 @@ THE RECURSION IS THE W-21 REPAIR STEP'S, and it closes a hole three checkers
 shared.  This scan used to be one level deep, and so did `citations.py`'s
 `LEAN_FILES` and `mutate.py`'s `lib_files` -- while `mutate.py`'s own
 `touched()` asks git with a RECURSIVE pathspec, and `check.sh` line 204 states
-the swept set as `TmKernel/**.lean`.  DRIVEN before the repair:
-`TmKernel/TmKernel/Sub/Probe.lean` holding `partial def w21SubLoop` (R4, a HARD
+the swept set as `LimeKernel/**.lean`.  DRIVEN before the repair:
+`LimeKernel/LimeKernel/Sub/Probe.lean` holding `partial def w21SubLoop` (R4, a HARD
 RULE), `def w21SubGatherable (_n : Nat) : Bool := true` (D40's exact class) and
 a backticked Look.zzz_no_such_thing gave this file rc=0, `citations.py` rc=0
 with byte-identical counts, and `mutate.py --gate` rc=0 "0 owed".  A library
@@ -34,7 +34,7 @@ repair left two holes of the same shape.  `check.sh`'s check-3 roster grep was
 never made recursive -- a theorem in a subdirectory was never required to have a
 `#print axioms` line -- and the three walks that WERE repaired shared a prune
 list holding the name `target`, a legal Lean module path component, so a library
-module under `kernel/TmKernel/TmKernel/target/` was invisible to checks 2, 8 and
+module under `kernel/LimeKernel/LimeKernel/target/` was invisible to checks 2, 8 and
 9 again.  Both driven; `leanfiles.py` is the one enumeration all four now use,
 and it prunes on a PROPERTY (a leading dot, or a CACHEDIR.TAG file) rather than
 on a name.
@@ -54,19 +54,19 @@ import ratchet
 # `Goals.lean` holds the outstanding goals of stages 3-6 as theorem statements
 # with `sorry` proofs -- an unproved statement that *elaborates* is the whole
 # point of the file, because it is checked to be well-formed and to name real
-# definitions.  It is safe because it is imported by nothing: `TmKernel.lean`
+# definitions.  It is safe because it is imported by nothing: `LimeKernel.lean`
 # does not import it and no module of the library does, so its `sorry`s cannot
 # reach a proved theorem.  `check.sh`'s axiom audit is what enforces that -- a
 # `sorryAx` in `Check.lean` means this file leaked.
 #
 # NAMED BY PATH, NOT BY NAME-AT-A-ROOT (the W-27 repair step).  The test used to
 # be "called `Goals.lean` AND sitting at the root of some directory on the
-# command line", and `check.sh` names TWO roots -- `TmKernel/TmKernel` and
-# `TmKernel` -- so the library directory was *also* a root and
-# `TmKernel/TmKernel/Goals.lean`, a real compiled library module, was exempt
+# command line", and `check.sh` names TWO roots -- `LimeKernel/LimeKernel` and
+# `LimeKernel` -- so the library directory was *also* a root and
+# `LimeKernel/LimeKernel/Goals.lean`, a real compiled library module, was exempt
 # from every rule in this file.  DRIVEN in a `git archive HEAD` clone: that path
-# holding `partial def` and `unsafe def`, imported by `TmKernel.lean` and built
-# by `lake build TmKernel:static`, gave rc=0 and no output; the identical file
+# holding `partial def` and `unsafe def`, imported by `LimeKernel.lean` and built
+# by `lake build LimeKernel:static`, gave rc=0 and no output; the identical file
 # named `Probe.lean` was named on both lines.  The header above claimed the
 # opposite ("without that test the recursion would have widened the one
 # exemption into a directory anybody could create") -- the SECOND ROOT was that
@@ -74,7 +74,7 @@ import ratchet
 #
 # So the exemption is now ONE PATH, resolved against this file's own directory,
 # and it does not depend on how a caller spells its arguments.
-EXEMPT_PATHS = {(pathlib.Path(__file__).resolve().parent / "TmKernel" / "Goals.lean")}
+EXEMPT_PATHS = {(pathlib.Path(__file__).resolve().parent / "LimeKernel" / "Goals.lean")}
 
 # A CHARACTER LITERAL AND AN INTERPOLATION PREFIX ARE THE TWO PLACES A `!` IS
 # NOT PART OF A NAME, and both are blanked before the scan so that the ban below
@@ -133,7 +133,7 @@ INTERP = re.compile(r"(?<![A-Za-z0-9_'])([a-z])!(?=\")")
 # exactly that spelling.  `@[extern "sym"] def f .. := <lean body>` has exactly
 # the same effect -- every proof and every `#print axioms` sees the Lean body
 # while the linked archive runs the C symbol -- and it was UNBANNED.  DRIVEN in
-# a `git archive HEAD` clone: `@[extern "tm_evil_probe"] def w28ExternProbe
+# a `git archive HEAD` clone: `@[extern "lime_evil_probe"] def w28ExternProbe
 # (n : Nat) : Nat := n` appended to `Emit.lean` left this file at rc=0.  Pointed
 # at a symbol the archive already defines it links and runs.  That is W-27's
 # finding -- the proof layer cannot see WHICH definition the archive exports --
@@ -172,11 +172,11 @@ INTERP = re.compile(r"(?<![A-Za-z0-9_'])([a-z])!(?=\")")
 # performed.  DRIVEN in a `git archive HEAD` clone at W-29:
 #
 #     def w29ExternProbe (n : Nat) : Nat := n
-#     attribute [extern "tm_kernel_call_c"] w29ExternProbe
+#     attribute [extern "lime_kernel_call_c"] w29ExternProbe
 #
-# appended to `Emit.lean` BUILT (`lake build TmKernel:static`, "Build completed
+# appended to `Emit.lean` BUILT (`lake build LimeKernel:static`, "Build completed
 # successfully") and left this file at **rc=0, no output** -- while the SAME
-# attribute on the SAME declaration, written `@[extern "tm_kernel_call_c"] def
+# attribute on the SAME declaration, written `@[extern "lime_kernel_call_c"] def
 # w29ExternProbe ..`, is named.  One rule, two spellings, one of them read: that
 # is gap 1875's own shape reached through the syntax rather than through the
 # attribute list, and `@[implemented_by]`'s command spelling was caught only by
@@ -304,7 +304,7 @@ ALLOWED_COMMANDS = {
 # `CommandElabM`, which is `run_cmd` by another spelling, and `run_cmd` is the
 # construct W-30 drove a NEW AXIOM past every gate with.  DRIVEN in a `cp -a`
 # clone with its own build tree: `#eval show CommandElabM Unit from liftCoreM <|
-# Lean.addDecl (Lean.Declaration.axiomDecl { name := `Tm.w31Planted, type :=
+# Lean.addDecl (Lean.Declaration.axiomDecl { name := `Lime.w31Planted, type :=
 # mkConst ``False, .. })` appended to `Emit.lean` inside a `section`, plus
 # `theorem w31_one_is_two : (1:Nat) = 2 := (w31Planted).elim`, BUILT at rc=0
 # ("Build completed successfully (174 jobs)") and left this file at RC=0 WITH NO
@@ -406,7 +406,7 @@ def command_positions(code):
 #
 # THE FIRST THREE ELABORATE ARBITRARY METACODE, AND THAT IS A NEW AXIOM PAST
 # EVERY GATE.  DRIVEN in a `git archive HEAD` clone against the built library
-# (`LEAN_PATH=kernel/TmKernel/.lake/build/lib/lean`, 8G, timeout 300): a file
+# (`LEAN_PATH=kernel/LimeKernel/.lake/build/lib/lean`, 8G, timeout 300): a file
 # whose `section` holds an INDENTED `run_cmd liftCoreM <| Lean.addDecl
 # (Lean.Declaration.axiomDecl { name := w30Planted, .. type := mkConst ``False
 # .. })` elaborates at rc=0 and prints that the planted name depends on an axiom
@@ -414,7 +414,7 @@ def command_positions(code):
 # it.  The word `axiom` never appears, so the
 # `axiom` token row below never fires; check 3 fails on `sorryAx` and the
 # planted axiom is not `sorryAx`.  Before this repair `totality.py
-# TmKernel/TmKernel TmKernel` gave rc=0 and NO OUTPUT on that file; with
+# LimeKernel/LimeKernel LimeKernel` gave rc=0 and NO OUTPUT on that file; with
 # `run_cmd` moved to COLUMN ZERO it gave rc=1.  The escape was the indentation
 # -- exactly the hole W-30 track A opened (gap 2091), closed for seven commands
 # and left open for this one because the KEYWORD SET, not the position, was
@@ -659,14 +659,14 @@ BANNED = [
 # check-3 roster grep -- was not, because nothing named it.  Worse, the three
 # that were repaired shared a hard-coded prune list holding the name `target`,
 # which is a LEGAL Lean module path component, so a library module under
-# `kernel/TmKernel/TmKernel/target/` was invisible to checks 2, 8 and 9 at once
+# `kernel/LimeKernel/LimeKernel/target/` was invisible to checks 2, 8 and 9 at once
 # -- W-21's `Sub/` class reached through the prune list instead of through the
 # non-recursion.  DRIVEN before the repair: a `target/Probe.lean` holding
 # `partial def w22TargetLoop`, a HARD RULE, gave this file rc=0.  The prune rule
 # is now a PROPERTY a build directory has (a leading dot, or a CACHEDIR.TAG
 # file) and never a name.
 
-PKG = pathlib.Path(__file__).resolve().parent / "TmKernel"
+PKG = pathlib.Path(__file__).resolve().parent / "LimeKernel"
 IMPORT_LINE = re.compile(
     r"(?m)^[ \t]*(?:public[ \t]+|meta[ \t]+|private[ \t]+)*import[ \t]+(?:all[ \t]+)?(\S+)")
 
@@ -685,7 +685,7 @@ kernel_decide_exempt = read_exempt(KERNEL_DECIDE_FILE.read_text()) \
 seen_kernel_decide = set()
 
 bad = 0
-# `check.sh` passes `TmKernel/TmKernel` AND `TmKernel`, so with the recursion
+# `check.sh` passes `LimeKernel/LimeKernel` AND `LimeKernel`, so with the recursion
 # every library file is reached twice; a SET is what keeps it scanned once.  It
 # is a set and no longer a path->at-a-root dict because the exemption above is a
 # PATH now and does not care which argument reached the file.
@@ -713,7 +713,7 @@ for p in sorted(files):
     # this kernel uses is in `ALLOWED_ATTRS` with a sentence, and anything else
     # is named here.  A block may hold several (`@[simp, csimp]`); the leading
     # token of each comma-separated entry is the attribute's NAME and the rest
-    # is its argument (`export tm_kernel_call`, `extern "sym"`).
+    # is its argument (`export lime_kernel_call`, `extern "sym"`).
     #
     # BOTH SPELLINGS, ONE LOOP (W-29).  `ATTR_SPELLINGS` is the `@[..]` block and
     # the `attribute [..] name` command, and writing the rule twice would be the
@@ -761,12 +761,12 @@ for p in sorted(files):
     # the kernel's own modules and nothing else -- a PROPERTY of the import
     # line, not a list of forbidden packages.  `import Lean` put `Lean.addDecl`
     # and withOptions in scope, and run_tac -- a TACTIC, which no command
-    # rule above reads -- used them to add `Tm.v34Bad : False` with
+    # rule above reads -- used them to add `Lime.v34Bad : False` with
     # `debug.skipKernelTC` set, so `theorem v34_one_is_two : (1:Nat) = 2`
     # passed all thirteen checks (driven at `fb05f4e` in a clone; without the
     # import line the same file fails at `Unknown constant
-    # Lean.Elab.Tactic.TacticM`).  Every live import is `TmKernel` or
-    # `TmKernel.<Mod>` today, so the rule costs nothing.  Check 14
+    # Lean.Elab.Tactic.TacticM`).  Every live import is `LimeKernel` or
+    # `LimeKernel.<Mod>` today, so the rule costs nothing.  Check 14
     # (`replay.py`) is the semantic half and does not care how a declaration
     # got in.
     for m in IMPORT_LINE.finditer(code):
@@ -807,14 +807,8 @@ for where in sorted(kernel_decide_exempt - seen_kernel_decide):
     print("%s: STALE: %s has no `decide +kernel` -- delete its line"
           % (KERNEL_DECIDE_FILE.name, where))
     bad += 1
-try:
-    import subprocess
-    head = subprocess.run(["git", "-C", str(KERNEL_DECIDE_FILE.parent), "show",
-                           "HEAD:./" + KERNEL_DECIDE_FILE.name],
-                          capture_output=True, text=True, timeout=60)
-    committed = read_exempt(head.stdout) if head.returncode == 0 else None
-except (OSError, subprocess.SubprocessError):
-    committed = None
+head = ratchet.committed(KERNEL_DECIDE_FILE)
+committed = read_exempt(head) if head is not None else None
 if committed is not None:
     for where in sorted(kernel_decide_exempt - committed):
         print("%s: GROWTH: %s is not in the committed file -- it may only shrink"

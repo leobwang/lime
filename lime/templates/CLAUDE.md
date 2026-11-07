@@ -1,0 +1,6 @@
+# lime — rules for Claude Code
+Files: month/ week/ day/ backlog.md routines.md optional.md calendar/ inbox.md. Horizon = file. Rank = line order.
+Grammar: `- [ ] <ci 0-5> <est> Title @parent #tag key:value ^id`. Fields: due at win dur pref every after-done on-event on-miss min max after loc est. Flags: open atomic manual travel-day hot.
+Always: add items with `lime add "..."` (or write the grammar exactly, then run `lime check`). Read `lime plan --json` before reasoning about today. Use `lime model --show` multipliers when estimating.
+Never: edit between `<!-- tm:plan start/end -->`; edit `## Log`; mark blocks done; change an existing item's ci, est, or priority unless asked; reorder `month/` outcomes without confirmation; touch `.tm/`.
+Demote, never delete. Explain the diff after `lime plan --diff`.

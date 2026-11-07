@@ -1,4 +1,4 @@
-# `tm` kernel in Lean 4 — stage one
+# `lime` kernel in Lean 4 (named `tm` until the rename: its block at the end of this file has the map) — stage one
 
 This is the first stage of the `rebuild-on-lean` kernel described in
 `../PLAN-lean-kernel.md`. It is small on purpose. Everything it claims below
@@ -107639,3 +107639,68 @@ Measured by the rename's verifiers, none caused by this land. Each was re-measur
 **Smaller, for W-55's records.** `cli_break_sweep.proptest-regressions` holds three seeds; this document's H block says one and gap 6052 accounts for a second, so the third (`09:30`, `09:15`, `09:30`) wants a name (D46). Three doc comments still call gap 6044 the owner's call, in `take_break`'s file and the sweep's, where D155 answered it.
 
 **Gap 5541's row, measured.** This document calls the three-year row's failures load. Alternating the land and the base at load 2.1-2.6, eight runs each, one test binary at a time: **land failed 4 of 8, base 5 of 8**, on the same two assertions (`tm drop ^z15` still running after 1 s; a stalled day at 1.0026-1.0029 s). So it fails about half the time on a nearly idle machine, which makes a green workspace run partly chance. The bound is not raised (D18). W-55 looks at the cost, or the owner rules on the bound.
+
+<!-- ======================================================================
+     The rename, step 1 (2026-11-06): the owner's D159, over e9b68bb. Gaps 6096-6099 are this block's. The tree cannot carry its
+     own measurement (gap 6083's reason): the acceptance as run is in the rename commit's message.
+     ====================================================================== -->
+
+## The rename, step 1: `tm` is `lime` in the code, and nothing moves on a user's disk
+
+**The map.** Everything above this block keeps the old spelling, on purpose: it is the record, and `parity.txt` anchors it by line.
+
+| old | new |
+|---|---|
+| `tm/`, `tm-core/`, `kernel/tm-kernel-ffi/` | `lime/`, `lime-core/`, `kernel/lime-kernel-ffi/` |
+| `kernel/TmKernel/`, its `TmKernel/` and `TmKernel.lean` | `kernel/LimeKernel/`, `LimeKernel/`, `LimeKernel.lean` |
+| `tm-spec-v1.md` | `lime-spec-v1.md` |
+| crates and binary `tm`, `tm-core`, `tm-kernel-ffi`, `tm-oracle` | `lime`, `lime-core`, `lime-kernel-ffi`, `lime-oracle` |
+| Rust `tm_core`, `tm_kernel_ffi`, `CARGO_BIN_EXE_tm` | `lime_core`, `lime_kernel_ffi`, `CARGO_BIN_EXE_lime` |
+| Lean package `TmKernel`, namespace `Tm`, `TmArch` | `LimeKernel`, `Lime`, `LimeArch` |
+| FFI `tm_kernel_call`, `tm_kernel_init`, `tm_kernel_free`, `lp_TmKernel_Tm_*`, `libTmKernel_TmKernel.a` | `lime_kernel_call`, `lime_kernel_init`, `lime_kernel_free`, `lp_LimeKernel_Lime_*`, `libLimeKernel_LimeKernel.a` |
+| every function, test and helper `tm_*`, the harness type `Tm` | `lime_*`, `Lime` |
+| developer variables `TM_*` | `LIME_*`; an old one is refused by name (below) |
+| `$TM_DIR` | `$LIME_DIR`; `$TM_DIR` still answers when `$LIME_DIR` is unset, because a user's shell profile holds it |
+| the hook `tm-check.sh`, the SVG ids `tm-lost` and `tm-interrupt` | `lime-check.sh`, `lime-lost`, `lime-interrupt` |
+
+**What stays, and why.**
+* On a user's disk: `.tm/` and everything in it, the `tm:plan` and `tm:review` markers, the temp file's `.tm-tmp-` name, and the `PRODID`. Step 2 moves them with a migration, after W-55 (D161).
+* `kernel/corpus/**` and `fixtures/fork-4748911-*`, byte for byte (D64): the first by the owner's standing rule, the second because they are the fork's answers by value.
+* The fork's own names: `tm_core` inside `kernel/lime-kernel-ffi/examples/oracle/`, `git show 4748911:tm-core/src/horizon.rs`, and the clause of a sentence or a parity row whose subject is the fork.
+* The record: this file above this block, `kernel/design/**`, `PLAN-lean-kernel.md`, `lime/DORMANT.md`, `.claude/API-NOTES.md`, §4's D-rows and AGENTS' dated records.
+* A commit read from before the rename is read at the path it had then, in today's spelling: `ratchet.show` and `ratchet.respell`, `frozenhist::show`, check 7.
+
+**The land's shape (D159).** Two commits on the first-parent line, each measured green at its own HEAD: the rename, whose tree is the codemod's output plus its hand patch, and D160's change on top of it. The rename's second parent is a commit whose tree is the moves alone, 100% renames, which does not build and is on no first-parent line; that is what lets `git log --follow` cross the rename. D88 is why the moves are not on the line, and this is a stated exception to D120's rule that a land merges a snapshot's tree and never the snapshot.
+
+**Where the tools live.** The codemod (lime_rename.py and known-names.txt), hand.patch, after.patch, land.sh and the acceptance script are kept under `refs/archive/rename-tools`, a local ref the land does not push. The re-run order is the script, then the patch, once per base.
+
+**The acceptance figures are in the rename commit's message**, for gap 6083's reason: `git log -1 --format=%B` on the commit that added this heading.
+
+**Parity P150 taken**: every name this step moves in what the binary prints and writes, against fork 4748911, whose name is `tm`: the command in messages, `--help` and the `lime:` error prefix; `lime-lost` and `lime-interrupt` in `day/*.svg`, which `GridWorld::with_todays_svg_ids` normalises over a frozen grid at that one comparison; `Lime.PErr.*` in printed refusals and in the wire's `why`; the template bodies of a newly `init`ed tree, and `lime-check.sh` for its hook; the replay cache's kernel id, as with any new build. Exit codes, `.tm/log.jsonl`, `.tm/state.json` and the day and week files with their `tm:plan` markers are byte-identical at one `--now`.
+
+**Old developer variables refuse by name.** This file spells `TM_ORACLE` as the working name about 230 times, and the `TM_*_BLESS` family with it, and `TM_ORACLE=/nonexistent <test binary> --ignored --exact <arm>` used to pass, the arm having gone inert under a name nothing read. AGENTS §9.2's disguised gap. Every read in a test now goes through `lime_core::devenv`, which fails the arm when any `TM_*` but `TM_DIR` is set and names both spellings; `refuse-old-names.sh` is the same rule for `build-oracle.sh` and `run-oracle.sh`, `capacity-census.py` carries its own four lines, and `kernel/lime-kernel-ffi/tests/corpus.rs` includes `devenv.rs` by `#[path]`, since that crate cannot depend on this one. `lime/tests/old_developer_names.rs` holds new arms to it: a read that goes around the helper, or an old spelling written anew, is named there.
+
+**Gap 6096 — no gate holds the rename after the land.**
+1. *What.* Nothing fails when a new line writes `tm plan` in a sentence, `Tm.Planner.dayPlan` in a citation, or a new helper's name in the old spelling in a test. An agent's habit passes every gate, and check 8's `respell` lets a live old citation resolve, on purpose, so that this file keeps resolving. `old_developer_names.rs` covers the developer variables and nothing else.
+2. *Why.* A gate over the word needs the keep rules the codemod carries, in the tree. That is a change to what "green" means (D19, D39), so it is the owner's call, and it was not built.
+3. *Cost.* Old spellings can creep back into live prose and code with every check green, and be read as the working name.
+4. *Clears it.* The owner: a check over the non-record files, if wanted, after step 2.
+
+**Gap 6097 — the binary's own developer variables do not refuse an old spelling.**
+1. *What.* `LIME_TRACE_KERNEL_CALLS`, `LIME_TRACE_KERNEL_REQUESTS`, `LIME_TRACE_REPLAY_SCOPE`, `LIME_TRACE_CAPACITY_REQUEST`, `LIME_TRACE_PLANNER_BUILD`, `LIME_KERNEL_FAULT_PROBE`, `LIME_TUI_CLOCK_RUNS` are read in `lime/src` and `lime-kernel-ffi/src`, not by a test arm. Their `TM_*` spelling is ignored.
+2. *Why.* `devenv` panics, and a panic is not what the shipped binary does about an environment variable. These are not arms: a test that needs one sets it on the child it spawns, under the new name.
+3. *Cost.* `TM_TRACE_KERNEL_CALLS=1 lime plan` prints no trace and says nothing. Nothing passes green because of it: the reader sees no trace.
+4. *Clears it.* Nothing owed unless a reader is misled.
+
+**Gap 6098 — `kernel/corpus/round-trip.expected`'s first line names the old spelling.**
+1. *What.* Line 1 says `TM_CORPUS_BLESS=1 cargo test --test corpus`. The file's bytes do not change, so it stays. Following it now fails `corpus_round_trip` by name.
+2. *Why.* `kernel/corpus/**` is frozen by the owner's rule.
+3. *Cost.* The next deliberate bless rewrites that line with the new name, in a diff that moves nothing else.
+4. *Clears it.* That bless.
+
+**Gap 6099 — a plain `git bisect` can land on the moves commit.**
+1. *What.* The rename's second parent does not build, and a bisect that is not `--first-parent` can pick it.
+2. *Why.* The owner's choice (D159): `git log --follow` on every file was worth one commit off the line.
+3. *Cost.* One `git bisect skip`.
+4. *Clears it.* Nothing; `git bisect start --first-parent` never sees it.
+

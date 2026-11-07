@@ -65,7 +65,7 @@ thmInfo
 # or track G's prose until the tracks were merged, so their vocabulary is a merge-time
 # obligation (README gap 870).  `List.getElem?_eq_some_iff` is used one line below the
 # doc comment that cites it (Planner.lean `lt_of_getElem?_some`); `by_cases` is a tactic,
-# 588 uses in TmKernel/TmKernel/*.lean.
+# 588 uses in LimeKernel/LimeKernel/*.lean.
 List.getElem?_eq_some_iff
 by_cases
 
@@ -101,8 +101,8 @@ saturating_sub
 # move this file's header prescribes: both name Rust `std` functions of the FORK, exactly what
 # this block is for, and `saturating_sub` was already sitting in it one line up.  Every citing
 # sentence was read: README P5/P17, design §17's and three superseded drafts' rows, parity.txt's
-# own P5 and P13 rows, `tm/tests/support/replay.rs`, `tm/tests/log_regressions.rs`,
-# `tm/tests/cli_check_log.rs` and `kernel/design/stage5/inventory.md` -- every one names what
+# own P5 and P13 rows, `lime/tests/support/replay.rs`, `lime/tests/log_regressions.rs`,
+# `lime/tests/cli_check_log.rs` and `kernel/design/stage5/inventory.md` -- every one names what
 # the fork does where the kernel refuses by name.  None was stale.  THE COST, declared: the
 # ratchet on these two names is gone, and a stale citation of either is now invisible; the
 # alternative was a cap bumped by one, which this file's header calls the way it stops being
@@ -126,12 +126,12 @@ out.sort_by
 # repository does not HOLD, and they are here, uncounted, with the rest of section 1; the
 # other six are files that do not exist and are in section 3.
 #
-# The linkable archive `lake build TmKernel:static` writes, under .lake/build/lib -- derived
+# The linkable archive `lake build LimeKernel:static` writes, under .lake/build/lib -- derived
 # output, so not a tracked file and not a stem of one.
-libTmKernel_TmKernel.a
-# The file `tm init` WRITES into a new tree, at .claude/skills/<name>/SKILL.md
-# (tm/src/init/mod.rs's `skill_file`).  The repository holds the eight templates under
-# tm/templates/skills/, none of them named this.
+libLimeKernel_LimeKernel.a
+# The file `lime init` WRITES into a new tree, at .claude/skills/<name>/SKILL.md
+# (lime/src/init/mod.rs's `skill_file`).  The repository holds the eight templates under
+# lime/templates/skills/, none of them named this.
 SKILL.md
 # A Lean `set_option` key, named in AGENTS R4's row about Json.lean's one suppression.
 # `linter` is an option namespace and no declaration of any kind, here or in the toolchain.
@@ -263,10 +263,10 @@ skip_serializing_if
 define_events!
 # proptest 1.x's own macros, named where a test's doc comment says which control-flow it is
 # NOT using: a silent `return Ok(())` is not a `prop_assume!`, and the difference is whether
-# the case is counted against `max_global_rejects` (W-25 repair step, tm/tests/kernel_item_grammar.rs).
+# the case is counted against `max_global_rejects` (W-25 repair step, lime/tests/kernel_item_grammar.rs).
 prop_assume!
 
-# The FORK's own vocabulary that is NOT in-tree.  tm-core/src/{planner,log,priority}.rs are
+# The FORK's own vocabulary that is NOT in-tree.  lime-core/src/{planner,log,priority}.rs are
 # in-tree and resolve by themselves (source 3); these are functions, fields, tests and constants
 # of the fork checkout at 4748911 (AGENTS §7.3), which this repository does not hold.
 AUTO_CLOSE_CATCHUP
@@ -326,7 +326,7 @@ set_option
 termination_by
 decreasing_by
 
-# The ONE EXPORT'S C SYMBOL.  `tm_kernel_call` is the argument of an `@[export]` attribute, not
+# The ONE EXPORT'S C SYMBOL.  `lime_kernel_call` is the argument of an `@[export]` attribute, not
 # a Lean declaration: no `def` declares it, source 6 cannot resolve it, and every citation of
 # it names the real thing the host dials.  It stood as a counted entry (8) in section 4 until
 # the W-30 repair step rooted `twins.py`'s reachability walk at it -- E2's exemption is now
@@ -334,7 +334,7 @@ decreasing_by
 # property, in `twins.py`, in `check.sh`, in `Capacity.lean` and in `README.md`, names the root
 # every time it states it.  OPENED, not bumped: the header says the honest move for a name
 # cited once more is to move it up here with a reason, and being the call graph's root is one.
-tm_kernel_call
+lime_kernel_call
 
 # Three more keywords, adjudicated at the W-29 track-A step, where `totality.py`'s command
 # residue had to NAME the commands it refuses.  `partial_fixpoint` is Lean 4.33's second way
@@ -407,7 +407,7 @@ can_fail
 # successor `PlannerWit.the_close_under_a_running_break_is_netted_from_its_block`; its three backticked citations are in
 # W-48 track G's append-only block, which named it while it stood, and W-49 track L's block says it is gone.
 3 PlannerWit.the_close_under_a_running_break_lays_its_block_across_the_break
-# W-51 repair track H (the owner's D140, parity P135): the test that pinned a retro `tm done` setting `[x]` on a
+# W-51 repair track H (the owner's D140, parity P135): the test that pinned a retro `lime done` setting `[x]` on a
 # dropped line is RENAMED with the behaviour it pinned — `d140_a_retro_done_on_a_settled_line_is_refused_p135`, and
 # `d140_a_retro_done_on_an_open_line_still_sets_the_box` for the box on an open line; its one backticked citation is
 # W-51 repair track H's append-only README block, which named it while it stood.
@@ -424,10 +424,10 @@ can_fail
 4 Planner.a_block_row_is_a_replayed_row
 6 Planner.dayPlan_assigns_nothing_yet
 3 Planner.the_day_has_no_segments_until_the_first_step_lands
-2 Tm.Planner.mem_stepOneRows
-1 Tm.PlannerWit.mkPlanReq?_refuses_a_zero_denominator
-1 Tm.PlannerWit.witCaps_eq
-1 Tm.PlannerWit.witCaps_ok
+2 Lime.Planner.mem_stepOneRows
+1 Lime.PlannerWit.mkPlanReq?_refuses_a_zero_denominator
+1 Lime.PlannerWit.witCaps_eq
+1 Lime.PlannerWit.witCaps_ok
 2 a_block_row_is_a_replayed_row
 2 a_wall_row_is_covered_by_the_blocked_list
 2 afterDone_is_history_dependent
@@ -511,7 +511,7 @@ can_fail
 #
 # On the DISCARDED `main` branch (AGENTS 1 says the quotation is historical).
 7 invariant_exhaustive.rs
-# `tm/tests/log_narrowed_facts.rs`, 292 lines, DELETED at 2b26be3 ("the kernel is the only
+# `lime/tests/log_narrowed_facts.rs`, 292 lines, DELETED at 2b26be3 ("the kernel is the only
 # reader of the log -- the switch").  The README's file arithmetic at 21198 still counts it.
 # THE ONE LIVE FIND of the dotted widening: the file is gone and the sentence is a count
 # taken while it existed, so it is adjudicated here rather than rewritten.
@@ -673,7 +673,7 @@ can_fail
 5 w35_check_break
 # W-39 track A (README gaps 3390 and 3580-3589): the planner's arrival is fork `Planner::new`'s -- the
 # state's, else the day's first logged `arrive`, else `now` -- so the W-38 view law over a dated state
-# with a budgeted window is REFUTED at the day `tm arrive` then `tm wake` leaves
+# with a budgeted window is REFUTED at the day `lime arrive` then `lime wake` leaves
 # (`PlannerWit.the_planners_window_is_the_lookaheads_on_a_dated_state_with_a_budgeted_window_is_refuted`)
 # and restated with the subdomain in its name; the witness day is planned from the logged 07:00, so the
 # day planned from two in the afternoon and the hour-later pair that moved the window are refuted and
@@ -793,7 +793,7 @@ can_fail
 # W-37 README block naming the law as it stood.
 1 a_block_started_inside_a_wall_is_not_paused_by_it
 # W-47 track L (README gap 4904): the owner's D111 makes the kernel's `Log.placeWords` the ONE table of places, read by
-# the log grammar and by the host off a request's `places` key, so the host's own table -- `tm_core::store::BreakPlace`,
+# the log grammar and by the host off a request's `places` key, so the host's own table -- `lime_core::store::BreakPlace`,
 # its row table and its reverse readers, W-41 track T's (P75) -- is DELETED.  Every citation counted here is W-41 track
 # T's append-only README block naming the table as it stood.
 1 BREAK_PLACES
@@ -842,8 +842,8 @@ can_fail
 1 PlannerWit.the_witness_day_is_two_replayed_blocks_and_the_written_wall
 1 PlannerWit.witCaps_ok
 1 String.toList_split_intercalate
-1 TM_FORK
-1 Tm.routine_lines_are_open
+1 LIME_FORK
+1 Lime.routine_lines_are_open
 1 UInt32.toNat_inj
 2 a_catch_up_sweep_leaves_one_archive_copy_per_id
 2 a_dangling_reference_is_a_warning_not_a_refusal
@@ -969,7 +969,6 @@ can_fail
 1 too_big
 1 trim_end_matches
 2 try_from
-2 var_os
 4 withFloor_is_the_floor_pass
 2 write_all
 
@@ -983,9 +982,9 @@ can_fail
 # `maxHeartbeats`, `maxErrors`), which core declares with `register_builtin_option` and source
 # 6's declaration regex does not match, and the error kind `unknownIdentifier`, which core
 # tags with `unknownIdentifierMessageTag` in `Lean/Exception.lean` -- core's `getElem?`, which is a CLASS FIELD and not a `def`, the Lean runtime
-# symbol `lean_mark_mt`, build artefacts (`libTmKernel`, `TmKernel.olean`), PLAN 2.5's
-# `TmArch`, the fork's `to_path` local and its `groupBy`/`minBy`, and `NhMm` -- the fork's own
-# name for the `2h30m` mixed-duration form, written as a comment at tm-core/src/model.rs:248
+# symbol `lean_mark_mt`, build artefacts (`libLimeKernel`, `LimeKernel.olean`), PLAN 2.5's
+# `LimeArch`, the fork's `to_path` local and its `groupBy`/`minBy`, and `NhMm` -- the fork's own
+# name for the `2h30m` mixed-duration form, written as a comment at lime-core/src/model.rs:248
 # and declared by nothing.
 BTreeSet
 ErrorKind
@@ -1003,12 +1002,12 @@ PrettyFormatter
 RawValue
 TestBackend
 TimeDelta
-TmArch
+LimeArch
 VmHWM
 getElem?
 groupBy
 lean_mark_mt
-libTmKernel
+libLimeKernel
 maxErrors
 maxHeartbeats
 maxRecDepth
@@ -1145,7 +1144,7 @@ unknownIdentifier
 16 ReachTooFar
 1 SilentVerbUndo
 2 String.utf8BytePos
-1 TmKernel.olean
+1 LimeKernel.olean
 1 TooManyPlaces
 2 Tree.effectiveDue
 2 UndoMask
@@ -1196,7 +1195,7 @@ unknownIdentifier
 # (allow_hyphen_values, subcommand_help_heading, subcommand_value_name), crossterm
 # (EnableMouseCapture), Linux (clear_refs, a /proc file), two named algorithms
 # (civil_from_days, init_by_array), the FORK's own struct (InstanceExt), a Claude Code
-# hook payload key (file_path), a spec timeline column (pN, tm-spec-v1.md:377) and a
+# hook payload key (file_path), a spec timeline column (pN, lime-spec-v1.md:377) and a
 # naming convention (snake_case).
 EnableMouseCapture
 FromStr
@@ -1288,7 +1287,7 @@ with_minute
 
 # W-40 land step (README gap 3783, track P's): D77 made the kernel's running break the comparand's
 # logged reading, so the fresh-draw oracle arm's declared class for README gap 3480, its helper and its
-# `TM_ORACLE` witness were DELETED.  Each citation counted here is an append-only README block -- W-39
+# `LIME_ORACLE` witness were DELETED.  Each citation counted here is an append-only README block -- W-39
 # track H's and W-40 track P's -- naming the thing as it stood.
 3 forkplan::gap_3480_explains
 4 gap_3480s_declared_class_holds_on_the_draw_that_found_it
@@ -1326,9 +1325,9 @@ with_minute
 5 forkplan::d81_loc
 
 # W-41 REPAIR STEP (README gaps 4130-4159).  Track E's P77 test was named for the opposite of what its last assertion
-# says (gap 4144: it asserts the TUI's request is NOT yet `tm plan`'s) and was renamed; the three earlier blocks that
+# says (gap 4144: it asserts the TUI's request is NOT yet `lime plan`'s) and was renamed; the three earlier blocks that
 # cite it -- E's, the land's §8 and its gap 4128 -- name it as it stood.  This block names it without backticks.
-3 p77_a_tui_left_open_past_midnight_plans_the_day_tm_plan_would_plan
+3 p77_a_tui_left_open_past_midnight_plans_the_day_lime_plan_would_plan
 
 # W-42 TRACK G (README gaps 4160-4199).  The owner's D83 closed README gap 32: a tab is the kernel's separator, so the
 # edit path's tab guard -- KErr.tabbedLine and its predicate lineHasTab -- was DELETED with the three entity laws and the
@@ -1348,13 +1347,13 @@ with_minute
 2 the_tab_guard_is_not_vacuous
 1 est_edit_of_a_tabbed_line_is_refused_by_name
 # W-42 TRACK H (README gaps 4260-4268).  The P77 test's last assertions flipped with the owner's D84 -- the TUI's
-# request past midnight IS `tm plan`'s now -- and the test was renamed for what it asserts (AGENTS §7.4 item 3, gap
+# request past midnight IS `lime plan`'s now -- and the test was renamed for what it asserts (AGENTS §7.4 item 3, gap
 # 4144's lesson); the W-41 repair's gap 4144 cites the name it carried then, as it stood.  This block names it
 # without backticks.
-1 p77_a_tui_past_midnight_is_read_as_the_roll_and_does_not_yet_send_tm_plans_request
+1 p77_a_tui_past_midnight_is_read_as_the_roll_and_does_not_yet_send_lime_plans_request
 
 # W-42 LAND STEP (README gaps 4320-4329).  Track G's D83 deleted the kernel's tabbedLine refusal; the land deleted the
-# host's last reader of that name, `tm/src/cli/day.rs`' D66 branch (estimate_unless_tabbed and its sentence, README gap
+# host's last reader of that name, `lime/src/cli/day.rs`' D66 branch (estimate_unless_tabbed and its sentence, README gap
 # 4165), which was what still resolved the name.  Every citation counted here names the refusal or the branch as it
 # stood: the append-only README blocks from the 2026-09-12 edit widening to W-37's D66 call, and AGENTS.md §2.4's list of
 # `kernel` names, which is not the land's file (README gap 4325).  The land's own block names both without backticks.
@@ -1391,9 +1390,9 @@ with_minute
 2 a_break_logged_before_a_start_but_begun_after_it_is_not_netted
 # W-43 TRACK H (README gaps 4390-4399).  The W-42 repair's pinned test of README gap 4342 was RENAMED when D91 closed
 # the gap it pinned (it now asserts the opposite, as d91_on_a_day_with_unfinished_work_the_tui_closes_in_memory_and_
-# asks_what_tm_plan_asks).  The W-42 repair's append-only block cites it by the name it carried then; track H's own
+# asks_what_lime_plan_asks).  The W-42 repair's append-only block cites it by the name it carried then; track H's own
 # block names it without backticks.
-1 tui::tests::d84_on_a_day_with_unfinished_work_the_tui_and_tm_plan_ask_about_different_documents
+1 tui::tests::d84_on_a_day_with_unfinished_work_the_tui_and_lime_plan_ask_about_different_documents
 
 
 # W-43 TRACK G (README gaps 4430-4459).  README gap 4344: the seven laws over W-42's narrower CanonicalItem carry
@@ -1429,7 +1428,7 @@ with_minute
 2 as_d87_asks_it
 2 break_alone
 
-# W-44 TRACK C (README gaps 4580-4599).  `tm-oracle plan`'s third graft, `worked-seam.patch` (README gap 4507), declares
+# W-44 TRACK C (README gaps 4580-4599).  `lime-oracle plan`'s third graft, `worked-seam.patch` (README gap 4507), declares
 # two functions in the scratch extraction of fork 4748911 that `build-oracle.sh` builds: the public entry the oracle's
 # `worked` op calls, and the method of the fork's `Planner` holding the lines the graft MOVES out of fork `active_run`.
 # They are declared by the graft's own `+` lines and in no repository `.rs` file, so the graft's doc comments, which
@@ -1457,7 +1456,7 @@ with_minute
 1 bless_because
 
 # W-46 TRACK K (README gaps 4740 and 1085; the owner's D105, parity P100).  Two tests of `cli_switch_acceptance` are
-# RENAMED with the statement each makes now that `tm break` logs a `break_start`: with a break running, deleting
+# RENAMED with the statement each makes now that `lime break` logs a `break_start`: with a break running, deleting
 # `.tm/state.json` changes nothing, and a break running with no block comes back and is named.  The old names are cited,
 # as history, by the append-only README blocks of the W-21 and W-22 repairs and of W-45's track D, switch and repair;
 # each is counted at its measured number, and W-46's own prose names them bare.
@@ -1466,12 +1465,12 @@ with_minute
 
 # W-46 TRACK H (README gaps 4621 and 4661; the owner's D104 and D106).  Two tests are RENAMED with the statement each
 # makes: `cli_tz_cache_digest`'s assertion is restated under D104 (a re-digested table that disagrees with the binary's
-# zone database is rebuilt, never served) and `cli_resume_replan`'s pin is flipped under D106 (`tm resume` plans after
+# zone database is rebuilt, never served) and `cli_resume_replan`'s pin is flipped under D106 (`lime resume` plans after
 # its own line).  The old names are cited, as history, by the append-only README blocks of the W-44 repair, W-45 track
 # Q, the W-45 land, switch and repair; each is counted at its measured number, and W-46's own prose names them bare.
 8 only_the_digest_stands_between_a_changed_offset_and_the_days_minutes
 1 cli_tz_cache_digest::only_the_digest_stands_between_a_changed_offset_and_the_days_minutes
-2 the_plan_tm_resume_writes_leaves_the_interruption_it_resumes_undrawn
+2 the_plan_lime_resume_writes_leaves_the_interruption_it_resumes_undrawn
 
 # W-46 REPAIR (README gaps 4870 and 4842's class).  The land composes the tracks' blocks with the W-46 switch's, so two
 # counts above are the COMPOSITION's (the switch's block cites gap 4740's old test name four more times and track H's
@@ -1479,19 +1478,19 @@ with_minute
 # it was renamed and a scratch log it read; and the W-46 repair renames track H's calendar test with the statement it
 # makes now that a section refusal yields to D80 (a) (gap 4793), which track H's part 2 cites by its old name.  Each is
 # counted at its measured number.
-2 a_routine_word_the_two_readers_key_apart_is_named_by_tm_check_and_planned_by_tm_plan
+2 a_routine_word_the_two_readers_key_apart_is_named_by_lime_check_and_planned_by_lime_plan
 1 pw_oldorder.log
 4 the_calendars_last_day_reaches_the_planner_section_by_two_names
 
 # W-45 SWITCH (R3; README gaps 4710-4739, the switch's block; README gap 4691: 133 names on the deletion, 125 once
 # the switch's own rewording named eight without backticks).  R3 DELETES
 # tm-core/src/planner.rs, fork 4748911's planner as the binary ran it, with its `pub mod`, and the 21
-# `BEGIN THE FORK PLANNER` regions of tm/tests with every test and helper they declared (README W-45 track C
+# `BEGIN THE FORK PLANNER` regions of lime/tests with every test and helper they declared (README W-45 track C
 # §7).  Every name counted here was declared by one of the two and is cited, as it stood, by an append-only
 # README block, a Lean note that names the fork function a definition ports (`Planner.lean`, `Lookahead.lean`,
 # `PlanCheck.lean`, `PlanDiff.lean`, `EmitWire.lean`, `PlannerWit.lean`, `Recur.lean`, `PlanWire.lean`,
-# `Check.lean`, `Negative.lean`, `Goals.lean`), `tm-core/src/planwire.rs`'s note on the fork's sentences, or
-# the oracle's `p64-runs.patch`.  The fork's functions are still fork 4748911's, which `tm-oracle plan`
+# `Check.lean`, `Negative.lean`, `Goals.lean`), `lime-core/src/planwire.rs`'s note on the fork's sentences, or
+# the oracle's `p64-runs.patch`.  The fork's functions are still fork 4748911's, which `lime-oracle plan`
 # extracts and builds out of the tree (D72); the region's names are dead.  The switch's own prose and the
 # surviving test files' doc comments name them without backticks.  Counted, so a NEW sentence citing one
 # shows up in a diff.
@@ -1596,7 +1595,7 @@ with_minute
 2 the_overrun_lines_witness_p45s_reset
 5 the_reversed_day_is_served_by_due_date_on_every_run
 2 the_woken_and_the_rebuilt_days_are_the_forks
-1 tm_core::planner::overtime_drops
+1 lime_core::planner::overtime_drops
 1 tui_kernel_answers::the_fork_and_the_kernel_answer_every_tui_world_as_the_verdicts_say
 3 two_routines_contend_for_one_position_on_the_fork
 1 W34_CENSUS
@@ -1622,17 +1621,17 @@ with_minute
 3 with_runs
 
 # W-45 REPAIR (README gap 4742), in the switch's archived commit: `kernel_capacity::planner_request_from` is DELETED --
-# `planner_ask` is the one entry `tm check` and T19 build the planner request through, and `planner_ask_from` the build.
+# `planner_ask` is the one entry `lime check` and T19 build the planner request through, and `planner_ask_from` the build.
 # Every citation counted here names it as it stood, in the append-only README blocks of W-45 track Q and the W-45 land.
 1 kernel_capacity::planner_request_from
 6 planner_request_from
 
 # W-46 SWITCH (R3, archived and refused; README gaps 4752, 4814 and the switch's block).  R3 deletes, with fork
-# 4748911's planner, the class of tm-core functions the switch orphans (W-46 track C §5: 38 functions, their tests and
+# 4748911's planner, the class of lime-core functions the switch orphans (W-46 track C §5: 38 functions, their tests and
 # helpers), and so these names -- fork 4748911's own functions, cited by the Lean notes that port them (`Priority.lean`,
 # `Capacity.lean`, `Lookahead.lean`, `GridCut.lean`, `PlanCheck.lean`), by `Check.lean`'s and `Negative.lean`'s notes,
 # and by the append-only README blocks, with the deleted tests' names those blocks cite -- resolve to nothing on the
-# deleted tree.  Fork 4748911's functions are still fork 4748911's, which `tm-oracle capacity` extracts and builds out
+# deleted tree.  Fork 4748911's functions are still fork 4748911's, which `lime-oracle capacity` extracts and builds out
 # of the tree (D72); the deleted tests' names are dead.  Counted at the number measured on the switch's tree, so a NEW
 # sentence citing one shows up in a diff.
 2 an_instance_deadline_without_a_window_enters_the_edf_pass
@@ -1685,8 +1684,8 @@ with_minute
 1 with_allow_home
 1 zero_capacity_is_infinite_utilization
 
-# W-47 TRACK C (README gap 4891): the oracle's hand reader of a capacity request's model is DELETED -- `tm-oracle
-# capacity` reads a model as `.tm/model.json`'s text through fork 4748911's own loader (`fork_model`), as `tm-oracle
+# W-47 TRACK C (README gap 4891): the oracle's hand reader of a capacity request's model is DELETED -- `lime-oracle
+# capacity` reads a model as `.tm/model.json`'s text through fork 4748911's own loader (`fork_model`), as `lime-oracle
 # plan` reads a world's.  The one citation counted here names it as it stood, in the append-only README block of W-46
 # track C (gap 4817's paragraph); every sentence since writes the dead name unbackticked.
 1 cap_model
@@ -1729,7 +1728,7 @@ with_minute
 # W-49 TRACK P (README "Stage 6 — W-49 track P"): the owner's D123 widened the row reader to every day the planner can
 # answer, so EmitWire.readSegs_refuses_past_the_cap is DELETED (refuted beside it as `readSegs_refuses_past_the_cap_is_refuted`),
 # and the W-48 repair's refusal test is restated as D123's behaviour row; the owner's D124 put a planned day's rows in the
-# planner's own answer, so `tm-core`'s planwire::rows_request is DELETED and `kernel_planner_wire.rs`' test of the two
+# planner's own answer, so `lime-core`'s planwire::rows_request is DELETED and `kernel_planner_wire.rs`' test of the two
 # writers sharing one `plan` object is restated as the one writer's (its old name below).  Every citation counted here is in an
 # append-only README block that recorded the name while it stood (W-24, W-47 track L and its repair, W-48 tracks H and R,
 # the W-48 repair); every sentence since writes it unbackticked.
@@ -1778,7 +1777,7 @@ with_minute
 1 readOptBreak_reads_the_break
 1 theHostBreakRequest
 1 ydBreakState
-# And two Rust tests of `tm/tests/kernel_planner_wire.rs` that asserted the wire's break refusals, folded into
+# And two Rust tests of `lime/tests/kernel_planner_wire.rs` that asserted the wire's break refusals, folded into
 # `a_break_on_the_wire_is_left_unread_whatever_it_carries` (README gap 5524); each counted citation is a README block
 # that named the test as it stood.
 1 a_break_past_the_day_is_planned_and_past_the_width_refused
@@ -1791,7 +1790,7 @@ with_minute
 5 Machine.brkEnded
 2 Replay.Machine.brkEnded
 1 Replay.a_break_line_for_an_older_ended_break_is_a_covered_break
-# W-52 repair track R (host half): the test that pinned `tm break` at a D129-ended break's own start beginning a second
+# W-52 repair track R (host half): the test that pinned `lime break` at a D129-ended break's own start beginning a second
 # break is REPLACED by the P139 refusal's row (README §7); the counted citations are W-52 track H's block and this repair's naming it as it stood.
 4 a_break_typed_at_the_breaks_own_start_begins_a_break
 # W-53 repair track K: takeFx is DELETED -- P143 made `brkFx` net through `netTake`, as the D129 ending's netting always did,
@@ -1806,13 +1805,13 @@ with_minute
 # README block naming the test as it stood (W-52 track H's for the first, swept once; W-53 track H's for the second).
 1 the_d141_arm_reports_a_break_end_and_does_not_retime_p138
 1 no_length_or_a_length_past_the_start_keeps_d129
-# W-53 repair land (README "Stage 6 — W-53 repair land"): two tests that pinned a no-length `tm break` inside a finished
+# W-53 repair land (README "Stage 6 — W-53 repair land"): two tests that pinned a no-length `lime break` inside a finished
 # break beginning a second break are RENAMED with the statement each makes once D147's gate is wired (parity P145):
 # `cli_d141_break_end`'s as a_break_its_own_line_ended_is_retimed_not_ended_again_p145 and `cli_d143_finished_break`'s
-# as a_tm_break_inside_a_finished_break_retimes_it_p145.  Each counted citation is an append-only README block naming
+# as a_lime_break_inside_a_finished_break_retimes_it_p145.  Each counted citation is an append-only README block naming
 # the test as it stood (W-52 track H's and later blocks for the first, W-53 track H's for the second), this land's block among them.
 6 a_break_its_own_line_ended_is_not_ended_again
-3 a_tm_break_inside_a_finished_break_is_not_its_end
+3 a_lime_break_inside_a_finished_break_is_not_its_end
 # W-54 track K (README gap 5878): takeFx's laws were character restatements of `brkFx_*` laws under the name of a
 # deleted definition and are DELETED with their audit lines (takeFx_mi's proof is now `Seal.brkFx_mi`, and takeFx_block
 # is RENAMED `Replay.brkFx_block`); the counted citations are the W-52 repair to W-53 repair blocks naming them while

@@ -1,0 +1,32 @@
+---
+source: lime/tests/cli_lifecycle.rs
+expression: json
+---
+{
+  "created": [
+    "CLAUDE.md",
+    ".claude/settings.json",
+    ".claude/hooks/lime-check.sh",
+    ".claude/skills/plan-week/SKILL.md",
+    ".claude/skills/plan-month/SKILL.md",
+    ".claude/skills/triage/SKILL.md",
+    ".claude/skills/capture/SKILL.md",
+    ".claude/skills/replan/SKILL.md",
+    ".claude/skills/review-day/SKILL.md",
+    ".claude/skills/review-week/SKILL.md",
+    ".claude/skills/explain/SKILL.md",
+    ".githooks/pre-commit"
+  ],
+  "dir": "[dir]",
+  "hook_hint": "[hint]",
+  "skipped": [
+    "config.toml",
+    ".gitignore",
+    "inbox.md",
+    "backlog.md",
+    "routines.md",
+    "optional.md",
+    "month/2026-09.md",
+    "week/2026-W37.md"
+  ]
+}

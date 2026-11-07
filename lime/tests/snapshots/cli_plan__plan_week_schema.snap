@@ -1,0 +1,27 @@
+---
+source: lime/tests/cli_plan.rs
+expression: schema(&json)
+---
+{
+  "days": [
+    {
+      "date": "string",
+      "minutes_at_level": [
+        "integer"
+      ],
+      "minutes_at_level_exact": [
+        {
+          "den": "string",
+          "num": "string"
+        }
+      ],
+      "total": "integer",
+      "total_exact": {
+        "den": "string",
+        "num": "string"
+      }
+    }
+  ],
+  "grid": "string",
+  "week": "string"
+}

@@ -793,6 +793,54 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
+name = "lime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "crossterm",
+ "insta",
+ "lime-core",
+ "lime-kernel-ffi",
+ "notify",
+ "proptest",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "toml",
+]
+
+[[package]]
+name = "lime-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "ical",
+ "insta",
+ "proptest",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "toml",
+ "ureq",
+]
+
+[[package]]
+name = "lime-kernel-ffi"
+version = "0.1.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1513,54 +1561,6 @@ checksum = "b1e27c91459209c2986af3dcf603a5a74a4368754ce37414f59acc971167f643"
 dependencies = [
  "displaydoc",
  "zerovec",
-]
-
-[[package]]
-name = "tm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "chrono-tz",
- "clap",
- "crossterm",
- "insta",
- "notify",
- "proptest",
- "ratatui",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "tm-core",
- "tm-kernel-ffi",
- "toml",
-]
-
-[[package]]
-name = "tm-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "chrono-tz",
- "ical",
- "insta",
- "proptest",
- "regex",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "toml",
- "ureq",
-]
-
-[[package]]
-name = "tm-kernel-ffi"
-version = "0.1.0"
-dependencies = [
- "cc",
 ]
 
 [[package]]

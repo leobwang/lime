@@ -1,0 +1,369 @@
+//! §9 dynamic adjustment on the `plan-basic` fixture — the Active block keeps
+//! its slot, an interruption is an ad-hoc wall, a lost block drops the tail —
+//! plus §9.1's "x extend → drops: …", §13's `lime plan --diff`,
+//! `lime plan --explain ^id`, `lime plan --allow-home` and `lime plan --week`.
+
+mod planner_common;
+
+use planner_common::{at, load, load_with_log, time, timeline, DayPlanner, Kernel, BASIC_LOG};
+use lime_core::model::Id;
+use lime_core::dayplan::{fmt_clock, DayPlan, SegKind, Segment};
+use lime_core::store::{ActiveBlock, InterruptState, RuntimeState};
+
+/// The morning of §4.3: wake, breakfast, arrive, two blocks worked, a break.
+const MORNING: &str = concat!(
+    r#"{"t":"2026-09-07T06:05:00-05:00","ev":"wake","slept_min":490}"#,
+    "\n",
+    r#"{"t":"2026-09-07T06:40:00-05:00","ev":"routine","item":"breakfast","inst":"2026-09-07","status":"done","actual_min":30}"#,
+    "\n",
+    r#"{"t":"2026-09-07T07:00:00-05:00","ev":"arrive","loc":"lounge","window":["07:00","16:00"],"budget":6}"#,
+    "\n",
+    r#"{"t":"2026-09-07T07:02:00-05:00","ev":"start","id":"t1","pred":5,"rep":5,"hsw":0.95,"slept_min":490,"loc":"lounge","blocks_done":0,"since_break_min":0}"#,
+    "\n",
+    r#"{"t":"2026-09-07T08:09:00-05:00","ev":"done","id":"t1","est_min":60,"actual_min":67,"went":1,"tags":["lean"],"ci":5}"#,
+    "\n",
+    r#"{"t":"2026-09-07T08:10:00-05:00","ev":"start","id":"t4","pred":5,"rep":5,"hsw":2.08,"slept_min":490,"loc":"lounge","blocks_done":1,"since_break_min":67}"#,
+    "\n",
+    r#"{"t":"2026-09-07T09:08:00-05:00","ev":"done","id":"t4","est_min":60,"actual_min":58,"went":1,"tags":[],"ci":3}"#,
+    "\n",
+    r#"{"t":"2026-09-07T09:08:00-05:00","ev":"break","planned_min":20,"actual_min":10,"where":"walk"}"#,
+    "\n",
+);
+
+use planner_common::basic_state as arrived;
+
+
+// ---------------------------------------------------------------------------
+// Purity and stability (§8.3, §17.2)
+// ---------------------------------------------------------------------------
+
+/// The same input twice gives the same plan, and the same hash.
+fn plan_is_pure_on(p: &dyn DayPlanner) {
+    let fx = load_with_log("plan-basic", Some(BASIC_LOG));
+    let state = arrived();
+    let a = p.day(&fx, &state, at("2026-09-07", 7, 0));
+    let b = p.day(&fx, &state, at("2026-09-07", 7, 0));
+    assert_eq!(a, b);
+    assert_eq!(a.hash(), b.hash());
+    assert_eq!(a.hash().len(), 16);
+}
+
+/// [`plan_is_pure_on`], asked of the kernel — the arm that survives R3.
+#[test]
+fn plan_is_pure() {
+    plan_is_pure_on(&Kernel);
+}
+
+/// A replan later in the day never rewrites what already happened: every
+/// segment of the 07:00 plan that had ended by 09:30 is still in the 09:30
+/// plan, byte for byte.
+fn a_replan_never_moves_the_past_on(p: &dyn DayPlanner) {
+    let fx = load_with_log("plan-basic", Some(MORNING));
+    let state = arrived();
+    let early = p.day(&fx, &state, at("2026-09-07", 7, 0));
+    let later = p.day(&fx, &state, at("2026-09-07", 9, 30));
+    let cutoff = at("2026-09-07", 7, 0);
+    for seg in early.segments.iter().filter(|s| s.end <= cutoff) {
+        assert!(
+            later.segments.contains(seg),
+            "the replan moved a settled segment: {seg:?}"
+        );
+    }
+    // The blocks the log already holds are in the later plan, marked done.
+    let t1 = later
+        .segments
+        .iter()
+        .find(|s| s.item.as_ref().is_some_and(|i| i.as_str() == "t1"))
+        .expect("^t1 was worked this morning");
+    assert_eq!(t1.start, at("2026-09-07", 7, 2));
+    assert!(t1.flags.done);
+    // Two blocks are gone from the budget (§8.1): the plan from 09:30 on may
+    // spend four, whatever the morning already cost.
+    let from = at("2026-09-07", 9, 30);
+    assert!(
+        later.planned_block_minutes(from) <= 4 * 60,
+        "{}",
+        timeline(&later)
+    );
+}
+
+/// [`a_replan_never_moves_the_past_on`], asked of the kernel — the arm that survives R3.
+#[test]
+fn a_replan_never_moves_the_past() {
+    a_replan_never_moves_the_past_on(&Kernel);
+}
+
+// ---------------------------------------------------------------------------
+// §9: the Active block, interruptions, the dropped tail
+// ---------------------------------------------------------------------------
+
+/// §9: "Active item keeps its current slot regardless of key (no preemption
+/// mid-block)" — its current *slot*, one block. The running block is reserved
+/// from `now` to the end of the block it started, so nothing else — no
+/// routine, no higher-key item, no break — is planned on top of it, and the
+/// rest of the day is planned normally around it.
+///
+/// This test used to assert `current.end == at("2026-09-07", 11, 30)`: the
+/// whole `est_min − elapsed` remainder reserved as one segment. §8.2 step 5
+/// exempts the current block from preemption, not the whole estimate, and
+/// reserving the estimate deleted every routine window it covered from the
+/// day (see `a_long_run_still_leaves_room_for_lunch_and_a_break`).
+fn the_active_block_keeps_the_slot_containing_now_on(p: &dyn DayPlanner) {
+    let fx = load_with_log("plan-basic", Some(MORNING));
+    let state = RuntimeState {
+        active: Some(ActiveBlock {
+            id: Id::new("m4"), // `Pick winter courses`, ci 2, p 5 — last in key order
+            started: time(9, 30),
+            est_min: 120,
+            paused: false,
+        }),
+        ..arrived()
+    };
+    let now = at("2026-09-07", 10, 0);
+    let day = p.day(&fx, &state, now);
+    let current = day
+        .current_segment()
+        .unwrap_or_else(|| panic!("a block is running:\n{}", timeline(&day)));
+    assert_eq!(current.item.as_deref_id(), Some("m4"));
+    assert!(current.kind.is_work());
+    // The block started at 09:30 and runs to the end of its 60-minute slot;
+    // `planned_min` still reports the item's own remainder (120 − 30 = 90),
+    // which is what the `▶` row's "90m left" says.
+    assert_eq!(current.start, now);
+    assert_eq!(current.end, at("2026-09-07", 10, 30));
+    assert_eq!(current.flags.planned_min, Some(90));
+    // Exactly one `▶`, and nothing at all overlaps the running block.
+    assert_eq!(
+        day.segments.iter().filter(|s| s.flags.current).count(),
+        1,
+        "{}",
+        timeline(&day)
+    );
+    for seg in day.segments.iter().filter(|s| !s.flags.current) {
+        assert!(
+            seg.end <= current.start || seg.start >= current.end,
+            "{seg:?} runs over the block that is running:\n{}",
+            timeline(&day)
+        );
+    }
+}
+
+/// [`the_active_block_keeps_the_slot_containing_now_on`], asked of the kernel — the arm that survives R3.
+#[test]
+fn the_active_block_keeps_the_slot_containing_now() {
+    the_active_block_keeps_the_slot_containing_now_on(&Kernel);
+}
+
+/// §8.2 steps 3 and 6 against §8.2 step 5: a six-block item that is running
+/// does not swallow the afternoon. It holds the block it is in, and lunch
+/// (`win:11:30-13:30 every:day`) and the `break_after_blocks` break are
+/// placed around it as on any other day.
+///
+/// Reserving the item's whole remaining estimate made the run one 355-minute
+/// segment from 09:35 to 15:30: `cut_slots_around` saw no free time to cut,
+/// so no break ever fell due, and `place_deferred` found no free position for
+/// lunch inside 11:30–13:30 and dropped it — off the timeline and out of the
+/// diagnostics both.
+fn a_long_run_still_leaves_room_for_lunch_and_a_break_on(p: &dyn DayPlanner) {
+    let fx = load_with_log("plan-basic", Some(MORNING));
+    let state = RuntimeState {
+        active: Some(ActiveBlock {
+            id: Id::new("m2"), // `Rollback path passes tests`, 6b
+            started: time(9, 30),
+            est_min: 360,
+            paused: false,
+        }),
+        ..arrived()
+    };
+    let now = at("2026-09-07", 9, 35);
+    let day = p.day(&fx, &state, now);
+    let tl = timeline(&day);
+
+    let current = day.current_segment().expect("a block is running");
+    assert_eq!(current.item.as_deref_id(), Some("m2"));
+    assert_eq!(current.end, at("2026-09-07", 10, 30), "{tl}");
+
+    // The window `lunch` must be placed in is inside what the old reservation
+    // covered, and it is on the timeline.
+    let lunch = day
+        .segments
+        .iter()
+        .find(|s| s.item.as_ref().is_some_and(|i| i.as_str() == "lunch"))
+        .unwrap_or_else(|| panic!("lunch is planned:\n{tl}"));
+    assert_eq!(lunch.kind, SegKind::Routine);
+    assert!(
+        lunch.start >= at("2026-09-07", 11, 30) && lunch.end <= at("2026-09-07", 13, 30),
+        "lunch sits in its window:\n{tl}"
+    );
+
+    // §8.2 step 3's break: the running block counts as a block worked, so the
+    // day breaks after `break_after_blocks` of them, not never — a stretch of
+    // at least `break_min` after the run with no work in it, whatever fills it.
+    let work: Vec<&Segment> = day.segments.iter().filter(|s| s.kind.is_work() && s.start >= now).collect();
+    assert!(
+        work.windows(2).any(|w| (w[1].start - w[0].end).num_minutes() >= i64::from(fx.cfg.day.break_min)),
+        "a break follows the run:\n{tl}"
+    );
+    // …and it is DRAWN as a Break row, on both planners: README gap 551's
+    // class, bounded exactly here until W-37, when the kernel began to draw the
+    // cut's kept breaks as the fork does (`Planner.PlanReq.keptBreakRows`).
+    let drawn = day.segments.iter().any(|s| s.kind == SegKind::Break && s.start > now);
+    assert!(drawn, "the break after the run is a Break row on {}:\n{tl}", p.name());
+
+    // Still no preemption mid-block (§8.2 step 5).
+    for seg in day.segments.iter().filter(|s| !s.flags.current) {
+        assert!(
+            seg.end <= current.start || seg.start >= current.end,
+            "{seg:?} runs over the block that is running:\n{tl}"
+        );
+    }
+}
+
+/// [`a_long_run_still_leaves_room_for_lunch_and_a_break_on`], asked of the kernel — the arm that survives R3.
+#[test]
+fn a_long_run_still_leaves_room_for_lunch_and_a_break() {
+    a_long_run_still_leaves_room_for_lunch_and_a_break_on(&Kernel);
+}
+
+/// §9: an interruption that has not been resumed is an ad-hoc wall from its
+/// start to `now`, and the day flows around it.
+fn an_open_interruption_is_a_wall_up_to_now_on(p: &dyn DayPlanner) {
+    let fx = load_with_log("plan-basic", Some(MORNING));
+    let state = RuntimeState {
+        interrupt: Some(InterruptState {
+            started: Some(time(12, 10)),
+            id: Some(Id::new("t4")),
+        }),
+        ..arrived()
+    };
+    let now = at("2026-09-07", 13, 5);
+    let day = p.day(&fx, &state, now);
+    let lost = day
+        .segments
+        .iter()
+        .find(|s| s.kind == SegKind::Lost)
+        .expect("the interruption is on the timeline");
+    assert_eq!(lost.start, at("2026-09-07", 12, 10));
+    assert_eq!(lost.end, now);
+    // Nothing is planned inside it, and the window is *not* extended by it
+    // (§9: an interruption drops the tail, it does not lengthen the day).
+    assert_eq!(day.window.1, at("2026-09-07", 16, 0));
+    for seg in day.segments.iter().filter(|s| s.kind.is_work() && s.end > now) {
+        assert!(seg.start >= now, "{seg:?}");
+    }
+}
+
+/// [`an_open_interruption_is_a_wall_up_to_now_on`], asked of the kernel — the arm that survives R3.
+#[test]
+fn an_open_interruption_is_a_wall_up_to_now() {
+    an_open_interruption_is_a_wall_up_to_now_on(&Kernel);
+}
+
+/// §8.3's tail-drop, in its operational form: taking a block away from the day
+/// never re-shuffles the plan — every slot both days keep holds the same item,
+/// and the smaller day's assigned set is a subset of the larger one's.
+fn losing_a_block_drops_a_tail_and_nothing_else_on(p: &dyn DayPlanner) {
+    let fx = load_with_log("plan-basic", Some(BASIC_LOG));
+    let now = at("2026-09-07", 7, 0);
+    let full = p.day(&fx, &arrived(), now);
+    let short_state = RuntimeState {
+        budget: Some(5),
+        ..arrived()
+    };
+    let short = p.day(&fx, &short_state, now);
+
+    let starts = |p: &DayPlan| -> Vec<(String, Vec<Id>)> {
+        p.segments
+            .iter()
+            .filter(|s| s.kind.is_work())
+            .map(|s| (fmt_clock(s.start), s.items()))
+            .collect()
+    };
+    let (a, b) = (starts(&full), starts(&short));
+    assert!(b.len() < a.len(), "a block was lost");
+    assert_eq!(b, a[..b.len()], "the kept slots hold the same items");
+    for id in short.assigned() {
+        assert!(full.assigned().contains(&id), "{id} appeared out of nowhere");
+    }
+}
+
+/// [`losing_a_block_drops_a_tail_and_nothing_else_on`], asked of the kernel — the arm that survives R3.
+#[test]
+fn losing_a_block_drops_a_tail_and_nothing_else() {
+    losing_a_block_drops_a_tail_and_nothing_else_on(&Kernel);
+}
+
+// ---------------------------------------------------------------------------
+// §9.1 the overtime prompt
+// ---------------------------------------------------------------------------
+
+
+
+// ---------------------------------------------------------------------------
+// §13 lime plan --diff
+// ---------------------------------------------------------------------------
+
+
+
+// ---------------------------------------------------------------------------
+// §13 lime plan --explain ^id
+// ---------------------------------------------------------------------------
+
+
+
+// ---------------------------------------------------------------------------
+// §13 lime plan --allow-home
+// ---------------------------------------------------------------------------
+
+/// `--allow-home` lifts §8.2 step 3's `home_max_ci` cap: the same home day
+/// gets its high-`ci` slots back and the milestones become workable.
+fn allow_home_lifts_the_home_cap_on(p: &dyn DayPlanner) {
+    let fx = load("plan-home-day");
+    let now = at("2026-09-07", 9, 0);
+    let capped = p.day(&fx, &fx.state, now);
+    let lifted = p.day_allowing_home(&fx, &fx.state, now);
+
+    let top = |p: &DayPlan| -> u8 {
+        p.segments
+            .iter()
+            .filter_map(|s| s.energy)
+            .max()
+            .unwrap_or(0)
+    };
+    assert_eq!(top(&capped), fx.cfg.location.home_max_ci);
+    assert!(top(&lifted) > fx.cfg.location.home_max_ci, "{}", timeline(&lifted));
+    // The `ci 4` milestone becomes workable; `ci 5` still is not, because the
+    // *home energy curve* itself tops out at 4 (§16's `energy.prior.home`).
+    assert!(
+        lifted.assigned().contains(&Id::new("m2")),
+        "the ci-4 milestone is workable again: {}",
+        timeline(&lifted)
+    );
+    assert!(!capped.assigned().contains(&Id::new("m2")));
+}
+
+/// [`allow_home_lifts_the_home_cap_on`], asked of the kernel — the arm that
+/// survives R3 (`--allow-home` crosses as the capacity section's
+/// `state.allowHome`, `kernel_capacity::request`'s key).
+#[test]
+fn allow_home_lifts_the_home_cap() {
+    allow_home_lifts_the_home_cap_on(&Kernel);
+}
+
+// ---------------------------------------------------------------------------
+// §13 lime plan --week
+// ---------------------------------------------------------------------------
+
+
+
+/// A small convenience the assertions above want.
+trait AsDeref {
+    fn as_deref_id(&self) -> Option<&str>;
+}
+
+impl AsDeref for Option<Id> {
+    fn as_deref_id(&self) -> Option<&str> {
+        self.as_ref().map(Id::as_str)
+    }
+}
+

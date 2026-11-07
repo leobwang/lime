@@ -6,7 +6,7 @@ this kernel reads the SOURCE or the THEOREM SET -- check 3 pins the axiom set,
 check 8 pins a citation, check 9 pins a body against a constant, check 11 pins
 uniqueness -- and the auditor who built the first call-graph walk put the
 finding in one sentence: *a definition can be pinned by a theorem, unique,
-audited and cited and still be called by nothing, and `Tm.remainingMin` is all
+audited and cited and still be called by nothing, and `Lime.remainingMin` is all
 five*.  Three findings of this campaign live in that blind spot and every one
 of them was found BY HAND: D50's `assignFold`, referenced seventeen times
 inside its own module while reaching nothing; gap 501's `Recur.lean`; and
@@ -14,7 +14,7 @@ inside its own module while reaching nothing; gap 501's `Recur.lean`; and
 found at all.
 
 THE PROPERTY.  *A definition not used solely within proofs must be reachable
-from `tm_kernel_call`.*  Mechanically: every `def` of the library for which the
+from `lime_kernel_call`.*  Mechanically: every `def` of the library for which the
 code generator EMITS a C function must be reached by the walk from the export,
 or be named in `reach-exempt.txt` under a section that says why.  The compiler
 is what decides the antecedent and it decides it the only way that cannot be
@@ -23,14 +23,14 @@ a definition it DOES emit is code the program either runs or carries dead.
 
 AND THE ROOT IS MEASURED NOW, NOT ASSUMED (W-32, README gap 2229).  The
 sentence above was true and the walk that implemented it was rooted at an
-ASSUMPTION: that everything `tm_kernel_call` can answer is something a caller
-can ask for.  `tm_kernel_call` is a door, not a caller -- what comes through it
+ASSUMPTION: that everything `lime_kernel_call` can answer is something a caller
+can ask for.  `lime_kernel_call` is a door, not a caller -- what comes through it
 is a REQUEST whose top-level keys choose which section runs -- and W-31's track
 P found the consequence by hand while pricing R3: `Planner.dayPlan`, §8.2's
 whole day planner, is reached from this root and from NO shipped caller,
-because `grep -rn '"planner"' tm/src` is empty.  So `sections.py` measures both
+because `grep -rn '"planner"' lime/src` is empty.  So `sections.py` measures both
 sides -- the kernel's own top-level sections, walked from the `@[export]`, and
-the requests `tm/src` actually builds -- and a dispatcher for a section nothing
+the requests `lime/src` actually builds -- and a dispatcher for a section nothing
 sends contributes only the callees of its absent arms.  289 definitions moved
 from reachable to unreachable at that root: the `planner` section's 228, the
 `plan` section's 53, and 8 the two share.  The number a gate prints is the
@@ -41,10 +41,10 @@ reads like a question about references, and it was measured as one before this
 file was written: of the 2,365 emitted `def`s of the FUNCTION-only population
 this gate started with, 260 were referenced by at least one `theorem` and by no
 `def` at all.  Exempting those 260 by that property
-would have been the wrong rule TWICE OVER.  It swallows `Tm.edf` and
-`Tm.edfGrants` -- §7's EDF grant machine, whose fast twins the W-30 repair
+would have been the wrong rule TWICE OVER.  It swallows `Lime.edf` and
+`Lime.edfGrants` -- §7's EDF grant machine, whose fast twins the W-30 repair
 deleted as dead (gap 2126) and whose originals nothing has called since -- and
-it cannot see `Tm.remainingMin`, which nine of `Tree.lean`'s ten definitions
+it cannot see `Lime.remainingMin`, which nine of `Tree.lean`'s ten definitions
 reference from inside their own module, exactly as `assignFold` did.  A rule
 that depends on who mentions a name is a rule the blind spot is defined by.  So
 the antecedent is the compiler's, the exemptions are NAMED, and the reason each
@@ -148,8 +148,8 @@ EXEMPT_FILE = pathlib.Path(__file__).resolve().parent / "reach-exempt.txt"
 # the binary builds, never assumed to be everything the export can answer
 # (`sections.py`, README gap 2229).
 # AND EVERY CRATE IT LINKS BY PATH (W-42 repair, README gaps 4322 and 4331).  The
-# scan read `tm/src` alone, and the one literal that sends `planner` -- the day
-# `tm check` has asked for since P78 -- is `tm-core`'s `planwire::with_planner`,
+# scan read `lime/src` alone, and the one literal that sends `planner` -- the day
+# `lime check` has asked for since P78 -- is `lime-core`'s `planwire::with_planner`,
 # so the section was counted UNSENT and 371 definitions it reaches were answered
 # by the `CLASS unsent planner` line while a shipped verb ran them.  The roots
 # are `sentkeys.program_roots`: the binary's manifest names them, not a list here.
@@ -160,8 +160,8 @@ RUST_SRCS = sentkeys.program_roots(pathlib.Path(__file__).resolve().parent.paren
 # about the others, while `mutate.py` had read `(def|abbrev|instance)` since
 # W-24 and `twins.py` at least DECLARED the gap.  MEASURED on the committed
 # tree: four library `abbrev`s had an emitted C FUNCTION, were unreachable, and
-# were named in no exemption -- `Tm.jrenderNat`, `Tm.Planner.posLt`,
-# `Tm.Planner.victimLt`, `Tm.PlannerWit.permissive` -- and with the global half
+# were named in no exemption -- `Lime.jrenderNat`, `Lime.Planner.posLt`,
+# `Lime.Planner.victimLt`, `Lime.PlannerWit.permissive` -- and with the global half
 # of the emitted population (gap 2257) the `abbrev` count is 36.  `instance` is
 # NOT here and the omission is declared: an instance is emitted, but it is
 # reached through typeclass dispatch the generator resolves at the CALL SITE,
@@ -235,7 +235,7 @@ CENSUS_TOPIC = re.compile(r"emitted definitions are reached")
 # Both classes are stated where they are measured now, and the names left the
 # file:
 #
-#   * UNSENT.  A definition the export reaches ONLY through a section `tm/src`
+#   * UNSENT.  A definition the export reaches ONLY through a section `lime/src`
 #     sends no request for.  `sections.py` already measures the cut; what was
 #     listed by hand was its CONSEQUENCE, 296 names in eighteen sections that
 #     all said "reached from the export ONLY through the request's `planner`
@@ -363,7 +363,7 @@ def proof_violations(stem):
     module nor a declaration-free manifest imports it -- mutate.py's
     `witness_violations` scan, applied to one more module."""
     files = set(mutate.lib_files())
-    target = "TmKernel/TmKernel/%s.lean" % stem
+    target = "LimeKernel/LimeKernel/%s.lean" % stem
     if target not in files:
         return ["%s is named by `CLASS proof %s` and is not a library module"
                 % (target, stem)]
@@ -502,20 +502,13 @@ def committed_exemptions(path, rev="HEAD"):
     -- until the W-41 repair (README gap 4132), which holds every commit since
     `ratchet.BASE` against its first parent as well (`ratchet.grown`).  `rev`
     reads another commit's copy (the history walk's structure lookups)."""
-    import subprocess
-    try:
-        out = subprocess.run(["git", "-C", str(path.parent), "show",
-                              rev + ":./" + path.name],
-                             capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out.stdout if out.returncode == 0 else None
+    return ratchet.committed(path, rev)
 
 
 def main(argv):
     audit = "--audit" in argv
     roots = [a for a in argv if not a.startswith("--")] or \
-        [str(pathlib.Path(__file__).resolve().parent / "TmKernel")]
+        [str(pathlib.Path(__file__).resolve().parent / "LimeKernel")]
     defs, files = library_defs(roots)
     if not files:
         raise SystemExit("reach.py: no .lean file under %s" % ", ".join(roots))
@@ -529,7 +522,7 @@ def main(argv):
     # enumeration that names the root module as well as the directory.
     pkg = ir.parents[2]
     # THE ROOT IS MEASURED AND NOT ASSUMED (W-32, README gap 2229).  The export
-    # is a door: a section `tm/src` never sends is a room nobody enters, and
+    # is a door: a section `lime/src` never sends is a room nobody enters, and
     # `sections.py` reads both sides -- the kernel's own top-level sections,
     # walked from the `@[export]`, and the requests the shipped binary builds --
     # to cut the arms no request takes.
@@ -553,7 +546,7 @@ def main(argv):
     if wirebad:
         for line in wirebad:
             print(line)
-        print("  -- check 12's root is the set of sections `tm/src` actually sends "
+        print("  -- check 12's root is the set of sections `lime/src` actually sends "
               "(README gap 2229).  Until every line above is resolved, this walk "
               "does not know what a user can reach, so it takes NO verdict about "
               "any definition: nothing here says a definition is unreachable, and "
@@ -664,7 +657,7 @@ def main(argv):
     for stem in sorted(compiled - set(library)):
         bad.append("STALE ARTEFACT: %s has no library module -- it is what a "
                    "DELETED module left behind, and this walk reads its functions "
-                   "as if they were emitted; delete it" % (ir / "TmKernel" / (stem + ".c")))
+                   "as if they were emitted; delete it" % (ir / "LimeKernel" / (stem + ".c")))
     for key in sorted(dead):
         if key in answered and key in entries:
             bad.append("ANSWERED BY PROPERTY: %s (%s) is %s, and this file still "
@@ -851,7 +844,7 @@ def main(argv):
               "HEAD fails under any section, and growth is the owner's to grant "
               "in the commit that changes reach.py" % EXEMPT_FILE.name)
     print("%d def/abbrev(s) in %d library module(s), %d emitted (%d as a global), "
-          "%d reachable from %s over the %d section(s) tm/src sends (%d cut), "
+          "%d reachable from %s over the %d section(s) lime/src sends (%d cut), "
           "%d exempt in %d section(s) (%d of them run at load), "
           "%d answered by property (%d reached only through %d declared unsent "
           "section(s), %d witness fixture(s), %d of %d declared proof-only "

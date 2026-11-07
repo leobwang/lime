@@ -7,7 +7,7 @@ gate:
 
   * W-17's P4 sort key -- the two halves swapped, 1,342 tests green.
   * W-18's nine candidate facts -- invert one, the whole suite green, and
-    `tm plan` visibly re-ranks.
+    `lime plan` visibly re-ranks.
   * W-19's `Planner.Ranked.gatherable` -- `:= true`, and 168 build targets,
     every theorem in `Planner.lean`, all nineteen `PlannerWit` `decide`
     witnesses and check.sh 8/8 stay green.
@@ -18,7 +18,7 @@ something must FAIL.  If nothing fails, no theorem, witness or test in the
 package distinguishes the definition from that constant, and the definition is
 unwitnessed no matter how carefully it is written.
 
-WHAT IS MUTATED.  Every `def` and `abbrev` in kernel/TmKernel/TmKernel/*.lean --
+WHAT IS MUTATED.  Every `def` and `abbrev` in kernel/LimeKernel/LimeKernel/*.lean --
 the library -- that is NEW OR CHANGED since the baseline commit named on the
 first line of `mutations.txt`.  Scoped that way because D40 scoped it that way:
 a full sweep of the existing kernel was DECLINED as producing a backlog rather
@@ -250,7 +250,7 @@ WHAT THIS CANNOT SEE.  Measured or argued, never guessed:
     runs check.sh BEFORE the commit -- so until the repair step every definition
     in a step's brand-new module was exempt at exactly the moment the gate
     exists to bite.  Still unseen: a library file outside
-    `kernel/TmKernel/TmKernel`, and anything `.gitignore` hides.
+    `kernel/LimeKernel/LimeKernel`, and anything `.gitignore` hides.
   * A KILLED RUN.  The mutation is restored in a `finally`, which covers an
     exception but not a SIGKILL, so the original bytes go to a `.mutate-in-flight`
     sidecar first and every run begins by putting back whatever it finds.  A
@@ -281,11 +281,13 @@ import subprocess
 import sys
 
 import leanfiles
+import pathlib
+import ratchet
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-PKG = os.path.join(HERE, "TmKernel")
-LIB = os.path.join(PKG, "TmKernel")
+PKG = os.path.join(HERE, "LimeKernel")
+LIB = os.path.join(PKG, "LimeKernel")
 ROSTER = os.path.join(HERE, "mutations.txt")
 LAKE = os.path.expanduser("~/.elan/bin/lake")
 
@@ -369,7 +371,7 @@ def read(path):
 # THE WALK IS `leanfiles.lean_files` since the W-22 repair step; this file no
 # longer has one of its own.  The prune list it used to hold named `target`,
 # which is a legal Lean module path component, so a library module under
-# `kernel/TmKernel/TmKernel/target/` was reported `NOT IN lib_files()` while
+# `kernel/LimeKernel/LimeKernel/target/` was reported `NOT IN lib_files()` while
 # `touched()` below saw it -- the same "two checkers disagreeing about whether a
 # file exists" failure `touched()`'s docstring names, one layer down from the
 # recursion W-21 repaired.  Driven: `lib_files()` stayed at 83 files with a
@@ -383,9 +385,9 @@ def lib_files():
     git with a RECURSIVE pathspec -- so a module in a SUBDIRECTORY was put into
     `moved` by one and then dropped by the other for not being in this list.
     `citations.py` and `totality.py` enumerated the same set the same wrong way
-    and `check.sh` line 204 states it as `TmKernel/**.lean`, a recursion that
+    and `check.sh` line 204 states it as `LimeKernel/**.lean`, a recursion that
     did not exist anywhere.  DRIVEN at the W-21 repair step:
-    `TmKernel/TmKernel/Sub/Probe.lean` holding `def w21SubGatherable (_n : Nat)
+    `LimeKernel/LimeKernel/Sub/Probe.lean` holding `def w21SubGatherable (_n : Nat)
     : Bool := true` -- gatherable's own shape, the one D40 exists for -- and a
     `partial def`, which is a HARD RULE, gave `--gate` rc=0 "0 owed",
     `totality.py` rc=0 and `citations.py` rc=0 with byte-identical counts.  The
@@ -399,7 +401,7 @@ def lib_files():
     directory named `target`.  `leanfiles.lean_files` is the one enumeration.
 
     AND THE ROOT MODULE IS IN IT (the W-23 repair step; README gap 1314).  The
-    walk was called on `LIB`, the module DIRECTORY, so `TmKernel/TmKernel.lean`
+    walk was called on `LIB`, the module DIRECTORY, so `LimeKernel/LimeKernel.lean`
     -- which Lake compiles into the same library -- was never folded, the same
     way check 3's roster never audited a theorem there.
     `leanfiles.library_files` names the root."""
@@ -470,11 +472,11 @@ def lib_files():
 #     convenience -- is exempt by (a) the moment (c) holds of it.  What stops
 #     that costing anything is (b): nothing outside the module can read it, so
 #     a rule declared there is a rule nothing runs.
-WITNESS_MODULES = ("TmKernel/TmKernel/PlannerWit.lean",)
+WITNESS_MODULES = ("LimeKernel/LimeKernel/PlannerWit.lean",)
 
 
 def module_name(path):
-    """`TmKernel/TmKernel/PlannerWit.lean` -> `TmKernel.PlannerWit`, the name
+    """`LimeKernel/LimeKernel/PlannerWit.lean` -> `LimeKernel.PlannerWit`, the name
     an `import` line spells."""
     rel = path.split("/", 1)[1] if "/" in path else path
     return rel[:-len(".lean")].replace("/", ".")
@@ -502,8 +504,8 @@ def witness_violations():
     **A MODULE THAT DECLARES NOTHING IS NOT AN IMPORTER FOR THIS PURPOSE**, and
     the W-23 repair step is where that had to be said out loud (README gap
     1314).  `lib_files()` was called on the module DIRECTORY and so had never
-    seen `TmKernel/TmKernel.lean`; the moment the root module joined the walk,
-    this check went RED -- the root module imports `TmKernel.PlannerWit`, as it
+    seen `LimeKernel/LimeKernel.lean`; the moment the root module joined the walk,
+    this check went RED -- the root module imports `LimeKernel.PlannerWit`, as it
     must, or Lake would not compile it at all.  So conjunct (b) as it was
     written -- "nothing in the library imports those modules" -- was NEVER TRUE,
     and nobody could see it.
@@ -664,7 +666,7 @@ def scope_step(stack, line):
         return
     if line.rstrip() == "mutual":
         # `mutual ... end` is a scope too, and MISSING IT WAS NOT SILENT: the
-        # bare `end` that closes one popped `namespace Tm` instead, and 153 of
+        # bare `end` that closes one popped `namespace Lime` instead, and 153 of
         # the library's definitions came back with no namespace at all.  That is
         # the shape of the whole gap -- a key that is not the name Lean knows.
         stack.append(("sec", None))
@@ -686,7 +688,7 @@ def scope_step(stack, line):
 
 
 def qualify(stack, name):
-    """`Tm.EmitWire.u32Within` from the open namespaces and the declared name."""
+    """`Lime.EmitWire.u32Within` from the open namespaces and the declared name."""
     parts = [n for kind, n in stack if kind == "ns" and n]
     return ".".join(parts + [name]) if parts else name
 
@@ -802,9 +804,9 @@ def roster():
 
 
 def at_commit(sha, path):
-    got = subprocess.run(["git", "show", "%s:kernel/%s" % (sha, path)],
-                         cwd=ROOT, capture_output=True, text=True)
-    return got.stdout if got.returncode == 0 else None
+    """`path` at `sha`, read through `ratchet.show`: from the path it had THEN and in today's spelling, so a body
+    the rename only respelled is the body the baseline held, and is not "a definition this step adds"."""
+    return ratchet.show(pathlib.Path(HERE) / path, sha) or None
 
 
 def touched(base):
@@ -823,11 +825,11 @@ def touched(base):
     whether a file exists is the shape of a gate going quietly useless."""
     files, tracked = set(), set()
     for argv, into in ((["git", "diff", "--name-only", base,
-                         "--", "kernel/TmKernel/TmKernel"], files),
+                         "--", "kernel/LimeKernel/LimeKernel"], files),
                        (["git", "ls-files", "--others", "--exclude-standard",
-                         "--", "kernel/TmKernel/TmKernel"], files),
+                         "--", "kernel/LimeKernel/LimeKernel"], files),
                        (["git", "ls-files", "--",
-                         "kernel/TmKernel/TmKernel"], tracked)):
+                         "kernel/LimeKernel/LimeKernel"], tracked)):
         got = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True)
         if got.returncode != 0:
             raise SystemExit("mutate.py: %s failed: %s"
@@ -837,7 +839,7 @@ def touched(base):
     # **THE THIRD CALL IS THE W-22 REPAIR STEP'S, and it is the same failure one
     # layer down.**  `--exclude-standard` asks git's IGNORE RULES, and this
     # repository's `.gitignore` line 2 is `**/target` -- so a library module at
-    # `kernel/TmKernel/TmKernel/target/Probe.lean` is not "other", it is
+    # `kernel/LimeKernel/LimeKernel/target/Probe.lean` is not "other", it is
     # IGNORED, and the second call above does not list it.  With `lib_files()`
     # repaired to walk it, `--gate` STILL printed "0 owed" on a `def
     # w22TargetGatherable : Bool := true` sitting on disk -- D40's exact class,
@@ -879,13 +881,13 @@ def new_or_changed(base):
 
 
 def build():
-    got = subprocess.run([LAKE, "build", "TmKernel:static"], cwd=PKG,
+    got = subprocess.run([LAKE, "build", "LimeKernel:static"], cwd=PKG,
                          capture_output=True, text=True,
                          env=dict(os.environ, LEAN_NUM_THREADS="4"))
     return got.returncode, (got.stdout or "") + (got.stderr or "")
 
 
-# lake v4.33.1 prints `error: TmKernel/PlannerWit.lean:3167:26: Type mismatch`
+# lake v4.33.1 prints `error: LimeKernel/PlannerWit.lean:3167:26: Type mismatch`
 # -- the word `error` comes FIRST, before the location.  A regex written the
 # other way round (location, then `error`) matches NOTHING, which is how the
 # first version of this file reported every failing build as PINNED with "no
@@ -915,10 +917,10 @@ def take_the_tree(argv):
     step, README gap 2011).  `restore_in_flight` and `arm_signals` closed gap
     1788's KILL case; neither is about CONCURRENCY, and there was no lock.
     OBSERVED LIVE by an auditor at 01:50 in the shared checkout: `git status`
-    showed ` M kernel/TmKernel/TmKernel/Boundary.lean` with a constant-folded
+    showed ` M kernel/LimeKernel/LimeKernel/Boundary.lean` with a constant-folded
     `readState` planted, while `ps` showed `python3 mutate.py --gate` beside a
-    `lean Boundary.lean` whose parent chain was `lake build TmKernel:static` <-
-    `cargo test -p tm --test planner_invariants` -- another session's acceptance
+    `lean Boundary.lean` whose parent chain was `lake build LimeKernel:static` <-
+    `cargo test -p lime --test planner_invariants` -- another session's acceptance
     run compiling the mutated source.  Its `0 failed` was not a fact about HEAD
     and nothing said so.
 
@@ -929,7 +931,7 @@ def take_the_tree(argv):
 
     The other half of the class -- an acceptance run started by a DIFFERENT tool
     while a mutation is live -- is answered where it can be seen:
-    `tm/tests/mutation_in_flight.rs` fails when the sidecar exists, so a
+    `lime/tests/mutation_in_flight.rs` fails when the sidecar exists, so a
     `cargo test --workspace` that overlaps this gate reports a FAILURE instead of
     a `0 failed` about a kernel nobody committed."""
     import fcntl

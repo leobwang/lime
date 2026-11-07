@@ -10,12 +10,12 @@ this repair: a library module holding
     def v34RunTacP : True := by
       run_tac (Lean.withOptions (fun o => o.setBool `debug.skipKernelTC true)
         (Lean.addDecl (Lean.Declaration.thmDecl
-          { name := `Tm.v34Bad, type := Lean.mkConst ``False,
+          { name := `Lime.v34Bad, type := Lean.mkConst ``False,
             value := Lean.mkConst ``True.intro, .. })))
       trivial
-    theorem v34_one_is_two : (1 : Nat) = 2 := (Tm.v34Bad).elim
+    theorem v34_one_is_two : (1 : Nat) = 2 := (Lime.v34Bad).elim
 
-built (`lake build` ok), and `#print axioms Tm.v34_one_is_two` printed "does not
+built (`lake build` ok), and `#print axioms Lime.v34_one_is_two` printed "does not
 depend on any axioms".  A proof of `1 = 2` passed all thirteen checks.
 
 totality.py's rules are a LIST of spellings (`set_option debug.skipKernelTC`,
@@ -33,8 +33,8 @@ THIS file is the PROPERTY, and it does not care about spelling:
 
 The replay adds each constant through `Environment.replay`, which runs the
 kernel's `addDecl` with no options -- `debug.skipKernelTC` is not an argument
-it takes.  DRIVEN on the plant above: `leanchecker TmKernel.V34` rc=1,
-"(kernel) declaration type mismatch, 'Tm.v34Bad' has type True but it is
+it takes.  DRIVEN on the plant above: `leanchecker LimeKernel.V34` rc=1,
+"(kernel) declaration type mismatch, 'Lime.v34Bad' has type True but it is
 expected to have type False".
 
 WHAT IT CANNOT SEE, declared.  `Environment.replay` re-adds an AXIOM without
@@ -68,7 +68,7 @@ import sys
 import leanfiles
 
 HERE = pathlib.Path(__file__).resolve().parent
-PKG = HERE / "TmKernel"
+PKG = HERE / "LimeKernel"
 OLEAN_DIR = PKG / ".lake" / "build" / "lib" / "lean"
 CACHE = PKG / ".lake" / "replay-cache.json"
 LAKE = pathlib.Path.home() / ".elan" / "bin" / "lake"
@@ -99,7 +99,7 @@ def main():
         code = leanfiles.strip_comments(p.read_text(encoding="utf-8"))
         imports[m] = [i for i in IMPORT.findall(code) if i in mods]
     # THE ROOT MODULE IS IMPORTS AND NOTHING ELSE (AGENTS §2.2), and here that
-    # is a check and not a description: `leanchecker TmKernel` would match every
+    # is a check and not a description: `leanchecker LimeKernel` would match every
     # module by prefix and replay them all at once (18 GB, measured), so the
     # root is not replayed -- which is sound only while it declares nothing.
     root = PKG.name

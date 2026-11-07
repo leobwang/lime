@@ -1,0 +1,25 @@
+---
+source: lime/tests/cli_items.rs
+expression: json
+---
+{
+  "changes": [
+    {
+      "field": "est",
+      "from": "30m",
+      "to": "45m"
+    },
+    {
+      "field": "loc",
+      "from": "",
+      "to": "out"
+    },
+    {
+      "field": "due",
+      "from": "",
+      "to": "2026-10-01"
+    }
+  ],
+  "id": "a1",
+  "line": "- [ ] 2 45m Insurance claim for the bike loc:out due:2026-10-01  ^a1"
+}

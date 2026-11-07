@@ -34,7 +34,7 @@ instance of the default having pointed the other way.
               SUBSET of Rust's.  The FFI shim, R9's own 66 lines (W-27).
     .md .txt  raw text.  The ledger, AGENTS.md (D41, W-20), the gate's own prose
     .sh .py   (the W-20 repair step), `mutations.txt` and `parity.txt` (W-25),
-    .toml     and since W-27 the repository ROOT README.md, `tm/DORMANT.md`, the
+    .toml     and since W-27 the repository ROOT README.md, `lime/DORMANT.md`, the
               six cargo/lake manifests and the oracle's shell scripts.
 
 whose content is an identifier that is ANY OF FOUR THINGS: snake_case (an
@@ -96,7 +96,7 @@ against it cannot launder one stale sentence with another.
        the line, not only the first -- that bug hid `oneBlock`, `overWall`,
        `overBreak`, `energyFilter` and `windDown`, all five real constructors of
        `PlanCheck.CheckName`, which is declared on one line), and the segments
-       of every `namespace` (`Tm.LogStamp` is declared by `namespace LogStamp`).
+       of every `namespace` (`Lime.LogStamp` is declared by `namespace LogStamp`).
     2. Lean string literals in those files.  A wire key, a refusal tag and a
        JSON field name are declared by the literal that spells them, and
        `"cap_done_min"` in Boundary.lean is that declaration.
@@ -121,8 +121,8 @@ against it cannot launder one stale sentence with another.
        max_energy, the two `let`s cited from prose, are allow-list entries
        instead.
     4. Rust string literals in those files.
-    5. File stems under tm/, tm-core/ and kernel/ (target/ and .lake/ pruned).
-       `cargo test --test cli_latency` names a FILE, and tm/tests/cli_latency.rs
+    5. File stems under lime/, lime-core/ and kernel/ (target/ and .lake/ pruned).
+       `cargo test --test cli_latency` names a FILE, and lime/tests/cli_latency.rs
        is where that name is declared; so are the snapshot stems the README
        quotes and the corpus documents.
     6. THE CHECKERS' OWN PYTHON (W-20).  `def`s, `class`es and module-level
@@ -140,7 +140,7 @@ against it cannot launder one stale sentence with another.
        citations.py's own docstring is invisible to citations.py.
     7. THE PINNED LEAN TOOLCHAIN'S OWN SOURCES (D41, W-20), read out of
        `~/.elan/toolchains/<the pin>/src/lean` -- the pin comes from
-       `kernel/TmKernel/lean-toolchain` and AGENTS R8 forbids moving it.  38,538
+       `kernel/LimeKernel/lean-toolchain` and AGENTS R8 forbids moving it.  38,538
        distinct short names.  CONSULTED ONLY FOR A CITATION WITH NO UNDERSCORE:
        19,449 of those names are snake_case (`map_append`, `succ_le`), and
        letting them resolve a deleted kernel THEOREM would be a real weakening
@@ -161,8 +161,8 @@ them to `::` spans pays 0 of that and resolves 62 citations.
 
 AND A NINTH, ADDED WITH CHECK 12 (W-31 track A): THE EMITTED C SYMBOLS.  A
 sentence about reachability names the thing that is or is not reached, and the
-thing is a C function -- `lp_TmKernel_Tm_remainingMin`, which is how the code
-generator spells `Tm.remainingMin`.  The owner's D52 cites exactly that symbol
+thing is a C function -- `lp_LimeKernel_Lime_remainingMin`, which is how the code
+generator spells `Lime.remainingMin`.  The owner's D52 cites exactly that symbol
 and this check FAILED ON IT at `01d4894`, because no source here holds a name
 the code generator invents.  An allow-list entry would have been the wrong
 answer twice: the class is not one name (check 12's own prose, this file's and
@@ -213,11 +213,11 @@ how this gets useless a second way.
 WHAT THIS CANNOT SEE.  Re-measured at W-20 with the resolver in this file and
 nothing else; do not quote these, RE-MEASURE.
   * THE NAMESPACE, and this is the largest one.  Resolution is on the LAST
-    dotted segment, so a citation Tm.Look.foo_bar resolves against a Tm.Cap.foo_bar
+    dotted segment, so a citation Lime.Look.foo_bar resolves against a Lime.Cap.foo_bar
     that still exists, and a theorem MOVED between namespaces is invisible.
     Measured at W-20 over the kernel's 7,783 distinct declared short names:
     115 of them are declared under MORE THAN ONE full name -- `wf` under 28
-    (`Tm.Cal.Instant.wf` … `Tm.Planner.Seg.wf`), `empty` under 15, `go` under
+    (`Lime.Cal.Instant.wf` … `Lime.Planner.Seg.wf`), `empty` under 15, `go` under
     14, `name` under 12 -- so for those 115 a citation can resolve against a
     declaration that is not the one the sentence means.  W-19's repair step hit
     exactly this and fixed it in the KERNEL rather than in the checker: a new
@@ -225,7 +225,7 @@ nothing else; do not quote these, RE-MEASURE.
     name, and gap 878 renamed it `groupLocOk` so that no citation of either can
     resolve against the other.  TURNING FULL-NAME RESOLUTION ON IS NOT A SMALL
     CHANGE and is why it is not done here: prose abbreviates (`Look.budgetOf`
-    for `Tm.Look.budgetOf`, `Log.charsLe` x35 for a declaration this file's own
+    for `Lime.Look.budgetOf`, `Log.charsLe` x35 for a declaration this file's own
     best-effort namespace tracker reads as `charsLe`), so it has to be a SUFFIX
     match, and a best-effort tracker -- `namespace`/`section`/`end`, which Lean
     lets you nest, name and unname -- still reports 267 distinct dotted
@@ -278,7 +278,7 @@ nothing else; do not quote these, RE-MEASURE.
     above wearing Rust's clothes: resolution is on the LAST segment, so
     Ctx::replay_of -- deleted at `2b26be3`, backticked at 63 sites, and no
     method of `Ctx`, which declares only `replay_with` -- RESOLVES, against five
-    free `fn replay_of` test helpers in `tm/tests`.  Measured at W-27: a
+    free `fn replay_of` test helpers in `lime/tests`.  Measured at W-27: a
     prototype that resolves the owner-and-member PAIR against `impl`, `enum` and
     `mod` bodies reports 59 distinct / 313 citations, and hand-checking the top
     rows shows most of them are the PROTOTYPE's errors, not the prose's -- an
@@ -296,7 +296,7 @@ nothing else; do not quote these, RE-MEASURE.
     Measured over the swept files: 48 spans wrap, 43 at an underscore or dot
     and all 43 real names, 5 at an eaten space and all 5 spurious.  The carry
     survives exactly one line boundary and is dropped at a fence.
-  * kernel/design/**, tm-spec-v1.md and PLAN-lean-kernel.md.  D41 scoped the
+  * kernel/design/**, lime-spec-v1.md and PLAN-lean-kernel.md.  D41 scoped the
     widening to AGENTS.md and DECLINED the design: measured at W-19,
     kernel/design/** holds 144 unresolved names, and they are not this class --
     the design is a prospective specification whose unresolved names are work to
@@ -304,13 +304,13 @@ nothing else; do not quote these, RE-MEASURE.
     "bound, constructor, rejection theorem" for a record that has no such field
     yet).  They are three `EXCLUDED` entries since W-27, which is the same
     decline said where a reader can see it and where a stale one fails.
-    RE-MEASURED there: tm-spec-v1.md is 35 citations / 28 distinct / 0
+    RE-MEASURED there: lime-spec-v1.md is 35 citations / 28 distinct / 0
     unresolved and would cost nothing today; PLAN-lean-kernel.md is 134 / 100 /
     8.  Reversing an owner's scope decision is the owner's to do, so neither was
     swept and both numbers are on the record instead.
   * RUST PROSE IS SWEPT SINCE W-24 and this bullet is its record.  It read, for
     four runs: "not one of the seven sets is read as PROSE for Rust; a stale
-    citation inside a `///` doc comment in tm/src is not swept at all".  Turning
+    citation inside a `///` doc comment in lime/src is not swept at all".  Turning
     it on cost 30 adjudications, not the 162 the W-23 measurement predicted --
     that number came from a WIDER span predicate than `is_citation`, and under
     this file's own predicate the population is 2,371 citations / 1,182 distinct
@@ -326,9 +326,9 @@ nothing else; do not quote these, RE-MEASURE.
     `#[doc = "..."]` attribute is a string literal and is blanked.
 
     THE FOURTH BULLET HERE USED TO BE THE DIRECTORY LIST, and it under-reported
-    itself exactly the way check 3's roster grep did: it named tm/build.rs,
-    kernel/tm-kernel-ffi/build.rs and "a future crate" as the unswept cases,
-    while tm/examples -- two compiled `--example` targets of a crate whose src
+    itself exactly the way check 3's roster grep did: it named lime/build.rs,
+    kernel/lime-kernel-ffi/build.rs and "a future crate" as the unswept cases,
+    while lime/examples -- two compiled `--example` targets of a crate whose src
     and tests ARE swept -- was none of the three and was unswept (README gap
     1418).  `RUST_FILES` is `leanfiles.rust_files(ROOT)` since the W-24 repair
     step, the SAME property-based walk and prune rule the Lean side has used
@@ -369,6 +369,7 @@ import collections
 
 import callgraph
 import leanfiles
+import ratchet
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -376,28 +377,28 @@ ROOT = os.path.dirname(HERE)
 # RECURSIVELY, build directories pruned -- `leanfiles.lean_files`, which is where
 # this walk went at the W-22 repair step.  It was the W-21 repair step's, and one
 # of three enumerations that disagreed with `check.sh` line 204's
-# `TmKernel/**.lean`.  A library module in a SUBDIRECTORY was invisible here,
+# `LimeKernel/**.lean`.  A library module in a SUBDIRECTORY was invisible here,
 # in `totality.py` and in `mutate.py` at once, while `mutate.py`'s own
 # `touched()` asked git with a recursive pathspec: driven before the repair, a
-# `TmKernel/TmKernel/Sub/Probe.lean` holding a backticked Look.zzz_no_such_thing
+# `LimeKernel/LimeKernel/Sub/Probe.lean` holding a backticked Look.zzz_no_such_thing
 # left this file's counts BYTE-IDENTICAL and rc 0.  One walk and not two,
-# because the recursive one subsumes `TmKernel/*.lean` and a path reached twice
+# because the recursive one subsumes `LimeKernel/*.lean` and a path reached twice
 # would have its every citation counted twice.
 #
 # AND THE PRUNE LIST WAS THE NEXT HOLE, repaired at W-22: the three walks shared
 # the hard-coded name `target`, which is a legal Lean module path component, so a
-# module under `kernel/TmKernel/TmKernel/target/` was invisible here, in
+# module under `kernel/LimeKernel/LimeKernel/target/` was invisible here, in
 # `totality.py` and in `mutate.py` at once.  Driven: it left this file at
 # 28699/27174/1525/0, byte-identical again.  `leanfiles.is_derived` prunes on a
 # property a build directory has, never on a name.
-LEAN_FILES = [str(p) for p in leanfiles.lean_files(os.path.join(HERE, "TmKernel"))]
+LEAN_FILES = [str(p) for p in leanfiles.lean_files(os.path.join(HERE, "LimeKernel"))]
 # **THE EIGHTH LEVEL OF THE ENUMERATION HOLE, AND THE RULE THAT ENDS THE CLASS**
 # (README gap 1525, answered at W-27).
 #
 # SEVEN times this campaign a checker has been found not to read something it
 # claimed to read, and each fix made a list longer: the Lean walk (W-21), the
 # prune list (W-22), check 3's roster grep (W-22), the library ROOT module
-# (W-23, gap 1314), `tm/examples` (W-24, gap 1418), `kernel/parity.txt` (W-25,
+# (W-23, gap 1314), `lime/examples` (W-24, gap 1418), `kernel/parity.txt` (W-25,
 # gap 1525) and, here, the `::`-spelled path `is_citation` refused.  Gap 1525
 # asked for the property that tells a checker's data file from
 # `citations-allow.txt` and concluded there is none.  **There is none, and that
@@ -432,7 +433,7 @@ LEAN_FILES = [str(p) for p in leanfiles.lean_files(os.path.join(HERE, "TmKernel"
 #
 # WHAT WENT IN WHEN THE DEFAULT FLIPPED, all measured first: the repository ROOT
 # `README.md` (47 citations, ONE unresolved -- `core.hooksPath`, a git config
-# key), `tm/DORMANT.md` (3, none), `kernel/tm-kernel-ffi/shim.c` (2, none -- R9's
+# key), `lime/DORMANT.md` (3, none), `kernel/lime-kernel-ffi/shim.c` (2, none -- R9's
 # own 66 lines, and the first C in this sweep), the six `Cargo.toml`/`lakefile.toml`
 # manifests (3, none; the root one carries D22's `raw_value` and `float_roundtrip`
 # paragraph) and the oracle's two `.sh` scripts (1, none).  One adjudication for
@@ -447,7 +448,7 @@ EXCLUDED = (
     ("kernel/design/", "D41 DECLINED the design: 144 unresolved names that are a "
                        "prospective specification's work to do (re-measured at W-27: "
                        "8 tracked files)"),
-    ("tm-spec-v1.md", "D41's decline.  RE-MEASURED at W-27 and it would cost NOTHING "
+    ("lime-spec-v1.md", "D41's decline.  RE-MEASURED at W-27 and it would cost NOTHING "
                       "today: 35 citations, 28 distinct, 0 unresolved.  Left out because "
                       "reversing an owner's scope decision is the owner's to do"),
     ("PLAN-lean-kernel.md", "D41's decline.  Re-measured at W-27: 134 citations, 100 "
@@ -461,17 +462,17 @@ EXCLUDED = (
     (".claude/", "the agent harness's own directory, pruned by the same leading-dot "
                  "property `leanfiles.is_derived` uses.  Measured: API-NOTES.md is "
                  "265 citations, 6 unresolved"),
-    ("tm/templates/", "the documents `tm init` writes into a NEW tree: fixture text, "
+    ("lime/templates/", "the documents `lime init` writes into a NEW tree: fixture text, "
                       "the same class as corpus/"),
-    ("tm/tests/fixtures/", "recorded input and output, the same class as a fenced block"),
-    ("tm-core/tests/fixtures/", "recorded input and output"),
+    ("lime/tests/fixtures/", "recorded input and output, the same class as a fenced block"),
+    ("lime-core/tests/fixtures/", "recorded input and output"),
     ("*.snap", "an insta SNAPSHOT is a RECORD of what a command printed at a commit that "
               "has gone; demanding it resolve against today's tree is demanding a "
               "re-bless, which AGENTS forbids"),
     ("*.proptest-regressions", "D46's seed lines.  Data, and not one byte of prose"),
     ("*Cargo.lock", "cargo resolver output -- three of them, one per workspace root"),
-    ("kernel/TmKernel/lake-manifest.json", "lake resolver output"),
-    ("kernel/TmKernel/lean-toolchain", "the R8 pin, one line, no prose"),
+    ("kernel/LimeKernel/lake-manifest.json", "lake resolver output"),
+    ("kernel/LimeKernel/lean-toolchain", "the R8 pin, one line, no prose"),
     ("*.gitignore", "no prose"),
     # `kernel/__pycache__/` was an entry here from W-28 until W-29.  It is gone
     # because the WALK no longer reaches it: `leanfiles.source_files` prunes on
@@ -488,7 +489,7 @@ EXCLUDED = (
 # comment later, never earlier), so no byte of a `.c` file is read as code.
 READERS = {".lean": "lean", ".rs": "rust", ".c": "rust", ".md": "plain",
            ".txt": "plain", ".sh": "plain", ".py": "plain", ".toml": "plain",
-           # W-39 (README gap 3533): `tm-oracle plan`'s graft onto fork 4748911,
+           # W-39 (README gap 3533): `lime-oracle plan`'s graft onto fork 4748911,
            # `plan-seam.patch` -- a header of prose that NAMES the fork's code it
            # changes, then a unified diff.  Read as text like a `.md`: its prose
            # is swept, and a diff line carries no backticks unless a doc comment
@@ -525,13 +526,13 @@ def tracked():
       * `leanfiles.source_files(ROOT, None)` -- the property-based WALK checks
         2, 3, 9 and 10 already share.  Its prune rule is a property a build
         directory HAS (a leading dot, or a CACHEDIR.TAG file), so `target/` and
-        `kernel/tm-kernel-ffi/target/` are pruned for a REASON that is in the
+        `kernel/lime-kernel-ffi/target/` are pruned for a REASON that is in the
         directory rather than in a pattern file, and a `target/` that is not a
         build directory is swept.
       * `git ls-files`, tracked plus added-but-not-committed
         (`--others --exclude-standard`) -- because acceptance runs BEFORE the
         commit, and because the walk PRUNES dot-directories that hold tracked
-        files (`kernel/corpus/*/.tm/`, `tm-core/tests/fixtures/*/.tm/`,
+        files (`kernel/corpus/*/.tm/`, `lime-core/tests/fixtures/*/.tm/`,
         `.claude/API-NOTES.md` -- 11 files here today).
 
     MEASURED at the W-28 repair step: walk 596, git 604, union 607; the walk's
@@ -623,12 +624,12 @@ def partition():
 
 # THE RUST SOURCES, BY THE SAME PROPERTY-BASED WALK THE LEAN USES.  This was a
 # hard-coded list of seven directory names until README gap 1418 -- the exact
-# shape leanfiles.py's own header says cannot work -- and `tm/examples` was not
-# on it: two compiled `--example` targets of the `tm` crate whose `src` and
+# shape leanfiles.py's own header says cannot work -- and `lime/examples` was not
+# on it: two compiled `--example` targets of the `lime` crate whose `src` and
 # `tests` ARE swept, holding 17 backticked spans of live prose about
 # `kernel_log::ReplayCache`, and check 8 was GREEN on a plant in either of them.
-# The list's blind-spot sentence named only `tm/build.rs`,
-# `kernel/tm-kernel-ffi/build.rs` and "a future crate", so it could not see it.
+# The list's blind-spot sentence named only `lime/build.rs`,
+# `kernel/lime-kernel-ffi/build.rs` and "a future crate", so it could not see it.
 # The walk now starts at the repository ROOT and prunes by property, which
 # closes all three of those named holes as well.
 RUST_FILES = [str(p) for p in leanfiles.rust_files(ROOT)]
@@ -668,7 +669,7 @@ RUST_FIELD = re.compile(r"^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?([a-z_][a-z0-9_]*)[
 # and the allow-list is for names this kernel does NOT declare.
 #
 # WHY IT IS NOT READ OUT OF THE `enum` BLOCK, which is where it looks like it
-# should live: `tm-core/src/log.rs` declares `Event` inside a macro, so its 26
+# should live: `lime-core/src/log.rs` declares `Event` inside a macro, so its 26
 # variants exist only at that macro's CALL site and no brace-matched `enum` body
 # holds them.  The shape read instead is a CAPITALISED
 # word at the head of a line in `rust_code`, followed by `,` `{` `(` `=>` or a
@@ -750,7 +751,7 @@ def read(path):
 def core_declared():
     """Source 6 (D41): the PINNED Lean toolchain's own library declarations.
 
-    `kernel/TmKernel/lean-toolchain` pins `leanprover/lean4:v4.33.1` (AGENTS R8
+    `kernel/LimeKernel/lean-toolchain` pins `leanprover/lean4:v4.33.1` (AGENTS R8
     forbids moving it), and elan unpacks that toolchain's sources at
     `~/.elan/toolchains/leanprover--lean4---v4.33.1/src/lean`.  Those files are a
     DECLARATION set in exactly the sense sources 1-5 are: `List.mapTR`,
@@ -775,7 +776,7 @@ def core_namespaces():
     declared nowhere, `Classical.choice` resolved on `choice` alone, and 16
     citations of Lean's own choice axiom would have had to be exempted by hand
     the moment the owner test below reached the dotted spans.  Source 1 has
-    always read `namespace` for THIS repository (`Tm.LogStamp` is declared by
+    always read `namespace` for THIS repository (`Lime.LogStamp` is declared by
     `namespace LogStamp`); this is the same rule applied to the toolchain, and
     it is the set the owner test needs, because an owner is a namespace far more
     often than it is a declaration.
@@ -848,7 +849,7 @@ def rust_split(text):
     and blanked everything to the next apostrophe, COMMENTS INCLUDED, so a
     `&'static str` anywhere in a file swallowed the prose behind it.  Driven at
     the W-24 repair step, in a scratch copy: two plants three lines apart at
-    tm-core/src/emit.rs, with `fn w24_lifetime_probe(x: &'static str)` between
+    lime-core/src/emit.rs, with `fn w24_lifetime_probe(x: &'static str)` between
     them, and only the FIRST was reported -- check 8 green on a needle it was
     built to see.  README gap 1416.
 
@@ -986,7 +987,7 @@ def rust_code(text):
     and ran over whole file text, so `// The old fn foo is gone.` declared
     `foo`, and so did the literal `"fn foo"` in a guard that greps for it.
     Both were LIVE: seg_title, deleted at W-23, resolved only from
-    `tm/tests/one_renderer.rs`'s needle string and `tm/tests/one_padder.rs`'s
+    `lime/tests/one_renderer.rs`'s needle string and `lime/tests/one_padder.rs`'s
     prose about a plant that was removed before the commit.
 
     `STRING_LIT` still runs over the RAW text, because a bare `"name"` string
@@ -1045,9 +1046,9 @@ def declared():
             names.add(m.group(1) or m.group(2))
     # SOURCE 5 IS `tracked()`, THE SAME POPULATION THE RESIDUE RULE USES (the
     # W-28 repair step).  It was a walk of THREE DIRECTORY NAMES, written out --
-    # `tm`, `tm-core`, `kernel` -- which is the shape `leanfiles.py`'s header
+    # `lime`, `lime-core`, `kernel` -- which is the shape `leanfiles.py`'s header
     # says cannot work, and the repository ROOT was not on it: `AGENTS.md`,
-    # `PLAN-lean-kernel.md`, `tm-spec-v1.md` and `.claude/API-NOTES.md` were
+    # `PLAN-lean-kernel.md`, `lime-spec-v1.md` and `.claude/API-NOTES.md` were
     # files this repository holds whose stems it did not declare.  That cost
     # nothing while a citation resolved on its last segment -- `AGENTS.md`
     # resolved because `md` is a declared name -- and it is the difference
@@ -1183,7 +1184,9 @@ def cited():
                          else None)
                 continue
             for m in SPAN.finditer(line):
-                name = m.group(1).strip()
+                # An append-only ledger keeps the name it was written with: a citation is read in today's
+                # spelling (`ratchet.respell`), so it resolves iff the name it means still exists.
+                name = ratchet.respell(m.group(1).strip())
                 if is_citation(name):
                     hits[name] += 1
                     where.setdefault(name, "%s:%d" % (os.path.relpath(path, HERE), n))
@@ -1191,6 +1194,7 @@ def cited():
             if carry is not None and len(parts) > 1:
                 name = wrapped(carry, parts[0])
                 if name is not None:
+                    name = ratchet.respell(name)
                     hits[name] += 1
                     where.setdefault(name, "%s:%d"
                                      % (os.path.relpath(path, HERE), n - 1))
@@ -1229,7 +1233,7 @@ def owner_resolves(segs, names, core, spaces, variants):
     git-initialised clone of HEAD and check 8 stayed rc=0 with the counts merely
     two higher, while a plain owner-less name planted beside them was named at
     once.  `Done` is one of 14,828 declared names and `All` is a
-    `tm-core` one, so neither owner ever had to be real.
+    `lime-core` one, so neither owner ever had to be real.
 
     AND IT WAS SCOPED TO `::` AND THAT WAS THE SAME HOLE ONE SEPARATOR OVER (the
     W-28 repair step, README gap 933).  `::` is how RUST spells a path and `.`
@@ -1254,7 +1258,7 @@ def owner_resolves(segs, names, core, spaces, variants):
     citation in this repository is three segments or more headed by a real
     namespace, so a RENAMED MIDDLE segment was invisible: DRIVEN in a
     git-initialised clone of HEAD, one line appended to `mutations.txt` each,
-    Tm.ZzzNoSuchOwnerW28.ramp, Tm.Planner.ZzzGoneW28.dayPlan and
+    Lime.ZzzNoSuchOwnerW28.ramp, Lime.Planner.ZzzGoneW28.dayPlan and
     Cal.ZzzGoneW28.mkInstant? were all GREEN (un-backticked here, by this
     check's own convention for a name that does not exist), while the
     two-segment ZzzNoSuchOwnerW28.ramp was named.  That is the same "join the enumeration

@@ -1,5 +1,7 @@
+LimeKernel/.lake/
+lime-kernel-ffi/target/
+# A checkout that built the tree before the rename still holds this directory: unignored, check 8 reads its files and `git status` shows them.
 TmKernel/.lake/
-tm-kernel-ffi/target/
 __pycache__/
 .mutate-in-flight
 .mutate-lock

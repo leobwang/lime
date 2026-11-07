@@ -54,7 +54,75 @@ cannot read (a `git archive` copy, a shallow clone without `BASE`) answers
 exactly as its HEAD comparand already did.
 """
 
+import re
 import subprocess
+
+#: **THE RENAME, SPELT ONCE** (tm -> lime, step 1).  Every gate that compares this tree with an older commit
+#: reads that commit in its OLD spelling and under its OLD paths: the exemption files name `Tm.Planner.x` where
+#: they now name `Lime.Planner.x`, and `kernel/TmKernel/Goals.lean` is where `kernel/LimeKernel/Goals.lean` was.
+#: Spelling is not scope (D121), so `respell` is applied to whatever a commit is read as, and a key that only
+#: changed its spelling is the key its parent held; a key the parent held under NO spelling is still growth.
+#: `old_path` answers the second half.  Checked by planting a real new exempt line in a scratch copy of each
+#: file (kernel/README.md's rename block): every plant still FAILS.
+RENAMED_PATHS = (
+    ("kernel/LimeKernel/LimeKernel/", "kernel/TmKernel/TmKernel/"),
+    ("kernel/LimeKernel/LimeKernel.lean", "kernel/TmKernel/TmKernel.lean"),
+    ("kernel/LimeKernel/", "kernel/TmKernel/"),
+    ("kernel/lime-kernel-ffi/", "kernel/tm-kernel-ffi/"),
+    ("lime-core/", "tm-core/"),
+    ("lime/", "tm/"),
+)
+_ATOM = re.compile(r"TmKernel|TmArch|(?<![A-Za-z0-9])(?:tm|Tm|TM)(?![A-Za-z0-9])")
+_IDENTISH = re.compile(r"[A-Za-z0-9_)\]>]")
+_REV_BEFORE = re.compile(r"(?:\b[0-9a-f]{7,40}|<[A-Za-z_-]+>):$")
+
+
+def _is_dot_tm(text, s):
+    """`.tm` the directory, and not `x.tm` a field: the character before the dot is no identifier, or it is the
+    last character of an escape (`"\\n.tm/state.json"`)."""
+    if text[s - 1:s] != ".":
+        return False
+    if s < 2 or not _IDENTISH.match(text[s - 2]):
+        return True
+    return s >= 3 and text[s - 3] == "\\"
+
+
+def respell(text):
+    """`text` in the new spelling.  It keeps what the rename keeps: `.tm`, `tm:<marker>`, `-//tm//`, `<rev>:tm...`,
+    `tm-tmp`.  A text already in the new spelling comes back unchanged."""
+    def one(m):
+        tok, s, e = m.group(0), m.start(), m.end()
+        if tok == "TmKernel":
+            return "LimeKernel"
+        if tok == "TmArch":
+            return "LimeArch"
+        if tok == "Tm":
+            return "Lime"
+        if tok == "TM":
+            return "LIME" if text[e:e + 1] == "_" else tok
+        if text[e:e + 1] != "_" and _is_dot_tm(text, s):
+            return tok
+        if text[max(0, s - 6):s] in ("--- a/", "+++ b/"):
+            return tok
+        if text[s - 2:s] == "//" and text[e:e + 2] == "//":
+            return tok
+        if text[e:e + 1] == ":" and text[e + 1:e + 2] not in ("", ":", " ", "\n", "\t"):
+            return tok
+        if _REV_BEFORE.search(text[max(0, s - 44):s]):
+            return tok
+        if text.startswith(("tm-tmp", "tm-spec.md"), s):
+            return tok
+        return "lime"
+    return _ATOM.sub(one, text)
+
+
+def old_path(rel):
+    """The repository-relative path `rel` had before the rename, or None when it has not moved."""
+    for new, old in RENAMED_PATHS:
+        if rel == new or (new.endswith("/") and rel.startswith(new)):
+            return old + rel[len(new):]
+    return None
+
 
 #: **GROWTH THE OWNER GRANTED, NAMED** (W-49 track P; the owner's D124, README gap 5130).
 #: "Growth is the owner's to grant, in the commit that changes this script" was a sentence in
@@ -111,14 +179,33 @@ def _git(path, *args):
 
 
 def show(path, rev):
-    """`path`'s text at `rev`: `""` when the file is not in that commit, `None`
-    when git cannot say."""
+    """`path`'s text at `rev`, IN THE NEW SPELLING and read from the path the file had in that commit (`respell`,
+    `old_path`): `""` when the file is not in that commit under either path, `None` when git cannot say."""
     listed = _git(path, "ls-tree", rev, "--", path.name)
     if listed is None:
         return None
-    if not listed.strip():
-        return ""
-    return _git(path, "show", "%s:./%s" % (rev, path.name))
+    if listed.strip():
+        text = _git(path, "show", "%s:./%s" % (rev, path.name))
+    else:
+        prefix = _git(path, "rev-parse", "--show-prefix")
+        if prefix is None:
+            return None
+        old = old_path(prefix.strip() + path.name)
+        if old is None:
+            return ""
+        listed = _git(path, "ls-tree", "--full-tree", rev, "--", old)
+        if listed is None:
+            return None
+        if not listed.strip():
+            return ""
+        text = _git(path, "show", "%s:%s" % (rev, old))
+    return None if text is None else respell(text)
+
+
+def committed(path, rev="HEAD"):
+    """`show`, for a caller to whom a file absent at `rev` and a git that cannot say are one answer: `None`."""
+    text = show(path, rev)
+    return text if text else None
 
 
 def history(path):

@@ -18,10 +18,10 @@ resolves against the tree instead of against an allow-list entry.  Two copies
 of this walk would be the §5.3 defect check 11 exists to catch, in the gates
 that catch it.
 
-THE ROOT IS `tm_kernel_call` (R9, the `@[export]` at `PlanWire.lean:1198`), and
+THE ROOT IS `lime_kernel_call` (R9, the `@[export]` at `PlanWire.lean:1198`), and
 the rooting is the whole difference between this instrument and a wrong one:
-rooting at `Tm.callExport` -- the Lean definition that CARRIES the attribute --
-reports almost everything dead, because the emitted function for `Tm.callExport`
+rooting at `Lime.callExport` -- the Lean definition that CARRIES the attribute --
+reports almost everything dead, because the emitted function for `Lime.callExport`
 is itself reached from nothing.  A missing root is a hard error here, never a
 quiet empty answer.
 
@@ -31,12 +31,12 @@ THE MANGLING IS DERIVED FROM THE PINNED TOOLCHAIN, NOT GUESSED.  `symbol` is
 transcribed: a letter or digit stands, `_` DOUBLES, and anything else becomes
 `_x`/`_u`/`_U` plus its code point in lower hex.  The rule this replaced was
 `name.replace(".", "_")` and it was wrong in both directions for a name that
-is not pure alphanumerics: `Tm.binsOfPairs?` is emitted as
-`lp_TmKernel_Tm_binsOfPairs_x3f` and was looked up under its own spelling with
+is not pure alphanumerics: `Lime.binsOfPairs?` is emitted as
+`lp_LimeKernel_Lime_binsOfPairs_x3f` and was looked up under its own spelling with
 the `?` still in it, which is no symbol at all -- 70 `def`s of this library
 carry a `?`, a `!` or a `'` -- and a `def` whose own name holds an underscore
 was looked up under the name of a DIFFERENT declaration one namespace down
-(Tm.foo_bar emits Tm_foo__bar, and Tm.foo.bar emits Tm_foo_bar).  W-31 track A,
+(Lime.foo_bar emits Lime_foo__bar, and Lime.foo.bar emits Lime_foo_bar).  W-31 track A,
 README gap 2140.
 
 WHAT IT CANNOT SEE, declared rather than discovered later:
@@ -50,7 +50,7 @@ WHAT IT CANNOT SEE, declared rather than discovered later:
     (`lean_alloc_closure((void*)l_foo, ..)`), which reads as an identifier in
     the caller's body and so IS an edge here; a pointer that arrives from
     outside the emitted tree is not.
-  * The Rust side.  `tm_kernel_call` is the only symbol the shim dials (R9) and
+  * The Rust side.  `lime_kernel_call` is the only symbol the shim dials (R9) and
     a second `@[export]` would need adding here as a second root.  WHICH
     REQUESTS THE RUST DIALS IT WITH is a different question and this walk
     cannot ask it either: the export is a door, and a section nothing sends is
@@ -66,15 +66,15 @@ import pathlib
 import re
 
 # THE ROOT OF THE CALL GRAPH: the one symbol the host dials (R9, `@[export
-# tm_kernel_call]` at `PlanWire.lean:1198`).
-EXPORT_ROOT = "tm_kernel_call"
+# lime_kernel_call]` at `PlanWire.lean:1198`).
+EXPORT_ROOT = "lime_kernel_call"
 # The prefix the code generator gives this package's declarations: lp_ plus
-# the mangled package name.  `TmKernel` is the package `lakefile.toml` declares
+# the mangled package name.  `LimeKernel` is the package `lakefile.toml` declares
 # and it mangles to itself.  A toolchain that changed the scheme would make
 # every lookup miss, so `reach.py` carries a floor that fails loudly instead.
-PREFIX = "lp_TmKernel_"
+PREFIX = "lp_LimeKernel_"
 # ANY emitted function, by its own C symbol -- the walk's population, which
-# includes the export itself (`tm_kernel_call` carries neither of the code
+# includes the export itself (`lime_kernel_call` carries neither of the code
 # generator's two name prefixes).
 ANY_EMITTED = re.compile(r"(?m)^LEAN_EXPORT[^\n(;]*?\b(\w+)\([^\n]*\{")
 # AND A DEFINITION THE GENERATOR EMITS AS A GLOBAL AND NOT AS A FUNCTION
@@ -268,7 +268,7 @@ def reachable(ir, cuts=None, root=None):
     """`(reached, emitted)`: what `root` reaches, and what was emitted.
 
     `root` is the export, `EXPORT_ROOT`, unless a reader names another symbol
-    -- check 13 (`fields.py`) walks from `Tm.Planner.dayPlan` to ask which
+    -- check 13 (`fields.py`) walks from `Lime.Planner.dayPlan` to ask which
     definitions the day BUILDER reaches, which is a different question from
     which ones the door does (W-33 track A).  A root that is not an emitted
     function is a hard error here, never a quiet empty answer.
@@ -287,7 +287,7 @@ def reachable(ir, cuts=None, root=None):
     `cuts` is `{symbol: set of symbols}` and is how the export stops being an
     ASSUMED root (`sections.py`, README gap 2229).  The export is a door, not a
     caller: what comes through it is a request, and a dispatcher for a section
-    `tm/src` never sends runs only its absent arms.  A symbol named in `cuts`
+    `lime/src` never sends runs only its absent arms.  A symbol named in `cuts`
     contributes exactly the callees given instead of everything its body
     mentions.  `None` -- the default, and what checks 8 and 11 pass -- is the
     walk as it was, so their answers do not move."""

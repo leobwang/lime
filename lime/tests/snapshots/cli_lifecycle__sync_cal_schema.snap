@@ -1,0 +1,12 @@
+---
+source: lime/tests/cli_lifecycle.rs
+expression: schema(&json)
+---
+{
+  "events": "integer",
+  "files": [],
+  "warnings": [
+    "string"
+  ],
+  "weeks": []
+}

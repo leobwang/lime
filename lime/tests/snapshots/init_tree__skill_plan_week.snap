@@ -1,0 +1,63 @@
+---
+source: lime/tests/init_tree.rs
+expression: plan_week
+---
+---
+name: plan-week
+description: Plan the coming week — propose 3–5 milestones from the month outcomes, the demoted work and the capacity grid, then write week/<next>.md after confirmation. Use when the user says "plan the week", "let's do the Sunday planning", or asks what next week should hold.
+---
+
+# /plan-week
+
+## 1. Read (never guess)
+
+```
+lime plan --week --json          # capacity grid: minutes per day per energy level
+lime review week --json          # last week: blocks done, what finished, calibration
+lime check --json                # the tree must be clean before you propose anything
+```
+
+<!-- json fields -->
+
+```
+lime plan --week --json → week days[].date days[].total days[].total_exact days[].minutes_at_level days[].minutes_at_level_exact grid
+lime review week --json → key review.blocks_done review.block_min review.load review.blocks_per_day[] review.hit review.demoted review.planned_blocks review.carry_in_min review.carry_out_min review.mix.high_share review.estimates[].tag review.estimates[].multiplier review.deadline_health.min_slack_days review.deadline_health.hot review.deadline_health.impossible review.lounge.overall
+```
+
+Then read, in this order: `month/<this month>.md` (outcomes with `!k`, and
+everything under `# Demoted`), `week/<this week>.md` (what is unfinished — the
+carry-over no `--json` document carries), `backlog.md` (dated items due in or
+near the week, and each `## series:` head), `calendar/<next week>.md`.
+
+## 2. Propose
+
+- **3–5 milestones**, each a child of an outcome (`@O1`), with `ci` 0–5 and an
+  estimate in blocks. Calibrate it: `lime model --show --json` gives
+  `model.duration` per tag, so a 4-block guess on a `#lean` item with `×1.6`
+  really costs 6 blocks of week budget. Say both numbers.
+- **Demoted items first.** Anything in `month/# Demoted` already lost a week;
+  pre-select it, and for anything in `churn` propose a cut or a re-scope
+  instead of a third attempt.
+- **Honesty.** Show Σ estimates ÷ the week's capacity (Σ `days[].total` ÷ 60 for blocks; minutes are
+  **floors** of `minutes_at_level_exact` and `total_exact`, and `total` floors the exact total, so it can
+  exceed Σ `minutes_at_level` by 5). Above `week.plan_ratio` (0.8), say what you would drop.
+- **Deadlines.** Name every dated item whose `u = need / capacity` is near 1
+  (`lime plan --explain ^id --json`) and what makes it fit: a smaller `est:`, a
+  later `due:`, or fewer milestones.
+
+Show the proposal as the exact lines you would write, under `# Milestones` and `# Tasks`.
+
+## 3. Write — only after confirmation
+
+Never create or edit `week/<next>.md` before the user says yes. Then, with the
+bare line (a leading `- [ ] ` would be read as a flag):
+
+```
+lime add "5 6b Finish ch.5 exercises @O1" --to week/<next week>.md --section Milestones
+lime check
+```
+
+For each pre-selected demoted item, `lime readopt ^id --to week` — a live id
+is refused by name (`notDemoted`); a live line moves with `lime move`.
+Use `lime add` (it assigns the `^id`) rather than writing lines by hand. Report
+what was written and what was deliberately left out.

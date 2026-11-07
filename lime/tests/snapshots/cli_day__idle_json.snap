@@ -1,0 +1,8 @@
+---
+source: lime/tests/cli_day.rs
+expression: "lime.json(&[\"idle\", \"b\", \"--min\", \"14\"])"
+---
+{
+  "attributed": "break",
+  "min": 14
+}

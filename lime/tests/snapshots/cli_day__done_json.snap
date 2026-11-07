@@ -1,0 +1,13 @@
+---
+source: lime/tests/cli_day.rs
+expression: "{\n    let lime2 = Lime::new(); lime2.ok(&[\"wake\", \"06:05\", \"--slept\", \"8h10m\"]);\n    lime2.ok(&[\"start\", \"^t4\", \"--energy\", \"4\"]);\n    lime2.json_at(\"2026-09-07T10:00:00-05:00\", &[\"done\"])\n}"
+---
+{
+  "actual_min": 60,
+  "est_min": 60,
+  "id": "t4",
+  "partial": false,
+  "remaining_min": null,
+  "state": "[x]",
+  "title": "Claude Code drafts tests"
+}

@@ -1,0 +1,35 @@
+[package]
+name = "lime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "lime"
+path = "src/main.rs"
+
+[dependencies]
+lime-core = { path = "../lime-core" }
+# The Lean kernel bridge (stage 3). In-repo, its own cargo workspace on
+# purpose (kernel/README.md, AGENTS §2.2) — a path dependency, not a new
+# external dependency, so R7 holds: every crates.io entry in the lockfile is
+# the fork point's own plus lime-kernel-ffi's pre-existing `cc`.
+lime-kernel-ffi = { path = "../kernel/lime-kernel-ffi" }
+chrono.workspace = true
+chrono-tz.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+clap.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+notify.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+tempfile.workspace = true
+# Stage 5 D9 B4: T2 (`tests/kernel_log_grammar.rs`). Not a new dependency: the
+# workspace's own, already in the lockfile through lime-core's dev-dependencies.
+proptest.workspace = true

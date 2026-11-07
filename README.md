@@ -1,39 +1,39 @@
-# tm
+# lime
 
-> **This branch has no working `tm`.** `rebuild-on-lean` removed the Rust
-> kernel (`tm-core`) in favour of the Lean 4 kernel under `kernel/`, which
+> **This branch has no working `lime`.** `rebuild-on-lean` removed the Rust
+> kernel (`lime-core`) in favour of the Lean 4 kernel under `kernel/`, which
 > covers a fraction of it so far. The manual below describes the tool as it
 > exists on `main`. See `PLAN-lean-kernel.md` for what is being built here and
-> `tm/DORMANT.md` for the frontend's status.
+> `lime/DORMANT.md` for the frontend's status.
 
-`tm` is a personal planner for people who think in plain text. You keep a small
+`lime` is a personal planner for people who think in plain text. You keep a small
 tree of Markdown files — a month of outcomes, a week of milestones and tasks, a
-backlog, your routines — and `tm` works out what to do next, an hour at a time,
+backlog, your routines — and `lime` works out what to do next, an hour at a time,
 from what is in those files and from what you tell it about your day.
 
-It has a command for every moment of a working day (`tm wake`, `tm arrive`,
-`tm start`, `tm done`), a terminal UI that shows the whole day at once
-(`tm tui`), and a set of Claude Code skills for the parts of planning that are
+It has a command for every moment of a working day (`lime wake`, `lime arrive`,
+`lime start`, `lime done`), a terminal UI that shows the whole day at once
+(`lime tui`), and a set of Claude Code skills for the parts of planning that are
 writing rather than deciding.
 
 Two ideas make it different from a to-do app.
 
 **The Markdown files are the database.** There is no hidden store, no database
 file, no import step. An item is a line in a file, and the file it sits in is
-what makes it this week's work rather than next month's. Everything `tm` knows
-about your intentions, you can read with `cat` and change with any editor. `tm`
+what makes it this week's work rather than next month's. Everything `lime` knows
+about your intentions, you can read with `cat` and change with any editor. `lime`
 rewrites lines byte-faithfully: your alignment, your spelling of an estimate,
 your comments and prose all survive.
 
-**The schedule is computed, never stored.** There is nothing in `tm` that moves
+**The schedule is computed, never stored.** There is nothing in `lime` that moves
 a task to 3pm. The timetable is recomputed from scratch every time you ask for
 it, out of the facts you wrote down — estimates, deadlines, how much energy a
 task needs, how much energy the model thinks you will have at 3pm. So you never
 maintain a schedule. You maintain facts, and re-run the planner. When the day
-goes wrong, you do not rearrange twelve rows; you tell `tm` one true thing
-(`tm energy 3`, `tm interrupt`) and the rest follows.
+goes wrong, you do not rearrange twelve rows; you tell `lime` one true thing
+(`lime energy 3`, `lime interrupt`) and the rest follows.
 
-`tm` is probably for you if you already keep plans in text files, want the
+`lime` is probably for you if you already keep plans in text files, want the
 computer to do the arithmetic of deadlines and capacity, and are willing to
 report a few facts about your day. It is probably not for you if you want a
 shared team tracker, notifications, or a calendar you drag things around in.
@@ -61,7 +61,7 @@ shared team tracker, notifications, or a calendar you drag things around in.
   - [Energy, ci, and slots](#energy-ci-and-slots)
   - [Reading the timetable](#reading-the-timetable)
   - [The diagnostics](#the-diagnostics)
-  - [What tm learns about you](#what-tm-learns-about-you)
+  - [What lime learns about you](#what-lime-learns-about-you)
   - [The week ahead](#the-week-ahead)
 - [The terminal UI](#the-terminal-ui)
 - [Command reference](#command-reference)
@@ -73,34 +73,34 @@ shared team tracker, notifications, or a calendar you drag things around in.
 
 ## Install
 
-**If you already have a `tm` binary**, put it somewhere on your `PATH` and you
+**If you already have a `lime` binary**, put it somewhere on your `PATH` and you
 are done:
 
 ```sh
-mkdir -p ~/.local/bin && cp ./tm ~/.local/bin/tm
+mkdir -p ~/.local/bin && cp ./lime ~/.local/bin/lime
 ```
 
-**To build it from source** you need a Rust toolchain. `tm` is a Rust
-workspace — a library (`tm-core`) and one binary (`tm`) — so run these from the
-workspace root, the directory that holds `Cargo.toml` beside the `tm/` and
-`tm-core/` folders:
+**To build it from source** you need a Rust toolchain. `lime` is a Rust
+workspace — a library (`lime-core`) and one binary (`lime`) — so run these from the
+workspace root, the directory that holds `Cargo.toml` beside the `lime/` and
+`lime-core/` folders:
 
 ```sh
-cargo build --release          # binary at ./target/release/tm
-cargo install --path tm        # or: install `tm` into ~/.cargo/bin
+cargo build --release          # binary at ./target/release/lime
+cargo install --path lime        # or: install `lime` into ~/.cargo/bin
 ```
 
 Either way, check it:
 
 ```console
-$ tm --version
-tm 0.1.0
+$ lime --version
+lime 0.1.0
 ```
 
-Do put `tm` on your `PATH` rather than typing a path into `target/`. Both hooks
-`tm init` writes give up when they cannot find it there: the Claude Code hook
-exits 0 **silently**, and the git pre-commit hook prints `pre-commit: tm is not
-on PATH — skipping tm check` on stderr and lets the commit through. Either way
+Do put `lime` on your `PATH` rather than typing a path into `target/`. Both hooks
+`lime init` writes give up when they cannot find it there: the Claude Code hook
+exits 0 **silently**, and the git pre-commit hook prints `pre-commit: lime is not
+on PATH — skipping lime check` on stderr and lets the commit through. Either way
 your validation net is off.
 
 ### Finding your plan directory
@@ -109,7 +109,7 @@ Every command needs to know which plan directory to work on. It looks, in this
 order:
 
 1. `--dir <path>` (a global flag; it works before or after the verb)
-2. `$TM_DIR`
+2. `$LIME_DIR`
 3. by walking up from the working directory for a directory holding a
    `config.toml` **next to `.tm/`, `backlog.md`, `week/` or `month/`** — or one
    with a `plan/` child that does
@@ -118,16 +118,16 @@ A bare `config.toml` with none of those beside it is not a plan directory, so a
 `config.toml` you keep for something else is never mistaken for one.
 
 So in normal use you `cd` into your plan directory, anywhere under it, or
-anywhere above a `plan/` folder, and type `tm now`. Outside one:
+anywhere above a `plan/` folder, and type `lime now`. Outside one:
 
 ```console
-$ tm now
-tm: no plan directory found (looked for config.toml next to .tm/, here and in every parent); use --dir <path> or set TM_DIR
+$ lime now
+lime: no plan directory found (looked for config.toml next to .tm/, here and in every parent); use --dir <path> or set LIME_DIR
 ```
 
-`tm init` is the one verb that also takes the directory as a plain argument, so
-`tm init X`, `tm init --dir X` and `tm --dir X init` all create the tree at `X`.
-Give it both and the positional wins: `tm init here --dir there` writes `here`.
+`lime init` is the one verb that also takes the directory as a plain argument, so
+`lime init X`, `lime init --dir X` and `lime --dir X init` all create the tree at `X`.
+Give it both and the positional wins: `lime init here --dir there` writes `here`.
 
 ---
 
@@ -138,7 +138,7 @@ From nothing to a planned day. Every block below is a real run.
 **1. Make a plan directory.**
 
 ```console
-$ tm init plan
+$ lime init plan
 created 20 file(s) in plan
 enable the pre-commit hook with:
   git config core.hooksPath plan/.githooks
@@ -148,20 +148,20 @@ $ cd plan
 The files are empty except for an HTML comment in each one showing what belongs
 there. Nothing else is created until you run a command that needs it.
 
-**2. Write down some work.** `tm add` takes a line in the item grammar and puts
+**2. Write down some work.** `lime add` takes a line in the item grammar and puts
 it in a file; it assigns the `^id` and prints where the line landed. `--section`
 says which heading to append under.
 
 ```console
-$ tm add "- [ ] 5 6b Finish the ch.5 exercises ^m1" --to week --section Milestones
+$ lime add "- [ ] 5 6b Finish the ch.5 exercises ^m1" --to week --section Milestones
 - [ ] 5 6b Finish the ch.5 exercises ^m1 → week/2026-W37.md
-$ tm add "4 2b Draft the rollback tests" --to week --section Tasks
+$ lime add "4 2b Draft the rollback tests" --to week --section Tasks
 - [ ] 4 2b Draft the rollback tests ^vy69 → week/2026-W37.md
-$ tm add "2 20m Call the bank about the card" --to week --section Tasks
+$ lime add "2 20m Call the bank about the card" --to week --section Tasks
 - [ ] 2 20m Call the bank about the card ^exm2 → week/2026-W37.md
 ```
 
-The `- [ ] ` prefix is optional, and you can give your own `^id` or let `tm`
+The `- [ ] ` prefix is optional, and you can give your own `^id` or let `lime`
 make one. Reading a line: `5` is how much energy it needs (0–5), `6b` is six
 blocks of an hour, the rest is the title.
 
@@ -170,44 +170,44 @@ work but take time. They have no checkbox — their instances live in the log, s
 the line never changes.
 
 ```console
-$ tm add "- sleep win:22:00-08:00 dur:8h30m every:day ci:0" --to routines
+$ lime add "- sleep win:22:00-08:00 dur:8h30m every:day ci:0" --to routines
 - sleep win:22:00-08:00 dur:8h30m every:day ci:0 → routines.md
-$ tm add "- breakfast win:06:00-09:00 dur:30m every:day pref:wake+10m" --to routines
+$ lime add "- breakfast win:06:00-09:00 dur:30m every:day pref:wake+10m" --to routines
 - breakfast win:06:00-09:00 dur:30m every:day pref:wake+10m → routines.md
-$ tm add "- lunch win:11:30-13:30 dur:30m every:day" --to routines
+$ lime add "- lunch win:11:30-13:30 dur:30m every:day" --to routines
 - lunch win:11:30-13:30 dur:30m every:day → routines.md
 ```
 
 **4. Check what you wrote.**
 
 ```console
-$ tm check
+$ lime check
 no problems
 ```
 
-**5. Start the day.** `tm wake` records when you got up; `tm arrive` says where
+**5. Start the day.** `lime wake` records when you got up; `lime arrive` says where
 you are, works out the day's window and budget, and plans it.
 
 ```console
-$ tm wake --slept 7h30m
+$ lime wake --slept 7h30m
 wake 06:45 · slept 450m
-$ tm arrive lounge
+$ lime arrive lounge
 arrive lounge 07:10 · window 07:10–15:10 · budget 6 blocks
 ```
 
 `lounge` is just a name for where you are — pick your own (`office`, `cafe`,
-`library`). `tm` learns a separate energy curve per location, and the word is
+`library`). `lime` learns a separate energy curve per location, and the word is
 not cosmetic: it decides the shape of the day. Two names are special. `lounge`
 starts from a high curve that reaches energy 5, so demanding work gets
 scheduled. `home` starts lower **and** is capped at energy 3, so ci-4 and ci-5
-work is never planned there at all. A name `tm` has not met before starts from
+work is never planned there at all. A name `lime` has not met before starts from
 the `home` curve, which peaks at 4, but takes no cap. See
 [Configuration](#configuration) to give your own locations a curve.
 
 **6. Look at the day.**
 
 ```console
-$ tm plan
+$ lime plan
 2026-09-07 · window 07:10–15:10 · budget 6 blocks
 07:12  ·      breakfast 30m
 07:42  4 p5   Draft the rollback tests          2b
@@ -237,11 +237,11 @@ So: six budgeted blocks of work, breaks between them, routines in their windows,
 and two complaints at the bottom — one hour of good energy went on a small
 errand (`↓`), and the work scheduled needs 1.39× the minutes the budget has.
 
-**7. Work.** `tm now` is the live answer to "what am I doing"; it is recomputed
+**7. Work.** `lime now` is the live answer to "what am I doing"; it is recomputed
 every time, so it is never stale.
 
 ```console
-$ tm now
+$ lime now
 nothing running
 · breakfast 30m  ci1  p0
   07:45–08:15 · elapsed 0m · left 30m
@@ -252,14 +252,14 @@ next
 0/6 blocks
 ```
 
-Look at the times: breakfast has slid to 07:45, because `tm now` recomputes the
+Look at the times: breakfast has slid to 07:45, because `lime now` recomputes the
 rest of the day from this moment. The timetable you printed at 07:12 was a
-snapshot; `tm now` is the live one.
+snapshot; `lime now` is the live one.
 
 ```console
-$ tm start ^m1 --energy 5
+$ lime start ^m1 --energy 5
 ▶ ^m1 Finish the ch.5 exercises · 07:50 · pred 5 rep 5
-$ tm now
+$ lime now
 ▶ ^m1 Finish the ch.5 exercises · started 07:50 · 40m of 360m
 ▶ Finish the ch.5 exercises  ci5  p5  6b
   08:30–08:50 · elapsed 0m · left 20m
@@ -277,7 +277,7 @@ you reported.
 the *block* and keep the remainder:
 
 ```console
-$ tm done --partial --went 1
+$ lime done --partial --went 1
 ✓ ^m1 Finish the ch.5 exercises · 65m/360m · 295m left
 ```
 
@@ -292,7 +292,7 @@ Still open, still estimated at 6 blocks originally, with 4h55m of work left.
 **9. At the end of the day.**
 
 ```console
-$ tm review day
+$ lime review day
  Day 2026-09-07 · lounge · 1/6 blocks · load 65.0 · window 07:10–15:10 · lost 0 · leak 0m · adherence 0%
  done      -    demoted  -    underused 0    replans 2 · drift 6m
  energy    pred 5   rep 5    MAE 0.0  bias 0.0
@@ -315,7 +315,7 @@ model expects. **`rest debt`** is break minutes you were owed and did not take.
 You do not have to close the day. Closing happens by itself on the first command
 of the next day.
 
-If you would rather poke at a full tree than build one, `tm init demo --example`
+If you would rather poke at a full tree than build one, `lime init demo --example`
 writes a worked example — outcomes, milestones, tasks, routines, a meeting, a
 deadline — that you can plan and replan against without inventing anything.
 
@@ -327,27 +327,27 @@ The habit is a handful of commands spread over the day.
 
 | when | command | what it is for |
 |---|---|---|
-| you get up | `tm wake --slept 7h30m` | sleep feeds the energy prediction; a short night lowers the whole curve |
-| you sit down to work | `tm arrive lounge` | fixes the day's window and budget, syncs the calendar, plans the day |
-| whenever you wonder | `tm now` | the live current block and the next three segments |
-| starting work | `tm start ^id --energy 4` | begins a block and records the energy you actually have |
-| finishing | `tm done --went 1` / `tm done --partial` / `tm stop` | finished the item / finished the block / gave up on the block |
-| when it goes wrong | `tm energy 3`, `tm break`, `tm interrupt` … `tm resume` | tell `tm` one true thing; the plan follows |
-| when you got it wrong | `tm undo` | reverses the last state change, 50 deep |
-| end of day | `tm review day` | what actually happened, and the first candidate for tomorrow |
+| you get up | `lime wake --slept 7h30m` | sleep feeds the energy prediction; a short night lowers the whole curve |
+| you sit down to work | `lime arrive lounge` | fixes the day's window and budget, syncs the calendar, plans the day |
+| whenever you wonder | `lime now` | the live current block and the next three segments |
+| starting work | `lime start ^id --energy 4` | begins a block and records the energy you actually have |
+| finishing | `lime done --went 1` / `lime done --partial` / `lime stop` | finished the item / finished the block / gave up on the block |
+| when it goes wrong | `lime energy 3`, `lime break`, `lime interrupt` … `lime resume` | tell `lime` one true thing; the plan follows |
+| when you got it wrong | `lime undo` | reverses the last state change, 50 deep |
+| end of day | `lime review day` | what actually happened, and the first candidate for tomorrow |
 
-None of it is compulsory in the sense of blocking anything else: `tm plan`,
-`tm start` and `tm now` all work on a bare tree with no `wake` and no `arrive`.
+None of it is compulsory in the sense of blocking anything else: `lime plan`,
+`lime start` and `lime now` all work on a bare tree with no `wake` and no `arrive`.
 But skipping them costs you more than you would guess:
 
 - With no `arrive`, the window just starts from now, and your location resolves
   to "anywhere" — which uses the **`home` energy curve**. That curve peaks at 4,
-  so a ci-5 item is never scheduled at all until you run `tm arrive`. (It is not
-  *capped* at 3 the way an explicit `tm arrive home` is, so ci-4 work still gets
+  so a ci-5 item is never scheduled at all until you run `lime arrive`. (It is not
+  *capped* at 3 the way an explicit `lime arrive home` is, so ci-4 work still gets
   slots.)
 - With no `wake`, the night is not "zero" — it is **unknown**, and an unknown
   night carries no sleep-debt penalty. A day with no `wake` is predicted exactly
-  as if you had slept well. `tm wake --slept 0m` is what tells `tm` you did not.
+  as if you had slept well. `lime wake --slept 0m` is what tells `lime` you did not.
 
 So `arrive` is what makes the window, the budget and the energy curve honest,
 and `wake` is what lets a short night show up in the plan.
@@ -358,19 +358,19 @@ This is the distinction people get wrong first.
 
 | verb | the item becomes | the remaining time |
 |---|---|---|
-| `tm done` | `[x]` done | gone — you said the item is finished |
-| `tm done --partial` | stays `[ ]`, gets `est:<remainder>` | kept on the item; counts as a finished block |
-| `tm stop` | stays `[ ]`, gets `est:<remainder>` | back in the pool, re-competes with everything else |
-| `tm extend 30m` | still running | the block gets longer, and `est:` grows to match |
+| `lime done` | `[x]` done | gone — you said the item is finished |
+| `lime done --partial` | stays `[ ]`, gets `est:<remainder>` | kept on the item; counts as a finished block |
+| `lime stop` | stays `[ ]`, gets `est:<remainder>` | back in the pool, re-competes with everything else |
+| `lime extend 30m` | still running | the block gets longer, and `est:` grows to match |
 
-`tm done` on a six-block item after one hour marks the whole thing done. Use
+`lime done` on a six-block item after one hour marks the whole thing done. Use
 `--partial` unless you really finished it.
 
-Already done it the wrong way? `tm undo` reverses the last state change and puts
+Already done it the wrong way? `lime undo` reverses the last state change and puts
 the line back as it was:
 
 ```console
-$ tm undo
+$ lime undo
 undid done (done ^m1) · 2 file(s) restored · 9 left
 ```
 
@@ -380,30 +380,30 @@ The stack is 50 deep, and it works on nearly every verb — see
 ### Interruptions, breaks and gaps
 
 ```console
-$ tm break                 # start a break; the running block pauses
+$ lime break                 # start a break; the running block pauses
 break 20m
-$ tm break                 # the same command ends it
+$ lime break                 # the same command ends it
 break ended · 6m of 20m
 ```
 
-`tm break` and `tm pause` are toggles. A second `tm break 10m --where walk`
+`lime break` and `lime pause` are toggles. A second `lime break 10m --where walk`
 while a break is running just ends the break and ignores the arguments.
 
-`tm interrupt` starts a stretch of lost time (it works even with nothing
-running); `tm resume` ends it, replans the rest of the day, and tells you what
+`lime interrupt` starts a stretch of lost time (it works even with nothing
+running); `lime resume` ends it, replans the rest of the day, and tells you what
 fell off:
 
 ```console
-$ tm interrupt
+$ lime interrupt
 interrupted
-$ tm resume
+$ lime resume
 resumed · lost 32m
 ```
 
 If time went missing and you cannot say what happened, attribute it:
 
 ```console
-$ tm idle i --min 60
+$ lime idle i --min 60
 60m attributed to interrupt
 ```
 
@@ -413,19 +413,19 @@ Leaked time is counted, not judged; it turns up in the review as `leak 111m`.
 ### Capture
 
 Anything you think of goes in the inbox first and becomes an item later.
-`tm add` with no `--to` writes to `inbox.md`, as a raw line with no checkbox and
+`lime add` with no `--to` writes to `inbox.md`, as a raw line with no checkbox and
 no id:
 
 ```console
-$ tm add "renew the bike insurance before october"
+$ lime add "renew the bike insurance before october"
 - renew the bike insurance before october → inbox.md
 ```
 
-When you come back to it, `tm triage` shows every inbox line and what the
+When you come back to it, `lime triage` shows every inbox line and what the
 grammar would make of it as it stands:
 
 ```console
-$ tm triage
+$ lime triage
  11  - renew the bike insurance before october
      - [ ] renew the bike insurance before october
 ```
@@ -434,7 +434,7 @@ It does no interpreting — "before october" is still part of the title. Giving 
 a ci, an estimate and a deadline is your job (or the `/triage` skill's):
 
 ```console
-$ tm add "2 30m Renew the bike insurance due:2026-09-30" --to backlog --section Untied
+$ lime add "2 30m Renew the bike insurance due:2026-09-30" --to backlog --section Untied
 - [ ] 2 30m Renew the bike insurance due:2026-09-30 ^xy9n → backlog.md
 ```
 
@@ -443,13 +443,13 @@ keystroke.
 
 ### Reviews
 
-`tm review day`, `tm review week` and `tm review month` print what actually
+`lime review day`, `lime review week` and `lime review month` print what actually
 happened. They are read-only unless you pass `--write`, which stores the text in
 the period's file between `<!-- tm:review start -->` and
 `<!-- tm:review end -->`. `--date` reviews an earlier period.
 
 ```console
-$ tm review week --date 2026-W38
+$ lime review week --date 2026-W38
  Week 2026-W38 · 13 blocks · load 768.0 · planned 19.0b
  milestone hit - · demoted -
  blocks    Mon 3 · Tue 3 · Wed 3 · Thu 3 · Fri 1 · Sat 0 · Sun 0
@@ -479,7 +479,7 @@ what is hot, impossible or overdue, and `carry in/out` is work that moved
 between weeks.
 
 ```console
-$ tm review month --date 2026-09
+$ lime review month --date 2026-09
  Month 2026-09 · outcomes 0/3 · carry-over 29.8b
  outcomes  ○ !1 O1 163% · ○ !1 O2 111% · ○ !3 O3 11%
  churn     m1 (W37,W38) · m2 (W37,W38) · m3 (W37,W38)
@@ -493,7 +493,7 @@ descendant rolls up against the outcome's original estimate.
 
 ### Closing periods
 
-You almost never run `tm close`. The first command after a period ends closes
+You almost never run `lime close`. The first command after a period ends closes
 the previous one, silently. Closing a **day** moves unfinished pinned items into
 the week; closing a **week** demotes unfinished milestones into the month's
 `# Demoted` section and files overdue dated items into `backlog.md` under
@@ -502,7 +502,7 @@ the week; closing a **week** demotes unfinished milestones into the month's
 Run it by hand only to close early, or to drop something as part of the close:
 
 ```console
-$ tm close month --drop '^O3'
+$ lime close month --drop '^O3'
 closed month 2026-09 · 6 moved · 4 demoted · 0 reopened · 1 dropped
 ```
 
@@ -519,71 +519,71 @@ example tree ships for `^m2` — and dropping the item means dropping the line
 you would still work from. The `[~]` goes on the live line, and the record is
 left as it is, `[-]` in the month it belongs to: the demotion it archives did
 happen. (Marking the copy instead would have left the item live and put the id
-on two live lines, which `tm check` rejects.)
+on two live lines, which `lime check` rejects.)
 
 A `--drop` that names something this close cannot act on — a typo, or a live item
 that lives in `backlog.md` — is still an error, not a shrug:
 
 ```console
-$ tm close month --drop '^a1'
-tm: ^a1 is in backlog.md: --drop only names items of month/2026-09.md (or ones this close already carried into month/2026-10.md); drop it where it lives with `tm drop`
+$ lime close month --drop '^a1'
+lime: ^a1 is in backlog.md: --drop only names items of month/2026-09.md (or ones this close already carried into month/2026-10.md); drop it where it lives with `lime drop`
 $ echo $?
 1
 ```
 
-`--drop` belongs to the month close alone. `tm close day --help` and
-`tm close week --help` do not offer it — only `tm close month --help` does —
+`--drop` belongs to the month close alone. `lime close day --help` and
+`lime close week --help` do not offer it — only `lime close month --help` does —
 and typing it on one of them is refused rather than ignored, wherever it is
 typed:
 
 ```console
-$ tm close day --drop '^p1'
-tm: --drop belongs to `tm close month` (§6.3); `tm close day` has no drop list — use `tm drop ^id`
-$ tm close --drop '^p1' day
-tm: --drop belongs to `tm close month` (§6.3); `tm close day` has no drop list — use `tm drop ^id`
+$ lime close day --drop '^p1'
+lime: --drop belongs to `lime close month` (§6.3); `lime close day` has no drop list — use `lime drop ^id`
+$ lime close --drop '^p1' day
+lime: --drop belongs to `lime close month` (§6.3); `lime close day` has no drop list — use `lime drop ^id`
 ```
 
 Each period is its own command, but the flags read the same on either side of
 it:
 
 ```console
-$ tm close --date 2026-09 month
+$ lime close --date 2026-09 month
 closed month 2026-09 · 3 moved · 0 demoted · 0 reopened · 0 dropped
 ```
 
-`tm close month --date 2026-09` is that same close, and so is
-`tm close --drop '^O3' month`. Where you put the flag never changes what it
+`lime close month --date 2026-09` is that same close, and so is
+`lime close --drop '^O3' month`. Where you put the flag never changes what it
 means.
 
 ---
 
 ## Writing items: the line grammar
 
-This is the part of `tm` you will come back to. Everything you tell the planner
+This is the part of `lime` you will come back to. Everything you tell the planner
 about your intentions is one line in one file.
 
-There are two ways to write one. `tm add "…"` assigns the `^id`, validates the
+There are two ways to write one. `lime add "…"` assigns the `^id`, validates the
 grammar and tells you where the line landed — use it for a single item, and for
 anything a script or Claude Code writes. Your editor is better for everything
 else: aligning columns, reordering a section, pasting in ten lines at once,
-writing a calendar file. `tm` re-reads the tree on every command, so hand edits
-need nothing but a save; run `tm check` when you are done.
+writing a calendar file. `lime` re-reads the tree on every command, so hand edits
+need nothing but a save; run `lime check` when you are done.
 
-Calendar files are the one place to be careful. `tm add --to calendar` is
+Calendar files are the one place to be careful. `lime add --to calendar` is
 accepted and appends to `calendar/<this week>.md`, but every line in a calendar
-file must be an `at:<start>/<end>` interval, so an ordinary `tm add` line lands
-there happily and then fails the next `tm check`:
+file must be an `at:<start>/<end>` interval, so an ordinary `lime add` line lands
+there happily and then fails the next `lime check`:
 
 ```console
-$ tm add "- [ ] 1 1b thing" --to calendar
+$ lime add "- [ ] 1 1b thing" --to calendar
 - [ ] 1 1b thing ^4bg6 → calendar/2026-W37.md
-$ tm check
+$ lime check
 calendar/2026-W37.md:1: error[calendar-shape]: a calendar line must be an interval (`at:<start>/<end>`)
 1 error, 0 warnings
 ```
 
 Write calendar entries by hand instead, with the `manual` flag, so
-`tm sync-cal` does not wipe them on the next sync.
+`lime sync-cal` does not wipe them on the next sync.
 
 ### Anatomy of a line
 
@@ -613,7 +613,7 @@ ignored.
 | `  - [ ] 3 1b Task` (indented) | **no** — indentation is not nesting; this is prose |
 | `-[ ] 3 1b Task` (no space) | no |
 | `* [ ] 3 1b Task` | no |
-| `- Just a note` | **yes** — an item with no state. `tm check` complains, and `--fix-ids` will write an `^id` into your note |
+| `- Just a note` | **yes** — an item with no state. `lime check` complains, and `--fix-ids` will write an `^id` into your note |
 | `- [ ]` | yes — an item with an empty title |
 
 To write a bulleted note inside a plan file, indent it two spaces.
@@ -623,14 +623,14 @@ To write a bulleted note inside a plan file, indent it two spaces.
 | written | means | does the planner see it? |
 |---|---|---|
 | `[ ]` | to do | yes |
-| `[>]` | in progress (written by `tm start`) | yes |
+| `[>]` | in progress (written by `lime start`) | yes |
 | `[x]` (or `[X]`) | done | no |
-| `[-]` | demoted — archived by a week close or `tm demote` | no |
-| `[~]` | dropped (`tm drop`) | no |
+| `[-]` | demoted — archived by a week close or `lime demote` | no |
+| `[~]` | dropped (`lime drop`) | no |
 | `[?]` | waiting on someone or something; pairs with `waiting:<date>` | no — listed under `waiting:` in the diagnostics |
 
 The state may be left out in `routines.md`, `optional.md` and `inbox.md`.
-Anywhere else, a missing state is a `tm check` error.
+Anywhere else, a missing state is a `lime check` error.
 
 **ci** (the first word after the state) is the item's *min-energy*: how sharp you
 need to be to do it well, 0–5. **Estimate** (the next word) is `Nb` blocks, `Nm`
@@ -639,21 +639,21 @@ two slots.
 
 | line | what actually happens |
 |---|---|
-| `- [ ] 7 2b Renew the permit` | `7` is not a ci, so `7` *and* `2b` fall into the title. `tm check` catches this one |
+| `- [ ] 7 2b Renew the permit` | `7` is not a ci, so `7` *and* `2b` fall into the title. `lime check` catches this one |
 | `- [ ] 6 out of range ci` | title is `6 out of range ci`, ci falls back to the file default. **No warning** |
 | `- [ ] 3 2d Days est` | `2d` is not a valid estimate; it becomes title text and the item has **no estimate**. No warning |
 | `- [ ] Title with 2b in it` | `2b` is just a word — estimates only count in the slot |
 | `- [ ] 30m walk the dog` | fine: no ci, estimate `30m`, title `walk the dog` |
 
 > **The single most common silent failure: an item with no estimate anywhere is
-> never scheduled, and `tm check` says nothing about it.**
+> never scheduled, and `lime check` says nothing about it.**
 >
 > ```console
-> $ tm add "3 Write the grant summary" --to week --section Tasks
+> $ lime add "3 Write the grant summary" --to week --section Tasks
 > - [ ] 3 Write the grant summary ^4v9j → week/2026-W37.md
-> $ tm check
+> $ lime check
 > no problems
-> $ tm plan
+> $ lime plan
 > 2026-09-07 · window 09:00–17:00 · budget 6 blocks
 > 09:00  4 p5   Sort the photos                   1b
 > 10:00  ·      rest 1h
@@ -729,14 +729,14 @@ is kept and reported as an error — the field is simply absent until you fix it
 
 | field | what it does | accepted | example |
 |---|---|---|---|
-| `est:` | the *remaining* estimate. Overrides the leading estimate for everything the planner does. Usually written by `tm stop`, `tm done --partial`, `tm extend`, a close — and by `tm edit ^id est=…`, which changes this token whenever the line already carries one | `Nb Nm Nh NhMm` (**not** `Nd`) | `est:4h53m` |
+| `est:` | the *remaining* estimate. Overrides the leading estimate for everything the planner does. Usually written by `lime stop`, `lime done --partial`, `lime extend`, a close — and by `lime edit ^id est=…`, which changes this token whenever the line already carries one | `Nb Nm Nh NhMm` (**not** `Nd`) | `est:4h53m` |
 | `ci:` | min-energy as a field — the only way to give a ci on a line with no state (routines, optionals). Beats a positional ci | `ci:0`–`ci:5` | `ci:0` |
 
-**Stamps `tm` writes. Do not hand-edit these.**
+**Stamps `lime` writes. Do not hand-edit these.**
 
 | field | value | written by |
 |---|---|---|
-| `demoted:` | `W37`, `W37,W38`, `D07` | a week or day close, or `tm demote` |
+| `demoted:` | `W37`, `W37,W38`, `D07` | a week or day close, or `lime demote` |
 | `waiting:` | a date | set with the `[?]` state when an `on-event:` item is completed |
 
 Two `demoted:` stamps on one line is the signal that the work has failed twice
@@ -770,26 +770,26 @@ already appeared on the line — otherwise they are title text.
 | `atomic` | must get contiguous slots; never split across a wall |
 | `hot` | forces priority 0 — the row is marked `⚠` and `--explain` says `p = 0 (hot flag)` |
 | `travel-day` | on an interval that lands today, the whole block budget goes to zero: routines, walls and optionals stay, no work is planned |
-| `manual` | in a `calendar/` file, the line survives `tm sync-cal` (everything else there is rewritten from the feed) |
+| `manual` | in a `calendar/` file, the line survives `lime sync-cal` (everything else there is rewritten from the feed) |
 | `open` | parsed, preserved, and **completely inert** — nothing reads it |
 
-**Write flags at the very end of the line, after the `^id`.** `tm check` only
+**Write flags at the very end of the line, after the `^id`.** `lime check` only
 half-catches a misplaced one. It warns when the flag word is the **last** word of
 the title:
 
 ```console
-$ tm check
+$ lime check
 week/2026-W37.md:3: warning[bad-value]: title ends with `hot`: flags count only after a `@ # ! ^ key:` token; move it after one if it was meant as a flag
 0 errors, 1 warning
 ```
 
 That came from `- [ ] 3 1b Do the thing hot ^z2`. But write
 `- [ ] 3 1b hot Task ^h1` — the flag word anywhere earlier in the title — and
-nothing warns at all. `tm check` says `no problems`, and the item is planned at
+nothing warns at all. `lime check` says `no problems`, and the item is planned at
 its ordinary priority:
 
 ```console
-$ tm plan --explain ^h1
+$ lime plan --explain ^h1
 p = k(3) + 2 (no due, no floor) = 5; deps ok
 ```
 
@@ -800,12 +800,12 @@ never written it.
 ### Ids, parents and tags
 
 **`^id`** is the handle every command uses. It can be any run of letters,
-digits, `_` and `-`; `tm` generates four characters from an alphabet with no
+digits, `_` and `-`; `lime` generates four characters from an alphabet with no
 `l`, `o`, `0` or `1` in it, so you never squint at an id. Ids are global across
-the whole tree, not per file. `tm add` assigns one and prints it;
-`tm check --fix-ids` writes one onto every line that lacks one. Lines in
+the whole tree, not per file. `lime add` assigns one and prints it;
+`lime check --fix-ids` writes one onto every line that lacks one. Lines in
 `routines.md`, `optional.md` and `inbox.md` get no id — those are addressed by
-their title (`tm skip workout`).
+their title (`lime skip workout`).
 
 **`@parent`** links an item to the item with that `^id` (or, for a routine, that
 title). Parents may live in any file — hierarchy and horizon are independent.
@@ -851,7 +851,7 @@ is `backlog.md`.
 
 ```text
 plan/
-├── config.toml            # settings; `tm` finds a plan directory by this file sitting beside the rest
+├── config.toml            # settings; `lime` finds a plan directory by this file sitting beside the rest
 ├── CLAUDE.md              # the rules for Claude Code
 ├── inbox.md               # capture, untriaged, any wording
 ├── backlog.md             # undated work, far-out dated work, series
@@ -867,7 +867,7 @@ plan/
 
 **An item's horizon is decided purely by the path its line sits on.** There is no
 `horizon:` field. Moving work between horizons means moving the line — with
-`tm move ^id week`, or by cutting and pasting in your editor. That is the whole
+`lime move ^id week`, or by cutting and pasting in your editor. That is the whole
 mechanism, and it is why the tree is worth keeping tidy.
 
 | file | horizon | default ci | candidate today? |
@@ -900,7 +900,7 @@ What each is for:
   never changes.
 - **`optional.md`**: ci 0, priority 5, rest slots only. An optional never
   displaces work. `max:4h/w` keeps it honest.
-- **`calendar/`** is rewritten by `tm sync-cal`. Your own entries there need the
+- **`calendar/`** is rewritten by `lime sync-cal`. Your own entries there need the
   `manual` flag or they are wiped on the next sync.
 
 ### The day file
@@ -963,27 +963,27 @@ remaining estimate lands in the month's `# Demoted` section:
 ```
 
 **Unfinished children are deleted from the week file outright.** They get no
-`[-]` line, no copy in the month, no line anywhere. This is the one place `tm`
+`[-]` line, no copy in the month, no line anywhere. This is the one place `lime`
 removes text you wrote, and it is worth seeing before it happens to you:
 
 ```console
-$ tm close week
+$ lime close week
 closed week 2026-W37 · 3 moved · 5 demoted · 0 reopened · 0 dropped
 ```
 
-That was `tm init demo --example`, whose `# Tasks` section held `^t1 ^t3 ^t4
+That was `lime init demo --example`, whose `# Tasks` section held `^t1 ^t3 ^t4
 ^t5`. Afterwards all four are gone — `grep` finds them nowhere in the tree but
 the day file's `## Log`. The *work* is not lost, because it is carried as a
 number in the parent's `est:`, but the breakdown is, and only version control
 will get it back. If a subtask is worth keeping as a sentence, promote it to a
 root of its own before the week closes, with
-`tm move ^id week --section Milestones` or your editor.
+`lime move ^id week --section Milestones` or your editor.
 
 What reaches the parent is `max(the parent's own remaining, the sum of the
 deleted children's own estimates)` — **not** their sum on top of it. A subtask is
 normally a decomposition of its parent, so a `6b` milestone with three `1b`
 children still demotes as `est:6b`; the children's minutes only show up when they
-add to more than the parent claimed, which is `tm` telling you the parent's
+add to more than the parent claimed, which is `lime` telling you the parent's
 estimate was stale. A parent with no estimate of its own picks up the children's
 total:
 
@@ -996,7 +996,7 @@ total:
 copy under `# Demoted` (`demoted:W36,W37`); a second demotion never writes a
 second line, and neither does a close catching up on periods you were away for —
 the record is moved into the month the close is running in, stamps and all. That
-is what keeps `tm check` quiet: an `^id` may be on the `[-]` line in the archived
+is what keeps `lime check` quiet: an `^id` may be on the `[-]` line in the archived
 week and on its one archive copy, and nowhere else.
 
 The **remaining moves with it**. The copy is the only line that carries what a
@@ -1008,9 +1008,9 @@ of October's close as `est:4b demoted:W37,W41`, not as the bare line it had
 shrunk to.
 
 What that floor never does is argue with **you**. An estimate on the line
-itself is yours — `tm edit ^id est=…` writes the `est:` token when the line
+itself is yours — `lime edit ^id est=…` writes the `est:` token when the line
 already carries one and the leading estimate when it does not, and `est:` is
-also what `tm stop` and `tm done --partial` leave — and all of them land on the
+also what `lime stop` and `lime done --partial` leave — and all of them land on the
 live line, never on the archive copy. Re-scope that parent to `1b` and October
 records `est:1b`: a number you wrote wins over a number an older close
 measured, downwards as well as upwards. The floor applies only where the line
@@ -1025,25 +1025,25 @@ are.
 Bringing work back is one command, and it lands in this week's file:
 
 ```console
-$ tm readopt ^m1
+$ lime readopt ^m1
 readopted ^m1 → week/2026-W38.md
 ```
 
 The state goes back to `[ ]` and **the stamp is kept on purpose**. A line
 carrying `demoted:W37,W38` has failed to happen twice; that is a decision you
-have been avoiding, not a scheduling problem. `tm review month` lists those under
+have been avoiding, not a scheduling problem. `lime review month` lists those under
 `cuts`.
 
 `readopt` is the demoted line's verb, and it is the only one, so it holds to two
 rules:
 
 - **An item that was never demoted is refused**, because there is nothing to
-  bring back: `` tm: ^t1 is in week 2026-W37: not demoted, so there is nothing to
-  readopt (use `tm move`) ``, exit 1. Use `tm move ^t1 <horizon>` to move a live
+  bring back: `` lime: ^t1 is in week 2026-W37: not demoted, so there is nothing to
+  readopt (use `lime move`) ``, exit 1. Use `lime move ^t1 <horizon>` to move a live
   line.
 - **An item that is still live somewhere gets its archive copy folded in**, not
   copied. Right after a week close the id is on two lines: the `[-]` record and
-  the live line you carried forward. `tm readopt ^m2 --to week/2026-W38.md` then
+  the live line you carried forward. `lime readopt ^m2 --to week/2026-W38.md` then
   moves *the live line* into W38, adds the copy's `demoted:` stamps **and its
   `est:`** to it, and deletes the copy — one line, one id. Ids are global, so
   nothing else would leave the tree valid. The estimate comes across because the
@@ -1054,7 +1054,7 @@ rules:
 On the example tree, where `^m2` ships as exactly that pair:
 
 ```console
-$ tm readopt ^m2
+$ lime readopt ^m2
 readopted ^m2 → week/2026-W37.md
 $ grep '\^m2' week/2026-W37.md
 - [ ] 4 6b Rollback path passes tests   @O2 est:3b demoted:W37 ^m2
@@ -1066,7 +1066,7 @@ The line still reads `6b` — the original estimate is never rewritten — and
 ### Two traps about file names
 
 1. **A stray `.md` file in the plan directory is still parsed**, and its `- [ ]`
-   lines become real candidates in `tm plan`. You get one warning
+   lines become real candidates in `lime plan`. You get one warning
    (`` warning[bad-value]: unknown file kind `notes.md`; treated as backlog ``)
    and no validation of the lines themselves. Keep loose Markdown out of the
    plan directory.
@@ -1078,17 +1078,17 @@ The line still reads `6b` — the original estimate is never rewritten — and
 
 ## Why the day came out that way
 
-Nothing about the timetable is arbitrary, and `tm` will explain any part of it.
+Nothing about the timetable is arbitrary, and `lime` will explain any part of it.
 The one command to remember is:
 
 ```console
-$ tm plan --explain ^m1
+$ lime plan --explain ^m1
 p = k(1) + 2 (no due, no floor) = 3; deps ok
 ```
 
 ### Window and budget
 
-`tm arrive` fixes two numbers for the day.
+`lime arrive` fixes two numbers for the day.
 
 - **Window** — when you can work: `min(arrival + window_hours, window_cap)`,
   plus every appointment minute inside it. Meetings do not eat your working day;
@@ -1107,7 +1107,7 @@ bites. The window end moves later with your arrival, but only until it hits
 `window_cap`; the budget does not move at all:
 
 ```console
-$ tm arrive lounge
+$ lime arrive lounge
 arrive lounge 16:00 · window 16:00–19:00 · budget 6 blocks
 ```
 
@@ -1133,7 +1133,7 @@ today". A window that closes with the instance unplaced is a miss, and `on-miss:
 says what happens: `expire` drops it and carries nothing, `persist` keeps it
 pending and overdue (which makes it `p 0`), `next` counts it as skipped and
 leaves the next occurrence alone. Instances live only in the log, which is why
-`tm routine done lunch` and `tm skip workout` change no file.
+`lime routine done lunch` and `lime skip workout` change no file.
 
 Then four gates, checked in this order. A blocked item is **kept in the output
 with its reason**, never silently dropped:
@@ -1181,18 +1181,18 @@ the binned cases. Getting worse is unlimited, and a jump straight to `p = 0` is
 never held back. `optional.md` lines are exempt: they are pinned at 5. The point
 is that the queue does not churn.
 
-Four real explanations, all from the `tm init demo --example` tree, so you can
+Four real explanations, all from the `lime init demo --example` tree, so you can
 repeat them. On the Monday, a milestone under an `!1` outcome with no deadline:
 
 ```console
-$ tm plan --explain ^m1
+$ lime plan --explain ^m1
 p = k(1) + 2 (no due, no floor) = 3; deps ok
 ```
 
 And a problem set due Friday, four days out — dated, but not yet under pressure:
 
 ```console
-$ tm plan --explain ^d1
+$ lime plan --explain ^d1
 p = k(3) + bin(u=0.26 → +1) = 4; need 7.8b, avail 30b by 2026-09-11; deps ok; cap 2b/d: 0b used
 ```
 
@@ -1200,27 +1200,27 @@ Run the same tree on the Friday instead. A weekly routine whose window has gone
 by, and the same problem set on the day it is due with none of it done:
 
 ```console
-$ tm plan --explain laundry
+$ lime plan --explain laundry
 p = 0 (overdue, on-miss persist); deps ok
-$ tm plan --explain ^d1
+$ lime plan --explain ^d1
 p = 0 (IMPOSSIBLE: needs 7.8b, 6b available by 2026-09-11); deps ok; cap 2b/d: 0b used
 ```
 
-`IMPOSSIBLE` is `tm` telling you the deadline cannot be met with the days and
+`IMPOSSIBLE` is `lime` telling you the deadline cannot be met with the days and
 caps you have. It still schedules what it can; the decision is yours.
 
 **Ties are broken by line order.** Rank is where the line sits in its section —
-that is what `tm rank ^id 1` and the TUI's `J`/`K` rewrite. If you want the plan
+that is what `lime rank ^id 1` and the TUI's `J`/`K` rewrite. If you want the plan
 to name a task rather than its parent milestone, move the task above it: **a
 parent competes with its own children**, and a milestone that sits higher in the
 file usually wins.
 
-`tm rank` only reorders inside one heading, though. In the layout this manual
+`lime rank` only reorders inside one heading, though. In the layout this manual
 recommends — milestones under `# Milestones`, their tasks under `# Tasks` — a
 task can never be ranked above its own parent:
 
 ```console
-$ tm rank ^t1 1
+$ lime rank ^t1 1
 ^t1 already at position 1
 ```
 
@@ -1229,9 +1229,9 @@ $ tm rank ^t1 1
 into the parent's section first, then rank it:
 
 ```console
-$ tm move ^t1 week --section Milestones
+$ lime move ^t1 week --section Milestones
 ^t1 week/2026-W37.md → week/2026-W37.md
-$ tm rank ^t1 1
+$ lime rank ^t1 1
 ^t1 → position 1
 ```
 
@@ -1241,7 +1241,7 @@ can be dropped off the end of the day.
 
 ### Energy, ci, and slots
 
-This is the idea that makes `tm` different from a queue.
+This is the idea that makes `lime` different from a queue.
 
 **Every item has a `ci`: the energy it needs.** Deep, difficult work is ci 4 or
 5. Admin is ci 2. Watching a video is ci 0.
@@ -1254,11 +1254,11 @@ debt and for anything you have reported today.
 the whole mechanism, and everything else follows from it:
 
 - Working at `home` caps slot energy at `home_max_ci` (3) — so ci 4 and 5 work is
-  never scheduled there. `tm plan --allow-home` lifts the cap for one run. The
-  cap is tied to the name `home`, not to the curve, so a location `tm` has not
+  never scheduled there. `lime plan --allow-home` lifts the cap for one run. The
+  cap is tied to the name `home`, not to the curve, so a location `lime` has not
   met before borrows the `home` curve without the cap.
 - Reporting a low energy re-plans the rest of the day and drops the work you
-  cannot do. `tm energy 4` on a morning full of ci-5 items pulls the ci-4 work
+  cannot do. `lime energy 4` on a morning full of ci-5 items pulls the ci-4 work
   forward and pushes the rest out; what it cost you shows up as the `deferred:`
   diagnostic.
 - A slot whose energy is 2 or more above the item's ci is marked `↓` — a good
@@ -1269,7 +1269,7 @@ the whole mechanism, and everything else follows from it:
 Report energy whenever it changes — mid-block is fine:
 
 ```console
-$ tm energy 4
+$ lime energy 4
 energy 4 (pred 5) at 08:00 · replanned
 ```
 
@@ -1328,8 +1328,8 @@ Two things about the numbers:
   ci-2 item placed in a good hour shows a 3 or a 4. Only on finished rows, which
   have no slot, does it fall back to the item's ci.
 - `2b×1.6` means "two blocks as written, scaled by the learned 1.6× multiplier".
-  Once `tm` has learned that your estimates run long, the multiplied figure is
-  what it actually budgets — and `tm done` measures you against it. The estimate
+  Once `lime` has learned that your estimates run long, the multiplied figure is
+  what it actually budgets — and `lime done` measures you against it. The estimate
   column always shows the *original* estimate, not the remaining `est:`.
 
 ### The diagnostics
@@ -1357,7 +1357,7 @@ They come out in a fixed order, and any of them can be missing on a given day:
 | `hot: d1` | the items now at `p 0` through deadline pressure |
 | `<id> conflicts with <id>` | two appointments overlap; nothing is scheduled in the overlap until you move one |
 | `t5 blocked by t4` | an `after:` dependency is not satisfied |
-| `deferred: m2 · d1 · t3 · c2` | work that would have fitted at the *predicted* energy but not at the one you reported. This line is what a `tm energy 4` costs you |
+| `deferred: m2 · d1 · t3 · c2` | work that would have fitted at the *predicted* energy but not at the one you reported. This line is what a `lime energy 4` costs you |
 | `waiting: a4` | a `[?]` item, waiting on an event |
 | `dropped: …` | eligible work that did not fit today. Not `[~]` dropped — just not today |
 | ``travel day: no blocks planned (`travel-day` wall today)`` | a `travel-day` interval landed today, so the block budget is zero |
@@ -1376,18 +1376,18 @@ to scroll past:
 IMPOSSIBLE d1 CS 234 pset 2: needs 7.8b, 0b available by 2026-09-11
 ```
 
-`tm plan --diff` adds one more line, `diff: +0 −0 moved 2 · drift 8m`: what
+`lime plan --diff` adds one more line, `diff: +0 −0 moved 2 · drift 8m`: what
 changed since the last plan, and how far the day has slid.
 
-### What tm learns about you
+### What lime learns about you
 
-`tm` keeps an append-only log of everything you do (`.tm/log.jsonl`) and fits a
+`lime` keeps an append-only log of everything you do (`.tm/log.jsonl`) and fits a
 small model from it.
 
 ```console
-$ tm model --fit
+$ lime model --fit
 fitted from 22 observations
-$ tm model --show
+$ lime model --show
 model  fitted 2026-09-18 · 22 obs
 energy    hsw  0  1  2  3  4  5  6  7  8  9 10 11
   home         3  4  4  4  3  3  3  3  2  2  2  2
@@ -1403,19 +1403,19 @@ Three things are learned: the **energy curve** per location by hours since wake;
 the **duration multiplier** per tag (how much longer things take than you say);
 and your **habits** per weekday (when you start, where you are), which feed the
 week-ahead capacity grid. Until there is data, the config priors are used —
-`tm model` will say `not fitted (using config priors)`.
+`lime model` will say `not fitted (using config priors)`.
 
-`tm model --compare` scores the stored model against a fresh fit and says which
+`lime model --compare` scores the stored model against a fresh fit and says which
 it would keep.
 
 One caveat: partial completions are fed into the duration fit as
 `actual ÷ full estimate`, so a day spent doing an hour at a time on big items can
-teach `tm` that you finish early when you did not.
+teach `lime` that you finish early when you did not.
 
 ### The week ahead
 
 ```console
-$ tm plan --week
+$ lime plan --week
 day          tot     5     4     3     2     1     0
 Mon 09-07   6h50    4h    2h   50m     ·     ·     ·
 Tue 09-08     6h    3h    3h     ·     ·     ·     ·
@@ -1436,30 +1436,30 @@ what to look at before promising anything.
 ## The terminal UI
 
 ```sh
-tm tui
+lime tui
 ```
 
 Five screens over the same files, with every action running the same code as the
 equivalent command. It watches the plan directory, so edits you make in your
 editor show up within a second, and it replans on its own every minute.
-`tm undo` works across everything it does.
+`lime undo` works across everything it does.
 
 It needs a real terminal:
 
 ```console
-$ tm tui < /dev/null
-tm: tm tui needs a terminal (stdout is not a tty) — every verb of §13 also works on its own
+$ lime tui < /dev/null
+lime: lime tui needs a terminal (stdout is not a tty) — every verb of §13 also works on its own
 ```
 
 That message, and every `--help` screen, cites `§` numbers from the design
-document `tm` was built to. You do not have it and you do not need it —
+document `lime` was built to. You do not have it and you do not need it —
 everything those sections say that affects you is in this manual. Read `(§7.1)`
 as "there is a reason for this", not as a chapter you were meant to have read.
 
 The message is nearly true: every planning and clock action has a command. Two
 TUI keys have no command-line twin — `n`, which writes a note into the day
 file's `## Log` (from the command line, type it into `## Notes` yourself), and
-`l`, whose nearest equivalent is re-running `tm arrive <loc>`.
+`l`, whose nearest equivalent is re-running `lime arrive <loc>`.
 
 ### The frame
 
@@ -1511,7 +1511,7 @@ moves the Timeline selection to that segment.
 ### Screen 1 — Today
 
 ```text
-tm · Mon 2026-09-07 · 10:42 · lounge · wake 06:05 (7h) · pred 5 ·  ● 0/6 · leak 0m · adherence 17% · window → 16:00 · lost 0
+lime · Mon 2026-09-07 · 10:42 · lounge · wake 06:05 (7h) · pred 5 ·  ● 0/6 · leak 0m · adherence 17% · window → 16:00 · lost 0
                   █████▒▒ ▒▒▒▒▒▒██████████▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒∙∙∙∙∙∙       █████████████                               ▲ 10:42
       ██████████████████████████████████████████                                                                      plan @07:00
 ┌ Timeline ─────────────────────────────────────┐┌ Now ──────────────────────────────────────┐┌ Week W37 · 0/25 ─────────────────┐
@@ -1615,7 +1615,7 @@ deadline, `u` is their ratio), **Waiting** (days waited against the timeout), an
 
 ### Screen 4 — Review
 
-The same text `tm review` prints, for the day, the week or the month; `h`/`l`
+The same text `lime review` prints, for the day, the week or the month; `h`/`l`
 switch period. **Note that `w` ("write to the file") and `c` ("ask Claude Code
 for prose") do not act** — they print the command into the hint line for you to
 run yourself.
@@ -1643,7 +1643,7 @@ an empty one:
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Line 2 is the live preview — the exact line `tm add` would write and the file it
+Line 2 is the live preview — the exact line `lime add` would write and the file it
 would go to — colour-coded green, yellow (a warning) or red (refused). `Tab`
 cycles the destination: week `#Milestones` → week `#Tasks` → `backlog.md` →
 today's `#Pinned` → `inbox.md`. `Enter` saves it and removes the inbox line it
@@ -1670,7 +1670,7 @@ then the shared row below, for anything the screen did not want.
 |---|---|
 | `1` `2` `3` `4` `5` | Today · Queue · Necessities · Review · Inbox |
 | `?` | the help overlay |
-| `:` | command line — any `tm` verb with its flags, quoting supported |
+| `:` | command line — any `lime` verb with its flags, quoting supported |
 | `q`, `Ctrl-C` | quit |
 | `R` | sync the calendar, then replan |
 
@@ -1693,16 +1693,16 @@ the order between them never shows.
 
 | key | does | runs |
 |---|---|---|
-| `d` | finish the running block | `tm done` |
-| `x` | extend by one block | `tm extend` |
-| `s` | stop; the remainder re-competes | `tm stop` |
-| `b` then `w`/`s`/`b`/`p` | break: walk / seat / bed / phone | `tm break --where …` |
-| `i` | an interruption began | `tm interrupt` |
-| `0` then `0`–`5` | report your energy now | `tm energy N` |
+| `d` | finish the running block | `lime done` |
+| `x` | extend by one block | `lime extend` |
+| `s` | stop; the remainder re-competes | `lime stop` |
+| `b` then `w`/`s`/`b`/`p` | break: walk / seat / bed / phone | `lime break --where …` |
+| `i` | an interruption began | `lime interrupt` |
+| `0` then `0`–`5` | report your energy now | `lime energy N` |
 | `l` | set your location | — |
-| `K` | skip today's instance of the selected routine | `tm skip` |
+| `K` | skip today's instance of the selected routine | `lime skip` |
 | `n` | write a note into `## Log` | — |
-| `Space` | pause / unpause the timer | `tm pause` |
+| `Space` | pause / unpause the timer | `lime pause` |
 
 Energy is `0` **then** a digit, because `1`–`5` alone are the screens. And note
 the capital in `K`: **lowercase `k` moves the selection up, `K` skips a
@@ -1728,9 +1728,9 @@ anywhere. The `:` line takes any verb with its flags, quoting included:
 `?` shows the whole map at any time:
 
 ```text
-┌ Keys — tm-spec §12.6 ───────────────────────────────────────────────────────────┐
+┌ Keys — lime-spec §12.6 ───────────────────────────────────────────────────────────┐
 │  1–5          screens: Today · Queue · Necessities · Review · Inbox             │
-│  ?            this help  ·  :  command line (any tm verb)  ·  q  quit           │
+│  ?            this help  ·  :  command line (any lime verb)  ·  q  quit           │
 │  e / Enter    open the selected line in the editor / drill into it              │
 │  r / R        replan (resume, when interrupted) · sync calendar + replan        │
 │  j / k        move the selection  ·  mouse: hover the day bar, click to select  │
@@ -1787,75 +1787,75 @@ block, `b` starts a break, `i` opens an interruption. `t` and `l` only record.
 Global flags, usable before or after the verb: `--json` (machine-readable
 output, on both paths: the result on stdout when the command works, one error
 object on stderr when it does not — see [Scripting](#scripting)) and
-`--dir <path>`. Without `--json`, errors stay `tm: <message>` on stderr.
+`--dir <path>`. Without `--json`, errors stay `lime: <message>` on stderr.
 
-Exit codes: **0** ok · **1** an ordinary error · **2** only from `tm check`, and
+Exit codes: **0** ok · **1** an ordinary error · **2** only from `lime check`, and
 only when there is at least one *error* · **3** a write conflict, meaning a plan
-file changed under `tm` and needs reconciling by hand.
+file changed under `lime` and needs reconciling by hand.
 
-Every verb has its own `tm <verb> --help` with the exact flags.
+Every verb has its own `lime <verb> --help` with the exact flags.
 
 ### Starting and finishing a day
 
 | command | what it does |
 |---|---|
-| `tm init [DIR] [--example] [--force]` | create a plan directory: config, files, `CLAUDE.md`, skills, hooks. The directory is `DIR`, else `--dir`, else `./plan` — `DIR` wins when you give both. `--example` fills it with a worked example. Refuses a non-empty directory without `--force`. **Not undoable** |
-| `tm wake [TIME] [--slept 7h] [--onset 20m]` | record when you woke. `TIME` is zero-padded `HH:MM` |
-| `tm arrive [LOC] [--at HH:MM]` | set the location, sync the calendar, compute window and budget, plan the day |
-| `tm plan [--week] [--diff] [--explain ^ID] [--allow-home]` | plan today and rewrite the day file's generated block. `--week` prints the capacity grid instead; `--explain` prints one item's priority and prints no timetable |
-| `tm now` | the current block and the next three segments. Read-only, always live |
-| `tm review <day\|week\|month> [--date D] [--write]` | the period's numbers. `--write` stores it in the file |
-| `tm close <day\|week\|month> [--date D]` | close a period early. Normally automatic. Each period is its own command, so `tm close day --help` shows only the flags a day close has; the flags work on either side of the period (`tm close --date D month` = `tm close month --date D`) |
-| `tm close month [--drop ^ID]` | …and the drop list is the month close's alone (§6.3). `tm close day --drop ^id` is an error, not a shrug |
+| `lime init [DIR] [--example] [--force]` | create a plan directory: config, files, `CLAUDE.md`, skills, hooks. The directory is `DIR`, else `--dir`, else `./plan` — `DIR` wins when you give both. `--example` fills it with a worked example. Refuses a non-empty directory without `--force`. **Not undoable** |
+| `lime wake [TIME] [--slept 7h] [--onset 20m]` | record when you woke. `TIME` is zero-padded `HH:MM` |
+| `lime arrive [LOC] [--at HH:MM]` | set the location, sync the calendar, compute window and budget, plan the day |
+| `lime plan [--week] [--diff] [--explain ^ID] [--allow-home]` | plan today and rewrite the day file's generated block. `--week` prints the capacity grid instead; `--explain` prints one item's priority and prints no timetable |
+| `lime now` | the current block and the next three segments. Read-only, always live |
+| `lime review <day\|week\|month> [--date D] [--write]` | the period's numbers. `--write` stores it in the file |
+| `lime close <day\|week\|month> [--date D]` | close a period early. Normally automatic. Each period is its own command, so `lime close day --help` shows only the flags a day close has; the flags work on either side of the period (`lime close --date D month` = `lime close month --date D`) |
+| `lime close month [--drop ^ID]` | …and the drop list is the month close's alone (§6.3). `lime close day --drop ^id` is an error, not a shrug |
 
 ### Working
 
 | command | what it does |
 |---|---|
-| `tm start <ID> [--energy N]` | start a block. Asks for your energy on a terminal. Accepts a routine's name as well as an id. `N` is 0–5; anything else is an error |
-| `tm done [ID] [--partial] [--went 1\|2\|3]` | finish the running block, or an item retrospectively. `--went` is 1 fine, 2 hard, 3 collapsed; anything else is an error |
-| `tm extend [BY]` | extend the running block; default one block. Rewrites the item's `est:` |
-| `tm stop` | stop the running block; the remainder goes back in the pool |
-| `tm pause` | pause / unpause the running timer (a toggle) |
-| `tm break [DUR] [--where walk\|seat\|bed\|phone]` | start a break; **run it again to end it** |
-| `tm interrupt` / `tm resume` | an interruption began / ended. `resume` replans |
-| `tm energy <0-5> [--at HH:MM]` | report energy now; replans the rest of the day |
-| `tm idle <w\|b\|t\|i\|l> [--min N]` | attribute a gap: work, break, routine, interruption, leak |
-| `tm skip <NAME>` | skip today's instance of a routine |
-| `tm routine done <NAME> [--min N]` | mark today's routine instance done |
-| `tm event <NAME> [ID]` | record a named event; resolves `on-event:` and `after:event:` |
+| `lime start <ID> [--energy N]` | start a block. Asks for your energy on a terminal. Accepts a routine's name as well as an id. `N` is 0–5; anything else is an error |
+| `lime done [ID] [--partial] [--went 1\|2\|3]` | finish the running block, or an item retrospectively. `--went` is 1 fine, 2 hard, 3 collapsed; anything else is an error |
+| `lime extend [BY]` | extend the running block; default one block. Rewrites the item's `est:` |
+| `lime stop` | stop the running block; the remainder goes back in the pool |
+| `lime pause` | pause / unpause the running timer (a toggle) |
+| `lime break [DUR] [--where walk\|seat\|bed\|phone]` | start a break; **run it again to end it** |
+| `lime interrupt` / `lime resume` | an interruption began / ended. `resume` replans |
+| `lime energy <0-5> [--at HH:MM]` | report energy now; replans the rest of the day |
+| `lime idle <w\|b\|t\|i\|l> [--min N]` | attribute a gap: work, break, routine, interruption, leak |
+| `lime skip <NAME>` | skip today's instance of a routine |
+| `lime routine done <NAME> [--min N]` | mark today's routine instance done |
+| `lime event <NAME> [ID]` | record a named event; resolves `on-event:` and `after:event:` |
 
 ### Changing the tree
 
 | command | what it does |
 |---|---|
-| `tm add <LINE> [--to WHERE] [--section S]` | add a line. `--to` takes `inbox` (default), `backlog` (alias `none`), `week`, `month`, `day`, `routines`, `optional`, `calendar`, or a path like `week/2026-W37.md`. A line put in `calendar` must be an `at:` interval or `tm check` will fail |
-| `tm edit <ID> [K=V…] [--set K=V] [--unset KEY]` | edit fields byte-faithfully. `ci=`, `est=`, `due=`, `title=`, `p=`, or any `key=value`. `est=` sets what is *left* of the item: the `est:` token on a line that already carries one, the leading estimate on a line that does not — so the estimate as written stays the historical number `tm` calibrates against. To change that one on a line with a remainder, `--unset est` first. `--unset` also clears the positional `ci` and `!p` |
-| `tm move <ID> <TO> [--section S]` | move an item to another horizon file |
-| `tm rank <ID> <N>` | move an item to position N of its section |
-| `tm demote <ID>` | demote a week item into the month's `# Demoted` |
-| `tm readopt <ID> [--to WHERE]` | bring a demoted item back, into this week by default |
-| `tm drop <ID>` | mark an item `[~]` |
-| `tm sync-cal` | pull the ICS feeds into `calendar/` — last week, this week and next week, and nothing further out |
-| `tm undo` | undo the last state change. A real stack, 50 deep |
+| `lime add <LINE> [--to WHERE] [--section S]` | add a line. `--to` takes `inbox` (default), `backlog` (alias `none`), `week`, `month`, `day`, `routines`, `optional`, `calendar`, or a path like `week/2026-W37.md`. A line put in `calendar` must be an `at:` interval or `lime check` will fail |
+| `lime edit <ID> [K=V…] [--set K=V] [--unset KEY]` | edit fields byte-faithfully. `ci=`, `est=`, `due=`, `title=`, `p=`, or any `key=value`. `est=` sets what is *left* of the item: the `est:` token on a line that already carries one, the leading estimate on a line that does not — so the estimate as written stays the historical number `lime` calibrates against. To change that one on a line with a remainder, `--unset est` first. `--unset` also clears the positional `ci` and `!p` |
+| `lime move <ID> <TO> [--section S]` | move an item to another horizon file |
+| `lime rank <ID> <N>` | move an item to position N of its section |
+| `lime demote <ID>` | demote a week item into the month's `# Demoted` |
+| `lime readopt <ID> [--to WHERE]` | bring a demoted item back, into this week by default |
+| `lime drop <ID>` | mark an item `[~]` |
+| `lime sync-cal` | pull the ICS feeds into `calendar/` — last week, this week and next week, and nothing further out |
+| `lime undo` | undo the last state change. A real stack, 50 deep |
 
 ### Looking and checking
 
 | command | what it does |
 |---|---|
-| `tm check [--fix-ids]` | validate the tree. Exits 2 when there are errors; `--fix-ids` writes an `^id` onto every line that lacks one (**not undoable**) |
-| `tm triage` | show every `inbox.md` line and what the grammar would make of it |
-| `tm log [--tail N] [--since 7d] [--item ^ID]` | read the log. `tm add` shows up here as an `edit`, so `--item` gives an item's whole life |
-| `tm model [--show] [--fit] [--compare]` | the learned model. `--fit` refits from the log (**not undoable**) |
-| `tm tui` | the terminal UI |
+| `lime check [--fix-ids]` | validate the tree. Exits 2 when there are errors; `--fix-ids` writes an `^id` onto every line that lacks one (**not undoable**) |
+| `lime triage` | show every `inbox.md` line and what the grammar would make of it |
+| `lime log [--tail N] [--since 7d] [--item ^ID]` | read the log. `lime add` shows up here as an `edit`, so `--item` gives an item's whole life |
+| `lime model [--show] [--fit] [--compare]` | the learned model. `--fit` refits from the log (**not undoable**) |
+| `lime tui` | the terminal UI |
 
 ### What is undoable
 
-`tm undo` restores the files a verb touched and appends a compensating entry to
+`lime undo` restores the files a verb touched and appends a compensating entry to
 the log — it never erases history.
 
 ```console
-$ tm undo
+$ lime undo
 undid drop (drop ^a1) · 1 file(s) restored · 49 left
 ```
 
@@ -1863,21 +1863,21 @@ undid drop (drop ^a1) · 1 file(s) restored · 49 left
 it runs out:
 
 ```console
-$ tm undo
-tm: nothing to undo
+$ lime undo
+lime: nothing to undo
 ```
 
 Almost every mutating verb is undoable. The exceptions, worth knowing before you
-need them: **`tm plan`, `tm model --fit`, `tm check --fix-ids` and `tm init` are
+need them: **`lime plan`, `lime model --fit`, `lime check --fix-ids` and `lime init` are
 not.**
 
 ---
 
 ## Claude Code integration
 
-`tm init` writes a Claude Code project into the plan directory: a `CLAUDE.md`
+`lime init` writes a Claude Code project into the plan directory: a `CLAUDE.md`
 with the rules, eight skills, a validating hook, and a git pre-commit hook. The
-division of labour is that **Claude writes lines; you and `tm` decide and
+division of labour is that **Claude writes lines; you and `lime` decide and
 record**.
 
 Because `.claude/` lives inside the plan directory, start Claude Code with the
@@ -1887,12 +1887,12 @@ you run `claude` from the repo root, these settings are not the ones in play.
 ### The rules, verbatim
 
 ```markdown
-# tm — rules for Claude Code
+# lime — rules for Claude Code
 Files: month/ week/ day/ backlog.md routines.md optional.md calendar/ inbox.md. Horizon = file. Rank = line order.
 Grammar: `- [ ] <ci 0-5> <est> Title @parent #tag key:value ^id`. Fields: due at win dur pref every after-done on-event on-miss min max after loc est. Flags: open atomic manual travel-day hot.
-Always: add items with `tm add "..."` (or write the grammar exactly, then run `tm check`). Read `tm plan --json` before reasoning about today. Use `tm model --show` multipliers when estimating.
+Always: add items with `lime add "..."` (or write the grammar exactly, then run `lime check`). Read `lime plan --json` before reasoning about today. Use `lime model --show` multipliers when estimating.
 Never: edit between `<!-- tm:plan start/end -->`; edit `## Log`; mark blocks done; change an existing item's ci, est, or priority unless asked; reorder `month/` outcomes without confirmation; touch `.tm/`.
-Demote, never delete. Explain the diff after `tm plan --diff`.
+Demote, never delete. Explain the diff after `lime plan --diff`.
 ```
 
 Claude may add items, write prose into `## Notes`, and propose milestones,
@@ -1908,8 +1908,8 @@ Each is invoked as `/<name>` in a Claude Code session. All of them read with
 
 | skill | when | what it writes |
 |---|---|---|
-| `/capture <text>` | one sentence you want remembered — *"pset 2 is due Friday night, six blocks, two a day max"* | one `tm add` |
-| `/triage` | `inbox.md` has lines waiting | one `tm add` per line, then removes the raw line; leaves anything ambiguous and says what it needs |
+| `/capture <text>` | one sentence you want remembered — *"pset 2 is due Friday night, six blocks, two a day max"* | one `lime add` |
+| `/triage` | `inbox.md` has lines waiting | one `lime add` per line, then removes the raw line; leaves anything ambiguous and says what it needs |
 | `/replan` | after an interruption, a late start, a new meeting | nothing — two sentences on what moved and why |
 | `/explain ^id` | *"why isn't this scheduled today?"* | nothing — it translates the priority arithmetic and says what you could change |
 | `/review-day` | end of a day | 4–6 sentences into the day file's `## Notes`, and one thing to change tomorrow |
@@ -1919,12 +1919,12 @@ Each is invoked as `/<name>` in a Claude Code session. All of them read with
 
 ### The hooks
 
-`.claude/hooks/tm-check.sh` runs after every file edit Claude makes. If the file
-is inside the plan tree and `tm check` finds problems, it exits 2 with the
+`.claude/hooks/lime-check.sh` runs after every file edit Claude makes. If the file
+is inside the plan tree and `lime check` finds problems, it exits 2 with the
 diagnostics on stderr, which blocks the turn and hands the errors back to Claude
 to fix. Edits elsewhere in your repo, and edits under `.tm/`, cost nothing.
 
-The git hook is the same check before every commit. `tm init` does not touch
+The git hook is the same check before every commit. `lime init` does not touch
 your git config; it prints the one line for you to run:
 
 ```sh
@@ -1934,18 +1934,18 @@ git config core.hooksPath plan/.githooks
 Bypass a single commit with `git commit --no-verify`. Note that `core.hooksPath`
 is a whole-repository setting.
 
-**Neither hook runs when `tm` is not on your `PATH`, and they say so
+**Neither hook runs when `lime` is not on your `PATH`, and they say so
 differently.** The Claude Code hook exits 0 **silently** — nothing at all in the
-transcript. The git pre-commit hook prints `pre-commit: tm is not on PATH —
-skipping tm check` on stderr and lets the commit through. If you rely on them,
-install `tm` properly rather than pointing at a path inside `target/`.
+transcript. The git pre-commit hook prints `pre-commit: lime is not on PATH —
+skipping lime check` on stderr and lets the commit through. If you rely on them,
+install `lime` properly rather than pointing at a path inside `target/`.
 
 ### Upgrading
 
 ```console
-$ tm init plan
-tm: plan is not empty — refusing to overwrite it (use --force)
-$ tm init plan --force
+$ lime init plan
+lime: plan is not empty — refusing to overwrite it (use --force)
+$ lime init plan --force
 created 12 file(s) in plan
 left alone, already there (8): config.toml, .gitignore, inbox.md, backlog.md, routines.md, optional.md, month/2026-09.md, week/2026-W37.md
 enable the pre-commit hook with:
@@ -1957,7 +1957,7 @@ settings, the hooks — and leaves your config and every content file untouched.
 
 ### Committing your plan
 
-The `.gitignore` that `tm init` writes ignores the per-machine files
+The `.gitignore` that `lime init` writes ignores the per-machine files
 (`state.json`, `last_plan.json`, `arrival_plan.json`, `undo.json`) and
 deliberately keeps `.tm/log.jsonl` and `.tm/model.json` — your observations and
 what has been learned from them are worth having in history.
@@ -1966,14 +1966,14 @@ what has been learned from them are worth having in history.
 
 ## Configuration
 
-`config.toml` must exist — `tm` recognises a plan directory by this file sitting
+`config.toml` must exist — `lime` recognises a plan directory by this file sitting
 next to `.tm/` or the plan files — but it may be empty; anything you leave out
 takes its default. An **unknown or misplaced key is a hard error** that blocks
 every command, so watch which section you put a key in:
 
 ```console
-$ tm now
-tm: invalid config plan/config.toml: TOML parse error at line 3, column 1
+$ lime now
+lime: invalid config plan/config.toml: TOML parse error at line 3, column 1
   |
 3 | block_min = 60
   | ^^^^^^^^^
@@ -1981,9 +1981,9 @@ unknown field `block_min`, expected one of `palette`, `min_width`, `editor`
 ```
 
 That was `block_min` put under `[tui]` instead of `[day]`; the "expected one of"
-list tells you which section `tm` was reading when it tripped.
+list tells you which section `lime` was reading when it tripped.
 
-This is the file `tm init` writes, complete:
+This is the file `lime init` writes, complete:
 
 ```toml
 tz = "America/Chicago"
@@ -2051,7 +2051,7 @@ editor    = "code -g {file}:{line}"
 ```
 
 **`tz`** is the one key almost everyone must change. It is an IANA zone name and
-it is validated. Every instant `tm` reasons about is in this zone, so daylight
+it is validated. Every instant `lime` reasons about is in this zone, so daylight
 saving comes out right.
 
 | section | key | what it does |
@@ -2077,7 +2077,7 @@ saving comes out right.
 | | `[energy.prior.<loc>]` | one step function per location, keyed by hours since wake (`"0-1"`, `"10+"`). Add curves for your own location names; a location with no curve of its own uses the `home` curve |
 | `[expected]` | `arrival`, `p_lounge` | what the week lookahead assumes about future days until it has learned. All seven weekday keys are required, spelled `Mon`…`Sun` |
 | `[calendar]` | `ics_urls` | your private ICS addresses — the "secret address in iCal format" your calendar offers. **Empty by default, so nothing is ever fetched until you add one** |
-| | `sync_on_arrive` | pull the calendar during `tm arrive` |
+| | `sync_on_arrive` | pull the calendar during `lime arrive` |
 | | `flight_regex` | an event matching this gets `buffer:2h travel-day` |
 | `[tui]` | `palette` | the project hues on the day bar |
 | | `min_width` | the column count below which panes stack |
@@ -2085,8 +2085,8 @@ saving comes out right.
 
 ### Hooking up your calendar
 
-Paste your calendar's private ICS address into `ics_urls`. Then `tm sync-cal`
-writes **last week, this week and next week** into `calendar/`, and `tm arrive`
+Paste your calendar's private ICS address into `ics_urls`. Then `lime sync-cal`
+writes **last week, this week and next week** into `calendar/`, and `lime arrive`
 does it for you as long as `sync_on_arrive` is true. Nothing further out is ever
 fetched, so an appointment three weeks away has no `calendar/` file and will not
 appear until that week comes round — if you need it in the plan now, write it by
@@ -2094,7 +2094,7 @@ hand with the `manual` flag. With nothing configured you get a warning rather
 than an error:
 
 ```console
-$ tm sync-cal
+$ lime sync-cal
 0 events · 0 files written
 ! no calendar feeds configured (config.toml [calendar] ics_urls)
 ```
@@ -2110,12 +2110,12 @@ hand needs the `manual` flag to survive the next sync.
 
 ### "It didn't schedule my item"
 
-Run `tm plan --explain ^id` first. Then work down this list:
+Run `lime plan --explain ^id` first. Then work down this list:
 
 1. **It has no estimate.** No leading estimate, no `est:`, no `dur:`, no children
-   with estimates. It will never be scheduled and `tm check` will not tell you.
+   with estimates. It will never be scheduled and `lime check` will not tell you.
 2. **Its ci is higher than any slot you will have today** — especially at home,
-   where slot energy is capped at 3, and on a day with no `tm arrive` at all,
+   where slot energy is capped at 3, and on a day with no `lime arrive` at all,
    which uses the `home` curve and so never reaches energy 5.
 3. **Its `loc:` does not match where you are.**
 4. **A `max:` cap for the period is spent.**
@@ -2126,13 +2126,13 @@ Run `tm plan --explain ^id` first. Then work down this list:
 8. **Its parent took the slots.** A milestone with an estimate — or with children
    whose estimates roll up into it — competes as a block in its own right, and
    usually wins, because it sits higher in the file. Move the task above it —
-   but `tm rank` only reorders inside one heading, so if the milestone is under
+   but `lime rank` only reorders inside one heading, so if the milestone is under
    `# Milestones` and the task under `# Tasks`, first
-   `tm move ^id week --section Milestones` (or move the line in your editor),
+   `lime move ^id week --section Milestones` (or move the line in your editor),
    then rank it. Or stop giving the milestone work of its own.
 9. **You pinned it and expected that to be enough.** `# Pinned` makes an item a
    candidate; it does not change its priority.
-10. **A typo in the id.** `tm plan --explain ^typo` answers
+10. **A typo in the id.** `lime plan --explain ^typo` answers
     `^typo is not a candidate today` and exits 0, which looks like an answer.
 11. **A `hot` that is not a flag.** If `--explain` shows an ordinary `p` on an
     item you flagged `hot`, the word is sitting in the title. Move it to the end
@@ -2142,72 +2142,72 @@ Run `tm plan --explain ^id` first. Then work down this list:
 
 `start`, `done`, `stop` and `extend` append to `## Log` but do **not** rewrite
 the timetable in the day file. Only `plan`, `arrive`, `energy` and `resume` do.
-So the file can show the morning's plan all afternoon. `tm now` is always
-computed live; re-run `tm plan` to refresh the file.
+So the file can show the morning's plan all afternoon. `lime now` is always
+computed live; re-run `lime plan` to refresh the file.
 
 ### "The numbers don't agree"
 
-- `tm now` prints raw wall-clock elapsed (`159m of 120m`); `tm done` subtracts
+- `lime now` prints raw wall-clock elapsed (`159m of 120m`); `lime done` subtracts
   pauses, breaks and interruptions (`152m/150m`). Both are right about different
   things.
 - A `--partial` done leaves **no `✓` and no actual** in the timeline, because a
   past row is only marked finished when the *item* was closed that day. The
   minutes are in the log and in the reviews.
-- `tm routine done <name>` without `--min` records the completion but produces a
+- `lime routine done <name>` without `--min` records the completion but produces a
   zero-length segment, so the routine vanishes from the timeline. Pass `--min`.
-- `tm review month` can show progress over 100% — every block on a descendant
+- `lime review month` can show progress over 100% — every block on a descendant
   rolls up against a fixed original estimate.
 
 ### Input formats
 
 - **Durations need a unit**: `30m`, `1h`, `1h30m`, `1b`, `8h10m`. A bare `90` is
-  `tm: invalid duration: "90"`. The exception is `--min`, which is a bare number
+  `lime: invalid duration: "90"`. The exception is `--min`, which is a bare number
   of minutes.
 - **Times must be zero-padded**: `06:05`, not `6:05`.
 - **`Nd` is not a valid estimate** in the leading slot, in `est:` or in `dur:`
   (it is fine in `buffer:`, `after-done:`, `min:`/`max:` and `pref:wake+…`).
 - **No spaces after commas** in `after:`, `every:` or `demoted:` lists.
-- **Ids only** — `tm start "Read ch.6"` does not work; `tm start ^t1` and
-  `tm start t1` do. Routine names work for `start`, `skip` and `routine done`.
+- **Ids only** — `lime start "Read ch.6"` does not work; `lime start ^t1` and
+  `lime start t1` do. Routine names work for `start`, `skip` and `routine done`.
 
 ### Commands that succeed when you expected an error
 
 | you ran | what happened |
 |---|---|
-| `tm rank ^id 99` | clamped silently, and still prints `^id → position 99` |
-| `tm plan --week --explain ^id` | prints the week grid; `--week` wins and `--explain` (or `--diff`) is ignored |
-| `tm model --fit --compare` | fits and prints the fit; `--compare` is ignored. §13 writes these three as alternatives — run one at a time |
-| `tm plan --explain ^typo` | `^typo is not a candidate today`, exit 0 |
-| `tm event <name>` matching nothing | `event <name> logged`, exit 0 |
-| `tm drop` on an already-dropped item | exit 0 |
-| `tm sync-cal` with no feeds | a `!` warning, exit 0 |
-| `tm interrupt` with nothing running | exit 0; `stop`, `extend` and `pause` all fail |
-| `tm done ^other` while a block runs | retro-dones `^other` and **leaves your block running** |
-| `tm break` while a break runs | ends the break and ignores the arguments |
-| `tm start` on an item already `[x]` | starts it |
+| `lime rank ^id 99` | clamped silently, and still prints `^id → position 99` |
+| `lime plan --week --explain ^id` | prints the week grid; `--week` wins and `--explain` (or `--diff`) is ignored |
+| `lime model --fit --compare` | fits and prints the fit; `--compare` is ignored. §13 writes these three as alternatives — run one at a time |
+| `lime plan --explain ^typo` | `^typo is not a candidate today`, exit 0 |
+| `lime event <name>` matching nothing | `event <name> logged`, exit 0 |
+| `lime drop` on an already-dropped item | exit 0 |
+| `lime sync-cal` with no feeds | a `!` warning, exit 0 |
+| `lime interrupt` with nothing running | exit 0; `stop`, `extend` and `pause` all fail |
+| `lime done ^other` while a block runs | retro-dones `^other` and **leaves your block running** |
+| `lime break` while a break runs | ends the break and ignores the arguments |
+| `lime start` on an item already `[x]` | starts it |
 
 ### Where things land
 
 - **`--to week`, `--to month` and `--to day` mean the period containing *now*.**
   Planning next week on Sunday evening silently writes into *this* week's file.
   Pass a path instead: `--to week/2026-W37.md`.
-- **`tm add` with no `--section` appends to the end of the file**, i.e. under its
+- **`lime add` with no `--section` appends to the end of the file**, i.e. under its
   last heading — which on a day file is `## Notes`, not `# Pinned`, and on a month
   file can be `# Demoted`. Always pass `--section` when it matters.
-- **`tm init` names its month and week files from the real system clock.**
+- **`lime init` names its month and week files from the real system clock.**
 
 ### Closing
 
 - Closing is automatic and silent, on the first command after a period ends.
-- **`tm close day` puts an empty `<!-- tm:review -->` block at the end of the day
-  file, holding the text `review pending`** until `tm review day --write` fills
+- **`lime close day` puts an empty `<!-- tm:review -->` block at the end of the day
+  file, holding the text `review pending`** until `lime review day --write` fills
   it in. It never overwrites a review that is already there, so the two can run
   in either order.
-- **`tm close <period>` with no `--date` closes the period the auto-close just
+- **`lime close <period>` with no `--date` closes the period the auto-close just
   ran — but only when that happened in this very command.** If some earlier
-  command already triggered it, `tm close month` means "close the month I am in
+  command already triggered it, `lime close month` means "close the month I am in
   now", and closes it early. After the month has rolled over, name the month you
-  mean: `tm close month --date 2026-09 --drop ^id`.
+  mean: `lime close month --date 2026-09 --drop ^id`.
 - **A catch-up sweep closes at most 16 periods of each kind.** Older ones are
   stamped closed without being run. Sixteen days is a fortnight and a bit, so a
   normal holiday is fine — but a tree left untouched for months can have its
@@ -2218,7 +2218,7 @@ computed live; re-run `tm plan` to refresh the file.
 ### Validation
 
 ```console
-$ tm check
+$ lime check
 backlog.md:7: error[dup-id]: duplicate id ^m2; also at week/2026-W37.md:9
 month/2026-09.md:8: warning[outcome-with-est]: outcome with an estimate (0.5b) and no children — did you mean a milestone in `week/`?
 week/2026-W37.md:9: error[dup-id]: duplicate id ^m2; also at backlog.md:7
@@ -2230,20 +2230,20 @@ Each problem names the file, the line, whether it is an error or a warning, a
 code you can look up, and what to do about it. A tree with real breakage:
 
 ```console
-$ tm check
+$ lime check
 week/2026-W37.md:22: error[bad-ci]: `9` is not a ci: ci is one digit `0`..`5` (§4.1); `9 2b` stayed in the title, so the estimate was not read either
 week/2026-W37.md:22: error[dangling-parent]: parent @nope does not exist
 week/2026-W37.md:23: error[bad-value]: `due:not-a-date`: invalid date or date-time: "not-a-date"
-week/2026-W37.md:23: warning[missing-id]: no `^id` on `Missing id`; run `tm check --fix-ids`
+week/2026-W37.md:23: warning[missing-id]: no `^id` on `Missing id`; run `lime check --fix-ids`
 week/2026-W37.md:24: error[parent-cycle]: parent cycle: ^z2 -> ^z3 -> ^z2
 week/2026-W37.md:26: warning[unknown-key]: unknown key `frobnicate:7`; it is preserved but ignored
 4 errors, 2 warnings
 ```
 
-`tm check` exits **2 only when there is at least one error**. Warnings alone
+`lime check` exits **2 only when there is at least one error**. Warnings alone
 exit 0 — so a CI gate on the exit code will not catch a `missing-id`.
 
-`tm check --fix-ids` appends an `^id` to every line that lacks one, including
+`lime check --fix-ids` appends an `^id` to every line that lacks one, including
 plain prose bullets you never meant as items. It is not undoable.
 
 The full set of problem codes: `dup-id`, `dangling-parent`, `parent-cycle`,
@@ -2264,7 +2264,7 @@ resolved the line by rule and carried on — a duplicate key, two conflicting sh
 keys, a flag word at the end of a title, an unknown file kind:
 
 ```console
-$ tm check
+$ lime check
 week/2026-W37.md:2: warning[bad-value]: duplicate key `due:2026-09-12`
 week/2026-W37.md:3: warning[bad-value]: conflicting shape keys (at: wins)
 0 errors, 2 warnings
@@ -2272,11 +2272,11 @@ week/2026-W37.md:3: warning[bad-value]: conflicting shape keys (at: wins)
 
 That run exits 0.
 
-### When a file changed under tm
+### When a file changed under lime
 
 ```console
-$ tm undo
-tm: conflict in week/2026-W37.md — the file changed under us
+$ lime undo
+lime: conflict in week/2026-W37.md — the file changed under us
   ours:   20 lines
   theirs: 22 lines
   reconcile week/2026-W37.md in your editor, then try again
@@ -2295,7 +2295,7 @@ Failures are JSON too. With `--json`, a command that fails prints **one JSON
 object on stderr** — stdout stays empty — and exits non-zero:
 
 ```console
-$ tm drop ^nope --json
+$ lime drop ^nope --json
 {
   "ok": false,
   "kind": "not-found",
@@ -2309,7 +2309,7 @@ $ tm drop ^nope --json
 
 The four top-level fields are always there. `ok` is always `false`, so that is
 the cheapest test for "is this a failure document". `kind` is a stable slug you
-can branch on; `message` is the same sentence the human run prints after `tm: `;
+can branch on; `message` is the same sentence the human run prints after `lime: `;
 `exit_code` is the code the process is about to exit with.
 
 `detail` holds whatever the failure itself knows, and is `{}` when it knows
@@ -2328,9 +2328,9 @@ nothing extra — you never have to test whether the key exists:
 | `config`, `json`, `log`, `model`, `calendar` | `config.toml`, a `.tm/` sidecar, the log, `.tm/model.json`, a calendar feed | `path` or `url` |
 | `error` | anything else ("nothing to undo", "no block running") | — |
 
-The one non-zero exit that is *not* a failure document is `tm check`'s **2**: the
+The one non-zero exit that is *not* a failure document is `lime check`'s **2**: the
 problems are the verb's result, so they stay on stdout in the usual shape with
-the rest of `tm check --json`.
+the rest of `lime check --json`.
 
-Without `--json` nothing changed: errors are `tm: <message>` on stderr, and a
+Without `--json` nothing changed: errors are `lime: <message>` on stderr, and a
 conflict adds its `ours:` / `theirs:` lines.

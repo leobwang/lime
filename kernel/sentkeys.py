@@ -3,7 +3,7 @@
 
 `fields.py`'s input half asks whether every field the planner request DECODES
 is read.  It could not see the step before that: a key the HOST's encoder
-writes that no kernel reader decodes at all.  `tm_core::planwire::overtime_json`
+writes that no kernel reader decodes at all.  `lime_core::planwire::overtime_json`
 writes `grown{remaining, plannedMin, needMin}` and `PlanWire.readOvertime`
 reads `id` and `blocks` -- D58's route "built" and read by nothing -- and an
 optional key an encoder misspells reads as absent with no refusal.  The input
@@ -12,7 +12,7 @@ became one.  This module produces the two sets of KEY PATHS that answer it:
 
   * `host_paths` -- every JSON key path the host's encoder writes into a
     request section, read off the RUST SOURCE of the codec
-    (`tm-core/src/planwire.rs`): `json!` object literals, `.insert("k"..)`,
+    (`lime-core/src/planwire.rs`): `json!` object literals, `.insert("k"..)`,
     `o["k"] = ..`, arrays built by `Value::Array(.. .map(|..| json!(..)) ..)`,
     and the encoder's own helpers composed by call.  A value handed IN by the
     caller (`planner_json`'s `overtime`) is the output of the module function
@@ -39,7 +39,7 @@ became one.  This module produces the two sets of KEY PATHS that answer it:
     stayed green; it is UNREAD now.
 
   * SINCE W-40 TRACK E (README gap 3717) the host side is the PROGRAM, not one
-    function: `host_sections` reads every `json!` object any function of `tm/src`
+    function: `host_sections` reads every `json!` object any function of `lime/src`
     or the codec builds that carries `docs` -- a request -- wherever it is written,
     and every request built as TEXT (`Text`, `skeleton`), and each of its
     top-level keys as a section, following helpers across modules (`Foreign`),
@@ -54,14 +54,14 @@ became one.  This module produces the two sets of KEY PATHS that answer it:
 
 WHAT IT CANNOT SEE, declared:
   * a key assembled from a variable, or an object built by a helper outside
-    the program (`tm/src` and the codec), on the host side; the ROOT of the section is the module
+    the program (`lime/src` and the codec), on the host side; the ROOT of the section is the module
     function `<section>_json`, so an encoder that writes the section some other
     way is not read at all (the loud direction: nothing to compare is a
     failure in `fields.py`, never a pass).  A writer that takes the section
     under any other parameter name (`req: &mut Value` writing
     `req["planner"]`) is not found, and a found writer's chain link it cannot
     read is a complaint.  Whether the BINARY calls a writer is not asked:
-    `add_worked_min` had no caller in `tm/src` until the W-41 repair (README
+    `add_worked_min` had no caller in `lime/src` until the W-41 repair (README
     gaps 3043 and 4142).
   * on the kernel side, a value that reaches a reader through a structure
     field (`parts.sec`) rather than a bound name: its reads are not
@@ -1099,9 +1099,9 @@ def host_paths(codec_text, section):
 # week grid with nothing asking whether a kernel reader decodes it.  The class is
 # "every place a request JSON object gains a section key", and this is its reader:
 #
-#   * THE PROGRAM is every `.rs` file of the `tm` binary and of every crate it links
-#     by path (`program_roots`, read off `tm/Cargo.toml`: `tm/src`, `tm-core/src`,
-#     `kernel/tm-kernel-ffi/src`), one `RustEncoder` per module, each able to follow
+#   * THE PROGRAM is every `.rs` file of the `lime` binary and of every crate it links
+#     by path (`program_roots`, read off `lime/Cargo.toml`: `lime/src`, `lime-core/src`,
+#     `kernel/lime-kernel-ffi/src`), one `RustEncoder` per module, each able to follow
 #     a call written `<module>::<fn>(..)` into another (`Foreign`).
 #   * A SITE is a `json!({..})` object any function of the program builds that
 #     carries `docs` -- `sections.sent_sections`' rule for a request, the scan check
@@ -1121,7 +1121,7 @@ def host_paths(codec_text, section):
 # {}", &rest[1..])`, because a `serde_json::Value` would sort the checkpoint's keys.
 # A `Text` keeps the fragments in source order and `skeleton` lexes the literals as
 # JSON, each hole a value (and, where a KEY is due, `&rest[1..]`'s members).  And the
-# sites are held to check 12's scan of `tm/src` (`sections.sent_sections`), so a
+# sites are held to check 12's scan of `lime/src` (`sections.sent_sections`), so a
 # request this reader cannot see is a failure by name, not a key compared with
 # nothing.
 #
@@ -1136,12 +1136,12 @@ def host_paths(codec_text, section):
 # ===========================================================================
 
 # The binary whose requests these are.
-BINARY = "tm"
+BINARY = "lime"
 
 
 def program_roots(root):
-    """The source directories of the `tm` binary and of every crate it links by PATH
-    (`tm/Cargo.toml`'s `path = ..` dependencies: `tm-core`, `tm-kernel-ffi`) -- a
+    """The source directories of the `lime` binary and of every crate it links by PATH
+    (`lime/Cargo.toml`'s `path = ..` dependencies: `lime-core`, `lime-kernel-ffi`) -- a
     property of the manifest, not a list: a crate the binary starts to link is read
     without an edit here."""
     root = pathlib.Path(root)
@@ -1188,7 +1188,7 @@ def host_sections(root, sections):
     ..}))`, which a binding-only read missed: `kernel_bridge`'s tree check) -- or a
     `Text` whose skeleton carries `docs` (`kernel_log::request`, and the capacity and
     walls requests once their `format!` splices the `log` section in).  AND THE SITES
-    ARE HELD TO CHECK 12'S OWN SCAN (`sections.sent_sections`, over `tm/src`): a region
+    ARE HELD TO CHECK 12'S OWN SCAN (`sections.sent_sections`, over `lime/src`): a region
     that scan reads as a request sending a section, outside a test, is a line some site
     here must hold -- or this reader missed a request, and that FAILS by name."""
     import sections as reqsec
@@ -1245,7 +1245,7 @@ def host_sections(root, sections):
             if isinstance(tree, dict) and "docs" in tree:
                 lines = txt.lines()
                 take(enc, fn, "%s:%s (text)" % (enc.path.name, ",".join(map(str, lines))), tree, set(lines))
-    # The floor: check 12's scan of what `tm/src` sends.
+    # The floor: check 12's scan of what `lime/src` sends.
     src = pathlib.Path(root) / BINARY / "src"
     found, _ = reqsec.sent_sections(src, sections)
     for key, regs in sorted(found.items()):
@@ -1317,7 +1317,7 @@ def merge(into, tree):
 #     binding whose value is the kernel's PARSED ANSWER: the result of a call to
 #     a function whose declared return type mentions `Value` and which reaches the
 #     FFI door -- a function calling a name an `extern "C"` block of the program
-#     declares (the shim's `tm_kernel_call_c`) -- through the program's calls.  No
+#     declares (the shim's `lime_kernel_call_c`) -- through the program's calls.  No
 #     function is named: the door is the `extern "C"` block, the answer is a
 #     `Value`, and the key path starts at the response's `ok` (AGENTS 2.4: one `ok`
 #     shape).  Its copy_sources answers the response key paths, one per call.
@@ -1348,7 +1348,7 @@ def copies_in(tree, prefix):
 
 def crate_name(src_dir):
     """The `name` of the crate whose `src` directory is src_dir, as Rust spells it in
-    a path (`tm-kernel-ffi` -> `tm_kernel_ffi`); `None` when there is no manifest."""
+    a path (`lime-kernel-ffi` -> `lime_kernel_ffi`); `None` when there is no manifest."""
     man = pathlib.Path(src_dir).parent / "Cargo.toml"
     if not man.exists():
         return None

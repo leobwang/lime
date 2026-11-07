@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """CHECK 12'S ROOT, DERIVED FROM THE BINARY INSTEAD OF ASSUMED (README gap 2229).
 
-Check 12 asks *is this definition reachable from `tm_kernel_call`* and it
-passes.  `tm_kernel_call` is the `@[export]`, so that question is answerable --
+Check 12 asks *is this definition reachable from `lime_kernel_call`* and it
+passes.  `lime_kernel_call` is the `@[export]`, so that question is answerable --
 but it is not the question the check was built to ask, and the difference is a
 whole subtree.  **The export is not a caller.**  It is a door, and what comes
 through it is a REQUEST: a JSON object whose top-level keys select which of the
@@ -12,11 +12,11 @@ being, on the export's own call graph, perfectly reachable.
 
 THE FINDING THIS FILE IS THE ANSWER TO.  W-31's track P priced R3 and found
 that `Planner.dayPlan` -- §8.2's whole planner -- is reached by NO shipped
-caller: `grep -rn '"planner"' tm/src` is EMPTY, and the `planner` section is
-sent only by `tm/tests/planner_invariants.rs` and
-`tm/tests/kernel_planner_wire.rs`, two harnesses no user can run.  Measured
+caller: `grep -rn '"planner"' lime/src` is EMPTY, and the `planner` section is
+sent only by `lime/tests/planner_invariants.rs` and
+`lime/tests/kernel_planner_wire.rs`, two harnesses no user can run.  Measured
 here on 2026-09-25: the `plan` section (W-24's rows) is in the same position,
-and `tm/src`'s three `"plan":` occurrences are all a CANDIDATE's nested key
+and `lime/src`'s three `"plan":` occurrences are all a CANDIDATE's nested key
 inside `kernel_capacity.rs`'s `plan_json`, never a request's own.  289 of the
 1,467 definitions check 12 called reachable are reached only through those two
 sections.
@@ -32,9 +32,9 @@ WHAT IS MEASURED, ON BOTH SIDES.
     the scrutinee of a `match .. with` the definition is that section's
     DISPATCHER: the arms tell us what still runs when the key is absent.
 
-  * WHAT `tm/src` SENDS, by reading the JSON the shipped binary builds.
+  * WHAT `lime/src` SENDS, by reading the JSON the shipped binary builds.
     `sent_sections` scans every `json!(..)` block and every string literal in
-    `tm/src` for the keys at brace depth 1, and calls the region a REQUEST when
+    `lime/src` for the keys at brace depth 1, and calls the region a REQUEST when
     those keys are all top-level sections of the kernel and either the region
     carries `docs` or it is a FRAGMENT (a literal that does not open its own
     object -- `kernel_log.rs` builds its request by `push_str`, so `,"tz":` and
@@ -44,7 +44,7 @@ WHAT IS MEASURED, ON BOTH SIDES.
 
 THE CUT, AND WHY IT IS AN ARM AND NOT A ROOT.  A walk "rooted at the section
 readers" would lose the plumbing every request runs -- `jparse`, `jemit`, the
-loader -- and report it dead.  The root stays `tm_kernel_call`; what changes is
+loader -- and report it dead.  The root stays `lime_kernel_call`; what changes is
 that a DISPATCHER for a section nothing sends contributes only the callees of
 its ABSENT arms.  For `planner` that is `runPlanner`'s `.error` and `.ok none`
 arms, which name `jsonErr` and `EmitWire.runRows`; the `.ok (some sec)` arm,
@@ -66,7 +66,7 @@ cut is taken where the program branches and not where the proof does.
 WHAT THIS CANNOT SEE, declared rather than discovered later:
 
   * WHETHER A SENT SECTION IS SENT ON A PATH A USER TAKES, beyond the floor
-    below.  A section named in a `#[cfg(test)]` fixture inside `tm/src` counts
+    below.  A section named in a `#[cfg(test)]` fixture inside `lime/src` counts
     as sent here.  This sentence used to add "(`tz` and `log` are named in one)"
     and the measurement is SIX of the eight sent sections -- `blockMin`, `cmds`,
     `docs`, `log`, `now` and `tz` -- which is the number a later reader would
@@ -243,7 +243,7 @@ class Lib:
 
         Lean's own rule, walked outwards: a candidate counts when its prefix is
         `namespace` or one of `namespace`'s enclosing namespaces.  Without it a
-        bare `none` in an arm resolves to `Tm.Planner.SegFlags.none` by suffix
+        bare `none` in an arm resolves to `Lime.Planner.SegFlags.none` by suffix
         alone and the cut quietly keeps a definition alive that nothing names --
         measured, and it was one of the 288 this file is about.
 
@@ -356,12 +356,12 @@ RAW_STR = re.compile(r'r(#*)"')
 #     unchanged, `planwire::with_planner`'s `"{head},\"planner\":{planner}}}"`
 #     opened and closed an object at `{head}` before the key, so the scan found
 #     no key in the one literal that sends `planner` and check 12 called the
-#     section UNSENT while `tm check` sent it on every run since P78.  A
+#     section UNSENT while `lime check` sent it on every run since P78.  A
 #     placeholder is a VALUE here (`0`) and a doubled brace one brace, which is
 #     what the macro writes;
 #   * a PATTERN -- the argument of a string SEARCH (`.contains(`,
 #     `.starts_with(`, ..) -- is text the program looks FOR, never text it
-#     sends.  `tm-kernel-ffi`'s `trace_kinds` matches `"planner":{` in a request
+#     sends.  `lime-kernel-ffi`'s `trace_kinds` matches `"planner":{` in a request
 #     to name the call it traces; read as a fragment it would count `planner`
 #     sent for that reason, which is the wrong reason (the land's gap 4322).
 FORMAT_MACRO = re.compile(
@@ -539,8 +539,8 @@ def sent_sections(src, known):
     out, bad = collections.defaultdict(list), []
     # `src` is one source directory or several: check 12 reads the binary's and
     # every crate it links by path (`sentkeys.program_roots`), because the one
-    # literal that sends `planner` is `tm-core`'s (`planwire::with_planner`) and a
-    # scan of `tm/src` alone could never have found it (README gap 4331).
+    # literal that sends `planner` is `lime-core`'s (`planwire::with_planner`) and a
+    # scan of `lime/src` alone could never have found it (README gap 4331).
     roots = [pathlib.Path(src)] if isinstance(src, (str, pathlib.Path)) else \
         [pathlib.Path(r) for r in src]
     files = sorted({f for r in roots for f in leanfiles.rust_files(r)})

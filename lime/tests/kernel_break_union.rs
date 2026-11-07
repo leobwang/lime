@@ -1,0 +1,555 @@
+//! **Every break on a block's ledger days is netted once, by the host and the replay alike** — the owner's
+//! **D94** (README gaps 4361, 4506 and 4363; parity P92), held as a CLASS of generated logs rather than a list of
+//! worlds (the campaign's lesson 2).
+//!
+//! The host's reading of a running block's minutes is `Replay::running_worked_min` — elapsed less the UNION of the
+//! idle spans of the block's ledger days (pauses, interruptions, every `break`) — the number `lime stop` prints and
+//! `lime done` logs.  The replay's is what its machine credits when the block is cut (`lime review`'s minutes, the heat
+//! grid's, an item's done minutes) and the open block it reads at the end of the log (`OpenBlock::worked_min_at`, the
+//! planner's open row).  Until D94 the replay netted only a break stepped while the clock ran (D87, P81) and the LAST
+//! break stepped where a clock starts (D92, P85); a clock behind the log — a `--now` moved backwards, two machines
+//! syncing one plan directory — writes every other shape: a break logged ahead of a `start` but begun after it, a
+//! start inside an earlier break with a later one stepped between, overlapping breaks, a break filed on the ledger day
+//! before the block's.  This file draws them all, with a pause or an interruption on top, and holds the two readings
+//! to one number on every day it draws.
+//!
+//! **It leaves nothing out** (the owner's **D99**, README gap 4520a, W-47 track K, parity P104).  Until W-47 a stated
+//! rule (`retroactive`) left out every day whose in-block lines were not in their stamps' order — a break, a `pause` or
+//! an `interrupt` logged after the replay had closed a stretch it lies across, which the host's union netted at its
+//! next reading and the replay never did (79-85 of 257 days a run).  The replay now settles the open block over every
+//! span it nets at every mark (`Replay.settle`), so those days read one number too, and they are compared — with a
+//! floor of their own, so the class cannot pass by drawing none of it ([`out_of_order`]).
+
+#[allow(dead_code)]
+#[path = "support/replay.rs"]
+mod replay;
+
+use std::sync::Mutex;
+
+use chrono::{DateTime, Duration, FixedOffset, NaiveDate, TimeZone};
+use proptest::prelude::*;
+
+/// 2026-09-07T09:00-05:00, the hour the drawn days are measured from.
+fn nine() -> DateTime<FixedOffset> {
+    FixedOffset::west_opt(5 * 3600).expect("offset").with_ymd_and_hms(2026, 9, 7, 9, 0, 0).single().expect("instant")
+}
+
+fn at(min: i64) -> DateTime<FixedOffset> {
+    nine() + Duration::minutes(min)
+}
+
+fn stamp(t: DateTime<FixedOffset>) -> String {
+    t.to_rfc3339()
+}
+
+/// When a drawn break's line is logged: before the block's `start` (a clock behind the log), or after it, at a
+/// position among the block's own marks.
+#[derive(Clone, Copy, Debug)]
+enum When {
+    Ahead,
+    InBlock(u8),
+}
+
+/// One drawn break: its start in minutes from 09:00, its length, and when its line is logged.
+#[derive(Clone, Copy, Debug)]
+struct Brk {
+    from: i64,
+    len: i64,
+    when: When,
+}
+
+/// A clock-stopping mark pair on the block: a `pause`/`unpause` or an `interrupt`/`resume`, its two instants, and
+/// where among the in-block lines each is logged.
+#[derive(Clone, Copy, Debug)]
+struct Marks {
+    interrupt: bool,
+    on: i64,
+    off: i64,
+}
+
+#[derive(Clone, Debug)]
+struct Day {
+    /// The block's `start`, in minutes from 09:00, and its `stop`.
+    start: i64,
+    stop: i64,
+    breaks: Vec<Brk>,
+    marks: Option<Marks>,
+    /// A wake on the 6th and a break at 06:30-07:20 on the 7th, filed on the 6th (before the 7th's 07:00 wake): a
+    /// break of the ledger day BEFORE the block's, logged ahead of the block or inside it (gap 4363).  The whole
+    /// block is then drawn from 07:05 rather than 09:00, so it can start inside that break.
+    day_before: Option<bool>,
+}
+
+impl Day {
+    /// Minutes from 09:00 the block's own offsets are drawn from: 07:05 on a day with a break of the day before.
+    fn base(&self) -> i64 {
+        if self.day_before.is_some() { -115 } else { 0 }
+    }
+
+    /// The instant `min` minutes into the block's own frame.
+    fn t(&self, min: i64) -> DateTime<FixedOffset> {
+        at(self.base() + min)
+    }
+}
+
+fn day_strategy() -> impl Strategy<Value = Day> {
+    (0i64..=60, 30i64..=150).prop_flat_map(|(start, span)| {
+        let stop = start + span;
+        let brk = (start - 40..stop - 5, 1i64..=40, prop_oneof![3 => Just(None), 2 => (0u8..4).prop_map(Some)])
+            .prop_map(|(from, len, when)| Brk { from, len, when: when.map_or(When::Ahead, When::InBlock) });
+        let marks = prop::option::weighted(0.5, (any::<bool>(), 1i64..=span - 2, 1i64..=30)).prop_map(move |m| {
+            m.map(|(interrupt, on, len)| Marks { interrupt, on: start + on, off: (start + on + len).min(stop - 1) })
+        });
+        (Just(start), Just(stop), prop::collection::vec(brk, 1..=3), marks, prop::option::weighted(0.25, any::<bool>()))
+            .prop_map(|(start, stop, breaks, marks, day_before)| Day { start, stop, breaks, marks, day_before })
+    })
+}
+
+fn line(t: DateTime<FixedOffset>, body: &str) -> String {
+    format!("{{\"t\":\"{}\",{body}}}", stamp(t))
+}
+
+fn break_line(t: DateTime<FixedOffset>, len: i64) -> String {
+    spelled_break_line(t, len, Spell::Both)
+}
+
+/// **How a drawn break's line spells its span** — the W-44 land's composition of D94 with the owner's **D95** (P93,
+/// README gap 4360): a `break` line's span is `[t, t + actual_min)`, else `[t, t + planned_min)` for a line logged
+/// without `actual_min`, to the host (`BreakRecord::span`) and the replay (`Replay.brkEnd`) alike.  Every spelling
+/// below spans `len` minutes to both readers; the binary's own writers log only [`Spell::Both`]'s shape when the
+/// break ran as planned, and a hand-edited log holds the other two.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Spell {
+    /// `planned_min` and `actual_min` both `len` (the arm's draw since track K).
+    Both,
+    /// `planned_min` `len` and no `actual_min` — D95's shape: until the land merged track H's reading, the host read
+    /// it as no span while the replay netted its planned minutes.
+    PlannedOnly,
+    /// `planned_min` fifteen more than `actual_min` `len` — a break ended early: the span is the actual one.
+    EndedEarly,
+}
+
+fn spelled_break_line(t: DateTime<FixedOffset>, len: i64, spell: Spell) -> String {
+    match spell {
+        Spell::Both => line(t, &format!("\"ev\":\"break\",\"planned_min\":{len},\"actual_min\":{len}")),
+        Spell::PlannedOnly => line(t, &format!("\"ev\":\"break\",\"planned_min\":{len}")),
+        Spell::EndedEarly => {
+            line(t, &format!("\"ev\":\"break\",\"planned_min\":{},\"actual_min\":{len}", len + 15))
+        }
+    }
+}
+
+/// The drawn day's log lines, in file order, WITHOUT the `stop` (the host reads the block running at the `stop`'s
+/// instant), and the `stop` line.
+fn lines(d: &Day) -> (Vec<String>, String) {
+    lines_spelled(d, &[])
+}
+
+/// [`lines`] with the `k`-th drawn break spelled `spells[k]` ([`Spell::Both`] past the slice's end).
+fn lines_spelled(d: &Day, spells: &[Spell]) -> (Vec<String>, String) {
+    let spell = |k: usize| spells.get(k).copied().unwrap_or(Spell::Both);
+    let mut out = Vec::new();
+    if d.day_before.is_some() {
+        out.push(line(at(-26 * 60), "\"ev\":\"wake\",\"slept_min\":420"));
+    }
+    if d.day_before == Some(true) {
+        out.push(break_line(at(-150), 50));
+    }
+    out.push(line(at(-120), "\"ev\":\"wake\",\"slept_min\":420"));
+    for (k, b) in d.breaks.iter().enumerate() {
+        if matches!(b.when, When::Ahead) {
+            out.push(spelled_break_line(d.t(b.from), b.len, spell(k)));
+        }
+    }
+    out.push(line(
+        d.t(d.start),
+        "\"ev\":\"start\",\"id\":\"a\",\"pred\":4,\"rep\":3,\"hsw\":2.0,\"slept_min\":420,\"loc\":\"home\",\"blocks_done\":0,\"since_break_min\":0",
+    ));
+    // The in-block lines: the marks at slots 1 and 3, each break at its own slot (0-3, before or between them).
+    let mut slots: Vec<(u8, u8, String)> = Vec::new();
+    if let Some(m) = d.marks {
+        let (on, off) = if m.interrupt {
+            ("\"ev\":\"interrupt\",\"id\":\"a\"".to_string(), format!("\"ev\":\"resume\",\"lost_min\":{},\"dropped\":[]", m.off - m.on))
+        } else {
+            ("\"ev\":\"pause\",\"id\":\"a\"".to_string(), "\"ev\":\"unpause\",\"id\":\"a\"".to_string())
+        };
+        slots.push((1, 0, line(d.t(m.on), &on)));
+        slots.push((3, 0, line(d.t(m.off), &off)));
+    }
+    for (k, b) in d.breaks.iter().enumerate() {
+        if let When::InBlock(s) = b.when {
+            slots.push((s, 1 + k as u8, spelled_break_line(d.t(b.from), b.len, spell(k))));
+        }
+    }
+    if d.day_before == Some(false) {
+        slots.push((0, 9, break_line(at(-150), 50)));
+    }
+    slots.sort_by_key(|(s, k, _)| (*s, *k));
+    out.extend(slots.into_iter().map(|(_, _, l)| l));
+    (out, line(d.t(d.stop), "\"ev\":\"stop\",\"id\":\"a\",\"remaining_min\":0"))
+}
+
+/// **A day whose lines logged inside the block are not in the order of their stamps** (README gap 4520a): a break, a
+/// `pause` or an `interrupt` logged after the replay may already have closed a stretch it lies across.  Until the owner's
+/// D99 the replay credited and drew such a stretch at its close and the host's union netted the late mark at its next
+/// reading, so this file left these days out by rule; since D99 the replay settles the open block over every span it
+/// nets at every mark, and these days are compared like any other — this predicate now only COUNTS them, for the floor
+/// that keeps the class from passing vacuously.  Over-approximated: such a day may hold no stretch a late mark reaches.
+fn out_of_order(d: &Day) -> bool {
+    // (log position, stamp in the block's frame) of every line logged between the `start` and the `stop`.
+    let mut in_block: Vec<((u8, usize), i64)> = d
+        .breaks
+        .iter()
+        .enumerate()
+        .filter_map(|(k, b)| match b.when {
+            When::InBlock(s) => Some(((s, 1 + k), b.from)),
+            When::Ahead => None,
+        })
+        .collect();
+    if let Some(m) = d.marks {
+        in_block.push(((1, 0), m.on));
+        in_block.push(((3, 0), m.off));
+    }
+    in_block.iter().any(|(pi, ti)| in_block.iter().any(|(pj, tj)| pi < pj && tj < ti))
+}
+
+/// The day the host's runtime reads — the block's own date.
+fn today() -> NaiveDate {
+    NaiveDate::from_ymd_opt(2026, 9, 7).expect("date")
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: lime_core::devenv::var("LIME_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256),
+        max_shrink_iters: 2_000,
+        ..ProptestConfig::default()
+    })]
+
+    /// **The host and the replay read a block one way, whatever breaks the log holds on its ledger days and in
+    /// whatever order its marks are logged** — the owner's D94 and D99.  The `stop`'s credit (the replay's,
+    /// `items.a.minutes`) is the host's `running_worked_min` at the `stop`'s instant over the log before it; and the
+    /// open block the replay reads at the end of that log (`OpenBlock::worked_min_at`, `Replay.openOf`) is the host's
+    /// number too wherever every break it holds ended by then.  Every drawn day is compared (D99 retired the rule that
+    /// left out a day whose in-block lines were not in their stamps' order, README gap 4520a).
+    #[test]
+    fn the_host_and_the_replay_net_every_break_on_a_blocks_ledger_days_once(d in day_strategy()) {
+        /// `[cases, compared, out of their stamps' order (gap 4520a, compared since D99), gap 4361 (a break the clock
+        /// met after it started, logged ahead), gap 4506 (a start inside a break that is not the last one stepped), gap
+        /// 4363 (a break of the day before, overlapping the block), open readings compared, open readings over a break
+        /// held ahead of the clock]`.
+        static CENSUS: Mutex<[u64; 8]> = Mutex::new([0; 8]);
+        let tz = chrono_tz::America::Chicago;
+        let (prefix, stop) = lines(&d);
+        let late = out_of_order(&d);
+        let ahead: Vec<&Brk> = d.breaks.iter().filter(|b| matches!(b.when, When::Ahead)).collect();
+        let meets_after_start = ahead.iter().any(|b| b.from > d.start && b.from < d.stop);
+        let covering: Vec<&&Brk> = ahead.iter().filter(|b| b.from <= d.start && d.start < b.from + b.len).collect();
+        let not_last = covering.iter().any(|b| !std::ptr::eq(**b, *ahead.last().expect("covering is ahead")));
+        let day_before = d.day_before.is_some() && d.base() + d.start < -100;
+        let all_end_by_stop = d.breaks.iter().all(|b| b.from + b.len <= d.stop);
+        let mut open_ahead = false;
+        let text = prefix.join("\n") + "\n";
+        let running = replay::replay_of_text(&text, tz);
+        let host = running.running_worked_min("a", today(), d.t(d.stop), None);
+        let whole = replay::replay_of_text(&(text.clone() + &stop + "\n"), tz);
+        let credit = whole.items.get("a").map(|i| i.minutes);
+        prop_assert!(host.is_some(), "the host reads no running block before the stop:\n{text}");
+        prop_assert_eq!(host, credit, "D94 + D99: the stop's credit is not the host's union (P92, P104); the log:\n{}{}", text, stop);
+        if all_end_by_stop {
+            let open = running.open_block.as_ref().filter(|b| b.id == "a").map(|b| replay::open_worked_min_at(b, d.t(d.stop)));
+            prop_assert_eq!(host, open, "D94 + D99: the open block read at the end of the log is not the host's union (P92, P104); the log:\n{}", text);
+            open_ahead = meets_after_start;
+        }
+        let r = {
+            let mut r = CENSUS.lock().expect("census");
+            r[0] += 1;
+            r[1] += 1;
+            r[2] += u64::from(late);
+            r[3] += u64::from(meets_after_start);
+            r[4] += u64::from(not_last);
+            r[5] += u64::from(day_before);
+            r[6] += u64::from(all_end_by_stop);
+            r[7] += u64::from(open_ahead);
+            *r
+        };
+        let generated: u64 = lime_core::devenv::var("LIME_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256);
+        if r[0] >= generated {
+            // **Floors** (AGENTS §9.2): a class compared on no day compares nothing.  Red is a finding about the draw,
+            // re-run and reported (D46), never reverted.
+            prop_assert!(r[2] * 5 > r[0], "fewer than a fifth of the days drawn held a mark out of its stamp's order (gap 4520a): {r:?}");
+            prop_assert!(r[3] > 0, "no compared day held a break logged ahead of the start that the clock met after it started (gap 4361): {r:?}");
+            prop_assert!(r[4] > 0, "no compared day started inside a break that was not the last one stepped (gap 4506): {r:?}");
+            prop_assert!(r[5] > 0, "no compared day held a break of the ledger day before overlapping the block (gap 4363): {r:?}");
+            prop_assert!(r[7] > 0, "no open reading held a break ahead of the clock (gap 4361, the block running): {r:?}");
+        }
+        eprintln!(
+            "kernel_break_union census (D94 + D99): {} cases, {} compared, {} out of their stamps' order (gap 4520a), {} with a \
+             break met after the start (gap 4361), {} starting inside a break not the last stepped (gap 4506), {} with a \
+             break of the day before (gap 4363), {} open readings compared ({} over a break ahead of the clock)",
+            r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]
+        );
+    }
+}
+
+/// **The draw is not vacuous on its own terms**: S1's day from the drive (`scratchpad/w44-k/drive`, README §1) — a
+/// thirty-minute break at 09:00, a five-minute one at 09:40, the `start` at 09:10, `stop` at 10:00 — is in the class,
+/// is compared, and reads 25 both ways (D92's replay read 50).
+#[test]
+fn the_drawn_class_holds_the_driven_gap_4506_day() {
+    let d = Day {
+        start: 10,
+        stop: 60,
+        breaks: vec![Brk { from: 0, len: 30, when: When::Ahead }, Brk { from: 40, len: 5, when: When::Ahead }],
+        marks: None,
+        day_before: None,
+    };
+    assert!(!out_of_order(&d));
+    let tz = chrono_tz::America::Chicago;
+    let (prefix, stop) = lines(&d);
+    let text = prefix.join("\n") + "\n";
+    let host = replay::replay_of_text(&text, tz).running_worked_min("a", today(), d.t(d.stop), None);
+    let whole = replay::replay_of_text(&(text + &stop + "\n"), tz);
+    assert_eq!(host, Some(25));
+    assert_eq!(whole.items.get("a").map(|i| i.minutes), Some(25));
+}
+
+/// The host's reading at the `stop`'s instant and the replay's credit for `d`, read as the arm reads them.
+fn the_two_readings(d: &Day) -> (Option<u32>, Option<u32>) {
+    let tz = chrono_tz::America::Chicago;
+    let (prefix, stop) = lines(d);
+    let text = prefix.join("\n") + "\n";
+    let host = replay::replay_of_text(&text, tz).running_worked_min("a", today(), d.t(d.stop), None);
+    let whole = replay::replay_of_text(&(text + &stop + "\n"), tz);
+    (host, whole.items.get("a").map(|i| i.minutes))
+}
+
+/// **The residual the arm left out reads one way now, and these are its witnesses** (README gap 4520a, closed by the
+/// owner's D99) — the two shapes the arm's draw found before W-44's rule named them (the first is the seed in
+/// `kernel_break_union.proptest-regressions`).  Each is a line logged inside the block after the replay had closed a
+/// stretch it lies across: two breaks logged out of order while the block runs (the replay closed `[09:00, 09:01]` at
+/// the 09:01 break, then stepped the 09:00 one — D94 credited 29 against the host's 28), and a `pause` stamped 09:01
+/// logged after a break at 09:17 (D94 banked `[09:00, 09:17]` at the break and `[09:02, 09:17]` again after the
+/// `unpause` — 44 against the host's 28).  Both are out of their stamps' order and both read 28 both ways.
+#[test]
+fn the_residual_the_arm_left_out_reads_one_way_by_its_witnesses() {
+    let breaks_out_of_order = Day {
+        start: 0,
+        stop: 30,
+        breaks: vec![Brk { from: 1, len: 1, when: When::InBlock(0) }, Brk { from: 0, len: 1, when: When::InBlock(0) }],
+        marks: None,
+        day_before: None,
+    };
+    let pause_behind_a_break = Day {
+        start: 0,
+        stop: 30,
+        breaks: vec![Brk { from: 17, len: 1, when: When::InBlock(0) }],
+        marks: Some(Marks { interrupt: false, on: 1, off: 2 }),
+        day_before: None,
+    };
+    for d in [&breaks_out_of_order, &pause_behind_a_break] {
+        assert!(out_of_order(d), "the witness is no longer out of its stamps' order: {d:?}");
+        assert_eq!(the_two_readings(d), (Some(28), Some(28)), "gap 4520a's witness reads two ways: {d:?}");
+    }
+}
+
+fn spell_strategy() -> impl Strategy<Value = Spell> {
+    prop_oneof![1 => Just(Spell::Both), 2 => Just(Spell::PlannedOnly), 2 => Just(Spell::EndedEarly)]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: lime_core::devenv::var("LIME_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256),
+        max_shrink_iters: 2_000,
+        ..ProptestConfig::default()
+    })]
+
+    /// **Every break a clock meets is netted ONCE, however its line spells its span** — the W-44 land's composition
+    /// of track K's D94 (the replay nets every break on a block's ledger days, P92) with track H's D95 (the host reads
+    /// a break's span as the replay does, P93).  The day is the arm above's, every drawn break spelled at random —
+    /// with `actual_min`, without it (D95's shape), or ended before its plan — and the two readings are held to one
+    /// number exactly as the arm holds them: the `stop`'s credit and, where every break ended by then, the open block.
+    /// Either track alone leaves it two numbers: without D94 a planned-only break logged ahead of the clock is netted
+    /// by the host and credited by the replay; without D95 a planned-only break is netted by the replay alone.
+    #[test]
+    fn the_host_and_the_replay_net_every_spelling_of_a_break_once(
+        d in day_strategy(),
+        spells in prop::collection::vec(spell_strategy(), 3),
+    ) {
+        /// `[cases, compared, compared holding a planned-only break the block's span overlaps, compared holding an
+        /// early-ended one it overlaps, of the first: logged ahead of the start]`.
+        static CENSUS: Mutex<[u64; 5]> = Mutex::new([0; 5]);
+        let tz = chrono_tz::America::Chicago;
+        let (prefix, stop) = lines_spelled(&d, &spells);
+        let overlaps = |b: &Brk| b.from < d.stop && d.start < b.from + b.len;
+        let spelled = |s: Spell| d.breaks.iter().zip(&spells).any(|(b, &x)| x == s && overlaps(b));
+        let planned_ahead = d.breaks.iter().zip(&spells).any(|(b, &x)| x == Spell::PlannedOnly && overlaps(b) && matches!(b.when, When::Ahead));
+        let text = prefix.join("\n") + "\n";
+        let running = replay::replay_of_text(&text, tz);
+        let host = running.running_worked_min("a", today(), d.t(d.stop), None);
+        let whole = replay::replay_of_text(&(text.clone() + &stop + "\n"), tz);
+        let credit = whole.items.get("a").map(|i| i.minutes);
+        prop_assert!(host.is_some(), "the host reads no running block before the stop:\n{text}");
+        prop_assert_eq!(host, credit, "D94 + D95 + D99: the stop's credit is not the host's union (P92, P93, P104); the log:\n{}{}", text, stop);
+        if d.breaks.iter().all(|b| b.from + b.len <= d.stop) {
+            let open = running.open_block.as_ref().filter(|b| b.id == "a").map(|b| replay::open_worked_min_at(b, d.t(d.stop)));
+            prop_assert_eq!(host, open, "D94 + D95 + D99: the open block is not the host's union (P92, P93, P104); the log:\n{}", text);
+        }
+        let r = {
+            let mut r = CENSUS.lock().expect("census");
+            r[0] += 1;
+            r[1] += 1;
+            r[2] += u64::from(spelled(Spell::PlannedOnly));
+            r[3] += u64::from(spelled(Spell::EndedEarly));
+            r[4] += u64::from(planned_ahead);
+            *r
+        };
+        let generated: u64 = lime_core::devenv::var("LIME_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256);
+        if r[0] >= generated {
+            // Floors (AGENTS §9.2): a spelling compared on no day compares nothing.
+            prop_assert!(r[1] * 2 > r[0], "fewer than half the days drawn were compared: {r:?}");
+            prop_assert!(r[2] > 0, "no compared day held a planned-only break the block overlaps (D95): {r:?}");
+            prop_assert!(r[3] > 0, "no compared day held an early-ended break the block overlaps: {r:?}");
+            prop_assert!(r[4] > 0, "no compared day held a planned-only break logged ahead of the start (D94 with D95): {r:?}");
+        }
+        eprintln!(
+            "kernel_break_union spellings census (W-44 land, D94 + D95): {} cases, {} compared, {} with a planned-only \
+             break the block overlaps ({} logged ahead of the start), {} with an early-ended one",
+            r[0], r[1], r[2], r[4], r[3]
+        );
+    }
+}
+
+/// **The composition is not vacuous on its own terms**: S1's day (two breaks logged ahead of a `start` at 09:10 that
+/// starts inside the first) with BOTH breaks logged without `actual_min` reads 25 both ways — the replay nets the
+/// planned spans (D94, `Replay.brkEnd`) and so does the host (D95, `BreakRecord::span`).
+#[test]
+fn the_driven_gap_4506_day_spelled_planned_only_reads_one_way() {
+    let d = Day {
+        start: 10,
+        stop: 60,
+        breaks: vec![Brk { from: 0, len: 30, when: When::Ahead }, Brk { from: 40, len: 5, when: When::Ahead }],
+        marks: None,
+        day_before: None,
+    };
+    let tz = chrono_tz::America::Chicago;
+    let (prefix, stop) = lines_spelled(&d, &[Spell::PlannedOnly, Spell::PlannedOnly]);
+    assert!(prefix.iter().all(|l| !l.contains("actual_min")), "{prefix:?}");
+    let text = prefix.join("\n") + "\n";
+    let host = replay::replay_of_text(&text, tz).running_worked_min("a", today(), d.t(d.stop), None);
+    let whole = replay::replay_of_text(&(text + &stop + "\n"), tz);
+    assert_eq!(host, Some(25));
+    assert_eq!(whole.items.get("a").map(|i| i.minutes), Some(25));
+}
+
+/// One break logged AFTER the block closed: its start in minutes into the block's frame and its length.
+#[derive(Clone, Copy, Debug)]
+struct Late {
+    from: i64,
+    len: i64,
+}
+
+/// How the drawn block closes: a `stop`, or a `done` carrying the host's minutes at its instant (what `lime done` logs).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Close {
+    Stop,
+    Done,
+}
+
+fn late_strategy() -> impl Strategy<Value = (Day, Vec<Late>, Close)> {
+    day_strategy().prop_flat_map(|d| {
+        let (start, stop) = (d.start, d.stop);
+        let late = (start - 20..stop + 5, 1i64..=40).prop_map(|(from, len)| Late { from, len });
+        (Just(d), prop::collection::vec(late, 1..=2), prop_oneof![Just(Close::Stop), Just(Close::Done)])
+    })
+}
+
+/// The `done` line `lime done` logs at `t` with `actual` minutes (§10.1's fields, `bDone`'s values).
+fn done_line(t: DateTime<FixedOffset>, actual: u32) -> String {
+    line(t, &format!("\"ev\":\"done\",\"id\":\"a\",\"est_min\":50,\"actual_min\":{actual},\"went\":2,\"ci\":3"))
+}
+
+/// The drawn day closed by `close`, with the `late` breaks logged after the close; and the host's union over the same
+/// marks, read at the close's instant with the late breaks logged while the block ran (it is order-free), and before
+/// them (what a `done` logs).
+fn late_readings(d: &Day, late: &[Late], close: Close) -> (Option<u32>, Option<u32>, Option<u32>, Vec<u32>) {
+    let tz = chrono_tz::America::Chicago;
+    let (prefix, stop) = lines(d);
+    let lates: Vec<String> = late.iter().map(|b| break_line(d.t(b.from), b.len)).collect();
+    let before = prefix.join("\n") + "\n";
+    let at_close = replay::replay_of_text(&before, tz).running_worked_min("a", today(), d.t(d.stop), None);
+    let with_late = prefix.iter().chain(&lates).cloned().collect::<Vec<_>>().join("\n") + "\n";
+    let host = replay::replay_of_text(&with_late, tz).running_worked_min("a", today(), d.t(d.stop), None);
+    let close_line = match close {
+        Close::Stop => stop,
+        Close::Done => done_line(d.t(d.stop), at_close.unwrap_or(0)),
+    };
+    let whole = before + &close_line + "\n" + &lates.join("\n") + "\n";
+    let r = replay::replay_of_text(&whole, tz);
+    let credit = r.items.get("a").map(|i| i.minutes);
+    let durations = r.durations_on(today()).map(|o| o.actual_min).collect();
+    (at_close, host, credit, durations)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: lime_core::devenv::var("LIME_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256),
+        max_shrink_iters: 2_000,
+        ..ProptestConfig::default()
+    })]
+
+    /// **A break logged AFTER the block closed, stamped inside it, is netted as if the clock had met it** — the owner's
+    /// **D100** (README gap 4520b, W-47 track K, parity P105): the later break wins.  The arm's day is closed by a `stop`,
+    /// or by a `done` carrying the host's minutes at its instant (what `lime done` logs), and one or two breaks are logged
+    /// after it, stamped from twenty minutes before the `start` to five after the close.  The host's union of idle spans
+    /// is order-free, so its reading at the close over the same marks — the late breaks logged while the block ran — is
+    /// the one number: the replay's credit (`items.a.minutes`: `lime review day`'s minutes, the item's) and, for a `done`,
+    /// its duration observation (the fit's) are held to it.  Until D100 both kept the close's number whatever was logged
+    /// after.
+    #[test]
+    fn a_break_logged_after_the_close_is_netted_as_the_host_unions_it(t in late_strategy()) {
+        /// `[cases, compared, a late break moved the reading, closed by a done, of those moved: closed by a done]`.
+        static CENSUS: Mutex<[u64; 5]> = Mutex::new([0; 5]);
+        let (d, late, close) = t;
+        let (at_close, host, credit, durations) = late_readings(&d, &late, close);
+        prop_assert!(host.is_some() && at_close.is_some(), "the host reads no running block before the close: {d:?}");
+        prop_assert_eq!(credit, host, "D100: the credit after a late break is not the host's union (P105): {:?} {:?} {:?}", d, late, close);
+        if close == Close::Done {
+            // A `done` of zero minutes pushes no observation (§10.1: the fit reads a block that was worked); one that
+            // pushed one has it netted, to zero if the late breaks took every minute (`Replay.netMin`'s bound).
+            let want: Vec<u32> = if at_close.unwrap_or(0) > 0 { vec![host.unwrap_or(0)] } else { vec![] };
+            prop_assert_eq!(durations, want, "D100: the done's duration observation is not netted (P105): {:?} {:?}", d, late);
+        }
+        let moved = host != at_close;
+        let r = {
+            let mut r = CENSUS.lock().expect("census");
+            r[0] += 1;
+            r[1] += 1;
+            r[2] += u64::from(moved);
+            r[3] += u64::from(close == Close::Done);
+            r[4] += u64::from(moved && close == Close::Done);
+            *r
+        };
+        let generated: u64 = lime_core::devenv::var("LIME_PROPTEST_CASES").ok().and_then(|s| s.parse().ok()).unwrap_or(256);
+        if r[0] >= generated {
+            // Floors (AGENTS §9.2): a late break that nets nothing on every day drawn compares nothing.
+            prop_assert!(r[2] * 4 > r[0], "fewer than a quarter of the days drawn held a late break the block's reading moved by (gap 4520b): {r:?}");
+            prop_assert!(r[4] > 0, "no day closed by a done held a late break that moved it (gap 4520b): {r:?}");
+        }
+        eprintln!(
+            "kernel_break_union late-break census (D100): {} cases, {} compared, {} moved by a late break, {} closed by a \
+             done ({} of them moved)",
+            r[0], r[1], r[2], r[3], r[4]
+        );
+    }
+}
+
+/// **The class holds the driven M11** (README "Stage 6 — W-47 track K" §1): `start` 08:00 — here 09:00, the arm's
+/// frame — `done` an hour later with sixty minutes, then a twenty-minute break thirty minutes in, logged after.  The
+/// host's union and the replay's credit read forty, and so does the `done`'s duration observation; before D100 the
+/// credit read sixty.
+#[test]
+fn the_late_break_class_holds_the_driven_m11() {
+    let d = Day { start: 0, stop: 60, breaks: vec![], marks: None, day_before: None };
+    let (at_close, host, credit, durations) = late_readings(&d, &[Late { from: 30, len: 20 }], Close::Done);
+    assert_eq!((at_close, host, credit, durations), (Some(60), Some(40), Some(40), vec![40]));
+}

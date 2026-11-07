@@ -11,11 +11,11 @@ applied to a gate, and it has now cost two findings in two consecutive runs:
     invisible to checks 2, 8 and 9 at once and a partial def -- a HARD RULE --
     passed all three.  Repaired by making three of them recursive.
   * W-22: the FOURTH was never repaired, because nothing named it.  check.sh's
-    check-3 roster grep was still TmKernel/*.lean, so a theorem in a
+    check-3 roster grep was still LimeKernel/*.lean, so a theorem in a
     subdirectory was never required to have a #print axioms line.  And the three
     that WERE repaired shared a hard-coded prune list holding the name "target",
     which is a legal Lean module path component: a library module under
-    kernel/TmKernel/TmKernel/target/ was invisible to checks 2, 8 AND 9 again,
+    kernel/LimeKernel/LimeKernel/target/ was invisible to checks 2, 8 AND 9 again,
     through the prune list instead of through the non-recursion.  Both DRIVEN at
     the W-22 repair step; the drives are in kernel/README.md's block.
 
@@ -26,7 +26,7 @@ whether a file exists now needs someone to write a second walk.
 WHAT IS PRUNED, and why it is a property and not a name.  A build directory is
 pruned; a source directory is not.  The old rule was a name list, and a name
 list cannot tell a cargo build directory called target from a Lean namespace
-called Tm.Target.  The rule here is two properties, both of them things a build
+called Lime.Target.  The rule here is two properties, both of them things a build
 directory HAS and a Lean module directory does not:
 
   * its name begins with a dot -- .lake and .git, and a leading dot is not a
@@ -120,7 +120,7 @@ def ignored_paths(root):
 
       * `kernel/w30probe.md` citing a dead name -- check 8 rc=1, NAMED;
       * `kernel/target/w30probe.md`, byte-identical -- check 8 **rc=0**;
-      * `kernel/TmKernel/TmKernel/target/Probe.lean` holding `partial def`, a
+      * `kernel/LimeKernel/LimeKernel/target/Probe.lean` holding `partial def`, a
         HARD RULE -- check 2 **rc=0, no output**.
 
     So the ignore answer no longer prunes a DIRECTORY at all.  It prunes an
@@ -133,7 +133,7 @@ def ignored_paths(root):
     WHAT IT COSTS, declared: an ignored directory that is neither dot-named nor
     CACHEDIR.TAG-marked is now DESCENDED.  Measured here today that is
     `kernel/__pycache__` and nothing else (3 files); `target/` and
-    `kernel/tm-kernel-ffi/target/` both carry the tag and are pruned by the
+    `kernel/lime-kernel-ffi/target/` both carry the tag and are pruned by the
     property, so the 19 GB this machine holds under them is not walked.
 
     Returns a set of `root`-relative paths, directories WITHOUT their trailing
@@ -199,7 +199,7 @@ def source_files(root, suffix, ignored=None):
     THE SUFFIX IS AN ARGUMENT SINCE README GAP 1418, and that is the whole of
     the Rust side's repair: `citations.py` enumerated the Rust with a hard-coded
     list of seven directory names, which is the exact shape this file's header
-    says cannot work, and `tm/examples` was not on it -- two compiled
+    says cannot work, and `lime/examples` was not on it -- two compiled
     `--example` targets of a crate whose `src` and `tests` ARE swept, holding
     live prose, invisible to check 8.  One walk, one prune rule, both
     languages."""
@@ -288,13 +288,13 @@ def rust_files(root):
 
     check 8's Rust sweep was a NAME LIST -- seven directories, written out --
     and the list's own blind-spot sentence named only the two `build.rs` files
-    and "a future crate".  `tm/examples` was neither, and was unswept: README
+    and "a future crate".  `lime/examples` was neither, and was unswept: README
     gap 1418, the fifth enumeration disagreement of this campaign and the first
     on the Rust side.  DRIVEN at the W-24 repair step, in a scratch copy: the
-    same `//! plant` prepended to tm/examples/windowbench.rs and to
-    tm/examples/tzprobe.rs left check 8 GREEN with byte-identical counts, while
-    the identical plant in tm/src/main.rs and in
-    kernel/tm-kernel-ffi/examples/oneshot.rs was named.
+    same `//! plant` prepended to lime/examples/windowbench.rs and to
+    lime/examples/tzprobe.rs left check 8 GREEN with byte-identical counts, while
+    the identical plant in lime/src/main.rs and in
+    kernel/lime-kernel-ffi/examples/oneshot.rs was named.
 
     WHAT IT CANNOT SEE, and it is the same sentence as `lean_files`': a build
     directory that is neither dot-prefixed nor CACHEDIR.TAG-marked is walked and
@@ -309,21 +309,21 @@ def library_files(pkg):
 
     THE ROOT MODULE IS ONE OF THEM, and that is the whole reason this function
     exists (README gap 1314, the W-23 repair step).  A Lake library named
-    `TmKernel` is `TmKernel/TmKernel/**.lean` PLUS `TmKernel/TmKernel.lean`, the
+    `LimeKernel` is `LimeKernel/LimeKernel/**.lean` PLUS `LimeKernel/LimeKernel.lean`, the
     root module beside the directory -- and four consumers sharing one walk
     still disagreed, because two of them called it on the DIRECTORY:
 
-      * check.sh 19  totality.py TmKernel/TmKernel TmKernel   (both)
-      * citations.py sweeps lean_files(kernel/TmKernel)       (the package)
-      * check.sh 59  leanfiles.py TmKernel/TmKernel           (the subdir ONLY)
-      * mutate.py    LIB = PKG/TmKernel                       (the subdir ONLY)
+      * check.sh 19  totality.py LimeKernel/LimeKernel LimeKernel   (both)
+      * citations.py sweeps lean_files(kernel/LimeKernel)       (the package)
+      * check.sh 59  leanfiles.py LimeKernel/LimeKernel           (the subdir ONLY)
+      * mutate.py    LIB = PKG/LimeKernel                       (the subdir ONLY)
 
     So a `theorem` in the root module was never required to carry a `#print
     axioms` line and a `def` there was never constant-folded, while `lake`
     compiled both.  DRIVEN in a scratch copy of kernel/ with check.sh's own
     lines 58-62: `theorem w23_probe_root_theorem : True := trivial` appended to
-    `TmKernel/TmKernel.lean` left `unaudited: []`; the identical theorem in
-    `TmKernel/TmKernel/Emit.lean` gave `unaudited: [w23_probe_lib_theorem]`.
+    `LimeKernel/LimeKernel.lean` left `unaudited: []`; the identical theorem in
+    `LimeKernel/LimeKernel/Emit.lean` gave `unaudited: [w23_probe_lib_theorem]`.
     Same class as the subdirectory (W-21), the roster grep (W-22) and the PRUNE
     list (W-22), one level UP instead of one level down.
 
@@ -344,13 +344,13 @@ def library_files(pkg):
 # It is here rather than in either of them for this file's own reason: two
 # definitions of one concept is the bug, and "where the pinned toolchain's
 # sources are" is one concept.
-TOOLCHAIN = pathlib.Path(__file__).resolve().parent / "TmKernel" / "lean-toolchain"
+TOOLCHAIN = pathlib.Path(__file__).resolve().parent / "LimeKernel" / "lean-toolchain"
 
 
 def toolchain_src():
     """The `src/lean` tree of the PINNED toolchain, as a pathlib.Path.
 
-    The pin is `kernel/TmKernel/lean-toolchain` (R8 forbids moving it) and elan
+    The pin is `kernel/LimeKernel/lean-toolchain` (R8 forbids moving it) and elan
     unpacks `leanprover/lean4:v4.33.1` at
     `~/.elan/toolchains/leanprover--lean4---v4.33.1`.  A pin this cannot read,
     or a toolchain whose sources are not unpacked, is a HARD ERROR and never a
@@ -525,10 +525,10 @@ def theorem_names(path):
 # `sed 's/.*\.//'`, so the comparison was a multiset over SHORT names: it saw a
 # name that had been LOST and could not see a name that had been SWAPPED.
 # DRIVEN in a clone before the repair: `Check.lean`'s
-# `#print axioms Tm.PlanWire.the_refusals_spell_themselves` replaced by a second
-# copy of `Tm.EmitWire.the_refusals_spell_themselves` left `lean Check.lean` at
+# `#print axioms Lime.PlanWire.the_refusals_spell_themselves` replaced by a second
+# copy of `Lime.EmitWire.the_refusals_spell_themselves` left `lean Check.lean` at
 # rc=0 with 5,220 axioms lines and check 3 saying `ok`, while
-# `Tm.PlanWire.the_refusals_spell_themselves` was audited ZERO times.  25 short
+# `Lime.PlanWire.the_refusals_spell_themselves` was audited ZERO times.  25 short
 # names are declared in more than one namespace at HEAD and 57 theorems sit on
 # them, so the exposure was real and latent.
 #

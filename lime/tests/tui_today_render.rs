@@ -1,0 +1,271 @@
+//! Screen 1 — Today, rendered (lime-spec-v1.md §12.1, §17 M6: "`ratatui`
+//! `TestBackend` snapshots of each pane at 120 and 90 columns").
+//!
+//! Every snapshot comes from a hand-built `App`: the `plan-basic` fixture,
+//! a fixed `now` of 2026-09-07 10:42 and the hand-written `DayPlan` of
+//! `tui_common::day_plan`, so nothing here moves when the planner changes.
+
+mod tui_common;
+
+use lime_core::model::Id;
+use tui_common::today;
+use tui_common::{app, idle_app, lines, render, render_lines};
+
+#[test]
+fn the_whole_screen_at_120_columns() {
+    insta::assert_snapshot!(render(&app(), 120, 30));
+}
+
+#[test]
+fn the_whole_screen_at_90_columns_stacks_the_panes() {
+    // §12: "below that, panes stack (Now on top, Timeline below, Week folded
+    // into the status line)".
+    insta::assert_snapshot!(render(&app(), 90, 34));
+}
+
+#[test]
+fn the_status_line() {
+    insta::assert_snapshot!(lines(&[today::status_line(&app(), 120)]));
+}
+
+#[test]
+fn the_status_line_folds_the_week_in_below_min_width() {
+    // §12: "Week folded into the status line" — one row, not a row of its own.
+    let row = lines(&[today::status_row(&app(), 90)]);
+    assert_eq!(row.lines().count(), 1);
+    assert!(row.contains("W37"), "the week is in the status line: {row}");
+    insta::assert_snapshot!(row);
+}
+
+#[test]
+fn the_narrow_frame_spends_no_row_on_the_week() {
+    // The frame is status · bar · bar · body … at either width, so the bar
+    // sits on the same rows and `bar_area` can hit-test it (§17.2).
+    let wide = render(&app(), 120, 30);
+    let narrow = render(&app(), 90, 34);
+    for screen in [&wide, &narrow] {
+        let head = screen.lines().next().expect("a status row");
+        assert!(head.contains("lime · Mon 2026-09-07"), "{head}");
+        let bar = screen.lines().nth(1).expect("the plan bar");
+        assert!(bar.contains("▲ 10:42"), "the bar follows the status row: {bar}");
+    }
+}
+
+#[test]
+fn the_timeline_pane() {
+    insta::assert_snapshot!(render_lines(&today::timeline_lines(&app(), 38, 14), 38));
+}
+
+#[test]
+fn the_timeline_pane_scrolls_to_keep_the_selection_visible() {
+    let mut app = app();
+    app.select(20);
+    let rendered = render_lines(&today::timeline_lines(&app, 38, 5), 38);
+    assert!(
+        rendered.contains("wind-down"),
+        "the last row must be on screen: {rendered}"
+    );
+    insta::assert_snapshot!(rendered);
+}
+
+#[test]
+fn the_now_pane() {
+    insta::assert_snapshot!(render_lines(&today::now_lines(&app(), 46), 46));
+}
+
+/// **The pause is said on the running block's row and no other** (the owner's D109, the W-48
+/// repair, README gap 5214): at 13:00 the head is the meeting `g1`, and `^t3`'s pause is not the
+/// meeting's; at 10:42 the head is `^t3` itself, and its pause is said.
+#[test]
+fn the_now_pane_says_paused_only_on_the_running_blocks_row() {
+    let mut meeting = tui_common::app_at(13, 0);
+    meeting.state.active.as_mut().expect("t3 runs").paused = true;
+    let pane = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(pane.contains("Meeting") || pane.contains("g1"), "the head is the wall: {pane}");
+    assert!(!pane.contains("paused"), "the meeting is not what is paused: {pane}");
+    let mut own = app();
+    own.state.active.as_mut().expect("t3 runs").paused = true;
+    let pane = render_lines(&today::now_lines(&own, 90), 90);
+    assert!(pane.contains("· paused"), "the running block's own row says it: {pane}");
+}
+
+/// **A wall that holds the paused block says when it lets go** (parity P123, README gap 5217, W-49
+/// track W): at 13:00 the head is the meeting `g1` and `^t3` is paused; with the kernel's
+/// reservation of `^t3` from the meeting's end in the day — a Block of `^t3` that takes no slot,
+/// after `now` — the pane names the block and the resume, as `lime now`'s header does
+/// (`emit::resumes_at`); with no such row it says nothing of it, and a block that is not paused
+/// is not said to resume.
+#[test]
+fn the_now_pane_names_the_held_blocks_resume() {
+    use lime_core::dayplan::{SegFlags, SegKind};
+    let cfg = tui_common::config();
+    let mut meeting = tui_common::app_at(13, 0);
+    meeting.state.active.as_mut().expect("t3 runs").paused = true;
+    let before = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(!before.contains("resumes"), "no reservation, no resume: {before}");
+    let i = meeting
+        .plan
+        .segments
+        .iter()
+        .position(|s| s.kind == SegKind::Break && s.start == tui_common::at(&cfg, 13, 50))
+        .expect("the break after the meeting");
+    meeting.plan.segments[i] = tui_common::seg(
+        &cfg,
+        (13, 50),
+        (14, 10),
+        SegKind::Block,
+        None,
+        Some("t3"),
+        SegFlags { planned_min: Some(20), ..SegFlags::default() },
+    );
+    let pane = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(pane.contains("· ^t3 resumes 13:50"), "the pane names the resume: {pane}");
+    meeting.state.active.as_mut().expect("t3 runs").paused = false;
+    let running = render_lines(&today::now_lines(&meeting, 90), 90);
+    assert!(!running.contains("resumes"), "a running block is not said to resume: {running}");
+}
+
+#[test]
+fn the_now_pane_with_nothing_running() {
+    // 16:30 with no `active` and no segment flagged current: past the last
+    // block of the hand-built day, in the gap before dinner.
+    let app = idle_app(16, 30);
+    let pane = render_lines(&today::now_lines(&app, 46), 46);
+    assert!(
+        pane.contains("nothing running (16:30)"),
+        "the idle row, not a block: {pane}"
+    );
+    insta::assert_snapshot!(pane);
+}
+
+#[test]
+fn a_row_that_contains_the_divider_glyph_is_still_its_own_segment() {
+    // The `───     window ends` divider is the one row that belongs to no
+    // segment. Detecting it by searching the whole row for `───` would also
+    // match an item's own text and shift every later row onto the wrong
+    // segment — `e` would then open the wrong file and line (§12).
+    let mut app = app();
+    app.plan.segments[0].flags.note = Some("a ─── b".to_string());
+    // The rows are the kernel's cells (the owner's D112): a test that edits a
+    // segment asks for them again, as the binary does for every day it plans,
+    // the edited note crossing as written.
+    app.plan = tui_common::rowwire::with_kernel_cells(tui_common::docs_json(), app.plan.clone(), &app.cfg);
+    app.refresh();
+    assert!(app.rows[0].text.contains("───"), "{}", app.rows[0].text);
+    assert_eq!(app.rows[0].segment, Some(0));
+    let mapped: Vec<usize> = app.rows.iter().filter_map(|r| r.segment).collect();
+    assert_eq!(mapped, (0..app.plan.segments.len()).collect::<Vec<_>>());
+    let dividers: Vec<&String> = app
+        .rows
+        .iter()
+        .filter(|r| r.segment.is_none())
+        .map(|r| &r.text)
+        .collect();
+    assert_eq!(dividers.len(), 1);
+    assert!(dividers[0].contains("window ends"), "{}", dividers[0]);
+}
+
+#[test]
+fn the_energy_pane() {
+    insta::assert_snapshot!(render_lines(&today::energy_lines(&app(), 46), 46));
+}
+
+#[test]
+fn the_week_pane() {
+    let app = app();
+    let title = today::week_title(&app);
+    let body = render_lines(&today::week_lines(&app, 38), 38);
+    insta::assert_snapshot!(format!("{title}\n{body}"));
+}
+
+#[test]
+fn an_id_less_routine_is_named_once_in_the_hot_and_waiting_lists() {
+    // `tree::key_of` keys a `routines.md` line by its title (§4.3 gives those
+    // lines no `^id`), so id == title and printing both read `lunch lunch`.
+    let mut app = app();
+    app.week.hot = vec![
+        tui_common::app::HotRow {
+            id: Id::new("lunch"),
+            title: "lunch".to_string(),
+            note: "due today".to_string(),
+        },
+        tui_common::app::HotRow {
+            id: Id::new("a3"),
+            title: "Pick up package".to_string(),
+            note: "due today".to_string(),
+        },
+    ];
+    app.week.waiting = vec![tui_common::app::WaitRow {
+        id: Id::new("shower"),
+        title: "shower".to_string(),
+        note: "2d".to_string(),
+    }];
+    let body = render_lines(&today::week_lines(&app, 46), 46);
+    assert!(
+        body.contains("⚠ lunch · due today"),
+        "the routine is named once:\n{body}"
+    );
+    assert!(
+        !body.contains("lunch lunch"),
+        "the title is not doubled:\n{body}"
+    );
+    assert!(
+        body.contains("? shower · 2d"),
+        "the waiting row is named once:\n{body}"
+    );
+    // An item with a real id still shows both.
+    assert!(
+        body.contains("⚠ a3 Pick up package · due today"),
+        "an id-carrying item keeps its id:\n{body}"
+    );
+}
+
+#[test]
+fn the_hint_line() {
+    insta::assert_snapshot!(lines(&[today::hint_line(&app(), 120)]));
+}
+
+#[test]
+fn the_command_line_replaces_the_hint() {
+    let mut app = app();
+    let action = app.action_for(key(':'));
+    app.apply(action);
+    for c in "plan --diff".chars() {
+        let action = app.action_for(key(c));
+        app.apply(action);
+    }
+    insta::assert_snapshot!(lines(&[today::hint_line(&app, 120)]));
+}
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+/// A plain character keystroke.
+fn key(c: char) -> KeyEvent {
+    KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+}
+
+/// §12.2–§12.5: pressing `2`–`5` in the shipped `lime tui` draws those screens,
+/// not a placeholder. The three modules were implemented but never added to
+/// the binary's `mod` list, so `today::draw` fell through to
+/// "screen N — … is not built yet" for every screen but Today, and only the
+/// M7 tests (which `#[path]`-include the modules) ever exercised them.
+#[test]
+fn screens_two_to_five_draw_their_own_panes() {
+    use tui_common::app::Screen;
+
+    for (screen, want) in [
+        (Screen::Queue, "Month"),
+        (Screen::Necessities, "Waiting"),
+        (Screen::Review, "adherence"),
+        (Screen::Inbox, "Capture"),
+    ] {
+        let mut app = app();
+        app.screen = screen;
+        let out = render(&app, 120, 30);
+        assert!(
+            !out.contains("not built yet"),
+            "{screen:?} is still the placeholder:\n{out}"
+        );
+        assert!(out.contains(want), "{screen:?} has no `{want}`:\n{out}");
+    }
+}

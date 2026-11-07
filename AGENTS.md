@@ -1,4 +1,4 @@
-# AGENTS.md — building the `tm` Lean kernel
+# AGENTS.md — building the `lime` Lean kernel
 
 You have been handed one stage of a rebuild. This is the working document for
 building it. Read §1–§7 once, then your stage's section in §8, then §9.
@@ -11,7 +11,7 @@ it is linked by section number.
 that, `kernel/README.md` is later than `PLAN-lean-kernel.md` — the plan has not
 been rewritten as the kernel learned things, and several of its statements are
 now stale in ways §10.2 lists by name. This document is the authority on
-*process* only: rules, conventions, verification, stop conditions.
+*process* only: rules, conventions, verification, stop conditions. **The product was renamed from `tm` to `lime`** (D159, step 1): `tm/`, `tm-core/`, `kernel/tm-kernel-ffi/`, `kernel/TmKernel/` and `tm-spec-v1.md` are `lime/`, `lime-core/`, `kernel/lime-kernel-ffi/`, `kernel/LimeKernel/` and `lime-spec-v1.md`; the namespace `Tm` is `Lime`; every function, test, crate and command `tm` is `lime`; `.tm/` and the `tm:plan` markers stay on a user's disk until step 2 (D161), and the fork keeps its own names. `PLAN-lean-kernel.md`, `kernel/design/**`, `kernel/README.md`, `lime/DORMANT.md`, `.claude/API-NOTES.md`, §4's D-rows and this file's dated records keep the old spelling in full, on purpose, and check 8 reads them through `ratchet.respell`. `TM_*` developer variables are `LIME_*` now, and an old one is refused by name; `TM_DIR`, a user's, still answers when `LIME_DIR` is unset.
 
 **Measurement date.** Every number here was re-measured on `rebuild-on-lean` at
 `bf7cc63` on 2026-09-12, with a clean working tree, every build and test command
@@ -47,9 +47,9 @@ final, step 4").*
 
 ## 1. What the kernel is, and the one idea
 
-`tm` is a Markdown-backed personal planner. The plan *is* the Markdown files;
+`lime` is a Markdown-backed personal planner. The plan *is* the Markdown files;
 there is no database behind them. The kernel is a pure Lean 4 package that
-exposes exactly one symbol — `@[export tm_kernel_call] Tm.callExport : String →
+exposes exactly one symbol — `@[export lime_kernel_call] Lime.callExport : String →
 String` — and Rust calls it through a hand-written C shim.
 
 **The organising idea: item lines are not stored.**
@@ -76,7 +76,7 @@ appends the line without ever asking whether `to_path` already holds `key`.
   **two verbs** that reach `move_to`.
 - **Six** is `PLAN-lean-kernel.md` §4.A's number and it is about *catalogued
   defects*: rows A1–A6, all verdict **U**. It is the five patched entrances plus
-  A6, the hole itself — `tm move` never checking the destination — which was
+  A6, the hole itself — `lime move` never checking the destination — which was
   still open on `main` when the plan was written.
 
 So: **six catalogued defects, five of them patched entrances, one hole, one
@@ -84,15 +84,15 @@ precondition.** Never write "six entrances"; the sixth row is not an entrance.
 
 The measurement behind A6: 426 of 39,601 ordered depth-2 command pairs on the
 committed 199-command alphabet, one of them reachable by a *single* command on a
-fresh `tm init --example` tree. (Stage 0 landed that precondition on `main`, and
+fresh `lime init --example` tree. (Stage 0 landed that precondition on `main`, and
 `main` has since been discarded with it: the restored Rust is the pre-stage-0
 fork point `4748911`. What closes A6 in the shipped binary now is the kernel —
-`move` and `readopt` run through it, and `tm move ^m2 month` on that tree is
+`move` and `readopt` run through it, and `lime move ^m2 month` on that tree is
 refused `occupied` with nothing written, `d8e8d4d`. See §2.2 and §10.2.)
 
 The finding cuts both ways, and the honest reading is in `PLAN-lean-kernel.md`
 §6.1: a cheap proptest would have caught *this* class. The kernel is not sold as
-"tm becomes verified" — §4's tally over 39 catalogued defects is 12
+"lime becomes verified" — §4's tally over 39 catalogued defects is 12
 unrepresentable, 12 proof obligations, 2 fixed by single ownership, 4 partial,
 **9 missed**, and the plan says out loud that quoting it as "verified" overstates
 it by a factor of three. Write prose that matches that.
@@ -114,7 +114,7 @@ needs, and that lemma is the step the whole plan-level round trip rests on.
 it.** `PLAN-lean-kernel.md` §3's structural row also lists "`moved`/`dropped` are
 sets, not `Vec`+`dedup`", which is what earns E3/E4 their **U** verdict in §4.
 Neither exists here: from `/Users/psixyzt/code/planner`,
-`grep -rn 'moved\|dropped' kernel/TmKernel/TmKernel/` returns 31 lines at
+`grep -rn 'moved\|dropped' kernel/LimeKernel/LimeKernel/` returns 31 lines at
 `bf7cc63` (26 at `c8f3a38`), all of them `dropped` as a constructor — of
 `Outcome` or `Glyph` — or prose. They are Rust
 `state.json` fields (`diff()`'s moved list, `resume`'s dropped list) with no
@@ -168,7 +168,7 @@ the others. §7 says what each one proves — checks 1–7 in §7.1, and checks 
 onward in their own scripts' headers and in `check.sh`'s comments above them.
 
 The seventh is the one stages 3–6 care about most: it elaborates
-`kernel/TmKernel/Goals.lean`, which holds the outstanding goals of stages 3–6 as
+`kernel/LimeKernel/Goals.lean`, which holds the outstanding goals of stages 3–6 as
 theorems with `sorry` proofs. Its number is a **burn-down** (§3.2), not a score.
 
 ### 2.2 Where things are
@@ -176,21 +176,21 @@ theorems with `sorry` proofs. Its number is a **burn-down** (§3.2), not a score
 | path | what |
 |---|---|
 | `/Users/psixyzt/code/planner/PLAN-lean-kernel.md` | the decision document. §3 architecture, §4 defect-by-defect verdicts, §5 the stage table, §6 risks/open questions/stop conditions, §7 standing rules |
-| `/Users/psixyzt/code/planner/tm-spec-v1.md` | the spec the kernel implements |
+| `/Users/psixyzt/code/planner/lime-spec-v1.md` | the spec the kernel implements |
 | `/Users/psixyzt/code/planner/kernel/README.md` | what is built, what is proved, and **one gap list, 1–51, in five places** (§6.4) |
-| `/Users/psixyzt/code/planner/kernel/TmKernel/TmKernel/` | the ten modules (§10.1) |
-| `/Users/psixyzt/code/planner/kernel/TmKernel/TmKernel.lean` | the root module: ten `import` lines and nothing else. **A module not listed here is not built** (§2.3) |
-| `/Users/psixyzt/code/planner/kernel/TmKernel/Check.lean` | the axiom audit: `#print axioms`, one line per theorem |
-| `/Users/psixyzt/code/planner/kernel/TmKernel/Negative.lean` | the cheats. **Must fail to compile** |
-| `/Users/psixyzt/code/planner/kernel/TmKernel/Goals.lean` | stages 4–6 as 40 unproved statements (stage 3's section holds none any more). The one place a `sorry` may appear (§3.2) |
+| `/Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel/` | the ten modules (§10.1) |
+| `/Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel.lean` | the root module: ten `import` lines and nothing else. **A module not listed here is not built** (§2.3) |
+| `/Users/psixyzt/code/planner/kernel/LimeKernel/Check.lean` | the axiom audit: `#print axioms`, one line per theorem |
+| `/Users/psixyzt/code/planner/kernel/LimeKernel/Negative.lean` | the cheats. **Must fail to compile** |
+| `/Users/psixyzt/code/planner/kernel/LimeKernel/Goals.lean` | stages 4–6 as 40 unproved statements (stage 3's section holds none any more). The one place a `sorry` may appear (§3.2) |
 | `/Users/psixyzt/code/planner/kernel/totality.py` | the totality/boundary-discipline linter |
 | `/Users/psixyzt/code/planner/kernel/corpus/` | 37 fixture Markdown files, copied verbatim from `main@557a3d2` (a commit this clone no longer holds); provenance in `corpus/PROVENANCE.md` |
-| `/Users/psixyzt/code/planner/kernel/tm-kernel-ffi/` | the Rust bridge: `shim.c` 66, `build.rs` 69, `src/lib.rs` 57 lines; its own cargo workspace on purpose (the root `Cargo.toml` `exclude`s it), and a **path dependency** of `tm` |
-| `/Users/psixyzt/code/planner/kernel/tm-kernel-ffi/examples/oracle/` | the differential oracle — **broken in this clone**: its scripts extract `main`, which no longer exists (§7.3) |
-| `/Users/psixyzt/code/planner/kernel/tm-kernel-ffi/examples/oneshot.rs` | reads one request on stdin and prints the kernel's response; how the README's by-hand stack and cost measurements were taken |
-| `/Users/psixyzt/code/planner/Cargo.toml`, `Cargo.lock`, `tm-core/` | the Rust workspace (members `tm-core`, `tm`), **restored** from the fork point `4748911` at `835d960`. `tm-core` is the fork-point library: the old grammar, planner, store and the harnesses `grammar_proptest.rs` and `planner_invariants.rs` |
-| `/Users/psixyzt/code/planner/tm/` | the live CLI/TUI frontend. `tm/DORMANT.md` is **superseded** — it still calls the kernel rewiring "underway" and A6 open; the README's 2026-09-12 block is the record |
-| `/Users/psixyzt/code/planner/tm/src/cli/kernel_bridge.rs` | the one choke point through which all seven kernel-backed verbs reach the kernel: read with the §1.3 guard, resolve horizon words and regions in the host, one request, write back only changed documents |
+| `/Users/psixyzt/code/planner/kernel/lime-kernel-ffi/` | the Rust bridge: `shim.c` 66, `build.rs` 69, `src/lib.rs` 57 lines; its own cargo workspace on purpose (the root `Cargo.toml` `exclude`s it), and a **path dependency** of `lime` |
+| `/Users/psixyzt/code/planner/kernel/lime-kernel-ffi/examples/oracle/` | the differential oracle — **broken in this clone**: its scripts extract `main`, which no longer exists (§7.3) |
+| `/Users/psixyzt/code/planner/kernel/lime-kernel-ffi/examples/oneshot.rs` | reads one request on stdin and prints the kernel's response; how the README's by-hand stack and cost measurements were taken |
+| `/Users/psixyzt/code/planner/Cargo.toml`, `Cargo.lock`, `lime-core/` | the Rust workspace (members `lime-core`, `lime`), **restored** from the fork point `4748911` at `835d960`. `lime-core` is the fork-point library: the old grammar, planner, store and the harnesses `grammar_proptest.rs` and `planner_invariants.rs` |
+| `/Users/psixyzt/code/planner/lime/` | the live CLI/TUI frontend. `lime/DORMANT.md` is **superseded** — it still calls the kernel rewiring "underway" and A6 open; the README's 2026-09-12 block is the record |
+| `/Users/psixyzt/code/planner/lime/src/cli/kernel_bridge.rs` | the one choke point through which all seven kernel-backed verbs reach the kernel: read with the §1.3 guard, resolve horizon words and regions in the host, one request, write back only changed documents |
 
 **`main` is discarded; the Rust is back, and part of it is the kernel's host.**
 The owner ruled `main` obsolete on 2026-09-12 (`f386c56`): `git rev-parse main`
@@ -200,20 +200,20 @@ in favour of the Lean one" — and the workspace was restored from it
 (`git checkout 4748911 -- tm-core Cargo.toml Cargo.lock`, `835d960`). So the
 sentence this section used to open with — "the branch has no Rust kernel" — is
 false in the way that matters: `cargo test --workspace` builds and runs the whole
-of `tm`, **and the `tm` binary calls the Lean kernel** for `move`, `drop`,
+of `lime`, **and the `lime` binary calls the Lean kernel** for `move`, `drop`,
 `demote`, `readopt`, `rank`, `add` and the keyed `edit` (`d8e8d4d`, `bd61f11`).
-What is true is narrower: `tm-core`'s own lifecycle functions are still the
+What is true is narrower: `lime-core`'s own lifecycle functions are still the
 fork-point Rust, **pre-stage-0** (its `move_to` has no destination check), and
 every verb the kernel does not yet back — `close`, `plan`, `review`, `recur`,
 `check`, id-less lines — still runs on them.
 *Status at R3 (built at W-45, rebuilt over the W-46 tracks, landed at the W-46 repair; kernel/README.md, "Stage 6 —
-W-45 switch", "Stage 6 — W-46 switch" and "Stage 6 — W-46 repair"): the planner is the kernel's — `tm plan`, `tm now`, every verb that replans and the TUI,
+W-45 switch", "Stage 6 — W-46 switch" and "Stage 6 — W-46 repair"): the planner is the kernel's — `lime plan`, `lime now`, every verb that replans and the TUI,
 its minute tick included (D103), plan the day `kernel_capacity::plan_day` asks the
-kernel for and `tm_core::planwire::read_plan` reads back — and fork 4748911's
+kernel for and `lime_core::planwire::read_plan` reads back — and fork 4748911's
 planner, `tm-core/src/planner.rs`, is deleted with the 21 `BEGIN THE FORK PLANNER`
-regions of `tm/tests`, and so is the class of `tm-core` functions only it reached (§7's own pass,
+regions of `lime/tests`, and so is the class of `lime-core` functions only it reached (§7's own pass,
 the slot cut, the energy pass and the lookahead; README gap 4752): each is reached only through
-frozen answers and `tm-oracle plan` or `tm-oracle capacity` (D72). The list above was stale before R3 too: `close` has been the kernel's since
+frozen answers and `lime-oracle plan` or `lime-oracle capacity` (D72). The list above was stale before R3 too: `close` has been the kernel's since
 stage 4, and the log's one reader and writer since stage 5.*
 
 The oracle is the fork point, not `main`, and the delta between them is stage
@@ -236,7 +236,7 @@ Cal ──▶ Grain ──▶ Text ──▶ Line ──▶ State ──▶ Plan
 Arith ────────────────────────────────────────────────────────────────┘
 ```
 
-Root import order (`cat TmKernel.lean`): `Arith Cal Grain Text Json Line Stamp Log Replay State
+Root import order (`cat LimeKernel.lean`): `Arith Cal Grain Text Json Line Stamp Log Replay State
 Plan Tree Priority Capacity Lookahead Fast Cmd Close Report Boundary` (`Replay` since stage 5 D9 step C1: it imports `Log` and `Arith`, and `Boundary` imports it for the `log` op's facts; `Log` since stage 5 D9 step B3: it imports `Json` and `Stamp`, and `Boundary` imports it since step B4 for the `log` op; `Stamp` since stage 5 D9 step B2: it imports `Cal` and `Line`, and `Log` imports it; `Tree` since stage 5 step 1: it imports `Plan`
 only, and `Boundary` imports it for its loaded-plan witnesses; `Priority` since stage 5 step 2: it
 imports `Plan` and `Arith`, and `Boundary` imports it likewise; `Capacity` since stage 5 step 3: it
@@ -246,7 +246,7 @@ imports `Priority` only, and `Boundary` imports it likewise; `Lookahead` since s
 step 2, and `Close` before step 5). **No module imports `Lean.Data.Json` any more** — the wire is the
 kernel's own (§2.4).
 
-*Re-derived at W-43 track G from `TmKernel.lean` (README gap 4325) — the order above is stage 5's.  The
+*Re-derived at W-43 track G from `LimeKernel.lean` (README gap 4325) — the order above is stage 5's.  The
 root module is **94** `import` lines: the 58 of the `Seal*` group, imported between `Replay` and
 `State`, and these 36, in order: `Arith Cal Grain Text Json Line Stamp Log Replay State Plan Tree Recur
 Priority Capacity Lookahead Width PastCut WallTimer Planner GridCut MidnightCut PlanDiff PlanOnce PlanFold
@@ -261,12 +261,12 @@ named, follow `Arith`.*
 - `Line` — the item line and the whole of §4.1's field grammar, with the parse ⇒ wf bridges. 6,829 lines. *Since W-43 track G (README gap 4346) it also holds chrono's readers — `LogStamp.trimWs`, `LogStamp.lit`, `LogStamp.numIn` and `StampErr` moved from `Stamp`, `Log.chronoYear`, `Log.chronoDateParts`, `Log.chronoDateValid`, `Log.utf8Len` and `Log.instDate?` moved from `Log`, with their names — and the item line reads its dates and times through them: `due:`'s date and `waiting:` through `Log.instDate?` (`parse_date`), a date-time through `Field.parseDT` (`parse_datetime`, sixteen bytes), a clock through `Field.parseTime` (`parse_time`); `Field.parseDate` and `Field.parseClock` are RFC 3339's, for a log stamp and the wire. 8,667 lines at W-43 track G.*
 - `State` — entity versus observation. `Core`, `wf`, `Entity`, `render`.
 - `Plan` — `Store`, `Doc`, `PlanCore`, `planWf`, `WfPlan`, and the comment rule (`commentAfter`).
-- `Stamp` — the log's `"t"` field, namespace `Tm.LogStamp` (never `Tm.Stamp`: `Field.Stamp` is the `demoted:` stamp; write the names qualified and never `open LogStamp` beside `Field`): `parseStamp` (chrono 0.4.45's `parse_rfc3339`, then the fork's `%Y-%m-%dT%H:%M%:z` fallback; `StampErr`), `renderStamp` (`fmt_timestamp`), `displayStamp` (the `tm log` column), `stampBefore` (chrono's order: the instant's, never `nanos`), and `parseStamp_renderStamp`. Stage 5 D9 step B2. *Since W-43 track G `StampErr` and the fallback's item readers (`trimWs`, `lit`, `numIn`) are defined in `Line`, under these names, because the item line reads its dates through them (README gap 4346).*
-- `Log` — the typed event grammar of `.tm/log.jsonl`, namespace `Tm.Log` (write `LogStamp` names qualified here too): `Event` (the 26 `define_events!` kinds and `unknown tag rest`), `Entry`, the field table `Kind.schema` with one reader `readF` and one writer `renderF` per serde field type, `readLine` (a `Verdict`: `blank`, an entry, or a named `LWarn`, in `Log::parse_bytes`' order), `renderLine` (`LogEntry::to_json`), `finiteF64` (serde_json's own "number out of range", applied to every numeral in the line), the small grammars `parseInstanceStatus`, `instDate?` and `stampFromKey`, and the goals `the_log_reads_what_it_renders`, `a_known_event_is_never_read_as_unknown`, `an_unknown_tag_is_never_a_warning` and `lineTooLong_bounds_every_string`. Stage 5 D9 step B3. **Since step S2 (D16) it also WRITES**: `emitEvent` reads the host's values with the reader's own `readArgs` and `emitLine` renders them with `renderLine`, so the log's format has one definition and not two held together by T2 — and `Event.primaryId` of a `close` is `period:key` since quirk Q6(f) (parity **P36**, gap 86). *Since W-43 track G `instDate?` (`parse_date`), `chronoYear`, `chronoDateParts`, `chronoDateValid` and `utf8Len` are defined in `Line`, under these names: an item line's `due:` and `waiting:` read through `instDate?` too, so a date has one reading in the kernel (README gap 4346).*
-- `Replay` — the kernel's replay of the log (design §7, §8; phase C), namespace `Tm.Replay`. Step C1: the undo mask as a left fold over a survivor stack (`matches`, written `«matches»` at its definition because `matches` is a keyword; `maskStep`, `survivors`, `dangles`), positions (`stackI`, `cancelledAt`, `cancelledLines`), `Log.linesIncreasing`, the goals `survivors_snoc_event`, `survivors_snoc_undo`, `a_cancelled_event_is_never_revived`, `a_dangling_undo_dangles_in_every_extension`, and the `@[csimp]` fast twins `survivorsFast`/`cancelledLinesFast` (per-tag and per-(tag, id) stacks of positions in `PosMap`, lazy deletion; `maskFast_inv` is the simulation). Stage 5 D9 step C1. Step C2: the day index, fork `DayIndex`, in chrono's order (`sortWakes`, `keptStep`/`dedupFrom`/`keptFrom`/`keptWakes`: consecutive dedup on the local date, not earliest per date; `lastWakeLe`, `dayOf` with chrono's `durationBetween` under 24 h; `dayIndexOf`, `entryDays` for every entry), quirk Q6(a)'s two first-wake rules (`keptWakeOn`, `firstLoggedWakeOn`, separated and bounded by `the_kept_wake_is_not_the_first_logged_wake` and `the_kept_wake_is_the_first_logged_wake_when_wakes_are_logged_in_order`), the goals `dayOf_is_the_wake_date_within_a_day`, `a_wake_day_is_shorter_than_a_day`, `keptWakes_append_of_later` restated in chrono's order (the design's nanosecond forms refuted by `…_by_nanos_is_refuted`), and the `@[csimp]` twins `sortWakesFast` (core `mergeSort`) and `entryDaysFast` (bisection, `lePoint`).
+- `Stamp` — the log's `"t"` field, namespace `Lime.LogStamp` (never `Lime.Stamp`: `Field.Stamp` is the `demoted:` stamp; write the names qualified and never `open LogStamp` beside `Field`): `parseStamp` (chrono 0.4.45's `parse_rfc3339`, then the fork's `%Y-%m-%dT%H:%M%:z` fallback; `StampErr`), `renderStamp` (`fmt_timestamp`), `displayStamp` (the `lime log` column), `stampBefore` (chrono's order: the instant's, never `nanos`), and `parseStamp_renderStamp`. Stage 5 D9 step B2. *Since W-43 track G `StampErr` and the fallback's item readers (`trimWs`, `lit`, `numIn`) are defined in `Line`, under these names, because the item line reads its dates through them (README gap 4346).*
+- `Log` — the typed event grammar of `.tm/log.jsonl`, namespace `Lime.Log` (write `LogStamp` names qualified here too): `Event` (the 26 `define_events!` kinds and `unknown tag rest`), `Entry`, the field table `Kind.schema` with one reader `readF` and one writer `renderF` per serde field type, `readLine` (a `Verdict`: `blank`, an entry, or a named `LWarn`, in `Log::parse_bytes`' order), `renderLine` (`LogEntry::to_json`), `finiteF64` (serde_json's own "number out of range", applied to every numeral in the line), the small grammars `parseInstanceStatus`, `instDate?` and `stampFromKey`, and the goals `the_log_reads_what_it_renders`, `a_known_event_is_never_read_as_unknown`, `an_unknown_tag_is_never_a_warning` and `lineTooLong_bounds_every_string`. Stage 5 D9 step B3. **Since step S2 (D16) it also WRITES**: `emitEvent` reads the host's values with the reader's own `readArgs` and `emitLine` renders them with `renderLine`, so the log's format has one definition and not two held together by T2 — and `Event.primaryId` of a `close` is `period:key` since quirk Q6(f) (parity **P36**, gap 86). *Since W-43 track G `instDate?` (`parse_date`), `chronoYear`, `chronoDateParts`, `chronoDateValid` and `utf8Len` are defined in `Line`, under these names: an item line's `due:` and `waiting:` read through `instDate?` too, so a date has one reading in the kernel (README gap 4346).*
+- `Replay` — the kernel's replay of the log (design §7, §8; phase C), namespace `Lime.Replay`. Step C1: the undo mask as a left fold over a survivor stack (`matches`, written `«matches»` at its definition because `matches` is a keyword; `maskStep`, `survivors`, `dangles`), positions (`stackI`, `cancelledAt`, `cancelledLines`), `Log.linesIncreasing`, the goals `survivors_snoc_event`, `survivors_snoc_undo`, `a_cancelled_event_is_never_revived`, `a_dangling_undo_dangles_in_every_extension`, and the `@[csimp]` fast twins `survivorsFast`/`cancelledLinesFast` (per-tag and per-(tag, id) stacks of positions in `PosMap`, lazy deletion; `maskFast_inv` is the simulation). Stage 5 D9 step C1. Step C2: the day index, fork `DayIndex`, in chrono's order (`sortWakes`, `keptStep`/`dedupFrom`/`keptFrom`/`keptWakes`: consecutive dedup on the local date, not earliest per date; `lastWakeLe`, `dayOf` with chrono's `durationBetween` under 24 h; `dayIndexOf`, `entryDays` for every entry), quirk Q6(a)'s two first-wake rules (`keptWakeOn`, `firstLoggedWakeOn`, separated and bounded by `the_kept_wake_is_not_the_first_logged_wake` and `the_kept_wake_is_the_first_logged_wake_when_wakes_are_logged_in_order`), the goals `dayOf_is_the_wake_date_within_a_day`, `a_wake_day_is_shorter_than_a_day`, `keptWakes_append_of_later` restated in chrono's order (the design's nanosecond forms refuted by `…_by_nanos_is_refuted`), and the `@[csimp]` twins `sortWakesFast` (core `mergeSort`) and `entryDaysFast` (bisection, `lePoint`).
 - `Seal` **and 57 `Seal*` proof modules — 58 files, 15,494 lines, 762 theorem declarations** — the
   window: a checkpoint plus sealed day and window records that answer exactly what replaying the whole
-  log answers (design §9; phase W), namespace `Tm.Seal`. `Seal.lean` itself is the types and the disk
+  log answers (design §9; phase W), namespace `Lime.Seal`. `Seal.lean` itself is the types and the disk
   codecs (`Header`, `DayRecord`, `WindowRecord`, `Ckpt`, `Meta`, `Resealed`, `Policy`, `Refusal`,
   `Seal.Q`; `emitCkpt`/`readCkpt` and the two record round trips; `sealable`, `horizonOf`,
   `dayRecordsBelow`/`Between`, `answer`, `askMerged`) — 1,839 lines and only 63 theorems, because the
@@ -287,7 +287,7 @@ named, follow `Arith`.*
 - `Cmd` — `lift`, `Transform`, `Dest`, `WfPlan.mapAt`, `KErr`, the commands (`cmdMove cmdDrop cmdSetEst cmdDemote cmdReadopt cmdRank cmdEdit cmdUnset`, and `WfPlan.insertFresh` for `add`), the `EditVal` table.
 - `Close` — §6.3's lifecycle as one fold at three grains: the `ClosePolicy` table and its bridges, `close`, the landing rank shift, `close_spec`, `autoClose`. On the wire since stage 4 step 5, as the `close` and `autoClose` ops.
 - `Report` — what a close reports (the owner's D3): `CloseEntry`, `Report`, `closeReport`, `closeR`/`autoCloseR`, and the theorems tying each entry to the close's result. kernel/README.md, stage-4 step-5 block.
-- `Boundary` — `String → String`: the request readers, `parseCmd`, the loader, `runLoad`/`run`, `respond`, `call`, `callExport`. Since stage 5 D9 step B4 `respond` runs `runWithLog`: the request's `tz` section (`readTz`, the zone table `tm/src/cli/tz_table.rs` probes, built only by `Cal.mkTz?`; **the one reader of `tz`** since the merge that closed gap 108) and `log` section (`readLogReq`, `mkLogReq?`, `logAnswer`: every line read by `Log.readLine`, its warnings by name, headers `[line, tag, id]`, renderings; since step C1 `want.facts`, answered as `facts.cancelled` for a tail from line 1, `Replay.cancelledLines`; since step C2 also `facts.days`, `[line, day]` for every entry, `Replay.entryDays` in the request's zone, which `LogReq.tz` carries from `zoneOf`), then `run`; a request with neither is `run`. Since stage 5 D10 step L6 the `capacity` section (`CapWire`, refusals `{"err":{"capacity":"<name> <key>"}}`; `CapWire.readTz` is `tzAbsent` or B4's `readTz`), `runCap`/`respondCap`/`callCap` (the `lookahead` response key, unit counts as digit strings), and `callExport`, which runs `callCap`: `runWithLog` on every request without `capacity` (`runCap_without_capacity_is_runWithEmit` since S2, `callExport_without_capacity_is_call`), and with it the `tz`/`log` sections first, then the documents, the capacity section and the commands, answering `docs`, `report`, `log`, `lookahead` (`runCap_answers_docs_report_log_lookahead`). Since stage 5 D10 step L8: the zone is read once (`zoneOf`, feeding `logSectionWith` and `readCapacityZ`; `the_zone_is_read_once_and_feeds_both_sections`), `runCap` answers through `runCapZ`, the optional `capacity.candidates` (`readCands`; `badCandidate <i> <key>`, `tooManyCandidates`) adds `lookahead.grants` (`grantJson`, `lookaheadJsonWith`), and a capacity request with commands is refused, `capacityWithCommands` (`runCap_refuses_commands_beside_capacity`, `an_answered_capacity_request_has_no_commands`). L8's host half: a candidate record's optional `floor` (`readFloor`, `badCandidate <i> floor`) and the floor answer's grant (`grantJsonF`, class `floor`; `grantJsonF_without_a_floor`); the binary's one encoder of this request is `tm/src/cli/kernel_capacity.rs`. Since stage 5 step **S2** (D16) the **`emit` section**: `{"emit":[{"at":[sec,ns,west,offSec],"ev":<tag>,"f":{…}}]}` in, the exact bytes to append out, through `Log.emitEvent`/`emitLine`; `runWithEmit` wraps `runWithLog`, so every theorem proved about `run` and the `log` section holds unchanged. Since stage 6 **W-13 track B** (D24) the **seam** is open: `logOpZ` answers a `LogAnswer` — the bytes `logOp` always answered, and the `Seal.Answer` they were rendered from (`LogReq.seamFacts`, `some` when the request resumed and asked for facts) — `logAnswerOf`/`readLogSection`/`logSectionWith` carry it, and `runCapZ` hands it to `readCapacityZ`, whose first consumer is `"wake": "log"` (`CapWire.WakeSrc`, `wakeClockOf`, `dayRecordOn`; refused `wakeWithoutLog` without a replay). `logOp` is kept as a **view** of `logOpZ`, so every law stated about it is unchanged (`the_capacity_section_reads_the_log_sections_own_replay`, `runCap_reads_the_capacity_section_against_its_own_log_answer`, `the_capacity_input_is_the_replays_wake`; README **gap 210 closed**). Since stage 6 **step L9** (gap 93 closed) the seam has its second consumer, **day 0**: the section gains `at` (a stamp through B2's one reader), `state` (`date`, `window`, `budget`, `arrival`, `loc`, `allowHome`), `posterior` (`fullHours`, `zeroHours`) and `sleep` (`shiftModel`, `shiftConfig`, `underHours` — the shifts **signed**), read by `readAt`, `readState`, `readPosterior`, `readSleep` through `boundedPos`/`signedOf` (`den ≤ 10^6`, value `≤ 10^6`, with rejection theorems), and `CapWire.todayFromLog` projects today's `DayRecord` into `Look.Today`. `day0` and `badDay0` are **gone**; the new refusals are `badAt`, `nowDisagrees`, `badState <key>`, `badPosterior <key>`, `badSleep <key>` and **`day0WithoutLog`** (a capacity request with no replay has no day 0 and is refused, never answered with an empty day). Phase F's F2/F3 spend the same seam.
+- `Boundary` — `String → String`: the request readers, `parseCmd`, the loader, `runLoad`/`run`, `respond`, `call`, `callExport`. Since stage 5 D9 step B4 `respond` runs `runWithLog`: the request's `tz` section (`readTz`, the zone table `lime/src/cli/tz_table.rs` probes, built only by `Cal.mkTz?`; **the one reader of `tz`** since the merge that closed gap 108) and `log` section (`readLogReq`, `mkLogReq?`, `logAnswer`: every line read by `Log.readLine`, its warnings by name, headers `[line, tag, id]`, renderings; since step C1 `want.facts`, answered as `facts.cancelled` for a tail from line 1, `Replay.cancelledLines`; since step C2 also `facts.days`, `[line, day]` for every entry, `Replay.entryDays` in the request's zone, which `LogReq.tz` carries from `zoneOf`), then `run`; a request with neither is `run`. Since stage 5 D10 step L6 the `capacity` section (`CapWire`, refusals `{"err":{"capacity":"<name> <key>"}}`; `CapWire.readTz` is `tzAbsent` or B4's `readTz`), `runCap`/`respondCap`/`callCap` (the `lookahead` response key, unit counts as digit strings), and `callExport`, which runs `callCap`: `runWithLog` on every request without `capacity` (`runCap_without_capacity_is_runWithEmit` since S2, `callExport_without_capacity_is_call`), and with it the `tz`/`log` sections first, then the documents, the capacity section and the commands, answering `docs`, `report`, `log`, `lookahead` (`runCap_answers_docs_report_log_lookahead`). Since stage 5 D10 step L8: the zone is read once (`zoneOf`, feeding `logSectionWith` and `readCapacityZ`; `the_zone_is_read_once_and_feeds_both_sections`), `runCap` answers through `runCapZ`, the optional `capacity.candidates` (`readCands`; `badCandidate <i> <key>`, `tooManyCandidates`) adds `lookahead.grants` (`grantJson`, `lookaheadJsonWith`), and a capacity request with commands is refused, `capacityWithCommands` (`runCap_refuses_commands_beside_capacity`, `an_answered_capacity_request_has_no_commands`). L8's host half: a candidate record's optional `floor` (`readFloor`, `badCandidate <i> floor`) and the floor answer's grant (`grantJsonF`, class `floor`; `grantJsonF_without_a_floor`); the binary's one encoder of this request is `lime/src/cli/kernel_capacity.rs`. Since stage 5 step **S2** (D16) the **`emit` section**: `{"emit":[{"at":[sec,ns,west,offSec],"ev":<tag>,"f":{…}}]}` in, the exact bytes to append out, through `Log.emitEvent`/`emitLine`; `runWithEmit` wraps `runWithLog`, so every theorem proved about `run` and the `log` section holds unchanged. Since stage 6 **W-13 track B** (D24) the **seam** is open: `logOpZ` answers a `LogAnswer` — the bytes `logOp` always answered, and the `Seal.Answer` they were rendered from (`LogReq.seamFacts`, `some` when the request resumed and asked for facts) — `logAnswerOf`/`readLogSection`/`logSectionWith` carry it, and `runCapZ` hands it to `readCapacityZ`, whose first consumer is `"wake": "log"` (`CapWire.WakeSrc`, `wakeClockOf`, `dayRecordOn`; refused `wakeWithoutLog` without a replay). `logOp` is kept as a **view** of `logOpZ`, so every law stated about it is unchanged (`the_capacity_section_reads_the_log_sections_own_replay`, `runCap_reads_the_capacity_section_against_its_own_log_answer`, `the_capacity_input_is_the_replays_wake`; README **gap 210 closed**). Since stage 6 **step L9** (gap 93 closed) the seam has its second consumer, **day 0**: the section gains `at` (a stamp through B2's one reader), `state` (`date`, `window`, `budget`, `arrival`, `loc`, `allowHome`), `posterior` (`fullHours`, `zeroHours`) and `sleep` (`shiftModel`, `shiftConfig`, `underHours` — the shifts **signed**), read by `readAt`, `readState`, `readPosterior`, `readSleep` through `boundedPos`/`signedOf` (`den ≤ 10^6`, value `≤ 10^6`, with rejection theorems), and `CapWire.todayFromLog` projects today's `DayRecord` into `Look.Today`. `day0` and `badDay0` are **gone**; the new refusals are `badAt`, `nowDisagrees`, `badState <key>`, `badPosterior <key>`, `badSleep <key>` and **`day0WithoutLog`** (a capacity request with no replay has no day 0 and is refused, never answered with an empty day). Phase F's F2/F3 spend the same seam.
 - `Arith` — exact rational arithmetic. Its consumers are `Report` (minutes as an `Arith.Pos`) and, since stage 5 step 2, `Priority` (the ladder, `safety`, a rational availability).
 
 *Added at W-43 track G, each line read off the module's own header (README gap 4325):*
@@ -310,25 +310,25 @@ named, follow `Arith`.*
 - `PlanWire` — the planner's inputs cross the wire, the `planner` section (D48; W-27), and `PlanWire.callExport` is the package's one `@[export]` since.
 - `PlanStable` — three stability laws of the planner's day (D77's break counter among them), theorems only. W-40.
 
-**A new module is not built until it is imported.** `kernel/TmKernel/TmKernel.lean`
-is **78** `import TmKernel.<Mod>` lines at stage 5's close (twenty at D9 step C1, nineteen at
+**A new module is not built until it is imported.** `kernel/LimeKernel/LimeKernel.lean`
+is **78** `import LimeKernel.<Mod>` lines at stage 5's close (twenty at D9 step C1, nineteen at
 D9 step B3, eighteen at D9 step B2, seventeen at D10 step L1, sixteen at step 3, fifteen at step 2,
 fourteen at step 1) and nothing else — **58 of the 78 are the `Seal*` group**, and each of the 58 has
-its own line: the group is a grouping in this document, never in `TmKernel.lean`; `lakefile.toml` names one
-`lean_lib TmKernel` and no module list. So a `.lean` file dropped into
-`TmKernel/TmKernel/` that nobody imports is **not compiled by check 1**, is not in
-`libTmKernel_TmKernel.a`, and is therefore invisible to the Rust — while
+its own line: the group is a grouping in this document, never in `LimeKernel.lean`; `lakefile.toml` names one
+`lean_lib LimeKernel` and no module list. So a `.lean` file dropped into
+`LimeKernel/LimeKernel/` that nobody imports is **not compiled by check 1**, is not in
+`libLimeKernel_LimeKernel.a`, and is therefore invisible to the Rust — while
 `check.sh` still prints seven `ok`s. Stage 3 added one (`Json`, imported at
 `c2ad8f6` in the same commit), stage 4 added `Close` and `Report` (each imported in the commit
 that created it), and the remaining stages propose more (§8.3, §8.4). Add the `import` line in the same commit as the file:
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel && cat TmKernel.lean
+cd /Users/psixyzt/code/planner/kernel/LimeKernel && cat LimeKernel.lean
 ```
 
-*At W-43 track G it is **94** lines (`grep -c '^import' TmKernel.lean`): the 58 of the `Seal*` group and
+*At W-43 track G it is **94** lines (`grep -c '^import' LimeKernel.lean`): the 58 of the `Seal*` group and
 36 others, stage 6 having added sixteen, every one in the commit that created it (`git log --diff-filter=A`
-on each file, and that commit's `TmKernel.lean`).  Since the W-31
+on each file, and that commit's `LimeKernel.lean`).  Since the W-31
 repair a library file that emitted no C fails check 12 (`reach.py`, README gap 2149), so a module nobody
 imports is no longer invisible to `check.sh`; it is still not in the archive, and the rule stands.*
 
@@ -453,7 +453,7 @@ and `blockMinAbsent` (a close op in a request without one), `badNow` and
 `detail.refusal`. Re-derive the list rather than trusting this block:
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel/TmKernel
+cd /Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel
 grep -n '"err"\|"kernel"\|jsonErr\|lerrJson\|throw\|kerrName' Boundary.lean
 grep -n 'def jget' -A 8 Json.lean
 ```
@@ -467,7 +467,7 @@ all of them; §8 says which stage adds what — and §8.2 gives `report` the sha
 does not yet have (the owner has since decided what it carries, §10.5 q8, but no
 code exists). Stage 3's scope listed `now` for itself (§8.1 item 5) and did not
 add it; it is owed to stage 4 by name. `report` has no code today: `grep -rn '"report"\|Report'
-kernel/TmKernel/TmKernel/` returns nothing, so there is no JSON key, no type and
+kernel/LimeKernel/LimeKernel/` returns nothing, so there is no JSON key, no type and
 no constructor for it anywhere in the kernel.
 
 ---
@@ -486,7 +486,7 @@ taste.
 | R5 | No `.toOption`. `Except` all the way through the boundary | `totality.py` |
 | R6 | No Mathlib. Core toolchain only (`Fin`, `Nat`, `Option`, `Except`, `Subtype`, `List`, `omega`, `decide`, `simp`, `Lean.Data.Json`) | absence from `lakefile.toml`; and needing it is a **stop condition**, not a decision you take (§9) |
 | R7 | No new dependencies of any kind, Lean or Rust | `lake-manifest.json`, `Cargo.toml` |
-| R8 | Do not touch `kernel/TmKernel/lean-toolchain` (`leanprover/lean4:v4.33.1`). `lake update` once moved a pinned v4.33.1 to v4.34.0-rc2 unasked and cost two link failures with a misleading error | review |
+| R8 | Do not touch `kernel/LimeKernel/lean-toolchain` (`leanprover/lean4:v4.33.1`). `lake update` once moved a pinned v4.33.1 to v4.34.0-rc2 unasked and cost two link failures with a misleading error | review |
 | R9 | Nothing but `String` crosses the FFI. No `lean_object*` escapes the shim | `nm` on the archive; the shim is 66 lines and stays that way |
 | R10 | Every bounded type gets a `Fin`/`Subtype`, a smart constructor its decoder actually uses, and a rejection theorem. Every integer crossing gets a stated width | `Negative.lean` cheats; audit |
 | R11 | A field's setter is not exported without its `view ∘ set = id` proof | audit; `Negative.lean` CHEAT 5 |
@@ -500,7 +500,7 @@ checker it had stopped describing. Corrected at W-27 track X, beside the R4 row
 above.)* `check.sh` passes **two**:
 
 ```bash
-cd <repo>/kernel && python3 totality.py TmKernel/TmKernel TmKernel
+cd <repo>/kernel && python3 totality.py LimeKernel/LimeKernel LimeKernel
 ```
 
 So the library *and* the package root are scanned, which means `Check.lean` and
@@ -513,8 +513,8 @@ fifty-six `sorry`s in it and the scan is clean.
 
 ```bash
 cd /Users/psixyzt/code/planner/kernel
-python3 totality.py TmKernel        # exit 0 — the root: Check, Negative, Goals
-grep -c 'sorry' TmKernel/Goals.lean # 56 at bf7cc63 — 40 goals plus the provisional defs and prose (70 at c8f3a38)
+python3 totality.py LimeKernel        # exit 0 — the root: Check, Negative, Goals
+grep -c 'sorry' LimeKernel/Goals.lean # 56 at bf7cc63 — 40 goals plus the provisional defs and prose (70 at c8f3a38)
 ```
 
 ### 3.1 What to do when a proof will not close
@@ -529,7 +529,7 @@ In this order. Every one of these is a normal outcome; none is a failure.
 2. **Put the missing fact into `planWf` instead of proving it.** Sorted-list
    extensionality with `≤` is false; the fix was not a cleverer proof, it was
    adding rank distinctness to `planWf` so the order became strict.
-3. **State the law and refute it.** Several of tm's stated laws are false as
+3. **State the law and refute it.** Several of lime's stated laws are false as
    written. A refutation is a deliverable of equal weight — `move_last_wins_refuted_globally`,
    `move_back_at_a_fresh_rank_is_not_the_inverse`,
    `floor_and_respect_are_incompatible`, `monthOfWeekByToday_is_not_stable`.
@@ -553,7 +553,7 @@ guardrail weaker; the right one is to satisfy it or to say you could not.
 
 ### 3.2 The one `sorry` exemption, and the burn-down
 
-`kernel/TmKernel/Goals.lean` holds every remaining obligation of stages 3–6 that
+`kernel/LimeKernel/Goals.lean` holds every remaining obligation of stages 3–6 that
 *can* be written down, as a Lean `theorem` whose statement elaborates against the
 real kernel and whose proof is `sorry`. **40 at `bf7cc63`** (52 at `c8f3a38`;
 stage 3's twelve are all gone — discharged, refuted, or renamed to a narrowing,
@@ -576,7 +576,7 @@ not ruled on (README "Stage 6 — W-43 track K" §5, gaps 4361, 4362 and 4366).*
 
 Three properties make it safe, and all three are checked:
 
-1. **Nothing imports it.** `TmKernel.lean` does not and no module does, so its
+1. **Nothing imports it.** `LimeKernel.lean` does not and no module does, so its
    `sorry`s cannot reach a proved theorem. Check 3 — the axiom audit — is what
    *enforces* that: a `sorryAx` in `Check.lean` means `Goals.lean` leaked.
 2. **`totality.py` exempts it by filename**, not by pattern (§3's R1 row).
@@ -803,6 +803,9 @@ that needs the user's assent, not an agent's judgment.
 | **D156** (2026-11-06, gap 6031, and the backdated fence): **D154's two edges are accepted with their cost recorded.** A plain `tm energy` or `tm wake` is no witness, because its line reads as the `--at` form that can run ahead of the clock. With a block open across 2+ days and `--now` backdated 2+ days, the block's own lines read as far-future, so a typed `break 5m` begins running and `tm stop` logs 4,250 minutes | both edges need a line the log cannot tell apart from a stated instant, or a clock moved back past D18's fence around a block left open for days. **Declined:** a log field marking a typed line (a log-format change, and old logs stay unmarked); a new `tm check` warning for a break or block over a day |
 | **D157** (2026-11-06, gap 6046): **D150's re-time out over a logged break STANDS, and the reply names what it covers** (built, H's gap 6066) | it ratifies a campaign call the owner was asked about afterwards: the kernel reads that line soundly since W-54's third repair, and a reply that names each break covered makes the move findable. **Declined:** refusing as before; staying silent |
 | **D158** (2026-11-06, order): **W-54's third repair lands with its remaining kernel defects recorded by name; then the tm→lime rename; then the module regroup; then a W-55 kernel round on the renamed tree, D155 and those defects its scope; then the rename's step 2 (the on-disk names)** | the host refuses or names each remaining defect's shape meanwhile, or the land's block records it; the rename and the regroup rewrite every path a kernel round would touch, so the round goes on the renamed tree. **Declined:** a fourth repair first; the kernel round ahead of the rename |
+| **D159** (2026-11-06, the owner's rename, step 1): **the command, crates, directories, the Lean package and namespace, the FFI symbols, the env vars and every function and test name become `lime`, in one measured commit made by a repeatable codemod; nothing on a user's disk changes** (`.tm/`, the `tm:plan` markers and the log keep their bytes) — the moves alone are that commit's second parent, so `git log --follow` crosses the rename while the first-parent line stays green (D88), which is a stated exception to D120's rule that a land merges a snapshot's tree and never the snapshot; `$TM_DIR` keeps answering when `LIME_DIR` is unset, because a user's shell profile holds it; `Lime.PErr.*` in output and in the wire's `why` is accepted for this step; a registered divergence (P150). *Campaign call inside this, revisable:* an old developer variable (`TM_ORACLE`, `TM_*_BLESS`) is refused by name, because the frozen record still spells it and a differential arm that goes inert passes green | the owner asked for the full rename, and the kernel round goes on the renamed tree (D158). **Declined:** two commits on the line (the script's commit is red until its gates are taught, against D88); the moves first on the line; bare constructor names in refusals (a kernel and wire change the rename does not need) |
+| **D160** (2026-11-06, the rename's old trees): **`lime check` names a tree whose hooks still call the old command, as a warning (D18's family, exit code unchanged), `lime init --force` removes `.claude/hooks/tm-check.sh`, and the root README carries an upgrade note**; a registered divergence (`P151`) with a behaviour row. The owner keeps a `tm` symlink on their own machine until each tree is regenerated | driven on the rename's tip: with only `lime` on PATH, a tree the old binary wrote commits a duplicate id at rc 0 with `pre-commit: tm is not on PATH — skipping tm check`, its Claude hook exits 0 silently, and `lime init --force` left `tm-check.sh` beside `lime-check.sh`, so the validation net is off with nothing to find. **Declined:** the note alone (nobody reads it before the first failed check); leaving old trees as they are |
+| **D161** (2026-11-06, the rename's step 2): **`.tm/` becomes `.lime/` and `tm:plan` becomes `lime:plan`, with a migration of existing trees, LAST — after W-55, under its own parity number and D-row** | it changes bytes on a user's disk, so it cannot share step 1's proof that every tree the old and new binary write is byte-identical, and a migration is written once against the final format. **Declined:** at the same time as step 1; dropping it |
 | Behaviour changes are recorded next to the rule they replace, with a theorem separating them — never taken silently | *"this is a bug" vs "this is an undocumented deliberate choice" is a judgment reading cannot settle* |
 
 ---
@@ -855,7 +858,7 @@ whole stage, found by running the corpus and not by reading.
 shape:
 
 - Rust: `est:` and the leading estimate were two syntactic slots for one field,
-  so `tm edit est=` reported success and changed nothing.
+  so `lime edit est=` reported success and changed nothing.
 - Lean, stage 2: §4.1's value types lived in `Line.lean`'s `Field` namespace and
   `State.lean` carried its **own** re-encoded copies. A parsed `at:` never
   reached `Core.shape`, so `shapeWfFor DocKind.calendar` was **unsatisfiable, not
@@ -926,7 +929,7 @@ conjunct — and gap 22 is closed. The one reader is also the fast one: a `@[csi
 twin skips the classification for a line with no `@` word
 (`parentRef_eq_parentRefFast`). A new instance
 of the class, recorded rather than hidden, is between the kernel and the host:
-`tm-core`'s fork-point parser is comment-blind while the kernel reads a comment
+`lime-core`'s fork-point parser is comment-blind while the kernel reads a comment
 as prose (gap 45), so two readers of one file disagree about a commented item.
 
 ### 5.4 The boundary is where the holes are.
@@ -1041,10 +1044,10 @@ I quantified over the thing the user has?
 
 A panic returns `Inhabited.default` with **exit code 0**. That is why
 `totality.py` exists, why `.toOption` is banned alongside it (it is how the FFI
-spike silently turned `est: -3` into `est: null`, reproducing tm's own
+spike silently turned `est: -3` into `est: null`, reproducing lime's own
 estimate-loss bug inside the boundary code of a verified kernel), and why stage 3
 owed the host a fault probe — landed at `dd89bc6` as a constructed probe
-(`TM_KERNEL_FAULT_PROBE`) whose tests assert the host's reaction:
+(`LIME_KERNEL_FAULT_PROBE`) whose tests assert the host's reaction:
 `the_panic_probe_faults_loudly_and_writes_nothing`.
 
 `decide` is the workhorse and it runs out. `set_option maxRecDepth` is live in
@@ -1135,22 +1138,22 @@ not a test, and that is worth writing down."*
 Eleven of 39 catalogued defects came from that and from nothing else, and all
 four integration bugs did. No kernel proof reaches them. Since `835d960` there is
 a binary on this branch again, and stage 3's own drives earned their keep: the
-bare-`tm init` tree that no kernel-backed verb could load, the bridge's phantom
+bare-`lime init` tree that no kernel-backed verb could load, the bridge's phantom
 blank line and lost final newline (`e5d38b8`), and gap 45's two readers were all
 found by driving it, not by a proof. The human's 30-minute drive of the stage-3
-binary is still owed (§8.1), and so is the stage-4 binary's — `tm close` and the
+binary is still owed (§8.1), and so is the stage-4 binary's — `lime close` and the
 automatic close on a real stale tree (§8.2) — **and, since 2026-09-16, the
 stage-5 binary's**, whose list is design §14.6's own.
 
 **Why no agent has done these, and no agent can.** Half of every drive list is
-the TUI, and `tm tui` exits by name when stdout is not a tty
-(`tm/src/tui/mod.rs:92`: *"tm tui needs a terminal (stdout is not a tty) — every
+the TUI, and `lime tui` exits by name when stdout is not a tty
+(`lime/src/tui/mod.rs:92`: *"lime tui needs a terminal (stdout is not a tty) — every
 verb of §13 also works on its own"*). Stage 5's list asks specifically for "the
 TUI through two reloads, with the CLI running a verb in between", which is
 exactly the integration surface no proof reaches (README **gap 182**). An agent
 can run the CLI half and has. *(This paragraph said an agent "cannot run" the
-TUI half, and that was FALSE — README gap **3527**, the W-38 repair: `tm tui`
-refuses a non-tty, not an agent. `script -qfc "stty cols 120 rows 40; tm --dir
+TUI half, and that was FALSE — README gap **3527**, the W-38 repair: `lime tui`
+refuses a non-tty, not an agent. `script -qfc "stty cols 120 rows 40; lime --dir
 <tree> --now <t> tui" tui.raw` gives it a pty, and a small terminal emulator
 over `tui.raw` renders the frame — the W-38 auditor drew D68's `paused` row and
 D65's meeting that way, and the repair re-drew it. What stays human is the part
@@ -1226,7 +1229,7 @@ design's unused reserved numbers (93–107, 118) remain; a new cheat still start
 the highest number in the checkout — 125 after the repair.*
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel
+cd /Users/psixyzt/code/planner/kernel/LimeKernel
 grep -n '^/- CHEAT' Negative.lean | tail -5
 ```
 
@@ -1255,10 +1258,10 @@ manual step is now guarded rather than merely documented.
 demonstrably lost names:
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel
+cd /Users/psixyzt/code/planner/kernel/LimeKernel
 grep -c '^#print axioms' Check.lean                                     # 4971 (3993 at e7b816c, 1299 at bf7cc63, 1006 at c8f3a38)
 grep '^#print axioms' Check.lean | awk '{print $3}' | sort -u | wc -l   # 4971
-grep -hcE '^(@\[[^]]*\][[:space:]]*)?theorem ' TmKernel/*.lean | awk '{s+=$1} END {print s}'   # 4969
+grep -hcE '^(@\[[^]]*\][[:space:]]*)?theorem ' LimeKernel/*.lean | awk '{s+=$1} END {print s}'   # 4969
 ```
 
 **These told an inconsistent story and were repaired at `e7b816c`; the trap that
@@ -1276,14 +1279,14 @@ declared short names against audited last segments — not the two `sort -u`
 counts, which cannot see a name declared in two namespaces:
 
 ```bash
-cd kernel   # not kernel/TmKernel: the one roster lives beside the package
-python3 leanfiles.py --theorems TmKernel | sed 's/.*\.//' | sort > /tmp/decl
-grep '^#print axioms' TmKernel/Check.lean | awk '{print $3}' | sed 's/.*\.//' | sort > /tmp/aud
+cd kernel   # not kernel/LimeKernel: the one roster lives beside the package
+python3 leanfiles.py --theorems LimeKernel | sed 's/.*\.//' | sort > /tmp/decl
+grep '^#print axioms' LimeKernel/Check.lean | awk '{print $3}' | sed 's/.*\.//' | sort > /tmp/aud
 comm -23 /tmp/decl /tmp/aud   # MUST BE EMPTY — check 3 fails if it is not
 comm -13 /tmp/decl /tmp/aud   # `WfPlan` and `effectiveScope` — the two `def`s below
 ```
 
-**The first line used to be a `grep` over `TmKernel/*.lean` and re-deriving that
+**The first line used to be a `grep` over `LimeKernel/*.lean` and re-deriving that
 way is how this reconciliation gets a wrong answer.** Four repairs have moved
 the roster since: the walk went recursive (W-21), the prune list became a
 property (W-22), the library ROOT module joined it (W-23, gap 1314), and the
@@ -1310,10 +1313,10 @@ one roster `check.sh` uses; re-deriving it by hand re-derives the hole.
   reproduces by the pipeline above — a reminder that §5.11 applies to this file
   too.)* *(W-39 repair, re-measured by that pipeline: **27** short names are declared
   in more than one namespace, not 24 — README gap 3723.)*
-- **Plus TWO non-theorems** in the audit: `Tm.WfPlan` at `Check.lean:472` and
-  `Tm.effectiveScope` at `Check.lean:5038`, both `def`s, are still audited. This
+- **Plus TWO non-theorems** in the audit: `Lime.WfPlan` at `Check.lean:472` and
+  `Lime.effectiveScope` at `Check.lean:5038`, both `def`s, are still audited. This
   bullet read *"Plus one non-theorem"* and named only the first from `e7b816c`
-  until W-24's land step, while `Tm.effectiveScope` had been audited since
+  until W-24's land step, while `Lime.effectiveScope` had been audited since
   `f2225ec` — so the pattern the repair removed **did** breed, once, and the
   sentence warning against it could not see it. It is why check 3's
   reconciliation is **one-directional**: auditing more than the theorems is not
@@ -1363,7 +1366,7 @@ banner which range is yours and fix it at the merge (§6.5).
    collapsed to its namespace root.
 4. Delete from `Goals.lean` every goal the branches discharged, and check that
    check 7's number went **down** by exactly that many (§3.2).
-5. Confirm every new module is imported in `TmKernel/TmKernel.lean` (§2.3).
+5. Confirm every new module is imported in `LimeKernel/LimeKernel.lean` (§2.3).
 6. Run `check.sh`, capped (§2.1). **Every** check, exit 0 — and
    `cargo test --workspace` green beside it (§7.5). *(This line said "seven"
    until the W-24 repair step, "nine" until W-25 track A and "ten" until W-31,
@@ -1447,7 +1450,7 @@ citations, W-19, owner D39/D41), **9** (every new definition constant-folded,
 W-20, owner D40), **10** (the parity register, W-25), **11** (§5.3: no two
 names for one definition, W-30 track A; a second key for a GENERALISATION
 since W-33 track A), **12** (a definition the compiler emits must be REACHED
-from `tm_kernel_call`, W-31 track A, owner D51) and **13** (a field the
+from `lime_kernel_call`, W-31 track A, owner D51) and **13** (a field the
 planner wire emits must have a WRITER the day builder reaches, W-33 track A,
 README gap 2403) are specified by their own scripts' headers —
 `kernel/citations.py`, `kernel/mutate.py`, `kernel/parity.py`,
@@ -1488,23 +1491,23 @@ Linux (§2.1, §5.10a); the bare forms below are what goes after the prefix.
 **1 — the kernel builds, including the linkable archive.**
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel && ~/.elan/bin/lake build TmKernel:static
+cd /Users/psixyzt/code/planner/kernel/LimeKernel && ~/.elan/bin/lake build LimeKernel:static
 ```
 
 Proves only that a proof that does not compile is not a proof. The `:static`
 facet matters: plain `lake build` produces `.olean` + C IR but not the archive
-Rust links (`.lake/build/lib/libTmKernel_TmKernel.a`, 3,704,386 bytes at
+Rust links (`.lake/build/lib/libLimeKernel_LimeKernel.a`, 3,704,386 bytes at
 `bf7cc63`; 1,759,720 at `c8f3a38`). The build emits `linter.unusedSimpArgs`
 hints; they are warnings.
 
-**It proves nothing about a module nobody imports.** `lake` builds the `TmKernel`
-library, which is `TmKernel/TmKernel.lean`'s ten imports; an unimported file in
+**It proves nothing about a module nobody imports.** `lake` builds the `LimeKernel`
+library, which is `LimeKernel/LimeKernel.lean`'s ten imports; an unimported file in
 that directory is not compiled and this check still says `ok` (§2.3).
 
 **2 — totality and boundary discipline.**
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel && python3 totality.py TmKernel/TmKernel TmKernel
+cd /Users/psixyzt/code/planner/kernel && python3 totality.py LimeKernel/LimeKernel LimeKernel
 ```
 
 Proves the kernel cannot answer wrongly *and silently* through a panic, and that
@@ -1515,7 +1518,7 @@ directories**: the library and the package root, so `Check.lean` and
 **3 — the axiom audit.**
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel && ~/.elan/bin/lake env lean Check.lean
+cd /Users/psixyzt/code/planner/kernel/LimeKernel && ~/.elan/bin/lake env lean Check.lean
 ```
 
 Proves no audited theorem depends on `sorryAx` — transitively, so a `sorry`
@@ -1532,7 +1535,7 @@ rot, all three of them caught here:
   §6.3's multiset reconciliation (`comm -23` of declared short names against
   audited last segments), fails when it is non-empty, and **names** up to five of
   the missing theorems;
-- auditing a `def` is *not* failed, deliberately: `Tm.WfPlan` is audited on
+- auditing a `def` is *not* failed, deliberately: `Lime.WfPlan` is audited on
   purpose (§6.3), so the reconciliation is one-directional.
 
 Step L9 added 35 declarations and 26 audit lines and this check said `ok` at
@@ -1541,7 +1544,7 @@ Step L9 added 35 declarations and 26 audit lines and this check said `ok` at
 **4 — `Negative.lean` MUST fail to compile.**
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel
+cd /Users/psixyzt/code/planner/kernel/LimeKernel
 LEAN_PATH=.lake/build/lib/lean ~/.elan/bin/lean Negative.lean    # exit 1
 ```
 
@@ -1551,7 +1554,7 @@ inverts the sense: if this ever compiles, the build fails.
 **5 — Rust calls the kernel and gets the right answers.**
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/tm-kernel-ffi && cargo test --quiet --test kernel --test stack
+cd /Users/psixyzt/code/planner/kernel/lime-kernel-ffi && cargo test --quiet --test kernel --test stack
 ```
 
 **93 tests at stage 6 W-18** — `kernel.rs` 86 and `stack.rs` 7 — through
@@ -1569,14 +1572,14 @@ checks 3, 6 and 7 say theirs, so a test that stops running is visible.
 **6 — the corpus round trip.**
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/tm-kernel-ffi && cargo test --quiet --test corpus -- --nocapture
+cd /Users/psixyzt/code/planner/kernel/lime-kernel-ffi && cargo test --quiet --test corpus -- --nocapture
 ```
 
 6 tests; prints the per-file table and a `CORPUS:` score line. It was written as
 the only check covering the two steps no theorem reached: splitting a file's
 bytes into lines and back, and the JSON escaping on both sides of the FFI. Both
 kernel halves are theorems now — `a_file_splits_into_the_lines_it_was_joined_from_char`
-over `Tm.splitOn`, and `jparse_jemit` / `the_response_call_emits_parses_back` for
+over `Lime.splitOn`, and `jparse_jemit` / `the_response_call_emits_parses_back` for
 the JSON — so what this check still uniquely covers is the **host's** half: the
 harness's `split('\n')` and its hand-written JSON codec agreeing with the kernel's
 over every corpus file.
@@ -1588,7 +1591,7 @@ it. `corpus_round_trip` is a **ratchet** against `corpus/round-trip.expected`: a
 file recorded `ok` that stops round-tripping fails, a file that starts
 round-tripping does not, because the grammar is still being extended, and the
 total `ok` count may not fall. The baseline is regenerated by setting
-`TM_CORPUS_BLESS=1` for that test run — `corpus_round_trip` calls `bless` when it
+`LIME_CORPUS_BLESS=1` for that test run — `corpus_round_trip` calls `bless` when it
 sees it — which **rewrites a committed file**, so treat it as an edit under
 review, not a test invocation, and never rebless downward.
 
@@ -1619,7 +1622,7 @@ target, 67 in the kernel target, at stage 4 final step 3.
 **7 — the outstanding goals of stages 3–6 elaborate.**
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel
+cd /Users/psixyzt/code/planner/kernel/LimeKernel
 LEAN_PATH=.lake/build/lib/lean ~/.elan/bin/lean Goals.lean        # exit 0, sorry warnings
 grep -c '^theorem ' Goals.lean                                    # 40 at bf7cc63 (52 at c8f3a38)
 ```
@@ -1686,7 +1689,7 @@ fork point; the old `main`-side pair (126 of 138, 481 of 2,048) is **superseded
 and must not be quoted**.
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/tm-kernel-ffi
+cd /Users/psixyzt/code/planner/kernel/lime-kernel-ffi
 ./examples/oracle/run-oracle.sh <scratch-dir> [cases-per-seed] [seeds]
 ```
 
@@ -1701,43 +1704,43 @@ dependency for an acceptance script that must run on this branch alone.
 It prints the denominator for every comparison, so "no disagreement" is never
 confused with "never ran". Four things are comparable through a `String → String`
 boundary: is it an item line; does each side hand the line back unchanged; what
-id does each read; does `tm edit est=` produce the same line. Title, `ci`,
+id does each read; does `lime edit est=` produce the same line. Title, `ci`,
 priority, parent, tags, shape, recurrence, budget, `loc:`, `buffer:` and the
 flags are **not** compared, because the kernel keeps those tokens verbatim and
 has no answer to differ from (gap 35).
 
-**A fifth thing became comparable at the S attempt:** `tm-oracle replay <tz>`
+**A fifth thing became comparable at the S attempt:** `lime-oracle replay <tz>`
 reads whole log texts and prints what the fork's `log::replay` derives from each,
 as JSON. That is **T5's oracle at the switch** (design §14.6 item 4), which
 deletes the in-tree Rust reader T5 compares against today. The fork's `Replay`
 and this branch's serialise 20 and 22 keys, differing only by this branch's
 `seams` and `last_effective_t`, with all 19 nested record structs field-identical
 on the same `chrono`/`chrono-tz`, so the comparison is key for key over the whole
-structure. It is driven from `tm/tests/kernel_replay_parity.rs`, which holds the
+structure. It is driven from `lime/tests/kernel_replay_parity.rs`, which holds the
 log corpus, not from `run-oracle.sh`.
 
 **The fork's answers are also frozen, and that arm is not `#[ignore]`d**
 (2026-09-16, W-11; design §14.6 item 4, README gaps 137/146/147/149). Taking the
-oracle's answers once and committing them to `tm/tests/fixtures/` puts a
+oracle's answers once and committing them to `lime/tests/fixtures/` puts a
 *differential* inside plain `cargo test --workspace`, which is what guards a
 commit — an arm that runs only when someone builds the fork point does not.
-`tm/tests/support/fork.rs` is the one place that reads them back, shared by
+`lime/tests/support/fork.rs` is the one place that reads them back, shared by
 `kernel_replay_parity.rs` and `kernel_log_door.rs`; **20 T5 inputs and 16 scoped
 door reads** are compared against them, key for key. Freezing is not weakening:
 a frozen expectation is the fork's own bytes, blessed by
 `the_frozen_fork_answers_are_reblessed_from_the_oracle` (inert without **both**
-`TM_ORACLE` and `TM_FORK_BLESS`, because rewriting a committed differential
+`LIME_ORACLE` and `LIME_FORK_BLESS`, because rewriting a committed differential
 fixture is a decision and never a repair, §7.2). Values, never a digest: a digest
 would have to normalise parity **P21** out, and that hides the one thing P21
 exists to watch (**D21**).
 
 **A third input set landed at stage 5's close**, and it is stage 5's own plan
-acceptance (§8.3): `tm-oracle replay` and the new `tm-oracle fit` read whole log
-texts, and `tm/tests/kernel_replay_parity.rs`'s
+acceptance (§8.3): `lime-oracle replay` and the new `lime-oracle fit` read whole log
+texts, and `lime/tests/kernel_replay_parity.rs`'s
 `stage5_parity_the_kernel_replays_and_fits_as_the_fork_point_does` compares them
 with the kernel's facts — the whole `Replay` key for key, and the `Model`
-`tm model --fit` writes from it (design §14.6's T12). It is `#[ignore]`d and inert
-without `TM_ORACLE`, so `cargo test --workspace` never needs the fork build;
+`lime model --fit` writes from it (design §14.6's T12). It is `#[ignore]`d and inert
+without `LIME_ORACLE`, so `cargo test --workspace` never needs the fork build;
 `run-oracle.sh` sets it and runs it as input set 3. **Widened at W-11** from the
 8 corpus-and-month logs to every input class T5 covers — the generated half-year,
 the 256 generated sequences and the 192 undo-triple logs as well — grouped by
@@ -1747,7 +1750,7 @@ values; 24 sightings of parity P21 and no other disagreement** (was 8 logs,
 144 keys, 16,772 values, 4 P21).
 
 **A fourth input set landed on 2026-09-16 (W-11), under owner decision D23**
-(README gap 148): `tm-oracle parse-entry` reads **one log line per line of
+(README gap 148): `lime-oracle parse-entry` reads **one log line per line of
 stdin** and prints what the fork's `Log::parse_bytes` says about that single
 segment — accepted (with the entry as the fork's own `to_json`, its tag, id,
 `tm log` column, and the instant as `epoch`/`nanos`/`offset`), refused (with
@@ -1758,10 +1761,10 @@ instead; that is how the crafted set's torn-write lines reach the fork. This is
 `Log::parse_bytes`, `LogEntry::parse` and `parse_timestamp`, which design §12
 deletes, so all three would otherwise have had to be retargeted inside the
 switch commit. The verdicts are frozen into
-`tm/tests/fixtures/fork-4748911-log-lines.jsonl` — **11 sources, 8,273 per-line
+`lime/tests/fixtures/fork-4748911-log-lines.jsonl` — **11 sources, 8,273 per-line
 verdicts and 7 whole-file readings, 1,946,886 bytes**, byte-reproducible on a
 re-bless — so the comparison runs in plain `cargo test --workspace`, and the
-`TM_ORACLE` arms are the re-bless and the one assertion bytes on disk cannot
+`LIME_ORACLE` arms are the re-bless and the one assertion bytes on disk cannot
 make: **1,375** kernel renderings handed back to the fork and read to the same
 entry. Measured at the retarget, unchanged from the pre-retarget figures against
 the in-tree reader: **T1 636 lines, 553 entries (533 byte-identical), 66
@@ -1793,7 +1796,7 @@ lines compared, 470 with nothing to report** — both **byte-for-byte** the
 `017ead3` and stage-5-close figures, so the grammar surface did not move while
 the in-tree reader was deleted, the writer was replaced by the kernel's (S2) and
 quirk Q6(f) was fixed. Set 3: **469 logs over 6 zones, 8,442 `Replay` keys, 285
-`tm event` name sets, 469 entry counts, 7 refused-line lists, 8 fitted models,
+`lime event` name sets, 469 entry counts, 7 refused-line lists, 8 fitted models,
 195,243 scalar values; 24 sightings of parity P21 — each checked to display the
 same `round1` load and `load_blocks` — and no other disagreement.** Set 4:
 **1,375** kernel renderings read back to the fork's own entry.
@@ -1857,7 +1860,7 @@ Go through this before you claim anything.
    value where the code assumed one.
 8. **Is the new theorem in `Check.lean`, or the omission recorded?** §6.3.
 9. **If you discharged a goal, is it deleted from `Goals.lean`** — and if you
-   added a module, is it imported in `TmKernel/TmKernel.lean`? §3.2 and §2.3.
+   added a module, is it imported in `LimeKernel/LimeKernel.lean`? §3.2 and §2.3.
    Both failures are silent: check 7 stays flat, check 1 stays green.
 10. **Does every `Negative.lean` block still fail for its stated reason?** Not
    just "the file failed". Look for a block failing on a `maxRecDepth`/heartbeat
@@ -1872,9 +1875,9 @@ Go through this before you claim anything.
 ### 7.5 Two suites are acceptance now, because the Rust calls the kernel
 
 Until stage 3, `check.sh` was the whole acceptance: the only Rust on the branch
-was `kernel/tm-kernel-ffi`, and checks 5 and 6 already ran it. **That is no longer
-true.** Since `d8e8d4d` the shipped `tm` binary calls the kernel for seven verbs
-through `tm/src/cli/kernel_bridge.rs`, so a kernel change can break the product
+was `kernel/lime-kernel-ffi`, and checks 5 and 6 already ran it. **That is no longer
+true.** Since `d8e8d4d` the shipped `lime` binary calls the kernel for seven verbs
+through `lime/src/cli/kernel_bridge.rs`, so a kernel change can break the product
 while all seven checks stay green — a renamed refusal the bridge maps by name, a
 reordered response key a test splits on, a wire field the host sends that the
 kernel now refuses. And a host change can break the kernel's contract without
@@ -1891,16 +1894,16 @@ systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0 --quiet cargo tes
 #   (984 / 0 / 0 across 64 test binaries at bf7cc63, 4.9 s warm)
 ```
 
-They do not overlap: the root workspace `exclude`s `kernel/tm-kernel-ffi`, so
+They do not overlap: the root workspace `exclude`s `kernel/lime-kernel-ffi`, so
 `cargo test --workspace` does **not** run the FFI crate's own **101** tests
 (63 at `bf7cc63`), and `check.sh` does not run the CLI, TUI,
-`tm-core` or proptest
+`lime-core` or proptest
 suites. **Since the owner's D36 (stage 6 W-18) checks 5 and 6 run all 101** —
 `kernel` 86, `stack` 7, `corpus` 8. Until then they ran 94 of them and the
 seven of `stack.rs` were run by nothing automatic, which this sentence said the
 opposite of for four runs (README gap 686). The FFI crate's `build.rs` re-drives `lake` when any file under
-`TmKernel/` changes, and `tm` depends on that crate, so the workspace run also
-rebuilds the kernel it links (`tm/build.rs` only adds the toolchain `lib/` rpath). A green
+`LimeKernel/` changes, and `lime` depends on that crate, so the workspace run also
+rebuilds the kernel it links (`lime/build.rs` only adds the toolchain `lib/` rpath). A green
 `check.sh` with the workspace unrun is half an acceptance; say which half in
 the commit if it is all you have.
 
@@ -1944,7 +1947,7 @@ its own. Read them before you read the plan's prose: they are the same
 obligations, already stated precisely enough to elaborate. Discharging one is
 §3.2's three-step move, and check 7's number is how the stage is measured.
 
-**A new module must be imported into `kernel/TmKernel/TmKernel.lean`.** Stages 4,
+**A new module must be imported into `kernel/LimeKernel/LimeKernel.lean`.** Stages 4,
 5 and 6 each propose one. Unimported, it is not built, not in the archive, not
 reachable from Rust — and `check.sh` still prints seven `ok`s (§2.3).
 
@@ -1971,10 +1974,10 @@ over a greedy fold. Classify every law you are given before you start.
 **Status at `bf7cc63` (2026-09-12): stage 3's scope is landed, its twelve goals
 are gone from `Goals.lean`, and a named list is still owed.** The honest one-line
 reading of the plan acceptance: the seven verbs are kernel-backed in the shipped
-binary and the id class is dead there (`tm move ^m2 month` on a fresh `tm init
+binary and the id class is dead there (`lime move ^m2 month` on a fresh `lime init
 --example` tree is refused `occupied`, nothing written — `d8e8d4d`); the fault
 probe returns a named `kernelFault`, never exit 0 (`dd89bc6`); both suites are
-green (§7.5); and `cargo build -p tm` into an empty target directory built and
+green (§7.5); and `cargo build -p lime` into an empty target directory built and
 linked in 18.1 s at `bf7cc63` with the Lean archive already built — a from-clean
 `lake` build was not re-measured. What the acceptance does **not** yet cover is
 listed under "Still owed", below, and it is not small.
@@ -1986,7 +1989,7 @@ original's; the text after it is what became of it (the original text is in `git
 1. **Restore the Rust workspace first.** *Landed, `835d960`* — not from `main`,
    which the owner discarded (`f386c56`), but from the in-clone fork point:
    `git checkout 4748911 -- tm-core Cargo.toml Cargo.lock`. Zero portability
-   fixes; 943 tests passed at the restore. The restored `tm-core` is pre-stage-0.
+   fixes; 943 tests passed at the restore. The restored `lime-core` is pre-stage-0.
 2. **Two verbs did not exist in Lean at all.** *Both landed.* `rank`: `cmdRank`,
    L20a/L20b proved (`1d4fc14`), both §5.8 directions
    (`rank_onto_a_taken_rank_is_refused`, `cmdRank_succeeds`, `d0aced9`); the host
@@ -2010,7 +2013,7 @@ original's; the text after it is what became of it (the original text is in `git
    owed to stage 4, which needs it first.
 6. **Panic layers 2 and 3.** *Landed, `dd89bc6`*: the stderr `dup2` while the TUI
    owns the screen, fault-versus-refusal at the verb seam with the terminal
-   restored, and the constructed probe `TM_KERNEL_FAULT_PROBE`.
+   restored, and the constructed probe `LIME_KERNEL_FAULT_PROBE`.
 7. **The four integration-bug countermeasures.** *Three landed, `f4d0ec5`*:
    `cli_conformance.rs` (`--help` versus runtime, 38 pages), `cli_json_matrix.rs`
    (34 verbs × four legs), `tui_screen_router.rs` (runtime half; the compile-time
@@ -2031,7 +2034,7 @@ loader already reads, §6.3's `move`/`readopt`/`demote`/`drop` rows, §17.2.
 comment rule), `Line.lean` (the parse ⇒ wf bridges), `Text.lean` (`freshId`,
 `joinWith_splitOn`), **one new module, `Json.lean`** (imported at `c2ad8f6`, §2.3),
 `Check.lean`, `Negative.lean` and `Goals.lean` by the conventions, all of
-`kernel/tm-kernel-ffi/`, and the restored `tm-core/` and `tm/` (the bridge, the
+`kernel/lime-kernel-ffi/`, and the restored `lime-core/` and `lime/` (the bridge, the
 CLI tests, the templates).
 
 **Depends on.** Stage 1's `WfPlan`/`mapAt`/`resolveDest`/`Dest`; stage 2's parser
@@ -2056,7 +2059,7 @@ to `the_response_call_emits_parses_back`, `b7f504d` (the original was stated ove
 `Lean.Json`'s `partial def`s and could be neither proved nor refuted);
 `the_char_edge_round_trips` proved, `d61fece`;
 a_file_splits_into_the_lines_it_was_joined_from restated over the kernel's own
-`Tm.splitOn` and proved as `a_file_splits_into_the_lines_it_was_joined_from_char`
+`Lime.splitOn` and proved as `a_file_splits_into_the_lines_it_was_joined_from_char`
 (`Text.lean`, audited in `Check.lean`), and `joining_lines_is_injective`
 **refuted** as `joining_lines_is_not_injective_char`, both `a6dcc96`;
 `the_loader_builds_sites_in_range` and `the_loader_builds_oriented_demotions`
@@ -2069,8 +2072,8 @@ corpus and CLI suites — never a theorem.
 
 **Still owed from stage 3, by name** — each recorded in `kernel/README.md`:
 
-- **Gap 48** — the host's `KERNEL_EDIT_KEYS` (`tm/src/cli/items.rs`) does not
-  route the eight newly wired keys; `tm edit ^id due=…` still runs the fork-point
+- **Gap 48** — the host's `KERNEL_EDIT_KEYS` (`lime/src/cli/items.rs`) does not
+  route the eight newly wired keys; `lime edit ^id due=…` still runs the fork-point
   Rust. The next host step, with **gap 50** (every other plan-tier edit refusal
   is still `badHorizon`) beside it.
 - **Gap 51** — `∀ v : EditVal, wordWf v.rendered = true` is proved for `loc`,
@@ -2084,7 +2087,7 @@ corpus and CLI suites — never a theorem.
 - **Gap 44** — `jparse`'s and `jemit`'s per-element recursion has no runtime
   twin; the ~21 500-element bound on a 2 MiB stack is the one `splitDoc` already
   had, but a request with that many *documents* newly aborts.
-- **Gap 45** — `tm-core`'s parser is comment-blind, so `tm check`/`tm plan` and
+- **Gap 45** — `lime-core`'s parser is comment-blind, so `lime check`/`lime plan` and
   the kernel disagree about a column-0 item inside `<!-- -->`; **gap 46** — the
   comment rule's narrow edges (generated-block interiors, indentation).
 - **`now` in the request** — stage 3's item 5; stage 4 adds it.
@@ -2102,7 +2105,7 @@ corpus and CLI suites — never a theorem.
 - **Two newline conventions** — the bridge normalizes rewritten files to a final
   newline, legacy writers do not; retires as stages 4 and 6 and gap 5 retire the
   legacy writers.
-- **The `Negative.lean` renumber** (§6.2, §6.5) and **`tm/DORMANT.md`**, whose
+- **The `Negative.lean` renumber** (§6.2, §6.5) and **`lime/DORMANT.md`**, whose
   text still says the rewiring is "underway".
 
 **Named traps — kept, each with its status at `bf7cc63`.**
@@ -2120,9 +2123,9 @@ corpus and CLI suites — never a theorem.
   the box is `[-]`** (gap 31). `tree.rs`'s `is_archive_copy` also constrains
   *where* a `[-]` may be an archive copy — a week file, or a `month/…# Demoted`
   section, and nowhere else. So a `[-]` in `backlog.md` paired with a `[ ]` in a
-  week file loads here as a demotion and is a **duplicate id** to `tm`. Nothing
+  week file loads here as a demotion and is a **duplicate id** to `lime`. Nothing
   in the corpus is in that state and no kernel command can reach it, but
-  `planWf` is supposed to be no weaker than `tm check` and on this predicate it
+  `planWf` is supposed to be no weaker than `lime check` and on this predicate it
   is. Closing it needs a placement's *section* to reach the plan tier. It is a
   behaviour change, so it is recorded rather than taken — and stage 3 is where a
   real host starts sending real trees. *Status: **open**, not decided this
@@ -2133,7 +2136,7 @@ corpus and CLI suites — never a theorem.
   as the archive half of a pair. That matches `tree.rs`, which walks `n.primary`
   only, and it is the behaviour you want for a frozen record — but know it before
   a user reports it. *Status: open, unchanged.*
-- **`tm undo` must replay the log.** L4b is refuted by
+- **`lime undo` must replay the log.** L4b is refuted by
   `move_back_at_a_fresh_rank_is_not_the_inverse`: the wire form carries a
   document, not a rank, and the rank is generated fresh. An undo built as "apply
   the inverse command" is wrong by a compiled theorem. *Status: now general —
@@ -2168,7 +2171,7 @@ corpus and CLI suites — never a theorem.
   (gap 32). `Text.isSp c := c == ' '`. Measured: 1,049 of 2,048
   generated lines are silently prose to the kernel. And it already reaches a
   shipped operation — on a line with a tab before a repeated `est:`,
-  `tm edit est=45m` writes the *first* `est:` in the Rust (documented: first
+  `lime edit est=45m` writes the *first* `est:` in the Rust (documented: first
   occurrence wins) and the *second* in the kernel, because the kernel cannot see
   the first. **The kernel is on the wrong side of the bug the rebuild exists to
   make impossible, in the same operation.** Do not ship kernel-backed `edit`
@@ -2253,7 +2256,7 @@ as stated, L19c refuted (`autoClose_leaves_lines_in_periods_it_passes`) beside
 `autoClose_strands_no_unfinished_line`. (5, `d7487b2`) `Report.lean` — D3's
 per-item list under `ok.report.closes`, tied to the close by `closeReport_ids` and
 `closeReport_agrees_with_close`; `now` and `blockMin` on the wire. (6, `5557713`)
-`tm close` and the automatic close are kernel-backed (`tm/src/cli/closing.rs`);
+`lime close` and the automatic close are kernel-backed (`lime/src/cli/closing.rs`);
 `AUTO_CLOSE_CATCHUP = 16` is deleted. (7, `210daad`) the last three over-strong
 goals refuted and renamed, each with its narrowed law
 (`close_leaves_no_line_it_would_take`, `close_never_demotes_a_wall_but_may_carry_it`,
@@ -2266,7 +2269,7 @@ proof of its statement or of its negation; burn-down 40 → **30**.
 *What the acceptance measures, clause by clause:* "close idempotent at library
 level" is `close_is_idempotent` on `WfPlan`; "at CLI level" is
 `closing_twice_changes_zero_bytes_the_second_time` through the built binary
-(`tm/tests/cli_close_kernel.rs`); "a 3-month-stale tree catches up losing
+(`lime/tests/cli_close_kernel.rs`); "a 3-month-stale tree catches up losing
 nothing" is `autoClose_catches_up_in_one_step` in general, decided on a loaded
 plan (`the_stale_tree_catches_up_in_one_call`), pushed through `String → String`
 (`a_three_month_stale_tree_catches_up_in_one_call_and_reports_each_line`) and
@@ -2283,7 +2286,7 @@ final step 4, below*; gaps 52 (deferred, no consumer), 53, 54
 (stage 5), 55 (stage 5 and an owner decision), 56 (kernel half: gap 10), 57
 (gap 10), 58 (stage 5's `cfg`), 60 (q9, the owner's), 61 (the host's old id
 generator), 62 (a kernel call over a history-sized tree takes about a minute —
-the automatic close's gate is load-bearing) and 63 (`tm check` does not name a
+the automatic close's gate is load-bearing) and 63 (`lime check` does not name a
 line a close would take); §6.3's overdue routing (stage 5) and F3 (stage 6); the
 human drive. *Repaired after the close* (README "Stage 4 repair"): the automatic
 close's gate was `state.closed` alone, so a tree the fork-point binary had stamped
@@ -2374,10 +2377,10 @@ extension of `Cmd.lean`, `Plan.lean` (the fold; `ClosePolicy`; the `sectionsWf`
 interaction), `Boundary.lean` (`now`, the close ops, the report), `Check.lean`,
 `Negative.lean`, `Goals.lean`.
 
-**If you take the `Close.lean` option, add `import TmKernel.Close` to
-`kernel/TmKernel/TmKernel.lean` in the same commit** — after `Plan.lean` and
+**If you take the `Close.lean` option, add `import LimeKernel.Close` to
+`kernel/LimeKernel/LimeKernel.lean` in the same commit** — after `Plan.lean` and
 before `Cmd.lean` if `Cmd` consumes it. Without the import the file is not
-compiled, is not in `libTmKernel_TmKernel.a`, and `close` is unreachable from
+compiled, is not in `libLimeKernel_LimeKernel.a`, and `close` is unreachable from
 Rust while all seven checks stay green (§2.3).
 
 **Goals this stage owns** — 11 in `Goals.lean` under `# STAGE 4`, plus the
@@ -2430,7 +2433,7 @@ blocker. Do not let it become an excuse:
 
 - **Library level, here, now.** `close_is_idempotent` on `WfPlan` is the L16
   goal. The stale-tree clause becomes a corpus-shaped fixture pushed through the
-  `String → String` boundary by a `tm-kernel-ffi` test — the same instrument as
+  `String → String` boundary by a `lime-kernel-ffi` test — the same instrument as
   check 6 — asserting the item count and the summed `est:` are unchanged.
 - **CLI level.** The restore this clause waited on has landed (from `4748911`,
   not `main`, §8.1), so the CLI clause is owed **in this stage**, through the
@@ -2438,7 +2441,7 @@ blocker. Do not let it become an excuse:
   fork-point Rust close still runs as housekeeping ahead of every command (§8.1's
   "Still owed"). Do not restate the library result as the CLI one.
   *Status (step 6): landed — `close` is kernel-backed and the CLI clause is
-  tested through the built binary (`tm/tests/cli_close_kernel.rs`).*
+  tested through the built binary (`lime/tests/cli_close_kernel.rs`).*
 - **The behaviour changes need a human**, and the plan's instruction is literal:
   construct a stale tree and close it before deciding. *Done 2026-09-12*: the
   owner drove stale trees with the restored binary and decided (a); (b) turned
@@ -2506,7 +2509,7 @@ Plus the corpus ratchet, plus 30 minutes driving whatever binary exists (§5.13)
 - **`demote` must learn to target a *section*** (gap 20). §6.3 files the
   copy into `month/<current>#Demoted`; today `demote` lands it at `freshRank`.
   This changes `demote`, its `normalized`-preservation lemma, and `sectionsWf`.
-  §6.2's "outcome with an estimate is a `tm check` warning" is unimplementable
+  §6.2's "outcome with an estimate is a `lime check` warning" is unimplementable
   until then, because the two-line demotion form this kernel writes would trip it.
   *Status (step 2): landed for `close`'s week row (a rank shift makes room in
   `# Demoted`); the `demote` wire verb still lands at `freshRank`, `sectionsWf`
@@ -2631,9 +2634,9 @@ fit stays Rust), §16 (config), §10.1 (log replay), §10.2.
 model, now), `Check.lean`, `Negative.lean`, `Goals.lean`.
 
 **This stage adds up to four modules; every one of them needs an
-`import TmKernel.<Mod>` line in `kernel/TmKernel/TmKernel.lean`, in dependency
+`import LimeKernel.<Mod>` line in `kernel/LimeKernel/LimeKernel.lean`, in dependency
 order** (§2.3). It is the stage most likely to lose one, because it adds the most
-files at once and none of the seven checks will tell you. `cat TmKernel.lean` at
+files at once and none of the seven checks will tell you. `cat LimeKernel.lean` at
 the end of the stage and count.
 
 **Goals this stage owns** — 14 in `Goals.lean` under `# STAGE 5`, plus
@@ -2693,11 +2696,11 @@ refused S; the sentence is false now and it is gone. What landed, by phase:
 rebuilt under §7.3's freshness rule. Every denominator is recorded; none is omitted:
 - **the whole `Replay` and the fit against fork point `4748911`** (input set 3): **469 logs over
   6 zones** — 8 frozen (the seven corpus logs and a generated month) and 461 in the classes too
-  large to freeze — **8,442 `Replay` keys** (18 of the fork's 20 per log), **285 `tm event` name
+  large to freeze — **8,442 `Replay` keys** (18 of the fork's 20 per log), **285 `lime event` name
   sets**, **469 entry counts**, 7 refused-line lists, **8 fitted models**, **195,243 scalar
   values**. Disagreements: **49**, every one `days.<date>.load`, every one **parity P21** (the
   kernel's exact fifths against the fork's accumulated `f64`), every one checked to display the
-  same `round1` load and `load_blocks`. **Nothing else differs**, and `tm model --fit` agrees on
+  same `round1` load and `load_blocks`. **Nothing else differs**, and `lime model --fit` agrees on
   all 8 fitted logs — design §14.6's T12, against the fork rather than a saved file. *(This
   number was **24** at stage 5's close and the undercount was the harness's, not the kernel's:
   both sides of every comparison were decoded by a `serde_json` without `float_roundtrip`, which
@@ -2708,7 +2711,7 @@ rebuilt under §7.3's freshness rule. Every denominator is recorded; none is omi
 - **inside plain `cargo test --workspace`, with no fork build** (D21): T5's frozen arms compare
   **20 inputs / 360 keys / 17,291 scalar values / 4 event-name sets** and the door **16
   `All`-scope reads / 288 keys / 32,976 values / 6 event-name sets**; 458 further inputs reach
-  the fork only under `TM_ORACLE` (**gap 150**) and 2 door inputs are counted **skipped**, never
+  the fork only under `LIME_ORACLE` (**gap 150**) and 2 door inputs are counted **skipped**, never
   as agreement. Their **P21** sightings are **4 + 8 + 0** (corpus, generated month, zone cases)
   and **24** (door) — **12 + 24**, where stage 5's close counted **4 + 8** for the same inputs,
   for the parser reason above.
@@ -2721,8 +2724,8 @@ rebuilt under §7.3's freshness rule. Every denominator is recorded; none is omi
   (`kernel_lookahead_parity.rs`) and T16 (`kernel_unit_reserve.rs`): **92 windows, 552 future
   days, 482 candidates** (312 entering the pass, 6 held by hysteresis, 132 floors) and **256**
   proptest cases, with **0** disagreements outside **P1** (25 candidates), **P2** (3), **P3**
-  (131) and **P27** (31 fork days). Those compare against the **in-tree** `tm_core::capacity` and
-  `tm_core::priority`, and that is a fork-point comparison, **re-verified at the close rather
+  (131) and **P27** (31 fork days). Those compare against the **in-tree** `lime_core::capacity` and
+  `lime_core::priority`, and that is a fork-point comparison, **re-verified at the close rather
   than carried**: `capacity.rs` is purely additive since `4748911` (198 added, **0 removed**);
   `priority.rs` is 27 added / 6 removed, and its non-additive edits are **three**, not one — the
   `use` line gaining `Exact`, `is_impossible` reading the exact shortfall (P1-refined's own
@@ -2749,7 +2752,7 @@ rebuilt under §7.3's freshness rule. Every denominator is recorded; none is omi
    0 disagreements. Phase F's **F2** and **F3** still want the same seam, which is now paid for.
 2. **The §5.13 human drives** of the stage-3, stage-4 **and stage-5** binaries. **No agent can
    perform them** *(partly false — an agent CAN drive the TUI through a pty, §5.13, README gap
-   3527)*: `tm tui` refuses a non-tty by name (`tm/src/tui/mod.rs:92`) and design
+   3527)*: `lime tui` refuses a non-tty by name (`lime/src/tui/mod.rs:92`) and design
    §14.6's stage-5 list asks for the TUI through two reloads with a CLI verb in between
    (README **gap 182**). Two items on that list are owner questions the drive is meant to
    settle: **gap 131** and **gap 139**.
@@ -2780,23 +2783,23 @@ each says what it closed and on what evidence. **None of them is a work list any
 
 *Measured 2026-09-16 (README, "W-9: the switch was built and measured, and it did not land").* The
 body swap is **built and green** — `Ctx::replay_with` onto `kernel_log::replay_scoped`, and with it
-`Ctx::log_tail_of`, `Ctx::entries_at`, the undo recorder and `tm log` — and it was measured end to
+`Ctx::log_tail_of`, `Ctx::entries_at`, the undo recorder and `lime log` — and it was measured end to
 end against the unswitched binary before being reverted: **T5 20/20 and the door suite 15/15 pass
 against the shipped switched path**, T12 passes, **8 of 10 T9s** pass (the unwritable-cache one with
 its `#[ignore]` removed), **131 of 138** captured outputs are byte-identical, and the three-year
 later verb is **faster** — 141.8 ms against track B's pre-switch 278.6 ms. So S's blocker is **not**
 item 1, and **not** the size of §12's deletion: it is **gap 146** — the moment
-`tm/tests/support/replay.rs`'s `replay_of_text` calls the kernel, T5's 20 tests and the door suite's
+`lime/tests/support/replay.rs`'s `replay_of_text` calls the kernel, T5's 20 tests and the door suite's
 15 become **self-comparisons**, passing while proving nothing (§9.2's worst disguised gap) on the
 least reviewable commit of the stage. Retargeting them to the fork oracle (**gap 137**) should be
 **its own preparation step before S**, exactly as D19 did for T9/T12, T11 and R12. Two new decisions
-belong inside S: **gap 144** (`tm log --json` cannot be both key-ordered and pretty-printed as design
+belong inside S: **gap 144** (`lime log --json` cannot be both key-ordered and pretty-printed as design
 §11.4 step 5 prescribes — `serde_json` here has no `preserve_order`, so parsing to `Value`
-alphabetises the keys) and **gap 145** (`tm check` does not survive a `reachTooFar` log, which is
-D18 (iii)'s "every verb **except** `tm check`" half).
+alphabetises the keys) and **gap 145** (`lime check` does not survive a `reachTooFar` log, which is
+D18 (iii)'s "every verb **except** `lime check`" half).
 
 *Partly closed 2026-09-16 (W-10; README, "the comparand that survives the deletion").* **Gap 146's
-blocker is answered for the corpus class, and its own figure was wrong.** `tm/tests/fixtures/`
+blocker is answered for the corpus class, and its own figure was wrong.** `lime/tests/fixtures/`
 now carries **fork point 4748911's own answers, frozen** — 7 corpus logs, 146,868 bytes, blessed
 through AGENTS §7.3's oracle by an `#[ignore]`d test and byte-reproducible on a re-bless — and
 `t5_the_corpus_logs_replay_as_the_frozen_fork_point_does` compares the kernel against them inside
@@ -2813,8 +2816,8 @@ door suite's 7 exposed tests are unretargeted (**149**).
 
 *Gap 148 closed 2026-09-16 (W-11, track B; README "the grammar differential that
 survives the deletion").* **T1-T3 no longer name a function design §12 deletes.**
-`tm-oracle` gained the per-log-entry `parse-entry` mode D23 called for (§7.3's
-fourth input set), and `tm/tests/kernel_log_grammar.rs`'s **11** direct sites on
+`lime-oracle` gained the per-log-entry `parse-entry` mode D23 called for (§7.3's
+fourth input set), and `lime/tests/kernel_log_grammar.rs`'s **11** direct sites on
 `Log::parse_bytes`/`LogEntry::parse`/`parse_timestamp` are now **0** — the parse
 half reads fork point 4748911's frozen per-line verdicts, and the writer half
 (`LogEntry::{new, to_json}`, `Event`, `EVENT_NAMES`, `hours_since_wake`) never
@@ -2841,26 +2844,26 @@ made unreachable both suites still build, run and compare (T5 20 inputs / 360
 values), and with one kernel answer corrupted they fail by name against fork
 point 4748911 — T5 on all three frozen arms, the door at **14 passed / 2
 failed**. Residue: **gap 150** (458 inputs reach the fork only under
-`TM_ORACLE`), **gap 152** (the fork's `Replay` cannot answer for `rows`), and
+`LIME_ORACLE`), **gap 152** (the fork's `Replay` cannot answer for `rows`), and
 **gap 151** (§12's deletion list reaches past the reader, to be settled at S).
 
 *Closed 2026-09-16, on the `w8-facts` track (README, "the three findings that would have made a
-naive switch wrong").* **Gaps 134, 135 and 136 are no longer on this list.** `tm check` is wired to
+naive switch wrong").* **Gaps 134, 135 and 136 are no longer on this list.** `lime check` is wired to
 the kernel's read-only line sweep, so it names every unreadable line and not just the last chunk's
 (**134**); `decode_facts` keeps the two all-time done-date numbers the kernel already sends
 (`Seal.ItemAgg.doneFirst`/`doneCount`), which is what the **135** audit found missing — without them
-`tm plan`'s `every:Nd` phase anchor and the ordinal recurrences' pending number are computed at
-`Hot` from a *suffix* of the completion dates; and `tm log`'s `total` is the log's all-time entry
+`lime plan`'s `every:Nd` phase anchor and the ordinal recurrences' pending number are computed at
+`Hot` from a *suffix* of the completion dates; and `lime log`'s `total` is the log's all-time entry
 count rather than the row count of the scope it asked for (**136**). All three are green against the
 **unswitched** binary under D19, and each is pinned by a test that was shown to fail without its
 fix. **T11's seven latency
 rows and the per-verb kernel-call count are no longer on this list either**: they landed on
 2026-09-16 on the `w8-latency` track, merged to `rebuild-on-lean` the same day, as
-`tm/tests/cli_latency.rs`'s T11 and `tm/tests/kernel_call_counts.rs`, both green against the
+`lime/tests/cli_latency.rs`'s T11 and `lime/tests/kernel_call_counts.rs`, both green against the
 **unswitched** binary. That track also closed **gap 138** (D20) and opened **gaps 140-141** (139-140
 on its own branch; renumbered at the merge, AGENTS §6.5, because track A took 139 the same day).
 **The eight remaining T9 CLI tests and T12 are no longer on this list**: they landed under D19 as
-`tm/tests/cli_switch_acceptance.rs`, six T9s and T12 green against the **unswitched** binary and
+`lime/tests/cli_switch_acceptance.rs`, six T9s and T12 green against the **unswitched** binary and
 two `#[ignore]`d with their full post-switch bodies (README, "the T9/T12 step"). S's acceptance for
 those two is to delete the attribute, not to write the test.
 Then **S2** (**gap 130**, D16's kernel writer, with quirk
@@ -2870,18 +2873,18 @@ kept by decision: **85** (e), **87** (g), **118** (b). And the **§5.13 human dr
 stage-4 and stage-5 binaries are still owed.
 
 **"Eight T9 tests" — and the three counts this ledger gave for one number.** Design §14.6 lists
-**ten** T9 names. Two of them exist and pass, both in `tm/tests/cli_check_log.rs` and both landed
+**ten** T9 names. Two of them exist and pass, both in `lime/tests/cli_check_log.rs` and both landed
 with D18 (i) and (ii) at `022317d`: `invalid_utf8_line_is_a_warning_and_tm_check_names_it` and
-`a_line_dated_next_year_changes_nothing_about_today_and_tm_check_names_it`. **Eight remain**, and
+`a_line_dated_next_year_changes_nothing_about_today_and_lime_check_names_it`. **Eight remain**, and
 that is the figure to quote. This paragraph said "nine" from the stage's close until 2026-09-15;
 `kernel/README.md`'s X1 block says "seven"; its S block says "eight" and is the one that is right.
 The older README blocks are append-only history (§6.4) and are not rewritten — §10.2's table
 carries the correction for anyone quoting them.
 
 *Closed 2026-09-16 (D19).* **All ten T9 names now exist**, and so does T12. The eight that were
-missing are in `tm/tests/cli_switch_acceptance.rs`; **six pass against the unswitched binary**, and
+missing are in `lime/tests/cli_switch_acceptance.rs`; **six pass against the unswitched binary**, and
 **two are `#[ignore]`d** because the code they name has no caller until S —
-`an_unwritable_cache_rebuilds_in_memory_with_one_notice` (nothing in `tm/src` calls
+`an_unwritable_cache_rebuilds_in_memory_with_one_notice` (nothing in `lime/src` calls
 `kernel_log::unwritable_notice`) and `a_hand_undo_beyond_the_rebuild_bound_fails_by_name`
 (`ReachTooFar` has no call site; **gap 120 part 3**). The figure to quote from here is
 "ten exist, two ignored until S". That step also took **gap 139** (`--now` at an instant before the
@@ -2889,10 +2892,10 @@ stored runtime day rolls `.tm/state.json` back), which is a question for the §5
 
 *Item 3 closed 2026-09-16 (D19).* **Design §14.6 item 3 — R12's consumer tests — is landed**, before
 the switch and green against the unswitched binary: **23** test files and the two shared modules
-(`planner_common/`, `review_common/`) moved from `tm-core/tests/` to `tm/tests/` with their **49**
+(`planner_common/`, `review_common/`) moved from `lime-core/tests/` to `lime/tests/` with their **49**
 insta snapshots, whose bodies are byte-identical — only insta's `source:` header line changed, and
 that was verified blob by blob, not asserted. What item 3 still owes S is **only the chokepoint's
-one-line body swap**: `tm/tests/support/replay.rs`'s `replay_of_text` calling the kernel instead of
+one-line body swap**: `lime/tests/support/replay.rs`'s `replay_of_text` calling the kernel instead of
 `Log::parse(..).replay(..)`. No caller changes. Measured while both readers still existed — the
 whole point of landing this before S — over the moved suites' own **308 distinct (text, zone)
 pairs**: the kernel door and the Rust reader agree **exactly**, with one refusal, which is the
@@ -2900,7 +2903,7 @@ recorded parity exception **P17** (**gap 142**).
 
 *Gaps 119 and 129 closed 2026-09-16 (W-11, S-after; README "a stalled ledger day has a
 name").* Both were **unreachable before S and reachable the moment it landed**, which is why
-three runs had correctly left them. **Gap 119**: `tm check` now names a stall in D18's warning
+three runs had correctly left them. **Gap 119**: `lime check` now names a stall in D18's warning
 family (`check::LOG_STALL`, `log-stall`), at the line the stall began on, with the ledger day it
 holds and the verb that clears it. The obvious rule was a trapdoor and the tests say so — a lag
 test ("the ledger day is more than 7 days behind `now`") fires on **healthy** trees, because
@@ -2908,7 +2911,7 @@ test ("the ledger day is more than 7 days behind `now`") fires on **healthy** tr
 measured over two trees identical but for the open block, the unstalled one ran **12 days**
 behind while the stalled one pinned at its block's day forever. The cause is named, not the lag.
 **Gap 129**: measured, not narrowed, on exactly the condition the gap wrote for itself — a bare
-`tm log` over three years (66,169 lines) is **232.9 ms**, inside `LATER_VERB`, so `All` stays and
+`lime log` over three years (66,169 lines) is **232.9 ms**, inside `LATER_VERB`, so `All` stays and
 the two-step narrowing is not built. The three-year behavioural test gap 117 could not carry
 landed with it. Residue: **gap 190**, design §9.4's third stall cause (a `stop` never followed by
 a `start`) is invisible to the host — it lives in the kernel's `Replay.Machine.lastCut` and
@@ -2921,7 +2924,7 @@ reaches no response key, and a stopped tree with a 23-day ledger lag still repor
 the one **spec** §3.1 field still *stored* rather than viewed, and it is always
 `none`.
 `Field.parentRef` reads `@O2` off the line today; wiring it would make
-`parentsTotal` — a **load precondition**, not `tm check`'s `@ghost` *report* —
+`parentsTotal` — a **load precondition**, not `lime check`'s `@ghost` *report* —
 refuse every `week/*.md` and `backlog.md` in the fixture corpus with
 `danglingParent`. The consequence is stated in gap 22: **spec** §3.2's
 `effectiveShape` prep rule, `effectiveCi` inheritance and `rootPrio` are **proved
@@ -3070,7 +3073,7 @@ the status block above and in `kernel/README.md`'s closing block.
 
 > **Plan acceptance.** D1–D14 decidable-checked on every plan the corpus
 > produces; `planner_invariants.rs` green at 256 cases through the FFI; the
-> one-renderer test. Cost: 3–4 wk. Worth alone: `tm plan` kernel-backed; G1
+> one-renderer test. Cost: 3–4 wk. Worth alone: `lime plan` kernel-backed; G1
 > structurally dead.
 
 **Scope, concretely.**
@@ -3105,8 +3108,8 @@ emitted text, §11 only as integer numerator/denominator pairs.
 consumers, `Boundary.lean` (the `report` half of the response, `state.json`
 runtime facts), `Check.lean`, `Negative.lean`, `Goals.lean`.
 
-**Both new modules need an `import TmKernel.<Mod>` line in
-`kernel/TmKernel/TmKernel.lean`** (§2.3) — and `Emit.lean` especially, because it
+**Both new modules need an `import LimeKernel.<Mod>` line in
+`kernel/LimeKernel/LimeKernel.lean`** (§2.3) — and `Emit.lean` especially, because it
 owns the generated Markdown blocks, which is the whole of item 3 below: a module
 that is not linked cannot own any bytes at all, and nothing would fail.
 
@@ -3151,7 +3154,7 @@ by D99 as the W-46 brief scheduled it).*
 Rust: `active`, `window`, `budget`, `break`, `interrupt`, `last_plan_hash`.
 
 **Acceptance.** The plan's three items. Note the third is a *Rust* test — the day
-section byte-identical across the file, `tm now`, `tm tui` and `tm plan --json`.
+section byte-identical across the file, `lime now`, `lime tui` and `lime plan --json`.
 
 **Named traps.**
 
@@ -3174,10 +3177,10 @@ section byte-identical across the file, `tm now`, `tm tui` and `tm plan --json`.
   makes the kernel refuse to be silent about it; it does not answer it.
 - **Nine defects are `M` and no kernel proof touches them** (G2, G3, G4, G6,
   G8–G12). Four are the integration bugs whose countermeasures are Rust tests.
-  Stage 6 is where `tm plan`'s CLI and JSON surfaces change most, so the `--json`
+  Stage 6 is where `lime plan`'s CLI and JSON surfaces change most, so the `--json`
   matrix test and the CLI conformance test earn their keep here.
 - **`Fin 6` forces a decision point but does not make the decision.** Nothing
-  stops the CLI writing `.getD 3` and silently filtering `tm start --energy 9`
+  stops the CLI writing `.getD 3` and silently filtering `lime start --energy 9`
   away again.
 - **Display divides; the kernel does not.** `progress`, `plan_honesty`,
   `as_blocks` and the review "share" family emit integer numerator and
@@ -3232,7 +3235,7 @@ authoritative list; this is what stage 6 has to *do* with it:
 
 Delete `tree::record_rank`, `tree::is_real_duplicate`, `store::choose`'s
 tie-break, and `cli/items.rs::drop_stale_demotion`. Cost: days. Acceptance: suite
-green with those four gone, and `tm check` *is* `parse`. **The deletion is the
+green with those four gone, and `lime check` *is* `parse`. **The deletion is the
 proof that the invariant became structural** — until then, "`Store.get` deletes
 four pieces of machinery" is a claim about what is *deletable*, not a thing that
 has been done.
@@ -3240,8 +3243,8 @@ has been done.
 Two notes to carry: `drop_stale_demotion`'s own doc comment ends *"Upstream fix:
 horizon::readopt"*; and gap 2 records that refusing to move a demoted
 item while its tombstone stands is **the change that makes `drop_stale_demotion`
-unnecessary** — and it is a behaviour change a user must assent to, since `tm`
-today allows `tm move ^id day` on a demoted item and leaves the stale `[-]`
+unnecessary** — and it is a behaviour change a user must assent to, since `lime`
+today allows `lime move ^id day` on a demoted item and leaves the stale `[-]`
 behind.
 
 ---
@@ -3266,7 +3269,7 @@ included, and a two-run theorem a change breaks is re-proved, never downgraded o
 deleted. Re-measured at `c9ef6f0`: 4.52 : 1; at `b2af1a8` (D6): 4.60 : 1; at stage 4
 final step 4 (B3, the commit that closes stage 4): **4.80 : 1** (18,815 proof lines :
 3,917 definition lines), 9.36 : 1 in `Close.lean`, 6.22 : 1 in `Report.lean`, by the
-same script (`python3 /tmp/claude-1000/proof_ratio.py kernel/TmKernel/TmKernel`) — under
+same script (`python3 /tmp/claude-1000/proof_ratio.py kernel/LimeKernel/LimeKernel`) — under
 D5 the number informs and stops nothing. The row stays, because a later owner
 may re-impose it; the decision and its cost are in README "Stage 4 final,
 2026-09-13". The paragraph that follows is its record as it stood before the
@@ -3320,7 +3323,7 @@ renumbers (§6.4).
 - **A goal deleted from `Goals.lean` without a proof** (§3.2). Check 7's number
   goes down and nothing is true — the one way to make this document's headline
   measurement lie.
-- A new module that is never imported into `TmKernel/TmKernel.lean` (§2.3): it
+- A new module that is never imported into `LimeKernel/LimeKernel.lean` (§2.3): it
   looks built, and check 1 agrees.
 
 ### 9.3 The ceiling, which belongs in front of any agent writing prose
@@ -3328,7 +3331,7 @@ renumbers (§6.4).
 Over 39 catalogued defects: 12 unrepresentable, 12 proof obligations, 2 fixed by
 single ownership, 4 partial, **9 missed**. Two thirds prevented or caught. The
 plan says the sentence out loud, and so should you: *"Anyone quoting this design
-as 'tm becomes verified' is overstating it by a factor of three."*
+as 'lime becomes verified' is overstating it by a factor of three."*
 
 ---
 
@@ -3338,7 +3341,7 @@ as 'tm becomes verified' is overstating it by a factor of three."*
 
 *Re-measured at W-43 track G, 2026-10-03, on the tree this step commits (README gap 4325): per module,
 `wc -l`, and the names `leanfiles.qualified_theorem_names` returns for that file — the roster
-`python3 leanfiles.py --theorems TmKernel` prints whole and check 3 reads.  The table after this one is
+`python3 leanfiles.py --theorems LimeKernel` prints whole and check 3 reads.  The table after this one is
 stage 5's close, kept as it was.*
 
 | module | lines | theorem declarations |
@@ -3381,7 +3384,7 @@ stage 5's close, kept as it was.*
 | `Width.lean` | 198 | 12 |
 | `Seal.lean` + 57 `Seal*` modules | 15,756 | 770 |
 | **94 modules** | **121,316** | **6,290** |
-| `TmKernel.lean` | 94 | — |
+| `LimeKernel.lean` | 94 | — |
 | `Check.lean` | 8,239 | — |
 | `Negative.lean` | 2,944 | — |
 | `Goals.lean` | 1,466 | — |
@@ -3425,7 +3428,7 @@ close) is in this file's history as of `30919c1`.
 | `Grain.lean` | 310 | 30 | 310 / 30 (unchanged) |
 | `Seal.lean` **+ 57 `Seal*` modules** | **15,494** | **762** | — (new, phase W; **58 files**, each with its own import line, §2.3) |
 | **78 modules** | **73,557** | **3,946** (one is a docstring line in `Cmd.lean`; the grep skips `Arith.lean`'s `private theorem cancelR`, and the two cancel) | 32,358 / 1,826 (thirteen modules) |
-| `TmKernel.lean` | 78 | — (the 78 imports; §2.3) | 13 |
+| `LimeKernel.lean` | 78 | — (the 78 imports; §2.3) | 13 |
 | `Check.lean` | 4,598 | — (3,946 `#print axioms` lines, 3,946 distinct names, 63 `APPENDED` banners) | 2,167 |
 | `Negative.lean` | 1,905 | — (147 cheat blocks, highest numbered 157) | 778 |
 | `Goals.lean` | 752 | — (13 goals with `sorry`, **all stage 6**; not imported) | 740 |
@@ -3435,13 +3438,13 @@ close) is in this file's history as of `30919c1`.
 names, 3,946 declared. The agreement is still two off-by-ones cancelling, and knowing which
 is the point of that section: the declared count includes `Cmd.lean`'s prose line at column 0
 and excludes `Arith.lean`'s `private theorem cancelR`, which is not audited either, and the
-audit still names one **definition**, `Tm.WfPlan`, at `Check.lean:472`. The honest sentence is
+audit still names one **definition**, `Lime.WfPlan`, at `Check.lean:472`. The honest sentence is
 unchanged: every theorem in the 78 modules is audited except the private `cancelR`, and the
 audit names one definition as well. Re-derived here by §6.3's own multiset diff: exactly two
 entries, `whose` declared-and-unaudited and `WfPlan` audited-and-undeclared.
 
 Proof : definition, by the same line-classification script, kept verbatim in the README's
-"Stage 4 closed" block (`python3 /tmp/claude-1000/proof_ratio.py kernel/TmKernel/TmKernel`;
+"Stage 4 closed" block (`python3 /tmp/claude-1000/proof_ratio.py kernel/LimeKernel/LimeKernel`;
 the on-disk copy was diffed against that verbatim copy at the close and is identical):
 **4.03 : 1** over the 78 modules (42,506 proof lines : 10,543 definition lines), net
 3.97 : 1 with witnesses and fixtures removed, 3.00 : 1 counting each declaration's doc
@@ -3461,11 +3464,11 @@ at stage 4's close: 3.4×).
 FFI crate: `shim.c` 66 + `build.rs` 80 + `src/lib.rs` **105** = **251** lines (207 at
 `b344185`); tests `kernel.rs` 1,922 lines (1,288), `corpus.rs` 738 (unchanged), `stack.rs`
 526 and `tests/harness/mod.rs` 486. FFI tests: 86 + 8 + 6 = **100** (76 at stage 4's close).
-Host side: `tm/src/cli/kernel_bridge.rs` 1,511 lines (1,253), `tm/src/cli/kernel_log.rs`
+Host side: `lime/src/cli/kernel_bridge.rs` 1,511 lines (1,253), `lime/src/cli/kernel_log.rs`
 **2,202 — the binary's only reader AND writer of the log** (1,129 at `b344185`, when nothing
 in the binary called it; its module header said so two commits longer than it was true, and
-its blanket `#![allow(dead_code)]` outlived the switch by four — README gap 238), `tm/src/cli/kernel_capacity.rs` 1,034, `tm/src/cli/closing.rs`
-**733** (622), `tm/src/cli/out.rs` **606**, `tm/build.rs` 40. `tm-core/src/log.rs` is **1,806** lines — the writer, the
+its blanket `#![allow(dead_code)]` outlived the switch by four — README gap 238), `lime/src/cli/kernel_capacity.rs` 1,034, `lime/src/cli/closing.rs`
+**733** (622), `lime/src/cli/out.rs` **606**, `lime/build.rs` 40. `lime-core/src/log.rs` is **1,806** lines — the writer, the
 decoded `Replay` and nothing else — against **3,609** before §12's deletion at `2b26be3`.
 
 `check.sh`: **seven** checks, **3.35 / 3.09 / 3.09 s** over three serial capped runs on a
@@ -3477,7 +3480,7 @@ result lines**, 0 warnings, capped (§7.5; 1,309 at stage 5's close, 1,087 acros
 passed, 15.76 s**, the year-of-log and both three-year tests included. T5
 (`kernel_replay_parity.rs --include-ignored`): **33 passed, 6.21 s**; the door suite **22**;
 `cli_switch_acceptance --include-ignored` **9**; `kernel_log_grammar --include-ignored`
-**18**. §12's one-reader grep: **41**, from 125 before the switch. `cargo build -p tm` into
+**18**. §12's one-reader grep: **41**, from 125 before the switch. `cargo build -p lime` into
 an empty target directory: **18.98 s, 1,556,152 KiB peak RSS** (1.48 GiB; 18.93 s and
 1,743,872 KiB at `b344185`). Every figure here was taken under
 `systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0`.
@@ -3489,13 +3492,13 @@ an empty target directory: **18.98 s, 1,556,152 KiB peak RSS** (1.48 GiB; 18.93 
 column that table carried (stage 3's close) is in this file as of `30919c1`.
 
 `build.rs` runs `lean --print-prefix` **inside** the Lean package so it honours
-`lean-toolchain`, then `lake build TmKernel:static`, then compiles `shim.c`, and
+`lean-toolchain`, then `lake build LimeKernel:static`, then compiles `shim.c`, and
 emits two `-L` search paths (`lib/lean` *and* `lib` — gmp/uv/ssl/crypto live in
-the latter). It has `rerun-if-changed` on every file under `TmKernel/`, so
+the latter). It has `rerun-if-changed` on every file under `LimeKernel/`, so
 editing Lean re-drives lake on the next `cargo test`. Since `0c3aaf7` it also
 emits `-Wl,-rpath,<toolchain>/lib` for the crate's binaries and tests, so Linux
 finds the toolchain's bundled `libc++`; because a dependency's link args do not
-propagate, `tm/build.rs` repeats that rpath for the `tm` binary and its test
+propagate, `lime/build.rs` repeats that rpath for the `lime` binary and its test
 harnesses.
 
 ### 10.2 Statements in the other documents that are stale
@@ -3547,20 +3550,20 @@ Check these before you quote them.
 4. The module header docstrings for every file you will touch. They name the
    rejected alternative.
 5. `kernel/check.sh`. It is the acceptance script and it is short.
-6. `tm-spec-v1.md` for the sections your stage implements.
+6. `lime-spec-v1.md` for the sections your stage implements.
 7. The fork point `4748911` as the oracle, by function name (`main` is
    discarded, §2.2).
 
 ### 10.4 Re-measuring before you quote
 
 ```bash
-cd /Users/psixyzt/code/planner/kernel/TmKernel
-wc -l TmKernel/*.lean TmKernel.lean Check.lean Negative.lean Goals.lean
-grep -cE '^(@\[[^]]*\][[:space:]]*)?theorem ' TmKernel/*.lean   # attr-aware; §6.3
+cd /Users/psixyzt/code/planner/kernel/LimeKernel
+wc -l LimeKernel/*.lean LimeKernel.lean Check.lean Negative.lean Goals.lean
+grep -cE '^(@\[[^]]*\][[:space:]]*)?theorem ' LimeKernel/*.lean   # attr-aware; §6.3
 grep -c '^#print axioms' Check.lean
 grep -c '^theorem ' Goals.lean                                  # what check 7 prints
-cat TmKernel.lean                                               # every module built
-ls -l .lake/build/lib/libTmKernel_TmKernel.a                    # archive size
+cat LimeKernel.lean                                               # every module built
+ls -l .lake/build/lib/libLimeKernel_LimeKernel.a                    # archive size
 cd /Users/psixyzt/code/planner && git worktree list && git branch -a && git log --oneline -1
 # and both suites, capped (§7.5): check.sh's seven lines, cargo test --workspace's totals
 ```

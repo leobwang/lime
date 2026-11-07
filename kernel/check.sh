@@ -8,8 +8,8 @@ fail=0
 say() { printf '%-46s %s\n' "$1" "$2"; }
 
 # 1. The kernel builds, including the linkable archive.
-( cd TmKernel && "$LAKE" build TmKernel:static >/dev/null 2>&1 ) \
-  && say "lake build TmKernel:static" "ok" || { say "lake build TmKernel:static" "FAILED"; fail=1; }
+( cd LimeKernel && "$LAKE" build LimeKernel:static >/dev/null 2>&1 ) \
+  && say "lake build LimeKernel:static" "ok" || { say "lake build LimeKernel:static" "FAILED"; fail=1; }
 
 # 2. Totality and boundary discipline.  A Lean panic returns Inhabited.default
 #    with exit code 0 -- a silent wrong answer -- so the kernel must be total.
@@ -55,7 +55,7 @@ say() { printf '%-46s %s\n' "$1" "$2"; }
 #    ONE line passed at rc=0 while check 3 named the axiom.  Driven in a clone
 #    with HEAD's and the repaired script over the same plant: rc=0 silent, then
 #    rc=1 naming both `#eval`s.  Both position readers share one class now.
-if python3 totality.py TmKernel/TmKernel TmKernel; then
+if python3 totality.py LimeKernel/LimeKernel LimeKernel; then
   say "totality check" "ok"
 else
   say "totality check" "FAILED"; fail=1
@@ -77,30 +77,30 @@ fi
 #    unaudited (gap 260: the audit had a count, not a roster).  So the check now
 #    runs AGENTS 6.3's own reconciliation: the multiset of declared short names
 #    against the multiset of audited last segments, `comm -23`, which must be
-#    EMPTY.  It is one-directional on purpose -- `Tm.WfPlan` is a `def` that is
+#    EMPTY.  It is one-directional on purpose -- `Lime.WfPlan` is a `def` that is
 #    deliberately audited (6.3), and auditing more than the theorems is not a
 #    defect.  A `sort -u` count cannot replace this: 23 short names are declared
 #    in more than one namespace.
 #
 #    AND THE ROSTER GREP WAS THE FOURTH ENUMERATION, repaired at the W-22 repair
 #    step.  W-21 made `totality.py`, `citations.py` and `mutate.py` recursive and
-#    left THIS one at `TmKernel/*.lean`, because none of the three named it: a
+#    left THIS one at `LimeKernel/*.lean`, because none of the three named it: a
 #    theorem in a SUBDIRECTORY was never required to have a `#print axioms` line,
 #    which is exactly the class the paragraph above says this check exists to
 #    catch.  DRIVEN before the repair, in a scratch copy: the same theorem gave
-#    `unaudited` EMPTY at `TmKernel/TmKernel/Sub/Probe.lean` and named it at
-#    `TmKernel/Probe2.lean`.  The walk is now `leanfiles.lean_files`, the one
+#    `unaudited` EMPTY at `LimeKernel/LimeKernel/Sub/Probe.lean` and named it at
+#    `LimeKernel/Probe2.lean`.  The walk is now `leanfiles.lean_files`, the one
 #    enumeration all four checkers share.
 #
 #    AND SHARING THE WALK WAS NOT ENOUGH: TWO OF THE FOUR CALLED IT ON THE
 #    MODULE DIRECTORY AND NOT ON THE LIBRARY (README gap 1314, the W-23 repair
-#    step).  A Lake library is `TmKernel/TmKernel/**.lean` PLUS the root module
-#    `TmKernel/TmKernel.lean` beside it; this roster and mutate.py's asked for
+#    step).  A Lake library is `LimeKernel/LimeKernel/**.lean` PLUS the root module
+#    `LimeKernel/LimeKernel.lean` beside it; this roster and mutate.py's asked for
 #    the directory, so a theorem in the ROOT module was never required to carry
 #    a `#print axioms` line and a def there was never constant-folded, while
 #    lake compiled both.  DRIVEN with these very lines: the probe theorem in
-#    TmKernel/TmKernel.lean left `unaudited: []` and the same theorem in
-#    Emit.lean named itself.  `leanfiles.py --library TmKernel` names the root,
+#    LimeKernel/LimeKernel.lean left `unaudited: []` and the same theorem in
+#    Emit.lean named itself.  `leanfiles.py --library LimeKernel` names the root,
 #    once, so a fifth disagreement needs someone to write a second walk OR a
 #    second root.
 #
@@ -152,27 +152,27 @@ fi
 #    nobody has written yet.  Measured: the two patterns agree EXACTLY on this
 #    library, 5,102 names each, and `leanfiles.py` states what the token cannot
 #    see.
-out=$( cd TmKernel && LEAN_PATH=.lake/build/lib/lean "$LEAN" Check.lean 2>&1 )
+out=$( cd LimeKernel && LEAN_PATH=.lake/build/lib/lean "$LEAN" Check.lean 2>&1 )
 n=$( printf '%s' "$out" | grep -c 'axioms' )
 # **RECONCILED BY THE FULL NAME** (W-29 repair step, README gap 2008).  Both
 # sides used to be put through `sed 's/.*\.//'`, which made this a multiset over
 # SHORT names: it saw a name that had been LOST and could NOT see one that had
 # been SWAPPED for another namespace's same-short-name theorem.  DRIVEN before
-# the repair: a second copy of `Tm.EmitWire.the_refusals_spell_themselves`
-# standing in for `Tm.PlanWire.the_refusals_spell_themselves` left this check
+# the repair: a second copy of `Lime.EmitWire.the_refusals_spell_themselves`
+# standing in for `Lime.PlanWire.the_refusals_spell_themselves` left this check
 # saying `ok` with the PlanWire theorem audited zero times.  `leanfiles.py
 # --theorems` now prints the name `lean` itself prints, so the two sides are
 # compared on the key the audit is actually about.
 unaudited=$( comm -23 \
-  <( python3 leanfiles.py --theorems TmKernel | sort ) \
-  <( grep '^#print axioms' TmKernel/Check.lean | awk '{print $3}' | sort ) )
+  <( python3 leanfiles.py --theorems LimeKernel | sort ) \
+  <( grep '^#print axioms' LimeKernel/Check.lean | awk '{print $3}' | sort ) )
 # **AND THE CHECK NAMED "THE AXIOM AUDIT" NEVER LOOKED AT THE AXIOM SET**
 # (W-31 repair step, README gap 2256).  This chain's first arm was `grep -q
 # sorryAx`: ONE NAME, where the hard rule is a CLASS -- *no new axiom*.  A
-# planted axiom is not `sorryAx`, so `lean` printed `'Tm.w31_one_is_two'
+# planted axiom is not `sorryAx`, so `lean` printed `'Lime.w31_one_is_two'
 # depends on axioms: [w31Planted]` and the gate read that line and said `ok`.
 # DRIVEN in a `cp -a` clone with its own build tree: `lake build
-# TmKernel:static` rc=0, this fragment "axiom audit (5290 theorems)  ok", and
+# LimeKernel:static` rc=0, this fragment "axiom audit (5290 theorems)  ok", and
 # the planted name in `$out` at line 5762.  `grep -rn 'propext|Classical.choice
 # |Quot.sound' check.sh *.py` returned only prose -- NOTHING in the tree
 # compared the printed set to the allowed one.  The twelfth counted instance of
@@ -187,7 +187,7 @@ unaudited=$( comm -23 \
 # could not have caught on its own reading of the SOURCE: `theorem
 # w32_critic_native : (1000 : Nat) < 2000 := by native_decide` appended to
 # `SealInStep.lean` in a `cp -a` clone with its own build tree, plus its
-# `#print axioms` line.  `lake build TmKernel:static` rc=0, Check.lean reported
+# `#print axioms` line.  `lake build LimeKernel:static` rc=0, Check.lean reported
 # ZERO errors, `grep -c sorryAx` was **0** -- so the arm this one replaced would
 # have said `ok` -- and `lean` printed `'w32_critic_native' depends on axioms:
 # [w32_critic_native._native.native_decide.ax_1_1]`.  The subset arm named it at
@@ -204,7 +204,7 @@ import re, sys
 ALLOWED = {"propext", "Classical.choice", "Quot.sound"}
 t = sys.stdin.read()
 # The name is GREEDY to its last apostrophe and the list is a character class:
-# `Tm.Field.map_map\x27` and 23 more carry a prime, and `[^\x27\n]+` read 5,266
+# `Lime.Field.map_map\x27` and 23 more carry a prime, and `[^\x27\n]+` read 5,266
 # of 5,290 records on the first drive -- the floor below caught this parser
 # before it gated anything, which is what the floor is for.
 dep = re.findall(r"(?m)^\x27(.+)\x27 depends on axioms: \[([^]]*)\]", t)
@@ -254,7 +254,7 @@ fi
 #    So the cap is lifted, hitting it anyway is a failure, and every `/- CHEAT`
 #    block must carry an error at a line of its own.  A block whose header
 #    says `withdrawn` holds no claim and is exempt.
-neg=$( cd TmKernel && LEAN_PATH=.lake/build/lib/lean "$LEAN" -DmaxErrors=1000000 Negative.lean 2>&1 )
+neg=$( cd LimeKernel && LEAN_PATH=.lake/build/lib/lean "$LEAN" -DmaxErrors=1000000 Negative.lean 2>&1 )
 rc=$?
 if [ $rc -eq 0 ]; then
   say "Negative.lean compiles (must not)" "FAILED"; fail=1
@@ -262,7 +262,7 @@ elif printf '%s\n' "$neg" | grep -q 'maximum number of errors'; then
   say "Negative.lean rejected" "FAILED (maxErrors reached)"; fail=1
 elif silent=$( printf '%s\n' "$neg" | python3 -c '
 import re, sys
-src = open("TmKernel/Negative.lean").read().split("\n")
+src = open("LimeKernel/Negative.lean").read().split("\n")
 starts = [i + 1 for i, l in enumerate(src) if l.startswith("/- CHEAT")]
 errs = {int(m.group(1)) for m in re.finditer(r"^Negative\.lean:(\d+):\d+: error", sys.stdin.read(), re.M)}
 ends = starts[1:] + [len(src) + 1]
@@ -279,7 +279,7 @@ fi
 #
 #    BOTH test binaries since the owner's D36 (README gap 686).  This check ran
 #    `--test kernel` only, and the root Cargo.toml's `members` excludes
-#    tm-kernel-ffi, so `cargo test --workspace` did not run the crate either:
+#    lime-kernel-ffi, so `cargo test --workspace` did not run the crate either:
 #    ALL SEVEN tests of tests/stack.rs were run by nothing automatic.  Not only
 #    T17, the D30(Q8) replan instrument gap 600 depends on -- also the four
 #    2 MiB-thread stack probes (T0 (a), the log op, T0 (c)) and the two
@@ -296,7 +296,7 @@ fi
 #    stops running is visible instead of silent: `--test kernel --test stack`
 #    is 86 + 7 = 93 today, and an #[ignore] added later moves the number without
 #    changing the verdict.  A binary that vanished would fail cargo outright.
-out=$( cd tm-kernel-ffi && cargo test --quiet --test kernel --test stack 2>&1 )
+out=$( cd lime-kernel-ffi && cargo test --quiet --test kernel --test stack 2>&1 )
 rc=$?
 n=$( printf '%s\n' "$out" | awk '/^test result:/ { p += $4; i += $8 }
                                  END { printf "%d tests%s", p, (i ? ", " i " ignored" : "") }' )
@@ -322,8 +322,8 @@ fi
 #    `corpus_round_trip` is a ratchet against corpus/round-trip.expected: a file
 #    recorded as round-tripping that stops doing so fails; a file that starts
 #    doing so does not, because the grammar is still being extended.  Rebless
-#    with `TM_CORPUS_BLESS=1 cargo test --test corpus`.
-out=$( cd tm-kernel-ffi && cargo test --quiet --test corpus -- --nocapture 2>&1 )
+#    with `LIME_CORPUS_BLESS=1 cargo test --test corpus`.
+out=$( cd lime-kernel-ffi && cargo test --quiet --test corpus -- --nocapture 2>&1 )
 rc=$?
 score=$( printf '%s' "$out" | grep -m1 '^CORPUS:' | sed 's/^CORPUS: //' )
 if [ $rc -eq 0 ]; then
@@ -333,7 +333,7 @@ else
   printf '%s\n' "$out" | tail -40
 fi
 
-# 7. The outstanding goals of stages 3-6 elaborate.  TmKernel/Goals.lean states
+# 7. The outstanding goals of stages 3-6 elaborate.  LimeKernel/Goals.lean states
 #    every remaining obligation as a theorem with a `sorry` proof: a statement
 #    that typechecks is guaranteed to be well-formed and to name real
 #    definitions, so a goal nobody can state is visible now rather than in
@@ -351,7 +351,7 @@ fi
 #    ONE.  "The number drops" was a count and nothing else: `sed -i /theorem
 #    plan_tail_drop/d` lowers the burn-down, keeps this check green, and AGENTS
 #    3.2's discipline -- prove it in a real module, append `#print axioms
-#    Tm.<name>` to Check.lean, THEN delete from Goals.lean -- was enforced by
+#    Lime.<name>` to Check.lean, THEN delete from Goals.lean -- was enforced by
 #    nobody at all.  So the deletion is reconciled against git, the way check 8
 #    reconciles its residue: every goal name in HEAD's Goals.lean that this
 #    tree no longer states must be NAMED IN Check.lean.
@@ -379,15 +379,17 @@ fi
 #    other four are caught.  Closing the remaining half needs the burn-down to
 #    record, goal by goal, WHICH theorem discharged it; this check has a roster
 #    and not a ledger, and that is README gap 1770.
-out=$( cd TmKernel && LEAN_PATH=.lake/build/lib/lean "$LEAN" Goals.lean 2>&1 )
+out=$( cd LimeKernel && LEAN_PATH=.lake/build/lib/lean "$LEAN" Goals.lean 2>&1 )
 rc=$?
-goals=$( grep -c '^theorem ' TmKernel/Goals.lean )
+goals=$( grep -c '^theorem ' LimeKernel/Goals.lean )
+goals_before_the_rename=kernel/TmKernel/Goals.lean
 gone=""
 if git rev-parse --verify -q HEAD >/dev/null; then
   for name in $( comm -23 \
-      <( git show HEAD:kernel/TmKernel/Goals.lean 2>/dev/null \
+      <( { git show HEAD:kernel/LimeKernel/Goals.lean 2>/dev/null \
+           || git show "HEAD:$goals_before_the_rename" 2>/dev/null; } \
            | grep -oE '^theorem [^ (){}:]+' | sed 's/^theorem //' | sort -u ) \
-      <( grep -oE '^theorem [^ (){}:]+' TmKernel/Goals.lean | sed 's/^theorem //' | sort -u ) ); do
+      <( grep -oE '^theorem [^ (){}:]+' LimeKernel/Goals.lean | sed 's/^theorem //' | sort -u ) ); do
     # NOT `grep -q` (W-39 track K, README gap 3551): under `pipefail`, `-q`
     # exits at its first match while the first grep is still writing ~6,000
     # audit lines, which then dies of SIGPIPE, and the pipeline's 141 read as
@@ -402,7 +404,7 @@ if git rev-parse --verify -q HEAD >/dev/null; then
     # a last segment `<name>_..._is_refuted`).  `grep "$name"` let any longer-named
     # theorem answer for it -- `plan_tail_drop_with_the_active_item_erased` for
     # `plan_tail_drop`, a `<name>_bound` lemma for a goal deleted with no proof.
-    grep '^#print axioms' TmKernel/Check.lean | awk '{print $3}' | sed 's/.*\.//' \
+    grep '^#print axioms' LimeKernel/Check.lean | awk '{print $3}' | sed 's/.*\.//' \
       | grep -xE "${name}(_(.*_)?is_refuted)?" >/dev/null || gone="$gone $name"
   done
 fi
@@ -425,7 +427,7 @@ stages=$( awk '
     else { line = "stages " out[0]; for (i = 1; i < m; i++) line = line ", " out[i] }
     if (loose) line = line ", " loose " above every header"
     print line
-  }' TmKernel/Goals.lean )
+  }' LimeKernel/Goals.lean )
 if [ -n "$gone" ]; then
   say "stage goals ($goals outstanding)" "FAILED (goal deleted, never audited)"; fail=1
   for name in $gone; do echo "  gone from Goals.lean and not named in Check.lean: $name"; done
@@ -449,18 +451,18 @@ fi
 #    THE FILE POPULATION IS INVERTED SINCE W-27 (README gap 1525).  The list
 #    below is the history of what this check grew to read, one hole at a time:
 #    the Lean recursion (W-21), the prune list and check 3's roster (W-22), the
-#    library ROOT module (W-23), `tm/examples` (W-24), `kernel/parity.txt`
+#    library ROOT module (W-23), `lime/examples` (W-24), `kernel/parity.txt`
 #    (W-25).  Every one of those is a file that had to be ADDED to a list to be
 #    covered, which is why each was found only after it had gone wrong.  The
 #    enumeration is now `git ls-files` (plus `--others`), `EXCLUDED` is the only
 #    list, and the residue must be EMPTY -- so the NEXT one fails this check
 #    instead of being silent.  It cost one adjudication and brought in the
-#    repository ROOT README.md, `tm/DORMANT.md`, the FFI shim's C, six manifests
+#    repository ROOT README.md, `lime/DORMANT.md`, the FFI shim's C, six manifests
 #    and two shell scripts.  And `::`-SPELLED SPANS ARE SWEPT, which is gap 989
 #    closed and ten live stale citations found; `citations.py`'s header has the
 #    numbers and the blind spot that is left.
 #
-#    So: every backticked identifier in TmKernel/**.lean -- RECURSIVELY since
+#    So: every backticked identifier in LimeKernel/**.lean -- RECURSIVELY since
 #    the W-21 repair step, which is where this line stopped overstating the
 #    sweep: three checkers enumerated the library one level deep while this
 #    sentence claimed a recursion none of them did, and a module in a
@@ -526,7 +528,7 @@ fi
 #    same step, because a doc comment naming its own fn's argument is correct
 #    prose and eleven names were exactly that; `let` bindings were measured and
 #    DECLINED (+896 short names for two resolutions).  Driven: the same plant --
-#    a backticked w24_module_comment_plant in a //! at tm-core/src/emit.rs:1 --
+#    a backticked w24_module_comment_plant in a //! at lime-core/src/emit.rs:1 --
 #    leaves the PREVIOUS citations.py's output byte-identical and is named by
 #    this one, and so are plants in ///, // and a nested /* */; a plant inside a
 #    STRING literal is correctly seen by neither half.  It cost 30 adjudications
@@ -583,7 +585,7 @@ fi
 #    THREE TIMES this campaign a definition shipped whose body nothing in the
 #    package could tell from a constant, and a human found all three:
 #    W-17's P4 sort key (halves swapped, 1,342 tests green), W-18's nine
-#    candidate facts (invert one, the suite green, `tm plan` visibly re-ranks),
+#    candidate facts (invert one, the suite green, `lime plan` visibly re-ranks),
 #    and W-19's `Planner.Ranked.gatherable` -- `:= true`, and 168 build targets,
 #    every theorem, all nineteen witnesses and check.sh 8/8 still green.  No
 #    check above can see it: check 3 reads axiom sets, check 4 reads a file that
@@ -737,12 +739,12 @@ fi
 #    SOURCE in a `finally`; it does not rebuild.  So after a pass that built
 #    anything, `.lake/build/ir` held the LAST MUTANT's C, and checks 11 and 12
 #    read that call graph.  Driven by W-34's reuse critic on a red run: checks
-#    11 and 12 failed with "`tm_kernel_call` is not an emitted function" because
+#    11 and 12 failed with "`lime_kernel_call` is not an emitted function" because
 #    `PlanWire.c` was missing; had the last mutant SURVIVED, they would have
 #    read a mutant's graph and said nothing.  One rebuild here makes every
 #    check after this line read what check 1 built.  On a settled tree it is
 #    Lake's no-op.
-( cd TmKernel && "$LAKE" build TmKernel:static >/dev/null 2>&1 ) \
+( cd LimeKernel && "$LAKE" build LimeKernel:static >/dev/null 2>&1 ) \
   || { say "rebuild after check 9" "FAILED"; fail=1; }
 
 # 10. The PARITY register has one home, and no number is issued twice.
@@ -866,8 +868,8 @@ fi
 #     cannot split is now COUNTED and FAILS the check.
 #
 #     It found ONE group that nothing answers, and it was a live duplicate
-#     README gap 1956 had already named and not taken: Tm.isDemotedRecord
-#     (Close.lean, the name that is now gone) and `Tm.demotedRecordPlacement`
+#     README gap 1956 had already named and not taken: Lime.isDemotedRecord
+#     (Close.lean, the name that is now gone) and `Lime.demotedRecordPlacement`
 #     (Plan.lean), D8's rule written twice in two modules.  The Close copy is deleted and its three
 #     sites read the Plan definition.
 #
@@ -925,15 +927,15 @@ fi
 #     re-spells its group's rule at closed arguments FAILS as FIXTURE
 #     (a `⟨43200 % 86400 / 60, by omega⟩` fixture); and a field-key
 #     constructor is a WIRE NAME only where Lean's own expected-type rule
-#     resolves it to `Tm.Field.Key` -- the tuple read the short name `Key`,
+#     resolves it to `Lime.Field.Key` -- the tuple read the short name `Key`,
 #     which is TWO types, and `.floor`/`.cap`/`.est` are `EditVal`'s
 #     constructors too, so a `.floor` sibling over a planted type and a
 #     `.machine` one over the replay's `Key` were each answered WIRE-NAMED
 #     before and are unanswered now.  E5 was made SPELLING-INVARIANT with it: `⟨n, 1⟩` IS
 #     `Q.mk n 1`, and the rung answered only the second.  Two precision defects
 #     the widening exposed are closed on the way: members were NAMED by their
-#     written name, first occurrence winning, so `Tm.Field.setEst` was reported
-#     as `Tm.setEst` (six such pairs; positional now, a scanner disagreement
+#     written name, first occurrence winning, so `Lime.Field.setEst` was reported
+#     as `Lime.setEst` (six such pairs; positional now, a scanner disagreement
 #     fatal); and a structure field sharing a parameter's spelling was holed.
 #     Measured at `9551d66` plus this step: 88 generalisation groups (61 before
 #     it), 0 UNANSWERED -- every group the widening formed is answered by E3
@@ -977,62 +979,62 @@ fi
 #     a property of the emitted CALL GRAPH, so none of them could see it, and
 #     the auditor who built the first walk put it in one sentence: a definition
 #     can be pinned by a theorem (check 9), unique (check 11), audited (check 3)
-#     and cited (check 8) and still be called by nothing -- `Tm.remainingMin` is
+#     and cited (check 8) and still be called by nothing -- `Lime.remainingMin` is
 #     all five.  THREE OF THIS CAMPAIGN'S FINDINGS LIVE THERE AND EVERY ONE WAS
 #     FOUND BY HAND: D50's `assignFold` (eight audit runs), gap 501's
 #     `Recur.lean` (many runs), and `Tree.lean` -- ten definitions and
 #     thirty-seven theorems -- which nobody had found at all.
 #
 #     THE PROPERTY, NOT A COUNT.  *A definition not used solely within proofs
-#     must be reachable from `tm_kernel_call`.*  The antecedent is the
+#     must be reachable from `lime_kernel_call`.*  The antecedent is the
 #     COMPILER'S: a `def` it emits no code for is one nothing can call, and a
 #     `def` it does emit is code the program runs or carries dead.  The
 #     source-side reading of "solely within proofs" was measured and REFUSED
 #     (`reach.py`'s header): it exempts 260 definitions, and among them are
-#     `Tm.edf` and `Tm.edfGrants` -- §7's EDF grant machine, whose fast twins the
+#     `Lime.edf` and `Lime.edfGrants` -- §7's EDF grant machine, whose fast twins the
 #     W-30 repair deleted as dead (gap 2126) and whose originals nothing has
 #     called since.  A rule about who MENTIONS a name is a rule the blind spot
-#     is defined by; `Tm.remainingMin` is mentioned nine times inside its own
+#     is defined by; `Lime.remainingMin` is mentioned nine times inside its own
 #     module, exactly as `assignFold` was.
 #
 #     AND THE ROOT OF THAT PROPERTY WAS ASSUMED UNTIL W-32 (README gap 2229).
-#     "Reachable from `tm_kernel_call`" is answerable and it is not the
-#     question: `tm_kernel_call` is a DOOR, not a caller.  What comes through it
+#     "Reachable from `lime_kernel_call`" is answerable and it is not the
+#     question: `lime_kernel_call` is a DOOR, not a caller.  What comes through it
 #     is a REQUEST, whose top-level keys choose which of the kernel's sections
 #     runs, and a section nothing sends is a door into a room nobody enters.
 #     W-31's track P found the consequence BY HAND, while pricing R3 -- the same
 #     way `assignFold`, `Recur.lean` and `Tree.lean` were all found -- and it is
 #     the fourth of them: `Planner.dayPlan`, §8.2's whole day planner, is
 #     reached from this root and from NO shipped caller, because `grep -rn
-#     '"planner"' tm/src` is EMPTY.  So the root is MEASURED now, on both sides,
+#     '"planner"' lime/src` is EMPTY.  So the root is MEASURED now, on both sides,
 #     by `sections.py`: the kernel's own top-level sections, walked from the
 #     `@[export]` definition by following the request value (so `readTz` on the
 #     `tz` object is never mistaken for a reader of the request), and the
-#     requests `tm/src` builds, read as the keys at brace depth 1 of every
+#     requests `lime/src` builds, read as the keys at brace depth 1 of every
 #     `json!` block and string literal that is request-shaped.  Measured
-#     2026-09-25: the kernel dispatches TEN top-level sections and `tm/src`
+#     2026-09-25: the kernel dispatches TEN top-level sections and `lime/src`
 #     sends EIGHT.  `planner` and `plan` -- W-24's rows -- are sent by
-#     `tm/tests/planner_invariants.rs` and `tm/tests/kernel_planner_wire.rs` and
-#     by nothing a user can run, and `tm/src`'s three `"plan":` occurrences are
+#     `lime/tests/planner_invariants.rs` and `lime/tests/kernel_planner_wire.rs` and
+#     by nothing a user can run, and `lime/src`'s three `"plan":` occurrences are
 #     all a CANDIDATE's nested field inside `kernel_capacity.rs`'s `plan_json`
-#     (in `tm-core/src/planwire.rs` since W-40 track E, README gap 2875).
+#     (in `lime-core/src/planwire.rs` since W-40 track E, README gap 2875).
 #     **1,467 reachable became 1,178** -- 228 behind `planner`, 53 behind
 #     `plan`, 8 behind the two together.
 #
 #     THE CUT IS AN ARM AND NOT A ROOT, and the difference was measured.
 #     Rooting the walk at the section readers loses the plumbing every request
 #     runs -- `jparse`, `jemit`, the loader -- and reports it dead, so the root
-#     stays `tm_kernel_call` and a dispatcher for an unsent section contributes
-#     only the callees of its ABSENT arms: `Tm.PlanWire.runPlanner` gives
-#     `Tm.jsonErr` and `Tm.EmitWire.runRows`, and its `.ok (some sec)` arm --
-#     `Tm.PlanWire.readPlannerSection`, `Tm.PlanWire.planReqOf`,
-#     `Tm.PlanWire.planJson`, `Tm.Planner.dayPlan` -- gives nothing.  The cut is
+#     stays `lime_kernel_call` and a dispatcher for an unsent section contributes
+#     only the callees of its ABSENT arms: `Lime.PlanWire.runPlanner` gives
+#     `Lime.jsonErr` and `Lime.EmitWire.runRows`, and its `.ok (some sec)` arm --
+#     `Lime.PlanWire.readPlannerSection`, `Lime.PlanWire.planReqOf`,
+#     `Lime.PlanWire.planJson`, `Lime.Planner.dayPlan` -- gives nothing.  The cut is
 #     taken where the PROGRAM branches and not where the PROOF does: the first
 #     attempt used the right-hand side of the kernel's own absence law, and
 #     `runRows_without_a_plan_section_is_runCap` is EXTENSIONAL -- it says the
-#     two compute the same value while `Tm.EmitWire.runRowsP` and `Tm.runCapP`
+#     two compute the same value while `Lime.EmitWire.runRowsP` and `Lime.runCapP`
 #     both still RUN -- so cutting there would have written three false reasons
-#     into the exemption file.  The cut is at `Tm.EmitWire.runRowsP`.
+#     into the exemption file.  The cut is at `Lime.EmitWire.runRowsP`.
 #
 #     THE EXEMPTIONS ARE W-27'S SHAPE -- an enumeration you join to be EXEMPT,
 #     not to be COVERED.  `reach-exempt.txt` grandfathers the definitions that
@@ -1053,7 +1055,7 @@ fi
 #     AND TWO CLASSES LEFT THE FILE AS NAMES (W-33 repair, README gap 2560).
 #     It grew 1,756 -> 1,772 in W-33 by D51's letter, and 509 of the 1,772 were
 #     two classes this gate already measures, listed one name at a time: the
-#     definitions reached ONLY through a request section `tm/src` never sends
+#     definitions reached ONLY through a request section `lime/src` never sends
 #     (296, eighteen sections all saying so) and `PlannerWit.lean`'s witness
 #     fixtures (213).  They are answered by PROPERTY now -- a `CLASS unsent
 #     <key>` line per DECLARED unsent section, measured by walking the graph
@@ -1139,9 +1141,9 @@ fi
 #     was built for, so a section string was deleted from the RUST.  `"emit"`
 #     renamed to `"items"` at `kernel_log.rs:2084`, its only send: 8 sections
 #     became 7, 1,178 reachable became 1,172, rc=1, and the six named are
-#     exactly what that arm alone reached -- `Tm.emitStep`, `Tm.readEmitAt`,
-#     `Tm.readEmitItem`, `Tm.EmitRefusal.json`, `Tm.Log.emitEvent` and
-#     `Tm.Log.emitLine`, which is the whole of D16's log WRITER.  Reverted, rc=0.
+#     exactly what that arm alone reached -- `Lime.emitStep`, `Lime.readEmitAt`,
+#     `Lime.readEmitItem`, `Lime.EmitRefusal.json`, `Lime.Log.emitEvent` and
+#     `Lime.Log.emitLine`, which is the whole of D16's log WRITER.  Reverted, rc=0.
 #     `"capacity"` renamed to `"cap"` at `kernel_capacity.rs:886`, its only send
 #     in a request-shaped region (the refusal fixtures in `kernel_bridge.rs` open
 #     their own object and carry no `docs`, so they are not read as requests):
@@ -1153,9 +1155,9 @@ fi
 #     AND THE GLOBAL HALF RE-DRIVEN (W-32), because `5d9aba5` also landed after
 #     its auditor had finished.  In a second clone with its OWN build tree,
 #     `def w32CriticOrphanGlobal : List Nat := [2, 7, 1, 8, 2, 8, 1, 8]`
-#     appended to `SealInStep.lean`: `lake build TmKernel:static` rc=0, the
+#     appended to `SealInStep.lean`: `lake build LimeKernel:static` rc=0, the
 #     generator wrote it as `LEAN_EXPORT const lean_object*
-#     lp_TmKernel_w32CriticOrphanGlobal = (const lean_object*)&..` at
+#     lp_LimeKernel_w32CriticOrphanGlobal = (const lean_object*)&..` at
 #     `SealInStep.c:94` -- the SECOND of the two global spellings, the one a
 #     pattern anchored on `;` misses -- the population went 2,926 -> 2,927, and
 #     this check printed `NOT EXEMPT: w32CriticOrphanGlobal (SealInStep.lean)`
@@ -1166,19 +1168,19 @@ fi
 #     request and still have its result carried by NO response key.  Measured
 #     2026-09-25 at the KEY layer -- every key the kernel emits under the
 #     measured root (`docs`, `report`, `log`, `emit`, `lookahead`, and their
-#     entries) is read by `tm/src`, `report.closes[].min` included
+#     entries) is read by `lime/src`, `report.closes[].min` included
 #     (`kernel_bridge.rs:521`, spent at `closing.rs:396`) -- so there is no dead
 #     answer key today.  The DEFINITION-level form of the question is open and
 #     is README gap 2282.
 #
 #     DRIVEN, in a `cp -a` clone with its own build tree, never the shared one.
-#     `Tm.PlanWire.hashHex` has exactly one caller in the emitted C; its call
+#     `Lime.PlanWire.hashHex` has exactly one caller in the emitted C; its call
 #     site in `planJson` was replaced by a literal (and the `rfl` theorem that
-#     pins `planJson` with it), `lake build TmKernel.PlanWire` rebuilt the one
+#     pins `planJson` with it), `lake build LimeKernel.PlanWire` rebuilt the one
 #     module, and the symbol went from FOUR occurrences in the IR to three --
 #     prototype, body, boxed wrapper, no call.  Check 12 then printed
-#     `NOT EXEMPT: Tm.PlanWire.hashHex (PlanWire.lean) is emitted and nothing
-#     reaches it from tm_kernel_call` at rc=1, and 1,413 reachable became 1,412.
+#     `NOT EXEMPT: Lime.PlanWire.hashHex (PlanWire.lean) is emitted and nothing
+#     reaches it from lime_kernel_call` at rc=1, and 1,413 reachable became 1,412.
 #     Reverted and rebuilt in the same clone it was rc=0 again.  Five more
 #     drives, no build needed: an entry deleted names its definition; a REACHED
 #     name added names itself STALE; a section with an empty reason takes its
@@ -1198,7 +1200,7 @@ fi
 #     the source, 0.66 to read the emitted function bodies out of
 #     `.lake/build/ir`, 0.30 for the section walk W-32 added (both languages:
 #     86 library modules indexed by definition head, six of them stripped, and
-#     `tm/src`'s 29 Rust files read once), 0.15 to walk the graph, 0.25 for the
+#     `lime/src`'s 29 Rust files read once), 0.15 to walk the graph, 0.25 for the
 #     second pass that measures the load-time class, and 0.00 for the exemption
 #     file.  **The W-32 root costs 0.30 s of 2.68**, measured against HEAD's own
 #     reach.py re-run in the same clone in the same minute: 2.57, 2.39, 2.36 s.
@@ -1282,7 +1284,7 @@ fi
 #     (5.11: re-measure, do not quote).
 #
 #     AND THE SENT HALF (W-36 track H, README gap 2931): every JSON key path the
-#     host codec's `planner_json` (tm-core/src/planwire.rs) writes must be
+#     host codec's `planner_json` (lime-core/src/planwire.rs) writes must be
 #     DECODED by the kernel's reader of the `planner` section, or be a dated
 #     line of `sent-exempt.txt` with an EXIT, which may only shrink.  W-35
 #     track R's `overtime.grown` was written and read by nothing, and the input
@@ -1303,7 +1305,7 @@ fi
 #     `day.rs`' `call_the_walls` write `emit.walls.week` with no gate asking
 #     whether a kernel reader decoded it.  The sections are the kernel's own
 #     (`sections.spine`, check 12's walk); the host side of each is
-#     `sentkeys.host_sections` over the PROGRAM (`tm/src` and every crate the
+#     `sentkeys.host_sections` over the PROGRAM (`lime/src` and every crate the
 #     binary links by path): every `json!` object carrying `docs`, WHEREVER it is
 #     written (a call's own argument included), and every request built as TEXT
 #     (`kernel_log`'s `log` section and request, and the `format!` that splices
@@ -1355,14 +1357,14 @@ fi
 #     re-check it, so a declaration added with the kernel check switched off is
 #     audited as if it had been checked.  DRIVEN at `fb05f4e` in a clone: a
 #     module importing `Lean` whose `def .. : True := by run_tac (withOptions
-#     (skipKernelTC := true) (addDecl (thmDecl `Tm.v34Bad : False := True.intro)))`
+#     (skipKernelTC := true) (addDecl (thmDecl `Lime.v34Bad : False := True.intro)))`
 #     let `theorem v34_one_is_two : (1 : Nat) = 2` build, print "does not depend
 #     on any axioms", and pass checks 1-13, rc=0.  totality.py now refuses the
 #     ROUTE (an import outside the kernel), and this is the PROPERTY: every
 #     library module is replayed into the environment its imports give by the
 #     pinned toolchain's `leanchecker`, whose `Environment.replay` runs the
 #     kernel with no options to switch off.  On the plant: rc=1, "(kernel)
-#     declaration type mismatch, 'Tm.v34Bad' has type True but it is expected
+#     declaration type mismatch, 'Lime.v34Bad' has type True but it is expected
 #     to have type False".  `replay.py`'s header has what it cannot see (an
 #     axiom replays clean) and why it keeps a cache (a cold run is 3 min 21 s
 #     wall at 6 jobs, 181 s of it PlannerWit; a remembered pass is keyed on the

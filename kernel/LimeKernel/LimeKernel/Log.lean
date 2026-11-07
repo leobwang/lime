@@ -1,0 +1,3211 @@
+import LimeKernel.Json
+import LimeKernel.Stamp
+/-!
+# Log — the typed event grammar of `.tm/log.jsonl` (stage 5, D9 track, step B3)
+
+Design `kernel/design/stage5/stage5-D9-D10-design.md` §5.4–§5.6 and §14.2 row B3.  One line of the
+log is one JSON object, and the fork point reads it with `Log::parse_bytes`, `LogEntry::parse` and
+`Event`'s hand-written `Deserialize` (`lime-core/src/log.rs`), and writes it with
+`LogEntry::to_json`.  This module ports both:
+
+* `readLine n seg : Verdict` — a line is `blank`, an `Entry`, or a warning `LWarn` **by name**;
+* `renderLine e` — serde's bytes for an entry: `{"t":…,"ev":…,<fields>}`, compact, fields in
+  `define_events!` order, `skip_serializing_if` as declared, an unknown event's keys sorted.
+
+Nothing in the binary calls it yet: B4 puts `log` on the wire, C1–C6 replay its entries.
+
+## The grammar is a table
+
+The **27** known tags (`EVENT_NAMES`; the design says 25, and `define_events!` had 26: `wake` …
+`undo`, and since the owner's **D105** `break_start`, the line `lime break` writes when a break BEGINS — parity
+**P100**, README "Stage 6 — W-46 track K") are the constructors of `Event`, plus `unknown tag rest`.  What varies between kinds is
+data, so it is a table (AGENTS §5.5): `Kind.schema` lists each kind's keys in declaration order with
+serde's type (`FTy`: `u8`, `u32`, a defaulted `u32d`, the `Option`s, `str`, `strs`, `flag`, `num` for
+`hsw`, `pair` for `window`, and since the owner's **D111** `place` for a `break_start`'s `where` — an
+`Option<String>` whose word must be one of `placeWords`, the ONE table of places, else the line is
+malformed, parity **P108**).  There is **one reader** (`readF`) and **one writer** (`renderF`) per
+field type, and every kind reads and writes through them (`readArgs`, `renderArgs`), so a kind cannot
+read a field one way and write it another.  `Kind.build` and `Event.split` are the two directions
+between a kind's decoded fields (`Args`) and the typed `Event`; `Event.tag`, `Event.strings` and
+`Event.primaryId` are written out per constructor, so their meaning does not depend on the table.
+
+## What serde does, and what the reader does (each row pinned by the B3 probe, README)
+
+1. `none` (the host found the line not UTF-8) is `invalidUtf8`.
+2. **Every** trailing `\r` goes (`trim_end_matches('\r')`; the design says one).
+3. A line of Rust whitespace only (`str::trim`, `isSp`) is `blank`.
+4. More than `maxLineChars` characters is `lineTooLong`; brackets nested deeper than
+   `maxLineDepth` outside strings (`depthOf`, a scan before `jparse`) is `lineTooDeep` (P14).
+5. `jparse` failing is `notJson`.
+6. Any numeral anywhere in the line that serde would refuse is `numberOutOfRange` (`finiteF64`,
+   serde_json 1.0.151's own algorithm without `float_roundtrip`, not IEEE's rounding: see its
+   section).
+7. Not an object is `notAnObject`.
+8. `t`: `LogEntry`'s derived reader takes the **first** `t` key; missing is `noT`, not a string is
+   `tNotString`, not a stamp is `badT`, and a **second** `t` key after a good one is `duplicateT`
+   (serde's `duplicate field`).  The design names neither of the last two.
+9. `ev`: the **last** `ev` key (serde collects a `Map` first); missing is `noEv`, not a string is
+   `evNotString`.
+10. A known tag decodes strictly, and a bad payload is a warning, never `unknown`.  Every key is
+    read at its **last** value; a type error anywhere beats a missing field, and among each the
+    first in declaration order is named (`FR.pair`: `Known::field_error` looks for a type error
+    first).  `-0`, `3.0`, `1e2` and `-1` are type errors at an integer field (serde reads them as
+    floats or negatives); `hsw` keeps any numeral as written, and an absent `hsw` is `0.0`, which
+    serde writes back as `0.0`.
+11. Any other tag is `unknown tag rest`, `rest` being every other key, sorted by serde's `String`
+    order (`charsLe`, core's stable merge sort), the last of a repeated key kept (`restOf`).
+
+**Where the reader's order is not serde's.**  serde reports the first defect **in stream order**,
+the reader the first in the order above.  They differ only on lines with two defects, or where
+serde stops early: `{"t":"bad","x":1e400}` (`numberOutOfRange` here, `badT` in the fork),
+`[1,2,` (`notJson` here, `notAnObject` there), and an object followed by trailing text whose event
+is also bad.  Only the class of a warning differs; entry or warning never does.  Recorded as parity
+residue (README, P24), decided against serde by T1 at B4.
+
+## The goals (design §15, B3), all discharged here
+
+`the_log_reads_what_it_renders` (every canonical entry), `a_known_event_is_never_read_as_unknown`,
+`an_unknown_tag_is_never_a_warning` and `lineTooLong_bounds_every_string`; beside them
+`an_out_of_range_numeral_warns_even_in_an_unknown_event`,
+`finiteF64_reads_only_the_sign_past_an_i32_exponent`, `every_line_warning_is_reachable`, the
+per-line theorems over the fork's `malformed.jsonl`, and the R10 refusals.
+
+## Names
+
+`LogStamp.parseStamp`, `LogStamp.renderStamp` and `LogStamp.StampErr` are written qualified: this
+module never opens `LogStamp` (B2's note: `Field.Stamp` is the `demoted:` stamp, and
+`Field.Stamp` is what `stampFromKey` returns).  No instant is compared here (carried note 1).
+
+## Rule D9-21
+
+Every function here that walks a line-sized list is a `foldl` or a loop, checked in the generated
+C (`goto _start`, no self-call): `lastVal`, `allStrs` (`strStep`), `depthOf` (`scanStep`), `capOf`
+and the exponent fold in `finiteF64`, `restOf`'s `dedupStep` fold, `charsLe`/`charsLt`,
+`splitDashW.go`, `allFiniteL`/`allFiniteO` (the list recursion is the tail of `&&`), and core's
+`find?`, `countP.go`, `all`, `dropWhile`, `filterTR`, `mapTR`, `lengthTR`, `reverse` and
+`mergeSortTR₂`.  `allFinite` recurses per nesting level, which `lineTooDeep` bounds at 64.
+`readArgs` and `renderArgs` recurse over a kind's schema (at most 8 keys).  `jstrs`, `Agrees` and
+the other definitions of the laws section are specifications no wire path calls.  `digitsOf`, which
+`renderLine` reaches through `JDec.render` and `jemit (.num _)`, runs as `digitsOfTR` since this step
+(`Text.lean`; README gap 101, closed).
+-/
+namespace Lime
+namespace Log
+
+open Cal (VInstant VOffset)
+
+/-! ## Widths and values -/
+
+/-- serde's `u8`: the fork checks no range narrower than this (`ci.min(5)` is the machine's). -/
+abbrev U8 := Fin 256
+/-- serde's `u32`. -/
+abbrev U32 := Fin 4294967296
+/-- An item id, as the log spells it. -/
+abbrev Id := List Char
+
+/-- `hsw`, lexical: the numeral as written, never evaluated (`f64` in the fork). -/
+inductive Num
+  | nat (n : Nat)
+  | dec (d : { d : JDec // d.plain = false })
+deriving DecidableEq, Repr
+
+/-- What an absent `hsw` is: serde's `#[serde(default)]` `0.0`, which it writes as `0.0`. -/
+def Num.zero : Num := .dec ⟨⟨false, 0, [0], none⟩, rfl⟩
+
+/-! ## Two readers of an object's pairs -/
+
+/-- **The value serde keeps for a key**: the last one written.  `Map<String, Value>` inserts in
+order, so a repeated key's last value wins.  A `foldl` (D9-21). -/
+def lastVal (kvs : List (List Char × JVal)) (k : List Char) : Option JVal :=
+  kvs.foldl (fun acc kv => if kv.1 == k then some kv.2 else acc) none
+
+/-! ## Every string in a value (a specification; never run on the wire) -/
+
+mutual
+/-- Every string in a value, keys included. -/
+def jstrs : JVal → List (List Char)
+  | .str s => [s]
+  | .arr xs => jstrsL xs
+  | .obj kvs => jstrsO kvs
+  | _ => []
+def jstrsL : List JVal → List (List Char)
+  | [] => []
+  | x :: xs => jstrs x ++ jstrsL xs
+def jstrsO : List (List Char × JVal) → List (List Char)
+  | [] => []
+  | (k, v) :: kvs => k :: (jstrs v ++ jstrsO kvs)
+end
+
+/-! ## `finiteF64`: serde_json's "number out of range", ported
+
+The fork collects every line as a `Map<String, Value>` before it reads a field, so **every
+numeral in the line**, at any depth and in a known or an unknown event, is parsed to a
+`serde_json::Number` first, and one that serde refuses fails the whole line (design §5.4, G-d,
+CRIT 15).  serde_json 1.0.151 is built without `float_roundtrip` here (`cargo tree -e features`),
+so its refusal is `Deserializer::f64_from_parts`'s, and that is not IEEE's rounding of the written
+decimal: the significand keeps the first digits that fit a `u64` (the rest are **dropped**, not
+rounded), it becomes a `f64` (rounded), and it is multiplied by `POW10[e]` (a rounded `f64`), and
+only that product's overflow is refused.  So `1.7976931348623157e308` is finite and the
+309-digit integer spelling of the same `f64` is not (B3 probe, lines 36 and 49).  The port below
+follows `parse_integer`, `parse_long_integer`, `parse_decimal`, `parse_decimal_overflow`,
+`parse_exponent`, `parse_exponent_overflow` and `f64_from_parts` step for step.
+
+**Its cost is bounded by the line, never by the numeral's value** (CRIT 14): the significand is
+below 2⁶⁴, a power is computed only for an exponent of at most 308, and the exponent's digits are
+folded with serde's `i32` overflow check, so a 60,000-digit exponent is a Boolean after ten
+digits. -/
+
+/-- `u64::MAX`. -/
+def u64Max : Nat := 18446744073709551615
+/-- `i32::MAX`. -/
+def i32Max : Nat := 2147483647
+
+/-- The number of bits of `n`.  Structural, with `n` as its own fuel (it reduces). -/
+def bitLen : Nat → Nat → Nat
+  | 0, _ => 0
+  | f + 1, n => if n = 0 then 0 else bitLen f (n / 2) + 1
+
+/-- **The `f64` nearest to `n`**, as an exact natural: 53 significant bits, ties to even.  Both
+`significand as f64` and a `POW10` entry (a float literal) are this. -/
+def roundF (n : Nat) : Nat :=
+  if bitLen n n ≤ 53 then n
+  else
+    let s := bitLen n n - 53
+    let q := n / 2 ^ s
+    let r := n % 2 ^ s
+    (if 2 ^ (s - 1) < r || (r == 2 ^ (s - 1) && q % 2 == 1) then q + 1 else q) * 2 ^ s
+
+/-- The least exact product a round-to-nearest multiplication turns into infinity:
+`f64::MAX = 2¹⁰²⁴ − 2⁹⁷¹` and the next value up, `2¹⁰²⁴`, tie at `2¹⁰²⁴ − 2⁹⁷⁰`, and the tie goes to
+the even one, infinity. -/
+def f64Overflow : Nat := 2 ^ 1024 - 2 ^ 970
+
+/-- `f64_from_parts(positive, significand, exponent)` returns a value (not
+`NumberOutOfRange`).  A negative exponent only divides; above 308 there is no `POW10` entry, and a
+non-zero significand is refused. -/
+def fromPartsFinite (sig : Nat) (e : Int) : Bool :=
+  if e < 0 then true
+  else if 308 < e then sig == 0
+  else decide (roundF sig * roundF (10 ^ e.toNat) < f64Overflow)
+
+/-- The significand serde keeps and the exponent the dropped digits add. -/
+structure Cap where
+  sig : Nat
+  exp : Int
+  full : Bool
+deriving Repr
+
+/-- An integer digit: kept while `sig * 10 + d` fits a `u64` (`parse_integer`); from the first
+that does not, every integer digit adds one to the exponent (`parse_long_integer`). -/
+def capInt (c : Cap) (d : Nat) : Cap :=
+  if c.full then { c with exp := c.exp + 1 }
+  else if u64Max < c.sig * 10 + d then { c with exp := c.exp + 1, full := true }
+  else { c with sig := c.sig * 10 + d }
+
+/-- A fraction digit: kept, taking one from the exponent, while it fits (`parse_decimal`); from
+the first that does not, ignored (`parse_decimal_overflow`). -/
+def capFrac (c : Cap) (d : Nat) : Cap :=
+  if c.full then c
+  else if u64Max < c.sig * 10 + d then { c with full := true }
+  else { c with sig := c.sig * 10 + d, exp := c.exp - 1 }
+
+/-- An exponent digit: `none` once `exp * 10 + d` passes `i32::MAX` (`parse_exponent`). -/
+def capExp (acc : Option Nat) (d : Nat) : Option Nat :=
+  acc.bind (fun e => if i32Max < e * 10 + d then none else some (e * 10 + d))
+
+/-- The significand and exponent serde has after a numeral's integer and fraction digits.  The
+integer digits are `digitsOf`'s (a loop since `digitsOf_eq_digitsOfTR`); both folds are `foldl`s. -/
+def capOf (d : JDec) : Cap :=
+  d.frac.foldl (fun c f => capFrac c f.val)
+    { ((digitsOf d.int).foldl (fun c ch => capInt c ((charDigit ch).getD 0)) ⟨0, 0, false⟩) with
+      full := false }
+
+/-- **serde_json reads this numeral as a finite number.**  A numeral with no fraction and no
+exponent that fits a `u64` is `parse_number`'s `U64`, `I64` or `-0.0` and never reaches
+`f64_from_parts`; everything else does. -/
+def finiteF64 (d : JDec) : Bool :=
+  if d.frac.isEmpty && d.exp.isNone && decide (d.int ≤ u64Max) then true
+  else
+    match d.exp with
+    | none => fromPartsFinite (capOf d).sig (capOf d).exp
+    | some (negE, x, xs) =>
+      match (x :: xs).foldl (fun a f => capExp a f.val) (some 0) with
+      | none => negE || (capOf d).sig == 0
+      | some v => fromPartsFinite (capOf d).sig (if negE then (capOf d).exp - v else (capOf d).exp + v)
+
+/-- An `hsw` serde reads as finite. -/
+def Num.finite : Num → Bool
+  | .nat n => finiteF64 ⟨false, n, [], none⟩
+  | .dec d => finiteF64 d.val
+
+mutual
+/-- **Every numeral in a value is finite to serde.**  Per nesting level in `allFinite`; along a
+list the recursive call is the tail of `&&` (D9-21: a loop in the generated C). -/
+def allFinite : JVal → Bool
+  | .num n => finiteF64 ⟨false, n, [], none⟩
+  | .dec d => finiteF64 d.val
+  | .arr xs => allFiniteL xs
+  | .obj kvs => allFiniteO kvs
+  | _ => true
+def allFiniteL : List JVal → Bool
+  | [] => true
+  | x :: xs => allFinite x && allFiniteL xs
+def allFiniteO : List (List Char × JVal) → Bool
+  | [] => true
+  | (_, v) :: kvs => allFinite v && allFiniteO kvs
+end
+
+/-! ## The places a break is taken (the owner's D111)
+
+**The ONE table of places.**  `lime break --where <place>` (§13) names one of these words, the
+TUI's `b` then `w`/`s`/`b`/`p` (§12.6) picks one, a logged `break_start` carries one, and the
+planner's request reads one back (`PlanWire.placeOf?`) — and every one of those readers reads
+THIS list.  Until the owner's **D111** (README gap 4904) the log's grammar read `where` as any
+string while the planner refused all but four, so a hand-edited `"where": "moon"` stopped
+`lime plan` (`badBreak place`) where fork 4748911 planned: two readers of one place.  Now the
+grammar reads a `break_start`'s place through this table (`readF`'s `place` arm) and names any
+other word a malformed line (`badField where`, D18's warning in `lime check`) — so the replay holds
+no running break for it, as the fork reads it (the fork has no `break_start` and counts the line
+an unknown event).
+
+**It is the kernel's, and the host reads it from the kernel** (`EmitWire.withPlaces`, the
+request's `places` key): a table the REQUEST carried would be an input to every sealed record
+the replay folds, and would have to join the checkpoint's key the way the zone table's digest
+did (D104); compiled into the kernel it is covered by the kernel id already.  The words'
+order is the TUI's prompt order and each word's first character is its §12.6 key, which the
+host derives and does not spell again.
+
+`brk` — the line that ENDS a break, in the fork's own shape — keeps its `where` a free string
+(`optStr`): D111 names the `break_start` line and no other, and a fork-written `break` line
+with any `where` is one the fork read. -/
+
+/-- **The places a break is taken**, in the TUI's order (§12.6: walk · seat · bed · phone). -/
+def placeWords : List (List Char) :=
+  [['w','a','l','k'], ['s','e','a','t'], ['b','e','d'], ['p','h','o','n','e']]
+
+/-- A word is a place when the table holds it, exactly as written. -/
+def isPlace (s : List Char) : Bool := placeWords.contains s
+
+/-! ## The field types -/
+
+/-- serde's field types as `define_events!` declares them.  `u32d` is a `u32` with
+`#[serde(default)]`; every `Option`, `strs` (`Vec<String>`), `flag` (`bool`) and `num` (`hsw`) is
+defaulted.  `place` is an `Option<String>` whose string must be a word of `placeWords` (the
+owner's D111): serde reads any string there and the kernel's grammar names any other word
+`badField`. -/
+inductive FTy
+  | u8 | u32 | u32d | optU8 | optU32 | str | optStr | strs | flag | num | pair | place | prios
+deriving DecidableEq, Repr
+
+/-- The kernel's type for each. -/
+@[reducible] def FTy.T : FTy → Type
+  | .u8 => U8
+  | .u32 => U32
+  | .u32d => U32
+  | .optU8 => Option U8
+  | .optU32 => Option U32
+  | .str => List Char
+  | .optStr => Option (List Char)
+  | .strs => List (List Char)
+  | .flag => Bool
+  | .num => Num
+  | .pair => List Char × List Char
+  | .place => Option (List Char)
+  | .prios => List (List Char × U8)
+
+/-- A schema's decoded fields, one per key, in order. -/
+@[reducible] def Args : List (List Char × FTy) → Type
+  | [] => Unit
+  | (_, t) :: s => t.T × Args s
+
+inductive Event
+  | wake (sleptMin : U32) (onsetMin : Option U32)
+  | arrive (loc : List Char) (window : List Char × List Char) (budget : U32)
+  | start (id : Id) (pred : U8) (rep : Option U8) (hsw : Num) (sleptMin : U32) (loc : List Char) (blocksDone : U32) (sinceBreakMin : U32)
+  | done (id : Id) (estMin : U32) (actualMin : U32) (went : Option U8) (tags : List (List Char)) (ci : U8) (isPartial : Bool)
+  | extend (id : Id) (byMin : U32)
+  | stop (id : Id) (remainingMin : U32)
+  | brk (plannedMin : U32) (actualMin : Option U32) (where_ : Option (List Char))
+  /-- **A break BEGAN** (the owner's **D105**, parity **P100**): `lime break` logs it when the break starts — `t` is
+  the start, with the planned minutes and the place — so a running break is a fact of the log and not of
+  `.tm/state.json` alone.  The line that ends the break is still `brk`, in the fork's shape (`t` the start). -/
+  | brkStart (plannedMin : U32) (where_ : Option (List Char))
+  | energy (pred : U8) (rep : U8) (hsw : Num) (loc : List Char)
+  | interrupt (id : Option Id)
+  | resume (lostMin : U32) (dropped : List Id)
+  | pause (id : Id)
+  | unpause (id : Id)
+  | idle (attributed : List Char) (min : U32)
+  | routine (item : List Char) (inst : List Char) (status : List Char) (actualMin : Option U32)
+  | skip (item : List Char) (inst : List Char)
+  /-- A plan was computed.  **`yesterday`** (the owner's **D108**, README gap 4893, parity **P119**): the day's FIRST
+  `plan` carries §7.4's hysteresis input — yesterday's `p` per item, the map `.tm/state.json`'s
+  `priorities_yesterday` caches — so the log derives it (`Replay.DayAcc.late`, since W-49) and deleting the cache moves no
+  ranking.  Every other `plan` line carries none (an empty map is not written).  Fork 4748911 writes no such key and
+  ignores it on read (its `define_events!` denies no unknown field). -/
+  | plan (hash : List Char) (replansToday : U32) (driftMin : U32) (yesterday : List (Id × U8))
+  | named (name : List Char) (id : Option Id)
+  | demote (id : Id) (from_ : List Char) (to : List Char) (estMin : U32)
+  | readopt (id : Id)
+  | move (id : Id) (from_ : List Char) (to : List Char)
+  | drop (id : Id)
+  | edit (id : Id) (field : List Char) (from_ : List Char) (to : List Char)
+  | note (text : List Char)
+  | loc (loc : List Char)
+  | close (period : List Char) (key : List Char)
+  | undo (of_ : List Char) (id : Option Id)
+  /-- Any tag that is not one of the 27: every other key, sorted by key, the last of a repeated
+  key kept (serde's `Map<String, Value>`). -/
+  | unknown (tag : List Char) (rest : List (List Char × JVal))
+deriving DecidableEq, Repr
+
+/-- The 27 known kinds, in `EVENT_NAMES` order (`brkStart` since D105). -/
+inductive Kind
+  | wake | arrive | start | done | extend | stop | brk | brkStart | energy | interrupt | resume | pause | unpause | idle | routine | skip | plan | named | demote | readopt | move | drop | edit | note | loc | close | undo
+deriving DecidableEq, Repr
+
+/-- `EVENT_NAMES`, in order. -/
+def Kind.all : List Kind :=
+  [.wake, .arrive, .start, .done, .extend, .stop, .brk, .brkStart, .energy, .interrupt, .resume, .pause, .unpause, .idle, .routine, .skip, .plan, .named, .demote, .readopt, .move, .drop, .edit, .note, .loc, .close, .undo]
+
+/-- The `ev` tag of a known kind. -/
+def Kind.tag : Kind → List Char
+  | .wake => ['w','a','k','e']
+  | .arrive => ['a','r','r','i','v','e']
+  | .start => ['s','t','a','r','t']
+  | .done => ['d','o','n','e']
+  | .extend => ['e','x','t','e','n','d']
+  | .stop => ['s','t','o','p']
+  | .brk => ['b','r','e','a','k']
+  | .brkStart => ['b','r','e','a','k','_','s','t','a','r','t']
+  | .energy => ['e','n','e','r','g','y']
+  | .interrupt => ['i','n','t','e','r','r','u','p','t']
+  | .resume => ['r','e','s','u','m','e']
+  | .pause => ['p','a','u','s','e']
+  | .unpause => ['u','n','p','a','u','s','e']
+  | .idle => ['i','d','l','e']
+  | .routine => ['r','o','u','t','i','n','e']
+  | .skip => ['s','k','i','p']
+  | .plan => ['p','l','a','n']
+  | .named => ['e','v','e','n','t']
+  | .demote => ['d','e','m','o','t','e']
+  | .readopt => ['r','e','a','d','o','p','t']
+  | .move => ['m','o','v','e']
+  | .drop => ['d','r','o','p']
+  | .edit => ['e','d','i','t']
+  | .note => ['n','o','t','e']
+  | .loc => ['l','o','c']
+  | .close => ['c','l','o','s','e']
+  | .undo => ['u','n','d','o']
+
+/-- **The field table** (`define_events!`, inventory §1): each kind's keys in declaration order,
+with serde's type and default.  Data, not derivation (AGENTS §5.5): the order is serde's
+writing order, and nothing about it follows from anything else. -/
+def Kind.schema : Kind → List (List Char × FTy)
+  | .wake => [(['s','l','e','p','t','_','m','i','n'], .u32), (['o','n','s','e','t','_','m','i','n'], .optU32)]
+  | .arrive => [(['l','o','c'], .str), (['w','i','n','d','o','w'], .pair), (['b','u','d','g','e','t'], .u32)]
+  | .start => [(['i','d'], .str), (['p','r','e','d'], .u8), (['r','e','p'], .optU8), (['h','s','w'], .num), (['s','l','e','p','t','_','m','i','n'], .u32d), (['l','o','c'], .str), (['b','l','o','c','k','s','_','d','o','n','e'], .u32d), (['s','i','n','c','e','_','b','r','e','a','k','_','m','i','n'], .u32d)]
+  | .done => [(['i','d'], .str), (['e','s','t','_','m','i','n'], .u32), (['a','c','t','u','a','l','_','m','i','n'], .u32), (['w','e','n','t'], .optU8), (['t','a','g','s'], .strs), (['c','i'], .u8), (['p','a','r','t','i','a','l'], .flag)]
+  | .extend => [(['i','d'], .str), (['b','y','_','m','i','n'], .u32)]
+  | .stop => [(['i','d'], .str), (['r','e','m','a','i','n','i','n','g','_','m','i','n'], .u32)]
+  | .brk => [(['p','l','a','n','n','e','d','_','m','i','n'], .u32), (['a','c','t','u','a','l','_','m','i','n'], .optU32), (['w','h','e','r','e'], .optStr)]
+  | .brkStart => [(['p','l','a','n','n','e','d','_','m','i','n'], .u32), (['w','h','e','r','e'], .place)]
+  | .energy => [(['p','r','e','d'], .u8), (['r','e','p'], .u8), (['h','s','w'], .num), (['l','o','c'], .str)]
+  | .interrupt => [(['i','d'], .optStr)]
+  | .resume => [(['l','o','s','t','_','m','i','n'], .u32), (['d','r','o','p','p','e','d'], .strs)]
+  | .pause => [(['i','d'], .str)]
+  | .unpause => [(['i','d'], .str)]
+  | .idle => [(['a','t','t','r','i','b','u','t','e','d'], .str), (['m','i','n'], .u32)]
+  | .routine => [(['i','t','e','m'], .str), (['i','n','s','t'], .str), (['s','t','a','t','u','s'], .str), (['a','c','t','u','a','l','_','m','i','n'], .optU32)]
+  | .skip => [(['i','t','e','m'], .str), (['i','n','s','t'], .str)]
+  | .plan => [(['h','a','s','h'], .str), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .u32), (['d','r','i','f','t','_','m','i','n'], .u32), (['y','e','s','t','e','r','d','a','y'], .prios)]
+  | .named => [(['n','a','m','e'], .str), (['i','d'], .optStr)]
+  | .demote => [(['i','d'], .str), (['f','r','o','m'], .str), (['t','o'], .str), (['e','s','t','_','m','i','n'], .u32)]
+  | .readopt => [(['i','d'], .str)]
+  | .move => [(['i','d'], .str), (['f','r','o','m'], .str), (['t','o'], .str)]
+  | .drop => [(['i','d'], .str)]
+  | .edit => [(['i','d'], .str), (['f','i','e','l','d'], .str), (['f','r','o','m'], .str), (['t','o'], .str)]
+  | .note => [(['t','e','x','t'], .str)]
+  | .loc => [(['l','o','c'], .str)]
+  | .close => [(['p','e','r','i','o','d'], .str), (['k','e','y'], .str)]
+  | .undo => [(['o','f'], .str), (['i','d'], .optStr)]
+
+/-- A kind and its decoded fields, as the event. -/
+def Kind.build : (k : Kind) → Args k.schema → Event
+  | .wake, (x0, x1, ()) => .wake x0 x1
+  | .arrive, (x0, x1, x2, ()) => .arrive x0 x1 x2
+  | .start, (x0, x1, x2, x3, x4, x5, x6, x7, ()) => .start x0 x1 x2 x3 x4 x5 x6 x7
+  | .done, (x0, x1, x2, x3, x4, x5, x6, ()) => .done x0 x1 x2 x3 x4 x5 x6
+  | .extend, (x0, x1, ()) => .extend x0 x1
+  | .stop, (x0, x1, ()) => .stop x0 x1
+  | .brk, (x0, x1, x2, ()) => .brk x0 x1 x2
+  | .brkStart, (x0, x1, ()) => .brkStart x0 x1
+  | .energy, (x0, x1, x2, x3, ()) => .energy x0 x1 x2 x3
+  | .interrupt, (x0, ()) => .interrupt x0
+  | .resume, (x0, x1, ()) => .resume x0 x1
+  | .pause, (x0, ()) => .pause x0
+  | .unpause, (x0, ()) => .unpause x0
+  | .idle, (x0, x1, ()) => .idle x0 x1
+  | .routine, (x0, x1, x2, x3, ()) => .routine x0 x1 x2 x3
+  | .skip, (x0, x1, ()) => .skip x0 x1
+  | .plan, (x0, x1, x2, x3, ()) => .plan x0 x1 x2 x3
+  | .named, (x0, x1, ()) => .named x0 x1
+  | .demote, (x0, x1, x2, x3, ()) => .demote x0 x1 x2 x3
+  | .readopt, (x0, ()) => .readopt x0
+  | .move, (x0, x1, x2, ()) => .move x0 x1 x2
+  | .drop, (x0, ()) => .drop x0
+  | .edit, (x0, x1, x2, x3, ()) => .edit x0 x1 x2 x3
+  | .note, (x0, ()) => .note x0
+  | .loc, (x0, ()) => .loc x0
+  | .close, (x0, x1, ()) => .close x0 x1
+  | .undo, (x0, x1, ()) => .undo x0 x1
+
+/-- A known event as its kind and fields; `none` for `unknown`. -/
+def Event.split : Event → Option (Σ k : Kind, Args k.schema)
+  | .wake x0 x1 => some ⟨.wake, (x0, x1, ())⟩
+  | .arrive x0 x1 x2 => some ⟨.arrive, (x0, x1, x2, ())⟩
+  | .start x0 x1 x2 x3 x4 x5 x6 x7 => some ⟨.start, (x0, x1, x2, x3, x4, x5, x6, x7, ())⟩
+  | .done x0 x1 x2 x3 x4 x5 x6 => some ⟨.done, (x0, x1, x2, x3, x4, x5, x6, ())⟩
+  | .extend x0 x1 => some ⟨.extend, (x0, x1, ())⟩
+  | .stop x0 x1 => some ⟨.stop, (x0, x1, ())⟩
+  | .brk x0 x1 x2 => some ⟨.brk, (x0, x1, x2, ())⟩
+  | .brkStart x0 x1 => some ⟨.brkStart, (x0, x1, ())⟩
+  | .energy x0 x1 x2 x3 => some ⟨.energy, (x0, x1, x2, x3, ())⟩
+  | .interrupt x0 => some ⟨.interrupt, (x0, ())⟩
+  | .resume x0 x1 => some ⟨.resume, (x0, x1, ())⟩
+  | .pause x0 => some ⟨.pause, (x0, ())⟩
+  | .unpause x0 => some ⟨.unpause, (x0, ())⟩
+  | .idle x0 x1 => some ⟨.idle, (x0, x1, ())⟩
+  | .routine x0 x1 x2 x3 => some ⟨.routine, (x0, x1, x2, x3, ())⟩
+  | .skip x0 x1 => some ⟨.skip, (x0, x1, ())⟩
+  | .plan x0 x1 x2 x3 => some ⟨.plan, (x0, x1, x2, x3, ())⟩
+  | .named x0 x1 => some ⟨.named, (x0, x1, ())⟩
+  | .demote x0 x1 x2 x3 => some ⟨.demote, (x0, x1, x2, x3, ())⟩
+  | .readopt x0 => some ⟨.readopt, (x0, ())⟩
+  | .move x0 x1 x2 => some ⟨.move, (x0, x1, x2, ())⟩
+  | .drop x0 => some ⟨.drop, (x0, ())⟩
+  | .edit x0 x1 x2 x3 => some ⟨.edit, (x0, x1, x2, x3, ())⟩
+  | .note x0 => some ⟨.note, (x0, ())⟩
+  | .loc x0 => some ⟨.loc, (x0, ())⟩
+  | .close x0 x1 => some ⟨.close, (x0, x1, ())⟩
+  | .undo x0 x1 => some ⟨.undo, (x0, x1, ())⟩
+  | .unknown _ _ => none
+
+/-- `Event::name`: the `ev` tag. -/
+def Event.tag : Event → List Char
+  | .wake _ _ => Kind.wake.tag
+  | .arrive _ _ _ => Kind.arrive.tag
+  | .start _ _ _ _ _ _ _ _ => Kind.start.tag
+  | .done _ _ _ _ _ _ _ => Kind.done.tag
+  | .extend _ _ => Kind.extend.tag
+  | .stop _ _ => Kind.stop.tag
+  | .brk _ _ _ => Kind.brk.tag
+  | .brkStart _ _ => Kind.brkStart.tag
+  | .energy _ _ _ _ => Kind.energy.tag
+  | .interrupt _ => Kind.interrupt.tag
+  | .resume _ _ => Kind.resume.tag
+  | .pause _ => Kind.pause.tag
+  | .unpause _ => Kind.unpause.tag
+  | .idle _ _ => Kind.idle.tag
+  | .routine _ _ _ _ => Kind.routine.tag
+  | .skip _ _ => Kind.skip.tag
+  | .plan _ _ _ _ => Kind.plan.tag
+  | .named _ _ => Kind.named.tag
+  | .demote _ _ _ _ => Kind.demote.tag
+  | .readopt _ => Kind.readopt.tag
+  | .move _ _ _ => Kind.move.tag
+  | .drop _ => Kind.drop.tag
+  | .edit _ _ _ _ => Kind.edit.tag
+  | .note _ => Kind.note.tag
+  | .loc _ => Kind.loc.tag
+  | .close _ _ => Kind.close.tag
+  | .undo _ _ => Kind.undo.tag
+  | .unknown t _ => t
+
+/-- **Every string an event holds**, field by field (`lineTooLong_bounds_every_string`).  For
+`unknown`, the tag, every key and every string at any depth of `rest`. -/
+def Event.strings : Event → List (List Char)
+  | .wake _ _ => []
+  | .arrive x0 x1 _ => [x0] ++ [x1.1, x1.2]
+  | .start x0 _ _ _ _ x5 _ _ => [x0] ++ [x5]
+  | .done x0 _ _ _ x4 _ _ => [x0] ++ x4
+  | .extend x0 _ => [x0]
+  | .stop x0 _ => [x0]
+  | .brk _ _ x2 => x2.toList
+  | .brkStart _ x1 => x1.toList
+  | .energy _ _ _ x3 => [x3]
+  | .interrupt x0 => x0.toList
+  | .resume _ x1 => x1
+  | .pause x0 => [x0]
+  | .unpause x0 => [x0]
+  | .idle x0 _ => [x0]
+  | .routine x0 x1 x2 _ => [x0] ++ [x1] ++ [x2]
+  | .skip x0 x1 => [x0] ++ [x1]
+  | .plan x0 _ _ x3 => [x0] ++ x3.map Prod.fst
+  | .named x0 x1 => [x0] ++ x1.toList
+  | .demote x0 x1 x2 _ => [x0] ++ [x1] ++ [x2]
+  | .readopt x0 => [x0]
+  | .move x0 x1 x2 => [x0] ++ [x1] ++ [x2]
+  | .drop x0 => [x0]
+  | .edit x0 x1 x2 x3 => [x0] ++ [x1] ++ [x2] ++ [x3]
+  | .note x0 => [x0]
+  | .loc x0 => [x0]
+  | .close x0 x1 => [x0] ++ [x1]
+  | .undo x0 x1 => [x0] ++ x1.toList
+  | .unknown t rest => t :: jstrsO rest
+
+/-- `Event::primary_id`: what `undo{id}` matches. -/
+def Event.primaryId : Event → Option Id
+  | .start i _ _ _ _ _ _ _ => some i
+  | .done i _ _ _ _ _ _ => some i
+  | .extend i _ => some i
+  | .stop i _ => some i
+  | .interrupt i => i
+  | .pause i => some i
+  | .unpause i => some i
+  | .routine item _ _ _ => some item
+  | .skip item _ => some item
+  | .named _ i => i
+  | .demote i _ _ _ => some i
+  | .readopt i => some i
+  | .move i _ _ => some i
+  | .drop i => some i
+  | .edit i _ _ _ => some i
+  -- **Quirk Q6(f), fixed** (gap 86; owner answer Q6, "fix, after the switch").  A close's id is
+  -- `period:key`, so `lime undo` of a week close writes `undo{of:"close", id:"week:2026-W37"}` and
+  -- cancels **that** close — not whichever close happens to be latest, which before this was the
+  -- automatic one a later verb's housekeeping had appended.  The fork writes `null` here, which is
+  -- parity **P36** (renumbered from P32 at stage 5's close: P32 was already taken by D10 step L8's
+  -- candidate-bounds row, README gap 226); a log written before this step still reads as it did, because an undo with no
+  -- id matches on the tag alone.
+  | .close p k => some (p ++ ':' :: k)
+  | .undo _ i => i
+  | .unknown _ rest =>
+    match lastVal rest ['i','d'] with
+    | some (.str s) => some s
+    | _ => none
+  | _ => none
+
+/-! ## Reading a field -/
+
+/-- A field's verdict: its value, or the key serde names in a `missing field` or a type error. -/
+inductive FR (α : Type)
+  | ok (a : α)
+  | missing (k : List Char)
+  | bad (k : List Char)
+
+/-- **Two fields' verdicts, the earlier first.**  The fork reports a mistyped field before a
+missing one, whatever their order (`Known::field_error` looks for a type error first, in
+declaration order, and serde's own error, which names the first missing field, is used only
+when there is none).  So a `bad` anywhere beats a `missing`, and among each the earlier wins. -/
+def FR.pair {α β : Type} : FR α → FR β → FR (α × β)
+  | .ok a, .ok b => .ok (a, b)
+  | .bad k, _ => .bad k
+  | .missing _, .bad k => .bad k
+  | .missing k, _ => .missing k
+  | .ok _, .bad k => .bad k
+  | .ok _, .missing k => .missing k
+
+/-- One element of a string array, onto the reversed strings so far. -/
+def strStep : Option (List (List Char)) → JVal → Option (List (List Char))
+  | some l, .str s => some (s :: l)
+  | _, _ => none
+
+/-- Every element a string, in order.  A `foldl` (D9-21): `tags` can be as long as a line. -/
+def allStrs (xs : List JVal) : Option (List (List Char)) :=
+  (xs.foldl strStep (some [])).map List.reverse
+
+/-- One pair of a priority map (D108), onto the reversed pairs so far: its value a `u8`. -/
+def prioStep : Option (List (List Char × U8)) → (List Char × JVal) → Option (List (List Char × U8))
+  | some l, (k, .num n) => if h : n < 256 then some ((k, ⟨n, h⟩) :: l) else none
+  | _, _ => none
+
+/-- **A priority map's pairs, in order** (D108): every value a `u8`.  A `foldl` (D9-21): the map can be as long as a
+line.  A repeated key is kept as written; serde's `BTreeMap` keeps the last, and the one reader of the map
+(`Replay.DayAcc.late`'s host decoder) builds its map in order, so the last wins there too. -/
+def allPrios (kvs : List (List Char × JVal)) : Option (List (List Char × U8)) :=
+  (kvs.foldl prioStep (some [])).map List.reverse
+
+/-- **One field, as serde reads it** (design §5.4's table, pinned by the B3 probe): absent is the
+default or `missing`; `null` is `none` for an `Option` and a type error otherwise; a numeral is an
+integer in the field's width or a type error (`-0`, `3.0` and `1e2` are floats to serde, so they
+are type errors at an integer field); `hsw` takes any numeral as written. -/
+def readF (k : List Char) : (t : FTy) → Option JVal → FR t.T
+  | .u8, none => .missing k
+  | .u8, some (.num n) => if h : n < 256 then .ok ⟨n, h⟩ else .bad k
+  | .u8, some _ => .bad k
+  | .u32, none => .missing k
+  | .u32, some (.num n) => if h : n < 4294967296 then .ok ⟨n, h⟩ else .bad k
+  | .u32, some _ => .bad k
+  | .u32d, none => .ok ⟨0, by decide⟩
+  | .u32d, some (.num n) => if h : n < 4294967296 then .ok ⟨n, h⟩ else .bad k
+  | .u32d, some _ => .bad k
+  | .optU8, none => .ok none
+  | .optU8, some .null => .ok none
+  | .optU8, some (.num n) => if h : n < 256 then .ok (some ⟨n, h⟩) else .bad k
+  | .optU8, some _ => .bad k
+  | .optU32, none => .ok none
+  | .optU32, some .null => .ok none
+  | .optU32, some (.num n) => if h : n < 4294967296 then .ok (some ⟨n, h⟩) else .bad k
+  | .optU32, some _ => .bad k
+  | .str, none => .missing k
+  | .str, some (.str s) => .ok s
+  | .str, some _ => .bad k
+  | .optStr, none => .ok none
+  | .optStr, some .null => .ok none
+  | .optStr, some (.str s) => .ok (some s)
+  | .optStr, some _ => .bad k
+  | .strs, none => .ok []
+  | .strs, some (.arr xs) =>
+    match allStrs xs with
+    | some ss => .ok ss
+    | none => .bad k
+  | .strs, some _ => .bad k
+  | .flag, none => .ok false
+  | .flag, some (.bool b) => .ok b
+  | .flag, some _ => .bad k
+  | .num, none => .ok Num.zero
+  | .num, some (.num n) => .ok (.nat n)
+  | .num, some (.dec d) => .ok (.dec d)
+  | .num, some _ => .bad k
+  | .pair, none => .missing k
+  | .pair, some (.arr [.str a, .str b]) => .ok (a, b)
+  | .pair, some _ => .bad k
+  -- **D111**: an `Option<String>` as `optStr` reads it, and the string a word of the table.
+  | .place, none => .ok none
+  | .place, some .null => .ok none
+  | .place, some (.str s) => if isPlace s then .ok (some s) else .bad k
+  | .place, some _ => .bad k
+  -- **D108**: a `BTreeMap<String, u8>` with `#[serde(default)]` — absent is empty, an object of `u8`s is read in order.
+  | .prios, none => .ok []
+  | .prios, some (.obj kvs) =>
+    match allPrios kvs with
+    | some ps => .ok ps
+    | none => .bad k
+  | .prios, some _ => .bad k
+
+/-- A schema's fields, each read from the pairs' last value for its key. -/
+def readArgs (kvs : List (List Char × JVal)) : (s : List (List Char × FTy)) → FR (Args s)
+  | [] => .ok ()
+  | (k, t) :: s => FR.pair (readF k t (lastVal kvs k)) (readArgs kvs s)
+
+/-! ## Writing a field -/
+
+/-- **One field, as serde writes it**: `none` is skipped (`skip_serializing_if = "Option::is_none"`),
+as is `partial: false` (`is_false`); `tags` and `dropped` are always written, and so is `hsw`. -/
+def renderF : (t : FTy) → t.T → Option JVal
+  | .u8, x => some (.num x.val)
+  | .u32, x => some (.num x.val)
+  | .u32d, x => some (.num x.val)
+  | .optU8, none => none
+  | .optU8, some x => some (.num x.val)
+  | .optU32, none => none
+  | .optU32, some x => some (.num x.val)
+  | .str, s => some (.str s)
+  | .optStr, none => none
+  | .optStr, some s => some (.str s)
+  | .strs, ss => some (.arr (ss.map JVal.str))
+  | .flag, false => none
+  | .flag, true => some (.bool true)
+  | .num, .nat n => some (.num n)
+  | .num, .dec d => some (.dec d)
+  | .pair, (a, b) => some (.arr [.str a, .str b])
+  | .place, none => none
+  | .place, some s => some (.str s)
+  | .prios, [] => none
+  | .prios, p :: ps => some (.obj ((p :: ps).map (fun q => (q.1, .num q.2.val))))
+
+/-- A schema's fields as pairs, in declaration order, skipped ones left out. -/
+def renderArgs : (s : List (List Char × FTy)) → Args s → List (List Char × JVal)
+  | [], () => []
+  | (k, t) :: s, (x, xs) =>
+    (match renderF t x with
+     | some v => [(k, v)]
+     | none => []) ++ renderArgs s xs
+
+/-- The strings a field holds. -/
+def strsOfF : (t : FTy) → t.T → List (List Char)
+  | .str, s => [s]
+  | .optStr, o => o.toList
+  | .strs, ss => ss
+  | .pair, p => [p.1, p.2]
+  | .place, o => o.toList
+  | .prios, ps => ps.map Prod.fst
+  | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .flag, _ | .num, _ => []
+
+/-- The strings a schema's fields hold, in order. -/
+def argStrs : (s : List (List Char × FTy)) → Args s → List (List Char)
+  | [], () => []
+  | (_, t) :: s, (x, xs) => strsOfF t x ++ argStrs s xs
+
+/-- A field serde reads as finite: only `hsw` can fail. -/
+def fieldFinite : (t : FTy) → t.T → Bool
+  | .num, h => h.finite
+  | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .str, _ | .optStr, _ | .strs, _
+  | .flag, _ | .pair, _ | .place, _ | .prios, _ => true
+
+def argsFinite : (s : List (List Char × FTy)) → Args s → Bool
+  | [], () => true
+  | (_, t) :: s, (x, xs) => fieldFinite t x && argsFinite s xs
+
+/-- **A field the reader reads back** (D111), a SPECIFICATION and never run (a `Prop`, as `Agrees` is):
+only a `place` can fail, and only with a word the table does not hold.  `fieldFinite` is the other such
+rule — a numeral serde refuses — checked over the whole line (`allFinite`); this one is the field's own reader's. -/
+def FieldReadable : (t : FTy) → t.T → Prop
+  | .place, o => o.all isPlace = true
+  | .u8, _ | .u32, _ | .u32d, _ | .optU8, _ | .optU32, _ | .str, _ | .optStr, _ | .strs, _
+  | .flag, _ | .num, _ | .pair, _ | .prios, _ => True
+
+def ArgsReadable : (s : List (List Char × FTy)) → Args s → Prop
+  | [], () => True
+  | (_, t) :: s, (x, xs) => FieldReadable t x ∧ ArgsReadable s xs
+
+/-! ## The known tags -/
+
+/-- The known kind of a tag, if any.  A scan of `EVENT_NAMES` (27 entries; each comparison stops at
+the first differing character, so a long unknown tag costs at most a few characters each). -/
+def kindOf (tag : List Char) : Option Kind := Kind.all.find? (fun k => k.tag == tag)
+
+/-- `EVENT_NAMES.contains(tag)`. -/
+def isKnownTag (tag : List Char) : Bool := (kindOf tag).isSome
+
+/-- `matches!(self, Event::Unknown { .. })`. -/
+def Event.isUnknown : Event → Bool
+  | .unknown _ _ => true
+  | _ => false
+
+/-- `matches!(self, Event::Undo { .. })`. -/
+def Event.isUndo : Event → Bool
+  | .undo _ _ => true
+  | _ => false
+
+/-- `Event::is_state_change`: everything but `plan`, `note`, `undo` and unknown events.  Ported for
+the grammar's completeness; the undo mask (C1) does not read it. -/
+def Event.isStateChange : Event → Bool
+  | .plan _ _ _ _ | .note _ | .undo _ _ | .unknown _ _ => false
+  | _ => true
+
+/-- An event's pairs after `t` and `ev`, as serde writes them: a known event's fields in
+declaration order; an unknown event's `rest`. -/
+def Event.fields (ev : Event) : List (List Char × JVal) :=
+  match ev with
+  | .unknown _ rest => rest
+  | _ =>
+    match ev.split with
+    | some ⟨k, a⟩ => renderArgs k.schema a
+    | none => []
+
+
+/-! ## Lines, warnings and verdicts (design §5.5) -/
+
+/-- **Why a line is not an entry.**  Every warning is named (AGENTS §5.7); the fork's text for
+each is serde's or its own, and parity entry P15 records that the kernel names them instead. -/
+inductive LWarn
+  /-- the line is not UTF-8 (the host hands the kernel `null` for it) -/
+  | invalidUtf8
+  /-- more than `maxLineChars` characters (P14) -/
+  | lineTooLong
+  /-- brackets nested deeper than `maxLineDepth` (P14) -/
+  | lineTooDeep
+  /-- not JSON -/
+  | notJson (e : JErr)
+  /-- a numeral serde refuses as out of range, anywhere in the line -/
+  | numberOutOfRange
+  /-- JSON, but not an object -/
+  | notAnObject
+  /-- no `t` key -/
+  | noT
+  /-- the first `t` is not a string -/
+  | tNotString
+  /-- the first `t` is not a stamp -/
+  | badT (e : LogStamp.StampErr)
+  /-- a second `t` key (serde's `duplicate field `t``, B3 probe) -/
+  | duplicateT
+  /-- no `ev` key -/
+  | noEv
+  /-- the last `ev` is not a string -/
+  | evNotString
+  /-- a known event without a field that has no default -/
+  | missingField (k : List Char)
+  /-- a known event's field of the wrong type or out of its width -/
+  | badField (k : List Char)
+deriving DecidableEq, Repr
+
+/-- One line: an entry, a warning, or nothing (a blank line). -/
+structure Entry where
+  line : Nat
+  t : VInstant
+  off : VOffset
+  ev : Event
+deriving DecidableEq, Repr
+
+inductive Verdict
+  | blank
+  | entry (e : Entry)
+  | warn (line : Nat) (w : LWarn)
+deriving DecidableEq, Repr
+
+/-- The line bound (R10; P14). -/
+def maxLineChars : Nat := 65536
+/-- The nesting bound (P14): `jparse` recurses per nesting level, so this is what keeps it on the
+stack. serde_json's own limit is 128. -/
+def maxLineDepth : Nat := 64
+
+/-- `trim_end_matches('\r')`: **every** trailing carriage return. -/
+def trimCR (l : List Char) : List Char := (l.reverse.dropWhile (· == '\r')).reverse
+
+/-- The bracket scanner's state: inside a string, just after a backslash in one, the open
+brackets, and the most there have been. -/
+structure Scan where
+  inStr : Bool
+  esc : Bool
+  depth : Nat
+  peak : Nat
+deriving Repr
+
+def scanStep (s : Scan) (c : Char) : Scan :=
+  if s.inStr then
+    if s.esc then { s with esc := false }
+    else if c = '\\' then { s with esc := true }
+    else if c = '"' then { s with inStr := false }
+    else s
+  else if c = '"' then { s with inStr := true }
+  else if c = '[' || c = '{' then { s with depth := s.depth + 1, peak := max s.peak (s.depth + 1) }
+  else if c = ']' || c = '}' then { s with depth := s.depth - 1 }
+  else s
+
+/-- **The deepest bracket nesting outside strings**, found before `jparse` runs.  A `foldl`. -/
+def depthOf (l : List Char) : Nat := (l.foldl scanStep ⟨false, false, 0, 0⟩).peak
+
+def kT : List Char := ['t']
+def kEv : List Char := ['e','v']
+
+/-- **`t`, as `LogEntry`'s derived reader takes it**: the first `t` key decides (`badT`,
+`tNotString`), and a second `t` key after a good one is `duplicateT` (serde's derived visitor
+refuses a repeated field; B3 probe). -/
+def readT (kvs : List (List Char × JVal)) : Except LWarn (VInstant × VOffset) :=
+  match kvs.find? (fun kv => kv.1 == kT) with
+  | none => .error .noT
+  | some (_, .str s) =>
+    match LogStamp.parseStamp s with
+    | .error e => .error (.badT e)
+    | .ok p => if kvs.countP (fun kv => kv.1 == kT) = 1 then .ok p else .error .duplicateT
+  | some _ => .error .tNotString
+
+/-- serde's `String` order: bytewise, which on UTF-8 is the code points' order.  Tail recursive. -/
+def charsLe : List Char → List Char → Bool
+  | [], _ => true
+  | _ :: _, [] => false
+  | a :: as, b :: bs => if a.val < b.val then true else if a = b then charsLe as bs else false
+
+/-- Strictly before, in the same order. -/
+def charsLt : List Char → List Char → Bool
+  | [], [] => false
+  | [], _ :: _ => true
+  | _ :: _, [] => false
+  | a :: as, b :: bs => if a.val < b.val then true else if a = b then charsLt as bs else false
+
+/-- One step of keeping a sorted run's last pair per key; the accumulator is reversed. -/
+def dedupStep (acc : List (List Char × JVal)) (kv : List Char × JVal) : List (List Char × JVal) :=
+  match acc with
+  | p :: ps => if p.1 == kv.1 then kv :: ps else kv :: p :: ps
+  | [] => [kv]
+
+/-- **An unknown event's `rest`**: every pair but `t` and `ev`, sorted by key (core's stable merge
+sort, `mergeSortTR₂` at run time), the last of a repeated key kept — serde's `Map`. -/
+def restOf (kvs : List (List Char × JVal)) : List (List Char × JVal) :=
+  ((((kvs.filter (fun kv => !(kv.1 == kT) && !(kv.1 == kEv))).mergeSort
+    (fun a b => charsLe a.1 b.1)).foldl dedupStep []).reverse)
+
+/-- After `t`: the tag, then a known kind's fields or an unknown event's `rest`. -/
+def readObject (n : Nat) (kvs : List (List Char × JVal)) : Verdict :=
+  match readT kvs with
+  | .error w => .warn n w
+  | .ok (t, off) =>
+    match lastVal kvs kEv with
+    | none => .warn n .noEv
+    | some (.str tag) =>
+      match kindOf tag with
+      | some k =>
+        match readArgs kvs k.schema with
+        | .ok a => .entry ⟨n, t, off, k.build a⟩
+        | .missing key => .warn n (.missingField key)
+        | .bad key => .warn n (.badField key)
+      | none => .entry ⟨n, t, off, .unknown tag (restOf kvs)⟩
+    | some _ => .warn n .evNotString
+
+/-- After `jparse`: the numerals, then the shape. -/
+def readValue (n : Nat) (v : JVal) : Verdict :=
+  if allFinite v then
+    match v with
+    | .obj kvs => readObject n kvs
+    | _ => .warn n .notAnObject
+  else .warn n .numberOutOfRange
+
+/-- **One log line** (a port of `Log::parse_bytes`' loop body and `LogEntry::parse`).  `n` is the
+physical line number; `none` is a line the host found not to be UTF-8.  In order: invalid UTF-8,
+trailing carriage returns, blank (Rust's `str::trim`, `isSp`), the length and
+nesting bounds, `jparse`, every numeral, the object, `t`, `ev`, and the fields. -/
+def readLine (n : Nat) : Option (List Char) → Verdict
+  | none => .warn n .invalidUtf8
+  | some raw =>
+    if (trimCR raw).all isSp then .blank
+    else if maxLineChars < (trimCR raw).length then .warn n .lineTooLong
+    else if maxLineDepth < depthOf (trimCR raw) then .warn n .lineTooDeep
+    else
+      match jparse (trimCR raw) with
+      | .error e => .warn n (.notJson e)
+      | .ok v => readValue n v
+
+/-! ## Small grammars (design §5.6): what the replay reads out of an event's strings
+
+Nothing in B3 calls these; C4 (`routine`, `skip`) and C5 (`demote`) do.  They are here because
+they are grammar, not replay. -/
+
+/-- `InstanceStatus`, as `routine.status` names it. -/
+inductive InstanceStatus
+  | done | pending | missed | expired | skipped
+deriving DecidableEq, Repr
+
+/-- **`parse_instance_status`**: `done`, `pending`, `missed`, `expired`, and `skipped` or `skip`;
+anything else is `none` (the replay warning `unknownInstanceStatus`, §8.3). -/
+def parseInstanceStatus (s : List Char) : Option InstanceStatus :=
+  if s == ['d','o','n','e'] then some .done
+  else if s == ['p','e','n','d','i','n','g'] then some .pending
+  else if s == ['m','i','s','s','e','d'] then some .missed
+  else if s == ['e','x','p','i','r','e','d'] then some .expired
+  else if s == ['s','k','i','p','p','e','d'] || s == ['s','k','i','p'] then some .skipped
+  else none
+
+/- `chronoYear`, `chronoDateParts`, `chronoDateValid`, `utf8Len` and `instDate?` — chrono's signed `%Y`,
+its `%Y-%m-%d` and `NaiveDate::from_ymd_opt`, Rust's `str::len` and `parse_date` — are defined in
+`Line.lean` since W-43, with their names: an item line reads its dates through them, and it is read
+below this module (README gap 4346).  `chronoYear`, `chronoDateValid` and `utf8Len` keep their bodies;
+`chronoDateParts` reads through the shared prefix `chronoYmd`; and `instDate?` tries RFC 3339's
+`Field.parseDate` first and reads the rest through `dayOfParts?` — `instDate?_is_chronos_parse_date`
+proves the branch changes no answer: `instDate?` is the ten-byte guard, `chronoDateParts` and
+`dayOfParts?` on every input. -/
+
+/-- `str::split_once("-W")`, as a loop. -/
+def splitDashW.go : List Char → List Char → Option (List Char × List Char)
+  | '-' :: 'W' :: rest, acc => some (acc.reverse, rest)
+  | c :: rest, acc => splitDashW.go rest (c :: acc)
+  | [], _ => none
+
+def splitDashW (s : List Char) : Option (List Char × List Char) := splitDashW.go s []
+
+/-- Rust's `str::parse::<i32>` on a short string: an optional `+` or `-`, then at least one ASCII
+digit and nothing else. -/
+def rustInt (s : List Char) : Option Int :=
+  match s with
+  | '-' :: t => (if t.all Field.isDigitC then readNat t else none).map (fun n => -(n : Int))
+  | '+' :: t => (if t.all Field.isDigitC then readNat t else none).map (fun n => (n : Int))
+  | t => (if t.all Field.isDigitC then readNat t else none).map (fun n => (n : Int))
+
+/-- **`IsoWeek::parse`**, the week: `YYYY-Www` split at the first `-W`, four characters and two,
+Rust's integer readers (so `+202` and `-999` are years and `+5` is a week), a week from 1 to 53 that
+the ISO year has (`Cal.isoWeeksIn`, which the 400-year Gregorian cycle carries to every year). -/
+def isoWeekOfKey (s : List Char) : Option Nat :=
+  match splitDashW s with
+  | none => none
+  | some (y, w) =>
+    if y.length = 4 && w.length = 2 then
+      match rustInt y, rustInt w with
+      | some yr, some (.ofNat wk) =>
+        if w.head? != some '-' && 1 ≤ wk && wk ≤ 53 &&
+            wk ≤ Cal.isoWeeksIn ((yr % 400 + 400) % 400 + 400).toNat then some wk else none
+      | _, _ => none
+    else none
+
+/-- **`stamp_from_key`**: an ISO week key is a week stamp, a date key is its day of the month,
+anything else (a month key) is `none`.  The week number is read by `isoWeekOfKey`; there is no other
+reader of a `YYYY-Www` key in the kernel (`Field.parseStamp` reads the `W37` of a `demoted:` field,
+not a key). -/
+def stampFromKey (s : List Char) : Option Field.Stamp :=
+  match isoWeekOfKey s with
+  | some w => some (.week w)
+  | none =>
+    if utf8Len s = 10 then
+      match chronoDateParts s with
+      | some (y, m, d) => if chronoDateValid y m d then some (.day d) else none
+      | none => none
+    else none
+
+/-! ## What the goals speak of -/
+
+/-- The tag a line carries: its last `ev`, when the line is an object and that is a string;
+otherwise empty (no known tag is empty). -/
+def tagIn (l : List Char) : List Char :=
+  match jparse (trimCR l) with
+  | .ok (.obj kvs) =>
+    match lastVal kvs kEv with
+    | some (.str s) => s
+    | _ => []
+  | _ => []
+
+/-- The line is an object whose `t` is one good stamp and whose `ev` is a string. -/
+def isObjectWithStampAndTag (l : List Char) : Bool :=
+  match jparse (trimCR l) with
+  | .ok (.obj kvs) =>
+    (match readT kvs with
+     | .ok _ => true
+     | .error _ => false) &&
+    (match lastVal kvs kEv with
+     | some (.str _) => true
+     | _ => false)
+  | _ => false
+
+/-- Every numeral in the line is finite to serde (vacuously, when it is not JSON). -/
+def allNumeralsFinite (l : List Char) : Bool :=
+  match jparse (trimCR l) with
+  | .ok v => allFinite v
+  | .error _ => true
+
+/-! ## Writing a line -/
+
+/-- The line as a value: `t`, `ev`, then the fields, in serde's order. -/
+def lineVal (e : Entry) : JVal :=
+  .obj ((kT, .str (LogStamp.renderStamp e.t e.off)) :: (kEv, .str e.ev.tag) :: e.ev.fields)
+
+/-- **`LogEntry::to_json`**: `{"t":…,"ev":…,<fields>}`, compact, fields in declaration order,
+`skip_serializing_if` as `define_events!` has it, an unknown event's keys sorted. -/
+def renderLine (e : Entry) : List Char := jemit (lineVal e)
+
+/-- A stamp `renderStamp` writes and `parseStamp` reads back (B2's `LogStamp.parseStamp_renderStamp_before_year_10000`). -/
+def stampCanonical (t : VInstant) (o : VOffset) : Bool :=
+  (t.val.ns == 0 || t.val.ns == 1000000000) && o.val.sec % 60 == 0 &&
+    (o.val.sec != 0 || !o.val.west) && (o.val.west || decide (t.val.sec + o.val.sec < LogStamp.yearEnd))
+
+/-- An unknown event's `rest` as serde's `Map` holds it: keys strictly increasing, none `t` or
+`ev`. -/
+def restCanonical (rest : List (List Char × JVal)) : Bool :=
+  decide (rest.Pairwise (fun a b => charsLt a.1 b.1 = true)) &&
+    rest.all (fun kv => !(kv.1 == kT) && !(kv.1 == kEv))
+
+/-- An event a reader can return: `hsw` finite; a `break_start`'s place a word of the table
+(D111); an unknown event's tag not a known one, its numerals finite, its `rest` a `Map`. -/
+def Event.canonical : Event → Bool
+  | .start _ _ _ h _ _ _ _ => h.finite
+  | .energy _ _ h _ => h.finite
+  | .brkStart _ w => w.all isPlace
+  | .unknown tag rest => !isKnownTag tag && allFiniteO rest && restCanonical rest
+  | _ => true
+
+/-- **An entry `readLine` can return**: its stamp round-trips (whole seconds or a leap second, a
+whole-minute offset, UTC written `+00:00`, before year 10000), its event is canonical, and its
+line is within the reader's two bounds. -/
+def Entry.canonical (e : Entry) : Bool :=
+  stampCanonical e.t e.off && e.ev.canonical &&
+    decide ((renderLine e).length ≤ maxLineChars) && decide (depthOf (renderLine e) ≤ maxLineDepth)
+
+
+/-! ## Laws: the pairs' last value -/
+
+theorem lastVal_go (xs : List (List Char × JVal)) (k : List Char) (acc : Option JVal) :
+    xs.foldl (fun acc kv => if kv.1 == k then some kv.2 else acc) acc = (lastVal xs k).or acc := by
+  induction xs generalizing acc with
+  | nil => simp [lastVal]
+  | cons kv xs ih =>
+    simp only [List.foldl_cons, lastVal]
+    rw [ih, ih (if kv.1 == k then some kv.2 else none)]
+    by_cases h : kv.1 == k <;> simp [h]
+
+theorem lastVal_cons (kv : List Char × JVal) (xs : List (List Char × JVal)) (k : List Char) :
+    lastVal (kv :: xs) k = (lastVal xs k).or (if kv.1 == k then some kv.2 else none) := by
+  conv => lhs; unfold lastVal
+  simp only [List.foldl_cons]
+  exact lastVal_go xs k _
+
+theorem lastVal_append (xs ys : List (List Char × JVal)) (k : List Char) :
+    lastVal (xs ++ ys) k = (lastVal ys k).or (lastVal xs k) := by
+  induction xs with
+  | nil => simp [lastVal]
+  | cons kv xs ih =>
+    rw [List.cons_append, lastVal_cons, ih, lastVal_cons, Option.or_assoc]
+
+theorem lastVal_nil (k : List Char) : lastVal [] k = none := rfl
+
+theorem lastVal_of_not_mem (xs : List (List Char × JVal)) (k : List Char)
+    (h : k ∉ xs.map Prod.fst) : lastVal xs k = none := by
+  induction xs with
+  | nil => rfl
+  | cons kv xs ih =>
+    rw [lastVal_cons]
+    simp only [List.map_cons, List.mem_cons, not_or] at h
+    rw [ih h.2]
+    have : (kv.1 == k) = false := by simpa using (Ne.symm h.1)
+    simp [this]
+
+theorem lastVal_mem (xs : List (List Char × JVal)) (k : List Char) (v : JVal)
+    (h : lastVal xs k = some v) : (k, v) ∈ xs := by
+  induction xs with
+  | nil => cases h
+  | cons kv xs ih =>
+    rw [lastVal_cons] at h
+    cases hl : lastVal xs k with
+    | some w => rw [hl] at h; cases h; exact List.mem_cons_of_mem _ (ih hl)
+    | none =>
+      rw [hl] at h
+      by_cases hk : kv.1 == k
+      · simp [hk] at h; subst h
+        have := beq_iff_eq.mp hk
+        exact List.mem_cons.mpr (Or.inl (by rw [← this]))
+      · simp [hk] at h
+
+/-! ## Laws: one field -/
+
+theorem allStrs_map (ss : List (List Char)) : allStrs (ss.map JVal.str) = some ss := by
+  unfold allStrs
+  suffices h : ∀ acc, (ss.map JVal.str).foldl strStep (some acc) = some (ss.reverse ++ acc) by
+    rw [h []]; simp
+  induction ss with
+  | nil => intro acc; rfl
+  | cons s ss ih => intro acc; simp only [List.map_cons, List.foldl_cons, strStep]; rw [ih]; simp
+
+/-- **A priority map the writer writes is read back as written** (D108). -/
+theorem allPrios_map (ps : List (List Char × U8)) :
+    allPrios (ps.map (fun q => (q.1, JVal.num q.2.val))) = some ps := by
+  unfold allPrios
+  suffices h : ∀ acc, (ps.map (fun q => (q.1, JVal.num q.2.val))).foldl prioStep (some acc)
+      = some (ps.reverse ++ acc) by
+    rw [h []]; simp
+  induction ps with
+  | nil => intro acc; rfl
+  | cons q ps ih =>
+    intro acc
+    simp only [List.map_cons, List.foldl_cons, prioStep, q.2.isLt, dite_true]
+    rw [ih]; simp
+
+/-- **The reader reads back what the writer writes, at every field the reader can read**
+(`FieldReadable`; D111).  This was stated at EVERY value of every field type until the owner's
+D111, and that statement is false since: a `place` the writer writes may be a word the table does
+not hold, and the reader names it `badField` (`readF_renderF_at_every_value_is_refuted`). -/
+theorem readF_renderF (k : List Char) :
+    ∀ (t : FTy) (x : t.T), FieldReadable t x → readF k t (renderF t x) = .ok x
+  | .u8, x, _ => by simp [renderF, readF, x.isLt]
+  | .u32, x, _ => by simp [renderF, readF, x.isLt]
+  | .u32d, x, _ => by simp [renderF, readF, x.isLt]
+  | .optU8, none, _ => rfl
+  | .optU8, some x, _ => by simp [renderF, readF, x.isLt]
+  | .optU32, none, _ => rfl
+  | .optU32, some x, _ => by simp [renderF, readF, x.isLt]
+  | .str, _, _ => rfl
+  | .optStr, none, _ => rfl
+  | .optStr, some _, _ => rfl
+  | .strs, ss, _ => by simp [renderF, readF, allStrs_map]
+  | .flag, false, _ => rfl
+  | .flag, true, _ => rfl
+  | .num, .nat _, _ => rfl
+  | .num, .dec _, _ => rfl
+  | .pair, (_, _), _ => rfl
+  | .place, none, _ => rfl
+  | .place, some s, h => by
+    simp only [FieldReadable, Option.all_some] at h
+    simp [renderF, readF, h]
+  | .prios, [], _ => rfl
+  | .prios, q :: ps, _ => by
+    simp only [renderF, readF]
+    rw [allPrios_map (q :: ps)]
+
+/-- **`readF_renderF` as stage 5 B3 stated it — at every value — is refuted** (the owner's D111):
+the writer writes a `place` of any word and the reader names a word the table does not hold
+`badField`.  The witness is gap 4904's own hand edit, `"where": "moon"`. -/
+theorem readF_renderF_at_every_value_is_refuted :
+    ¬ ∀ (k : List Char) (t : FTy) (x : t.T), readF k t (renderF t x) = .ok x := by
+  intro h
+  have := h ['w','h','e','r','e'] .place (some ['m','o','o','n'])
+  simp [renderF, readF, isPlace, placeWords] at this
+
+/-- The pairs agree with a schema's fields: each key's last value is what the field writes. -/
+def Agrees (kvs : List (List Char × JVal)) : (s : List (List Char × FTy)) → Args s → Prop
+  | [], () => True
+  | (k, t) :: s, (x, xs) => lastVal kvs k = renderF t x ∧ Agrees kvs s xs
+
+theorem readArgs_of_agrees (kvs : List (List Char × JVal)) :
+    ∀ (s : List (List Char × FTy)) (a : Args s), ArgsReadable s a → Agrees kvs s a →
+      readArgs kvs s = .ok a
+  | [], (), _, _ => rfl
+  | (k, t) :: s, (x, xs), hr, ⟨h1, h2⟩ => by
+    simp only [ArgsReadable] at hr
+    simp only [readArgs, h1, readF_renderF k t x hr.1, readArgs_of_agrees kvs s xs hr.2 h2, FR.pair]
+
+theorem renderArgs_keys : ∀ (s : List (List Char × FTy)) (a : Args s),
+    ∀ kv ∈ renderArgs s a, kv.1 ∈ s.map Prod.fst
+  | [], (), kv, h => by simp [renderArgs] at h
+  | (k, t) :: s, (x, xs), kv, h => by
+    simp only [renderArgs, List.mem_append] at h
+    rcases h with h | h
+    · split at h <;> simp at h; subst h; simp
+    · simp only [List.map_cons, List.mem_cons]; exact Or.inr (renderArgs_keys s xs kv h)
+
+theorem agrees_renderArgs : ∀ (s : List (List Char × FTy)) (a : Args s)
+    (pre : List (List Char × JVal)), (s.map Prod.fst).Nodup →
+    (∀ kv ∈ pre, kv.1 ∉ s.map Prod.fst) → Agrees (pre ++ renderArgs s a) s a
+  | [], (), _, _, _ => trivial
+  | (k, t) :: s, (x, xs), pre, hnd, hpre => by
+    simp only [List.map_cons, List.nodup_cons] at hnd
+    have hrest : k ∉ (renderArgs s xs).map Prod.fst := by
+      intro hm
+      obtain ⟨kv, hkv, rfl⟩ := List.mem_map.mp hm
+      exact hnd.1 (renderArgs_keys s xs kv hkv)
+    have hpk : k ∉ pre.map Prod.fst := by
+      intro hm
+      obtain ⟨kv, hkv, hk⟩ := List.mem_map.mp hm
+      exact hpre kv hkv (by simp [hk])
+    refine ⟨?_, ?_⟩
+    · simp only [renderArgs]
+      rw [← List.append_assoc, lastVal_append, lastVal_of_not_mem _ _ hrest, lastVal_append,
+        lastVal_of_not_mem _ _ hpk]
+      split <;> simp_all [lastVal_cons, lastVal_nil]
+    · simp only [renderArgs]
+      rw [← List.append_assoc]
+      apply agrees_renderArgs s xs _ hnd.2
+      intro kv hkv
+      simp only [List.mem_append] at hkv
+      rcases hkv with hkv | hkv
+      · intro hm; exact hpre kv hkv (by simp [hm])
+      · split at hkv <;> simp at hkv
+        subst hkv; exact hnd.1
+
+/-! ## Laws: each kind -/
+
+theorem Kind.build_of_split (ev : Event) (k : Kind) (a : Args k.schema)
+    (h : ev.split = some ⟨k, a⟩) : k.build a = ev := by
+  cases ev <;> cases h <;> rfl
+
+theorem Event.tag_of_split (ev : Event) (k : Kind) (a : Args k.schema)
+    (h : ev.split = some ⟨k, a⟩) : ev.tag = k.tag := by
+  cases ev <;> cases h <;> rfl
+
+theorem Event.fields_of_split (ev : Event) (k : Kind) (a : Args k.schema)
+    (h : ev.split = some ⟨k, a⟩) : ev.fields = renderArgs k.schema a := by
+  cases ev <;> cases h <;> rfl
+
+theorem Event.strings_of_split (ev : Event) (k : Kind) (a : Args k.schema)
+    (h : ev.split = some ⟨k, a⟩) : ev.strings = argStrs k.schema a := by
+  cases ev <;> cases h <;> simp [Event.strings, argStrs, strsOfF, Kind.schema]
+
+theorem Event.canonical_of_split (ev : Event) (k : Kind) (a : Args k.schema)
+    (h : ev.split = some ⟨k, a⟩) :
+    (ev.canonical = true ↔ (argsFinite k.schema a = true ∧ ArgsReadable k.schema a)) := by
+  cases ev <;> cases h <;>
+    simp [Event.canonical, argsFinite, fieldFinite, ArgsReadable, FieldReadable, Kind.schema]
+
+theorem Event.split_build (k : Kind) (a : Args k.schema) : (k.build a).split = some ⟨k, a⟩ := by
+  cases k <;> rfl
+
+theorem Event.split_of_not_unknown (ev : Event) (h : ev.isUnknown = false) :
+    ∃ k a, ev.split = some ⟨k, a⟩ := by
+  cases ev <;> first | exact ⟨_, _, rfl⟩ | cases h
+
+theorem kindOf_tag (k : Kind) : kindOf k.tag = some k := by
+  cases k <;> decide
+
+theorem Kind.keys_nodup (k : Kind) : (k.schema.map Prod.fst).Nodup := by
+  cases k <;> decide
+
+theorem Kind.no_t_key (k : Kind) : kT ∉ k.schema.map Prod.fst := by
+  cases k <;> decide
+
+theorem Kind.no_ev_key (k : Kind) : kEv ∉ k.schema.map Prod.fst := by
+  cases k <;> decide
+
+/-! ## Laws: finiteness of what is written -/
+
+theorem finiteF64_of_nat (n : Nat) (h : n ≤ u64Max) : finiteF64 ⟨false, n, [], none⟩ = true := by
+  simp [finiteF64, h]
+
+theorem allFiniteL_map_str (ss : List (List Char)) : allFiniteL (ss.map JVal.str) = true := by
+  induction ss with
+  | nil => rfl
+  | cons s ss ih => simp [allFiniteL, allFinite, ih]
+
+theorem allFiniteO_append (xs ys : List (List Char × JVal)) :
+    allFiniteO (xs ++ ys) = (allFiniteO xs && allFiniteO ys) := by
+  induction xs with
+  | nil => simp [allFiniteO]
+  | cons kv xs ih => obtain ⟨k, v⟩ := kv; simp [allFiniteO, ih, Bool.and_assoc]
+
+theorem u32_le_u64Max (x : U32) : x.val ≤ u64Max := by
+  have := x.isLt; unfold u64Max; omega
+
+theorem u8_le_u64Max (x : U8) : x.val ≤ u64Max := by
+  have := x.isLt; unfold u64Max; omega
+
+theorem allFiniteO_renderArgs : ∀ (s : List (List Char × FTy)) (a : Args s),
+    argsFinite s a = true → allFiniteO (renderArgs s a) = true
+  | [], (), _ => rfl
+  | (k, t) :: s, (x, xs), h => by
+    simp only [argsFinite, Bool.and_eq_true] at h
+    simp only [renderArgs, allFiniteO_append, allFiniteO_renderArgs s xs h.2, Bool.and_true]
+    cases t with
+    | u8 => simp [renderF, allFiniteO, allFinite, finiteF64_of_nat _ (u8_le_u64Max x)]
+    | u32 => simp [renderF, allFiniteO, allFinite, finiteF64_of_nat _ (u32_le_u64Max x)]
+    | u32d => simp [renderF, allFiniteO, allFinite, finiteF64_of_nat _ (u32_le_u64Max x)]
+    | optU8 => cases x <;> simp [renderF, allFiniteO, allFinite, finiteF64_of_nat _ (u8_le_u64Max _)]
+    | optU32 => cases x <;> simp [renderF, allFiniteO, allFinite, finiteF64_of_nat _ (u32_le_u64Max _)]
+    | str => simp [renderF, allFiniteO, allFinite]
+    | optStr => cases x <;> simp [renderF, allFiniteO, allFinite]
+    | strs => simp [renderF, allFiniteO, allFinite, allFiniteL_map_str]
+    | flag => cases x <;> simp [renderF, allFiniteO, allFinite]
+    | num => cases x <;> simp_all [renderF, allFiniteO, allFinite, fieldFinite, Num.finite]
+    | pair => simp [renderF, allFiniteO, allFinite, allFiniteL]
+    | place => cases x <;> simp [renderF, allFiniteO, allFinite]
+    | prios =>
+      cases x with
+      | nil => simp [renderF, allFiniteO]
+      | cons q ps =>
+        simp only [renderF, allFiniteO, allFinite, Bool.and_true]
+        suffices H : ∀ l : List (List Char × U8),
+            allFiniteO (l.map (fun q => (q.1, JVal.num q.2.val))) = true from H (q :: ps)
+        intro l
+        induction l with
+        | nil => rfl
+        | cons r l ih => simp [allFiniteO, allFinite, finiteF64_of_nat _ (u8_le_u64Max r.2), ih]
+
+/-! ## Laws: the written line's shape -/
+
+theorem jemitOTail_ends (kvs : List (List Char × JVal)) : ∃ p, jemitOTail kvs = p ++ ['}'] := by
+  induction kvs with
+  | nil => exact ⟨[], rfl⟩
+  | cons kv kvs ih =>
+    obtain ⟨p, hp⟩ := ih
+    exact ⟨',' :: (jemitPair kv ++ p), by simp [jemitOTail, hp]⟩
+
+theorem jemit_obj_ends (kvs : List (List Char × JVal)) : ∃ p, jemit (.obj kvs) = '{' :: (p ++ ['}']) := by
+  cases kvs with
+  | nil => exact ⟨[], rfl⟩
+  | cons kv kvs =>
+    obtain ⟨p, hp⟩ := jemitOTail_ends kvs
+    exact ⟨jemitPair kv ++ p, by simp [jemit, jemitObj, hp]⟩
+
+theorem trimCR_of_last (l : List Char) (c : Char) (h : c ≠ '\r') : trimCR (l ++ [c]) = l ++ [c] := by
+  have : (c == '\r') = false := by simpa using h
+  simp [trimCR, this]
+
+theorem trimCR_jemit_obj (kvs : List (List Char × JVal)) : trimCR (jemit (.obj kvs)) = jemit (.obj kvs) := by
+  obtain ⟨p, hp⟩ := jemit_obj_ends kvs
+  rw [hp, ← List.cons_append, trimCR_of_last _ _ (by decide)]
+
+theorem not_blank_jemit_obj (kvs : List (List Char × JVal)) :
+    (jemit (.obj kvs)).all isSp = false := by
+  obtain ⟨p, hp⟩ := jemit_obj_ends kvs
+  rw [hp]
+  have h : isSp '{' = false := by decide
+  simp [List.all_cons, h]
+
+/-! ## Laws: an unknown event's `rest` -/
+
+theorem charsLt_irrefl : ∀ a : List Char, charsLt a a = false
+  | [] => rfl
+  | c :: as => by simp [charsLt, charsLt_irrefl as]
+
+theorem charsLe_of_lt : ∀ a b : List Char, charsLt a b = true → charsLe a b = true
+  | [], _, _ => rfl
+  | _ :: _, [], h => by simp [charsLt] at h
+  | x :: as, y :: bs, h => by
+    simp only [charsLt] at h
+    simp only [charsLe]
+    split
+    · rfl
+    · split at h
+      · contradiction
+      · split
+        · next hxy => simp only [hxy, if_true] at h; exact charsLe_of_lt as bs h
+        · next hxy => simp [hxy] at h
+
+theorem ne_of_charsLt (a b : List Char) (h : charsLt a b = true) : a ≠ b := by
+  rintro rfl; rw [charsLt_irrefl] at h; cases h
+
+/-! ### `charsLe` is a total order
+
+The three laws `Replay.insSort_eq_mergeSort` asks of a comparison, and the two
+`spotLe` asks of a path order.  They live **here**, beside the one definition of
+the concept, because two runs have now wanted them elsewhere and the answer to
+that is never a second `charsLe` (AGENTS §5.3): W-16's track A wrote one in
+`Boundary.lean` and W-16's K3b wrote another in `Recur.lean`, and the repair
+step deleted both and pointed their call sites at this function.
+
+`omega` cannot see a `UInt32` order, so every step goes through
+`UInt32.lt_iff_toNat_lt` first; `Char.ext` is what makes distinct code points
+distinct characters. -/
+
+/-- Two characters that differ differ in their code points. -/
+theorem char_val_ne (a b : Char) (h : a ≠ b) : a.val.toNat ≠ b.val.toNat :=
+  fun hv => h (Char.ext (UInt32.toNat_inj.mp hv))
+
+/-- The code-point order as a `Nat` order, which is the form `omega` reads. -/
+theorem char_lt_toNat {a b : Char} : (a.val < b.val) ↔ (a.val.toNat < b.val.toNat) :=
+  UInt32.lt_iff_toNat_lt
+
+theorem charsLe_antisymm : ∀ (x y : List Char),
+    charsLe x y = true → charsLe y x = true → x = y
+  | [],      []       => fun _ _ => rfl
+  | [],      _ :: _   => fun _ h2 => by simp [charsLe] at h2
+  | _ :: _,  []       => fun h1 _ => by simp [charsLe] at h1
+  | a :: as, b :: bs  => fun h1 h2 => by
+      unfold charsLe at h1 h2
+      by_cases hab : a = b
+      · subst hab
+        rw [if_neg (by rw [char_lt_toNat]; omega), if_pos rfl] at h1 h2
+        rw [charsLe_antisymm as bs h1 h2]
+      · have hne := char_val_ne a b hab
+        rcases Nat.lt_or_ge a.val.toNat b.val.toNat with hlt | hge
+        · rw [if_neg (by rw [char_lt_toNat]; omega), if_neg (Ne.symm hab)] at h2
+          exact absurd h2 (by simp)
+        · rw [if_neg (by rw [char_lt_toNat]; omega), if_neg hab] at h1
+          exact absurd h1 (by simp)
+
+theorem charsLe_total : ∀ (x y : List Char), (charsLe x y || charsLe y x) = true
+  | [],      _        => by simp [charsLe]
+  | _ :: _,  []       => by simp [charsLe]
+  | a :: as, b :: bs  => by
+      unfold charsLe
+      by_cases hab : a = b
+      · subst hab
+        rw [if_neg (by rw [char_lt_toNat]; omega), if_pos rfl]
+        simpa using charsLe_total as bs
+      · have hne := char_val_ne a b hab
+        rcases Nat.lt_or_ge a.val.toNat b.val.toNat with hlt | hge
+        · rw [if_pos (by rw [char_lt_toNat]; omega)]; simp
+        · rw [if_neg (by rw [char_lt_toNat]; omega), if_neg hab,
+              if_pos (show b.val < a.val by rw [char_lt_toNat]; omega)]
+          simp
+
+theorem charsLe_trans : ∀ (x y z : List Char),
+    charsLe x y = true → charsLe y z = true → charsLe x z = true
+  | [],      _,       _,       _,  _  => rfl
+  | _ :: _,  [],      _,       h1, _  => by simp [charsLe] at h1
+  | _ :: _,  _ :: _,  [],      _,  h2 => by simp [charsLe] at h2
+  | a :: as, b :: bs, c :: cs, h1, h2 => by
+      unfold charsLe at h1 h2 ⊢
+      by_cases hab : a = b
+      · subst hab
+        rw [if_neg (by rw [char_lt_toNat]; omega), if_pos rfl] at h1
+        by_cases hbc : a = c
+        · subst hbc
+          rw [if_neg (by rw [char_lt_toNat]; omega), if_pos rfl] at h2 ⊢
+          exact charsLe_trans as bs cs h1 h2
+        · have := char_val_ne a c hbc
+          rcases Nat.lt_or_ge a.val.toNat c.val.toNat with hlt | hge
+          · rw [if_pos (by rw [char_lt_toNat]; omega)]
+          · rw [if_neg (by rw [char_lt_toNat]; omega), if_neg hbc] at h2
+            exact absurd h2 (by simp)
+      · have hab' := char_val_ne a b hab
+        rcases Nat.lt_or_ge a.val.toNat b.val.toNat with hab1 | hab2
+        · by_cases hbc : b = c
+          · subst hbc
+            rw [if_pos (by rw [char_lt_toNat]; omega)]
+          · have hbc' := char_val_ne b c hbc
+            rcases Nat.lt_or_ge b.val.toNat c.val.toNat with hbc1 | hbc2
+            · rw [if_pos (show a.val < c.val by rw [char_lt_toNat]; omega)]
+            · rw [if_neg (by rw [char_lt_toNat]; omega), if_neg hbc] at h2
+              exact absurd h2 (by simp)
+        · rw [if_neg (by rw [char_lt_toNat]; omega), if_neg hab] at h1
+          exact absurd h1 (by simp)
+
+theorem dedup_of_pairwise : ∀ (rest acc : List (List Char × JVal)),
+    (acc.reverse ++ rest).Pairwise (fun a b => charsLt a.1 b.1 = true) →
+    (rest.foldl dedupStep acc).reverse = acc.reverse ++ rest
+  | [], acc, _ => by simp
+  | kv :: rest, acc, h => by
+    simp only [List.foldl_cons]
+    have step : dedupStep acc kv = kv :: acc := by
+      cases acc with
+      | nil => rfl
+      | cons p ps =>
+        have hp : charsLt p.1 kv.1 = true := by
+          have := List.pairwise_append.mp h
+          exact this.2.2 p (by simp) kv (by simp)
+        have : (p.1 == kv.1) = false := by simpa using ne_of_charsLt _ _ hp
+        simp [dedupStep, this]
+    rw [step, dedup_of_pairwise rest (kv :: acc) (by simpa using h)]
+    simp
+
+theorem restOf_canonical (a b : JVal) (rest : List (List Char × JVal)) (h : restCanonical rest = true) :
+    restOf ((kT, a) :: (kEv, b) :: rest) = rest := by
+  simp only [restCanonical, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
+  obtain ⟨hp, hk⟩ := h
+  have hf : ((kT, a) :: (kEv, b) :: rest).filter (fun kv => !(kv.1 == kT) && !(kv.1 == kEv)) = rest := by
+    simp only [List.filter_cons]
+    have h1 : (!(kT == kT) && !(kT == kEv)) = false := by decide
+    have h2 : (!(kEv == kT) && !(kEv == kEv)) = false := by decide
+    simp only [h1, h2, Bool.false_eq_true, if_false]
+    exact List.filter_eq_self.mpr (fun x hx => by simpa using hk x hx)
+  unfold restOf
+  rw [hf, List.mergeSort_of_pairwise (hp.imp (fun {x y} hxy => charsLe_of_lt _ _ hxy))]
+  have := dedup_of_pairwise rest [] (by simpa using hp)
+  simpa using this
+
+/-! ## Laws: `t` and `ev` in a written line -/
+
+theorem countP_of_not_mem (fields : List (List Char × JVal)) (k : List Char)
+    (h : k ∉ fields.map Prod.fst) : fields.countP (fun kv => kv.1 == k) = 0 := by
+  rw [List.countP_eq_zero]
+  intro kv hkv hk
+  exact h (List.mem_map.mpr ⟨kv, hkv, by simpa using hk⟩)
+
+theorem stamp_hyps (t : VInstant) (o : VOffset) (h : stampCanonical t o = true) :
+    (t.val.ns = 0 ∨ t.val.ns = 1000000000) ∧ o.val.sec % 60 = 0 ∧ (o.val.sec = 0 → o.val.west = false)
+      ∧ (o.val.west = true ∨ t.val.sec + o.val.sec < LogStamp.yearEnd) := by
+  simp only [stampCanonical, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq, bne_iff_ne, ne_eq,
+    Bool.not_eq_true', decide_eq_true_eq] at h
+  obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
+  refine ⟨h1, h2, fun hz => ?_, h4⟩
+  rcases h3 with h3 | h3
+  · exact absurd hz h3
+  · exact h3
+
+theorem readT_line (t : VInstant) (o : VOffset) (tag : List Char) (fields : List (List Char × JVal))
+    (hs : stampCanonical t o = true) (hf : kT ∉ fields.map Prod.fst) :
+    readT ((kT, .str (LogStamp.renderStamp t o)) :: (kEv, .str tag) :: fields) = .ok (t, o) := by
+  obtain ⟨h1, h2, h3, h4⟩ := stamp_hyps t o hs
+  have hte : (kT == kT) = true := by decide
+  have hne : (kEv == kT) = false := by decide
+  simp only [readT, List.find?_cons, hte, LogStamp.parseStamp_renderStamp_before_year_10000 t o h1 h2 h3 h4,
+    List.countP_cons, hne, countP_of_not_mem fields kT hf]
+  rfl
+
+theorem lastVal_ev_line (a : JVal) (tag : List Char) (fields : List (List Char × JVal))
+    (hf : kEv ∉ fields.map Prod.fst) :
+    lastVal ((kT, a) :: (kEv, .str tag) :: fields) kEv = some (.str tag) := by
+  have hte : (kT == kEv) = false := by decide
+  have hee : (kEv == kEv) = true := by decide
+  rw [lastVal_cons, lastVal_cons, lastVal_of_not_mem _ _ hf]
+  simp [hte]
+
+/-! ## Laws: the grammar's goals -/
+
+theorem readLine_of_parse (n : Nat) (raw : List Char) (v : JVal)
+    (hb : (trimCR raw).all isSp = false)
+    (hl : (trimCR raw).length ≤ maxLineChars) (hd : depthOf (trimCR raw) ≤ maxLineDepth)
+    (hp : jparse (trimCR raw) = .ok v) : readLine n (some raw) = readValue n v := by
+  simp only [readLine, hb, Bool.false_eq_true, if_false, Nat.not_lt.mpr hl, Nat.not_lt.mpr hd, hp]
+
+theorem keys_of_fields_known (ev : Event) (k : Kind) (a : Args k.schema) (h : ev.split = some ⟨k, a⟩)
+    (key : List Char) (hk : key ∉ k.schema.map Prod.fst) : key ∉ ev.fields.map Prod.fst := by
+  rw [Event.fields_of_split ev k a h]
+  intro hm
+  obtain ⟨kv, hkv, rfl⟩ := List.mem_map.mp hm
+  exact hk (renderArgs_keys _ _ kv hkv)
+
+theorem keys_of_rest (rest : List (List Char × JVal)) (h : restCanonical rest = true) :
+    kT ∉ rest.map Prod.fst ∧ kEv ∉ rest.map Prod.fst := by
+  simp only [restCanonical, Bool.and_eq_true, List.all_eq_true] at h
+  constructor <;> intro hm <;> obtain ⟨kv, hkv, hk⟩ := List.mem_map.mp hm <;>
+    have := h.2 kv hkv <;> simp_all
+
+/-- **The log reads what it renders** (design §15, B3; added and discharged in B3). -/
+theorem the_log_reads_what_it_renders (e : Entry) (h : e.canonical = true) :
+    readLine e.line (some (renderLine e)) = .entry e := by
+  simp only [Entry.canonical, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨hs, hc⟩, hl⟩, hd⟩ := h
+  have ht : trimCR (renderLine e) = renderLine e := trimCR_jemit_obj _
+  rw [readLine_of_parse e.line (renderLine e) (lineVal e) (by rw [ht]; exact not_blank_jemit_obj _)
+    (by rw [ht]; exact hl) (by rw [ht]; exact hd) (by rw [ht]; exact jparse_jemit _)]
+  obtain ⟨line, t, o, ev⟩ := e
+  cases hu : ev.isUnknown with
+  | false =>
+    obtain ⟨k, a, hsp⟩ := Event.split_of_not_unknown ev hu
+    have hca : argsFinite k.schema a = true ∧ ArgsReadable k.schema a := by
+      exact (Event.canonical_of_split ev k a hsp).1 hc
+    have hfin : allFinite (lineVal ⟨line, t, o, ev⟩) = true := by
+      simp only [lineVal, allFinite, allFiniteO, Bool.true_and]
+      rw [Event.fields_of_split ev k a hsp]
+      exact allFiniteO_renderArgs _ _ hca.1
+    simp only [readValue]
+    rw [if_pos hfin]
+    simp only [lineVal, readObject]
+    rw [readT_line t o ev.tag ev.fields hs (keys_of_fields_known ev k a hsp kT (Kind.no_t_key k)),
+      lastVal_ev_line _ ev.tag ev.fields (keys_of_fields_known ev k a hsp kEv (Kind.no_ev_key k))]
+    simp only
+    rw [Event.tag_of_split ev k a hsp, kindOf_tag]
+    simp only
+    have hag := agrees_renderArgs k.schema a [(kT, .str (LogStamp.renderStamp t o)), (kEv, .str k.tag)]
+      (Kind.keys_nodup k) (by
+        intro kv hkv
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at hkv
+        rcases hkv with rfl | rfl
+        · exact Kind.no_t_key k
+        · exact Kind.no_ev_key k)
+    rw [← Event.fields_of_split ev k a hsp] at hag
+    have hr := readArgs_of_agrees _ k.schema a hca.2 hag
+    simp only [List.cons_append, List.nil_append] at hr
+    rw [hr]
+    simp only [Kind.build_of_split ev k a hsp]
+  | true =>
+    cases ev with
+    | unknown tag rest =>
+      simp only [Event.canonical, Bool.and_eq_true, Bool.not_eq_true'] at hc
+      obtain ⟨⟨hkn, hfr⟩, hrc⟩ := hc
+      have hfin : allFinite (lineVal ⟨line, t, o, .unknown tag rest⟩) = true := by
+        simp [lineVal, allFinite, allFiniteO, Event.fields, hfr]
+      simp only [readValue]
+      rw [if_pos hfin]
+      simp only [lineVal, readObject, Event.fields, Event.tag]
+      rw [readT_line t o tag rest hs (keys_of_rest rest hrc).1,
+        lastVal_ev_line _ tag rest (keys_of_rest rest hrc).2]
+      simp only
+      have hk : kindOf tag = none := by
+        simp only [isKnownTag, Option.isSome_eq_false_iff] at hkn; simpa using hkn
+      rw [hk]
+      simp only
+      rw [restOf_canonical _ _ rest hrc]
+    | _ => cases hu
+
+/-- **A known event is never read as `unknown`** (design §15, B3; added and discharged in B3):
+a line whose tag is one of the 27 is that kind's event or a warning (cheat 94's claim is false). -/
+theorem a_known_event_is_never_read_as_unknown (n : Nat) (l : List Char) (e : Entry)
+    (h : readLine n (some l) = .entry e) (hk : isKnownTag (tagIn l) = true) :
+    e.ev.isUnknown = false := by
+  simp only [readLine] at h
+  split at h; · cases h
+  split at h; · cases h
+  split at h; · cases h
+  split at h
+  · cases h
+  next v hp =>
+    simp only [readValue] at h
+    split at h
+    · split at h
+      next kvs =>
+        simp only [readObject] at h
+        split at h
+        · cases h
+        · split at h
+          · cases h
+          next tag hev =>
+            split at h
+            next k hkind =>
+              split at h
+              next a _ => cases h; cases k <;> rfl
+              · cases h
+              · cases h
+            next hkind =>
+              simp only [tagIn, hp, hev] at hk
+              simp [isKnownTag, hkind] at hk
+          · cases h
+      · cases h
+    · cases h
+
+theorem trimCR_prefix (l : List Char) : ∃ s, l = trimCR l ++ s := by
+  refine ⟨(l.reverse.takeWhile (· == '\r')).reverse, ?_⟩
+  unfold trimCR
+  rw [← List.reverse_append, List.takeWhile_append_dropWhile, List.reverse_reverse]
+
+theorem scan_peak_mono (xs : List Char) (s : Scan) : s.peak ≤ (xs.foldl scanStep s).peak := by
+  induction xs generalizing s with
+  | nil => exact Nat.le_refl _
+  | cons c xs ih =>
+    simp only [List.foldl_cons]
+    refine Nat.le_trans ?_ (ih _)
+    unfold scanStep
+    split <;> (try split) <;> (try split) <;> (try split) <;> simp <;> omega
+
+theorem depthOf_prefix (a b : List Char) : depthOf a ≤ depthOf (a ++ b) := by
+  unfold depthOf; rw [List.foldl_append]; exact scan_peak_mono _ _
+
+theorem skipWs_suffix : ∀ l : List Char, ∃ p, l = p ++ skipWs l
+  | [] => ⟨[], rfl⟩
+  | c :: cs => by
+    rw [skipWs.eq_2]
+    split
+    · obtain ⟨p, hp⟩ := skipWs_suffix cs; exact ⟨c :: p, by rw [List.cons_append, ← hp]⟩
+    · exact ⟨[], rfl⟩
+
+theorem jparse_not_blank (m : List Char) (v : JVal) (h : jparse m = .ok v) :
+    m.all isSp = false := by
+  cases hall : m.all isSp with
+  | false => rfl
+  | true =>
+    exfalso
+    have hsp : ∀ c ∈ m, isSp c = true := by simpa using hall
+    unfold jparse jparseWith at h
+    rw [show 2 * m.length + 2 = (2 * m.length + 1) + 1 by omega, jval.eq_2] at h
+    obtain ⟨p, hp⟩ := skipWs_suffix m
+    cases hs : skipWs m with
+    | nil => rw [hs] at h; cases h
+    | cons c r =>
+      rw [hs] at h hp
+      have hc : isSp c = true := hsp c (by rw [hp]; simp)
+      simp only at h
+      have hd : (charDigit c).isSome = false := by
+        cases hx : (charDigit c).isSome
+        · rfl
+        · rw [isSp_of_digit c hx] at hc; cases hc
+      have hne : ∀ x : Char, isSp x = false → c ≠ x := by
+        intro x hx hcx; subst hcx; rw [hc] at hx; cases hx
+      rw [if_neg (by simp [hd]), if_neg (hne '-' (by decide)), if_neg (hne '"' (by decide)),
+        if_neg (hne '[' (by decide)), if_neg (hne '{' (by decide))] at h
+      have hn := hne 'n' (by decide)
+      have ht := hne 't' (by decide)
+      have hf := hne 'f' (by decide)
+      split at h <;> simp_all
+
+/-- **An unknown tag is never a warning** (design §15, B3; added and discharged in B3): a line that
+is an object with one good `t` and a string `ev` that no kind has, within the two bounds and with
+every numeral finite, is an entry (cheat 93's claim is false). -/
+theorem an_unknown_tag_is_never_a_warning (n : Nat) (l : List Char) (w : LWarn)
+    (hshape : isObjectWithStampAndTag l = true) (hu : isKnownTag (tagIn l) = false)
+    (hlen : l.length ≤ maxLineChars) (hdepth : depthOf l ≤ maxLineDepth)
+    (hfin : allNumeralsFinite l = true) :
+    readLine n (some l) ≠ .warn n w := by
+  obtain ⟨sfx, hsfx⟩ := trimCR_prefix l
+  unfold isObjectWithStampAndTag at hshape
+  split at hshape
+  next kvs hp =>
+    simp only [Bool.and_eq_true] at hshape
+    obtain ⟨ht, hev⟩ := hshape
+    have hl' : (trimCR l).length ≤ maxLineChars := by
+      have := congrArg List.length hsfx; simp at this; omega
+    have hd' : depthOf (trimCR l) ≤ maxLineDepth := by
+      have := depthOf_prefix (trimCR l) sfx; rw [← hsfx] at this; omega
+    rw [readLine_of_parse n l _ (jparse_not_blank _ _ hp) hl' hd' hp]
+    simp only [allNumeralsFinite, hp] at hfin
+    simp only [readValue, hfin, if_true, readObject]
+    split at ht
+    next p hrt =>
+      rw [hrt]
+      split at hev
+      next tag htag =>
+        simp only [htag]
+        have hk : kindOf tag = none := by
+          simp only [tagIn, hp, htag, isKnownTag, Option.isSome_eq_false_iff] at hu
+          simpa using hu
+        simp only [hk]
+        intro h; cases h
+      · cases hev
+    · cases ht
+  · cases hshape
+
+/-! ## Laws: every string a parse returns is shorter than its input -/
+
+theorem map_cons_ok {c : Char} {e : Except JEsc (List Char)} {s : List Char}
+    (h : e.map (fun t => c :: t) = .ok s) : ∃ t, e = .ok t ∧ s = c :: t := by
+  cases e with
+  | error x => simp [Except.map] at h
+  | ok t => simp [Except.map] at h; exact ⟨t, rfl, h.symm⟩
+
+theorem junescape_length (n : Nat) : ∀ (l s : List Char), l.length ≤ n →
+    junescape l = .ok s → s.length ≤ l.length := by
+  induction n with
+  | zero =>
+    intro l s hl h
+    cases l with
+    | nil => simp [junescape] at h; subst h; simp
+    | cons _ _ => simp at hl
+  | succ n ih =>
+    intro l s hl h
+    rw [junescape.eq_def] at h
+    repeat' split at h
+    all_goals first
+      | (simp at h; subst h; simp)
+      | cases h
+      | (obtain ⟨t, ht, rfl⟩ := map_cons_ok h
+         have := ih _ t (by simp at hl ⊢; omega) ht
+         simp; omega)
+
+theorem jscan_strlen (n : Nat) : ∀ (l s r : List Char), l.length ≤ n →
+    jscan l = some (s, r) → s.length + r.length < l.length := by
+  induction n with
+  | zero =>
+    intro l s r hl h
+    cases l with
+    | nil => simp [jscan] at h
+    | cons _ _ => simp at hl
+  | succ n ih =>
+    intro l s r hl h
+    match l with
+    | [] => simp [jscan] at h
+    | c :: rest =>
+      rw [jscan.eq_def] at h
+      simp only at h
+      by_cases hq : c = '"'
+      · rw [if_pos hq] at h
+        cases h
+        simp
+      · rw [if_neg hq] at h
+        by_cases hb : c = '\\'
+        · rw [if_pos hb] at h
+          match rest with
+          | [] => simp at h
+          | e :: rest' =>
+            simp only at h
+            cases hj : jscan rest' with
+            | none => rw [hj] at h; simp at h
+            | some p =>
+              obtain ⟨s', r'⟩ := p
+              rw [hj] at h
+              simp only [Option.some.injEq, Prod.mk.injEq] at h
+              obtain ⟨rfl, rfl⟩ := h
+              have := ih rest' s' r' (by simp at hl; omega) hj
+              simp; omega
+        · rw [if_neg hb] at h
+          cases hj : jscan rest with
+          | none => rw [hj] at h; simp at h
+          | some p =>
+            obtain ⟨s', r'⟩ := p
+            rw [hj] at h
+            simp only [Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl⟩ := h
+            have := ih rest s' r' (by simp at hl; omega) hj
+            simp; omega
+
+theorem jstring_strlen (l s r : List Char) (h : jstring l = .ok (s, r)) :
+    s.length + r.length < l.length := by
+  unfold jstring at h
+  cases hj : jscan l with
+  | none => rw [hj] at h; cases h
+  | some p =>
+    obtain ⟨raw, r'⟩ := p
+    rw [hj] at h
+    simp only at h
+    cases hu : junescape raw with
+    | error e => rw [hu] at h; cases h
+    | ok cs =>
+      rw [hu] at h
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      have h1 := jscan_strlen l.length l raw r' (Nat.le_refl _) hj
+      have h2 := junescape_length raw.length raw cs (Nat.le_refl _) hu
+      omega
+
+theorem jstrs_ofDec (d : JDec) : jstrs (JVal.ofDec d) = [] := by
+  unfold JVal.ofDec; split <;> rfl
+
+theorem jstrsO_cons (kv : List Char × JVal) (kvs : List (List Char × JVal)) :
+    jstrsO (kv :: kvs) = kv.1 :: (jstrs kv.2 ++ jstrsO kvs) := by
+  obtain ⟨k, v⟩ := kv; rfl
+
+theorem jval_strs_step (f : Nat)
+    (harr : ∀ l xs r, jarr f l = .ok (xs, r) → ∀ s ∈ jstrsL xs, s.length + r.length < l.length)
+    (hobj : ∀ l kvs r, jobj f l = .ok (kvs, r) → ∀ s ∈ jstrsO kvs, s.length + r.length < l.length) :
+    ∀ l v r, jval (f + 1) l = .ok (v, r) → ∀ s ∈ jstrs v, s.length + r.length < l.length := by
+  intro l v r h s hs
+  rw [jval.eq_2] at h
+  have hl := skipWs_length_le l
+  cases hsk : skipWs l with
+  | nil => rw [hsk] at h; cases h
+  | cons c t =>
+    rw [hsk] at h hl
+    simp only at h
+    by_cases hd : (charDigit c).isSome = true
+    · rw [if_pos hd] at h
+      unfold jnumber at h
+      split at h
+      · cases h
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        simp [jstrs_ofDec] at hs
+    · rw [if_neg hd] at h
+      by_cases hm : c = '-'
+      · rw [if_pos hm] at h
+        unfold jnumber at h
+        split at h
+        · cases h
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          simp [jstrs_ofDec] at hs
+      rw [if_neg hm] at h
+      by_cases hq : c = '"'
+      · rw [if_pos hq] at h
+        cases hj : jstring t with
+        | error e => rw [hj] at h; cases h
+        | ok p =>
+          obtain ⟨s', r'⟩ := p
+          rw [hj] at h
+          simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          simp only [jstrs, List.mem_singleton] at hs
+          subst hs
+          have := jstring_strlen t _ _ hj
+          simp only [List.length_cons] at hl; omega
+      · rw [if_neg hq] at h
+        by_cases hb : c = '['
+        · rw [if_pos hb] at h
+          cases hj : jarr f t with
+          | error e => rw [hj] at h; cases h
+          | ok p =>
+            obtain ⟨xs, r'⟩ := p
+            rw [hj] at h
+            simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl⟩ := h
+            have := harr t _ _ hj s hs
+            simp only [List.length_cons] at hl; omega
+        · rw [if_neg hb] at h
+          by_cases hc : c = '{'
+          · rw [if_pos hc] at h
+            cases hj : jobj f t with
+            | error e => rw [hj] at h; cases h
+            | ok p =>
+              obtain ⟨kvs, r'⟩ := p
+              rw [hj] at h
+              simp only [Except.ok.injEq, Prod.mk.injEq] at h
+              obtain ⟨rfl, rfl⟩ := h
+              have := hobj t _ _ hj s hs
+              simp only [List.length_cons] at hl; omega
+          · rw [if_neg hc] at h
+            split at h <;> first
+              | (cases h; done)
+              | (simp only [Except.ok.injEq, Prod.mk.injEq] at h
+                 obtain ⟨rfl, rfl⟩ := h
+                 simp [jstrs] at hs)
+
+theorem jarr_strs_step (f : Nat)
+    (hval : ∀ l v r, jval f l = .ok (v, r) → ∀ s ∈ jstrs v, s.length + r.length < l.length)
+    (htail : ∀ l xs r, jtail f l = .ok (xs, r) → ∀ s ∈ jstrsL xs, s.length + r.length < l.length) :
+    ∀ l xs r, jarr (f + 1) l = .ok (xs, r) → ∀ s ∈ jstrsL xs, s.length + r.length < l.length := by
+  intro l xs r h s hs
+  rw [jarr.eq_2] at h
+  have hl := skipWs_length_le l
+  cases hsk : skipWs l with
+  | nil => rw [hsk] at h; cases h
+  | cons c t =>
+    rw [hsk] at h hl
+    simp only at h
+    by_cases hb : c = ']'
+    · rw [if_pos hb] at h
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp [jstrsL] at hs
+    · rw [if_neg hb] at h
+      cases hv : jval f (c :: t) with
+      | error e => rw [hv] at h; cases h
+      | ok p =>
+        obtain ⟨x, r1⟩ := p
+        rw [hv] at h
+        simp only at h
+        cases ht : jtail f r1 with
+        | error e => rw [ht] at h; cases h
+        | ok q =>
+          obtain ⟨ys, r2⟩ := q
+          rw [ht] at h
+          simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          simp only [jstrsL, List.mem_append] at hs
+          have hc2 := (jparser_consumes f).2.2.1 _ _ _ ht
+          rcases hs with hs | hs
+          · have := hval _ _ _ hv s hs; omega
+          · have := htail _ _ _ ht s hs
+            have hc1 := (jparser_consumes f).1 _ _ _ hv
+            omega
+
+theorem jtail_strs_step (f : Nat)
+    (hval : ∀ l v r, jval f l = .ok (v, r) → ∀ s ∈ jstrs v, s.length + r.length < l.length)
+    (htail : ∀ l xs r, jtail f l = .ok (xs, r) → ∀ s ∈ jstrsL xs, s.length + r.length < l.length) :
+    ∀ l xs r, jtail (f + 1) l = .ok (xs, r) → ∀ s ∈ jstrsL xs, s.length + r.length < l.length := by
+  intro l xs r h s hs
+  rw [jtail.eq_2] at h
+  have hl := skipWs_length_le l
+  cases hsk : skipWs l with
+  | nil => rw [hsk] at h; cases h
+  | cons c t =>
+    rw [hsk] at h hl
+    simp only at h
+    by_cases hb : c = ']'
+    · rw [if_pos hb] at h
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp [jstrsL] at hs
+    · rw [if_neg hb] at h
+      by_cases hc : c = ','
+      · rw [if_pos hc] at h
+        cases hv : jval f t with
+        | error e => rw [hv] at h; cases h
+        | ok p =>
+          obtain ⟨x, r1⟩ := p
+          rw [hv] at h
+          simp only at h
+          cases ht : jtail f r1 with
+          | error e => rw [ht] at h; cases h
+          | ok q =>
+            obtain ⟨ys, r2⟩ := q
+            rw [ht] at h
+            simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl⟩ := h
+            simp only [jstrsL, List.mem_append] at hs
+            have hc2 := (jparser_consumes f).2.2.1 _ _ _ ht
+            simp only [List.length_cons] at hl
+            rcases hs with hs | hs
+            · have := hval _ _ _ hv s hs; omega
+            · have := htail _ _ _ ht s hs
+              have hc1 := (jparser_consumes f).1 _ _ _ hv
+              omega
+      · rw [if_neg hc] at h; cases h
+
+theorem jobj_strs_step (f : Nat)
+    (hpair : ∀ l kv r, jpair f l = .ok (kv, r) → ∀ s ∈ jstrsO [kv], s.length + r.length < l.length)
+    (hotail : ∀ l kvs r, jotail f l = .ok (kvs, r) → ∀ s ∈ jstrsO kvs, s.length + r.length < l.length) :
+    ∀ l kvs r, jobj (f + 1) l = .ok (kvs, r) → ∀ s ∈ jstrsO kvs, s.length + r.length < l.length := by
+  intro l kvs r h s hs
+  rw [jobj.eq_2] at h
+  have hl := skipWs_length_le l
+  cases hsk : skipWs l with
+  | nil => rw [hsk] at h; cases h
+  | cons c t =>
+    rw [hsk] at h hl
+    simp only at h
+    by_cases hb : c = '}'
+    · rw [if_pos hb] at h
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp [jstrsO] at hs
+    · rw [if_neg hb] at h
+      cases hv : jpair f (c :: t) with
+      | error e => rw [hv] at h; cases h
+      | ok p =>
+        obtain ⟨kv, r1⟩ := p
+        rw [hv] at h
+        simp only at h
+        cases ht : jotail f r1 with
+        | error e => rw [ht] at h; cases h
+        | ok q =>
+          obtain ⟨ys, r2⟩ := q
+          rw [ht] at h
+          simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          obtain ⟨rfl, rfl⟩ := h
+          have hc2 := (jparser_consumes f).2.2.2.2.2 _ _ _ ht
+          rw [jstrsO_cons] at hs
+          simp only [List.mem_cons, List.mem_append] at hs
+          have hp := hpair _ _ _ hv
+          simp only [jstrsO, List.append_nil, List.mem_cons] at hp
+          rcases hs with hs | hs | hs
+          · have := hp s (Or.inl hs); omega
+          · have := hp s (Or.inr hs); omega
+          · have := hotail _ _ _ ht s hs
+            have hc1 := (jparser_consumes f).2.2.2.2.1 _ _ _ hv
+            omega
+
+theorem jpair_strs_step (f : Nat)
+    (hval : ∀ l v r, jval f l = .ok (v, r) → ∀ s ∈ jstrs v, s.length + r.length < l.length) :
+    ∀ l kv r, jpair (f + 1) l = .ok (kv, r) → ∀ s ∈ jstrsO [kv], s.length + r.length < l.length := by
+  intro l kv r h s hs
+  rw [jpair.eq_2] at h
+  have hl := skipWs_length_le l
+  cases hsk : skipWs l with
+  | nil => rw [hsk] at h; cases h
+  | cons c t =>
+    rw [hsk] at h hl
+    simp only at h
+    by_cases hq : c = '"'
+    · rw [if_pos hq] at h
+      cases hj : jstring t with
+      | error e => rw [hj] at h; cases h
+      | ok p =>
+        obtain ⟨k, r1⟩ := p
+        rw [hj] at h
+        simp only at h
+        have h1 := jstring_strlen t k r1 hj
+        have hl1 := skipWs_length_le r1
+        cases hs1 : skipWs r1 with
+        | nil => rw [hs1] at h; cases h
+        | cons c' r2 =>
+          rw [hs1] at h hl1
+          simp only at h
+          by_cases hc : c' = ':'
+          · rw [if_pos hc] at h
+            cases hv : jval f r2 with
+            | error e => rw [hv] at h; cases h
+            | ok q =>
+              obtain ⟨v, r3⟩ := q
+              rw [hv] at h
+              simp only [Except.ok.injEq, Prod.mk.injEq] at h
+              obtain ⟨rfl, rfl⟩ := h
+              have hc3 := (jparser_consumes f).1 _ _ _ hv
+              simp only [jstrsO, List.append_nil, List.mem_cons] at hs
+              simp only [List.length_cons] at hl hl1
+              rcases hs with rfl | hs
+              · omega
+              · have := hval _ _ _ hv s hs; omega
+          · rw [if_neg hc] at h; cases h
+    · rw [if_neg hq] at h; cases h
+
+theorem jotail_strs_step (f : Nat)
+    (hpair : ∀ l kv r, jpair f l = .ok (kv, r) → ∀ s ∈ jstrsO [kv], s.length + r.length < l.length)
+    (hotail : ∀ l kvs r, jotail f l = .ok (kvs, r) → ∀ s ∈ jstrsO kvs, s.length + r.length < l.length) :
+    ∀ l kvs r, jotail (f + 1) l = .ok (kvs, r) → ∀ s ∈ jstrsO kvs, s.length + r.length < l.length := by
+  intro l kvs r h s hs
+  rw [jotail.eq_2] at h
+  have hl := skipWs_length_le l
+  cases hsk : skipWs l with
+  | nil => rw [hsk] at h; cases h
+  | cons c t =>
+    rw [hsk] at h hl
+    simp only at h
+    by_cases hb : c = '}'
+    · rw [if_pos hb] at h
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp [jstrsO] at hs
+    · rw [if_neg hb] at h
+      by_cases hc : c = ','
+      · rw [if_pos hc] at h
+        cases hv : jpair f t with
+        | error e => rw [hv] at h; cases h
+        | ok p =>
+          obtain ⟨kv, r1⟩ := p
+          rw [hv] at h
+          simp only at h
+          cases ht : jotail f r1 with
+          | error e => rw [ht] at h; cases h
+          | ok q =>
+            obtain ⟨ys, r2⟩ := q
+            rw [ht] at h
+            simp only [Except.ok.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl⟩ := h
+            have hc2 := (jparser_consumes f).2.2.2.2.2 _ _ _ ht
+            simp only [List.length_cons] at hl
+            rw [jstrsO_cons] at hs
+            simp only [List.mem_cons, List.mem_append] at hs
+            have hp := hpair _ _ _ hv
+            simp only [jstrsO, List.append_nil, List.mem_cons] at hp
+            rcases hs with hs | hs | hs
+            · have := hp s (Or.inl hs); omega
+            · have := hp s (Or.inr hs); omega
+            · have := hotail _ _ _ ht s hs
+              have hc1 := (jparser_consumes f).2.2.2.2.1 _ _ _ hv
+              omega
+      · rw [if_neg hc] at h; cases h
+
+theorem jparser_strs (f : Nat) :
+    (∀ l v r, jval f l = .ok (v, r) → ∀ s ∈ jstrs v, s.length + r.length < l.length) ∧
+    (∀ l xs r, jarr f l = .ok (xs, r) → ∀ s ∈ jstrsL xs, s.length + r.length < l.length) ∧
+    (∀ l xs r, jtail f l = .ok (xs, r) → ∀ s ∈ jstrsL xs, s.length + r.length < l.length) ∧
+    (∀ l kvs r, jobj f l = .ok (kvs, r) → ∀ s ∈ jstrsO kvs, s.length + r.length < l.length) ∧
+    (∀ l kv r, jpair f l = .ok (kv, r) → ∀ s ∈ jstrsO [kv], s.length + r.length < l.length) ∧
+    (∀ l kvs r, jotail f l = .ok (kvs, r) → ∀ s ∈ jstrsO kvs, s.length + r.length < l.length) := by
+  induction f with
+  | zero =>
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> intro l x r h <;> cases h
+  | succ f ih =>
+    obtain ⟨hv, ha, ht, ho, hp, hot⟩ := ih
+    exact ⟨jval_strs_step f ha ho, jarr_strs_step f hv ht, jtail_strs_step f hv ht,
+           jobj_strs_step f hp hot, jpair_strs_step f hv, jotail_strs_step f hp hot⟩
+
+/-- **Every string `jparse` returns is shorter than the input.** -/
+theorem jparse_strs (l : List Char) (v : JVal) (h : jparse l = .ok v) :
+    ∀ s ∈ jstrs v, s.length < l.length := by
+  intro s hs
+  unfold jparse jparseWith at h
+  split at h
+  · cases h
+  next v' rest hv =>
+    split at h
+    · cases h
+      have := (jparser_strs _).1 _ _ _ hv s hs; omega
+    · cases h
+
+/-! ## Laws: every string an entry holds came from its line -/
+
+theorem FR.pair_ok {α β : Type} {x : FR α} {y : FR β} {p : α × β} (h : FR.pair x y = .ok p) :
+    x = .ok p.1 ∧ y = .ok p.2 := by
+  cases x <;> cases y <;> simp [FR.pair] at h ⊢ <;> subst h <;> simp
+
+theorem mem_jstrsO_of_mem (kvs : List (List Char × JVal)) (kv : List Char × JVal) (h : kv ∈ kvs) :
+    kv.1 ∈ jstrsO kvs ∧ ∀ s ∈ jstrs kv.2, s ∈ jstrsO kvs := by
+  induction kvs with
+  | nil => cases h
+  | cons p ps ih =>
+    rw [jstrsO_cons]
+    rcases List.mem_cons.mp h with rfl | h
+    · exact ⟨List.mem_cons_self, fun s hs => List.mem_cons_of_mem _ (List.mem_append_left _ hs)⟩
+    · obtain ⟨h1, h2⟩ := ih h
+      exact ⟨List.mem_cons_of_mem _ (List.mem_append_right _ h1),
+        fun s hs => List.mem_cons_of_mem _ (List.mem_append_right _ (h2 s hs))⟩
+
+theorem jstrsO_sub (xs ys : List (List Char × JVal)) (h : ∀ kv ∈ xs, kv ∈ ys) :
+    ∀ s ∈ jstrsO xs, s ∈ jstrsO ys := by
+  induction xs with
+  | nil => intro s hs; cases hs
+  | cons p ps ih =>
+    intro s hs
+    rw [jstrsO_cons] at hs
+    have hp := mem_jstrsO_of_mem ys p (h p List.mem_cons_self)
+    rcases List.mem_cons.mp hs with rfl | hs
+    · exact hp.1
+    · rcases List.mem_append.mp hs with hs | hs
+      · exact hp.2 s hs
+      · exact ih (fun kv hkv => h kv (List.mem_cons_of_mem _ hkv)) s hs
+
+theorem allStrs_mem (xs : List JVal) (ss : List (List Char)) (h : allStrs xs = some ss) :
+    ∀ s ∈ ss, JVal.str s ∈ xs := by
+  unfold allStrs at h
+  suffices H : ∀ (ys : List JVal) (acc out : List (List Char)), ys.foldl strStep (some acc) = some out →
+      ∀ s ∈ out, s ∈ acc ∨ JVal.str s ∈ ys by
+    cases hf : xs.foldl strStep (some []) with
+    | none => rw [hf] at h; cases h
+    | some out =>
+      rw [hf] at h; simp only [Option.map_some, Option.some.injEq] at h; subst h
+      intro s hs
+      rcases H xs [] out hf s (List.mem_reverse.mp hs) with h | h
+      · cases h
+      · exact h
+  intro ys
+  induction ys with
+  | nil => intro acc out h s hs; simp at h; subst h; exact Or.inl hs
+  | cons y ys ih =>
+    intro acc out h s hs
+    simp only [List.foldl_cons] at h
+    cases y with
+    | str t =>
+      simp only [strStep] at h
+      rcases ih (t :: acc) out h s hs with h1 | h1
+      · rcases List.mem_cons.mp h1 with rfl | h1
+        · exact Or.inr List.mem_cons_self
+        · exact Or.inl h1
+      · exact Or.inr (List.mem_cons_of_mem _ h1)
+    | _ =>
+      simp only [strStep] at h
+      have : ∀ zs : List JVal, zs.foldl strStep none = none := by
+        intro zs; induction zs with
+        | nil => rfl
+        | cons z zs ihz => simp only [List.foldl_cons, strStep]; exact ihz
+      rw [this] at h; cases h
+
+theorem allPrios_mem (kvs : List (List Char × JVal)) (ps : List (List Char × U8)) (h : allPrios kvs = some ps) :
+    ∀ q ∈ ps, ∃ v, (q.1, v) ∈ kvs := by
+  unfold allPrios at h
+  suffices H : ∀ (ys : List (List Char × JVal)) (acc out : List (List Char × U8)),
+      ys.foldl prioStep (some acc) = some out → ∀ q ∈ out, q ∈ acc ∨ ∃ v, (q.1, v) ∈ ys by
+    cases hf : kvs.foldl prioStep (some []) with
+    | none => rw [hf] at h; cases h
+    | some out =>
+      rw [hf] at h; simp only [Option.map_some, Option.some.injEq] at h; subst h
+      intro q hq
+      rcases H kvs [] out hf q (List.mem_reverse.mp hq) with h | h
+      · cases h
+      · exact h
+  have hnone : ∀ zs : List (List Char × JVal), zs.foldl prioStep none = none := by
+    intro zs; induction zs with
+    | nil => rfl
+    | cons z zs ihz => simp only [List.foldl_cons, prioStep]; exact ihz
+  intro ys
+  induction ys with
+  | nil => intro acc out h q hq; simp at h; subst h; exact Or.inl hq
+  | cons y ys ih =>
+    intro acc out h q hq
+    simp only [List.foldl_cons] at h
+    obtain ⟨k, w⟩ := y
+    cases w with
+    | num n =>
+      by_cases hn : n < 256
+      · simp only [prioStep, hn, dite_true] at h
+        rcases ih _ out h q hq with h1 | ⟨v, hv⟩
+        · rcases List.mem_cons.mp h1 with rfl | h1
+          · exact Or.inr ⟨_, List.mem_cons_self⟩
+          · exact Or.inl h1
+        · exact Or.inr ⟨v, List.mem_cons_of_mem _ hv⟩
+      · simp only [prioStep, hn, dite_false] at h
+        rw [hnone] at h; cases h
+    | _ => simp only [prioStep] at h; rw [hnone] at h; cases h
+
+theorem readF_strs (k : List Char) : ∀ (t : FTy) (ov : Option JVal) (x : t.T), readF k t ov = .ok x →
+    ∀ s ∈ strsOfF t x, ∃ v, ov = some v ∧ s ∈ jstrs v
+  | .str, none, x, h => by simp [readF] at h
+  | .str, some v, x, h => by
+    cases v <;> simp [readF] at h
+    subst h; intro s hs; simp [strsOfF] at hs; subst hs; exact ⟨_, rfl, by simp [jstrs]⟩
+  | .optStr, none, x, h => by simp [readF] at h; subst h; simp [strsOfF]
+  | .optStr, some v, x, h => by
+    cases v <;> simp [readF] at h
+    · subst h; simp [strsOfF]
+    · subst h; intro s hs; simp [strsOfF] at hs; subst hs; exact ⟨_, rfl, by simp [jstrs]⟩
+  | .place, none, x, h => by simp [readF] at h; subst h; simp [strsOfF]
+  | .place, some v, x, h => by
+    cases v <;> simp [readF] at h
+    · subst h; simp [strsOfF]
+    · rename_i w
+      split at h
+      · cases h; intro s hs; simp [strsOfF] at hs; subst hs; exact ⟨_, rfl, by simp [jstrs]⟩
+      · cases h
+  | .strs, none, x, h => by simp [readF] at h; subst h; simp [strsOfF]
+  | .strs, some v, x, h => by
+    cases v with
+    | arr xs =>
+      simp only [readF] at h
+      split at h
+      · next ss hss =>
+        cases h
+        intro s hs
+        refine ⟨_, rfl, ?_⟩
+        show s ∈ jstrsL xs
+        have hm := allStrs_mem xs _ hss s hs
+        clear hss hs
+        induction xs with
+        | nil => cases hm
+        | cons y ys ih =>
+          simp only [jstrsL, List.mem_append]
+          rcases List.mem_cons.mp hm with rfl | hm
+          · exact Or.inl (by simp [jstrs])
+          · exact Or.inr (ih hm)
+      · cases h
+    | _ => simp [readF] at h
+  | .pair, none, x, h => by simp [readF] at h
+  | .pair, some v, x, h => by
+    cases v with
+    | arr xs =>
+      match xs, h with
+      | [.str a, .str b], h =>
+        simp [readF] at h; subst h
+        intro s hs; refine ⟨_, rfl, ?_⟩
+        simp [strsOfF] at hs; simp [jstrs, jstrsL]; exact hs
+      | [], h => simp [readF] at h
+      | [_], h => simp [readF] at h
+      | _ :: _ :: _ :: _, h => simp [readF] at h
+      | [.null, _], h | [.bool _, _], h | [.num _, _], h | [.dec _, _], h | [.arr _, _], h
+      | [.obj _, _], h => simp [readF] at h
+      | [.str _, .null], h | [.str _, .bool _], h | [.str _, .num _], h | [.str _, .dec _], h
+      | [.str _, .arr _], h | [.str _, .obj _], h => simp [readF] at h
+    | _ => simp [readF] at h
+  | .prios, none, x, h => by simp [readF] at h; subst h; simp [strsOfF]
+  | .prios, some v, x, h => by
+    cases v with
+    | obj kvs =>
+      simp only [readF] at h
+      split at h
+      · next ps hps =>
+        cases h
+        intro s hs
+        refine ⟨_, rfl, ?_⟩
+        show s ∈ jstrsO kvs
+        simp only [strsOfF, List.mem_map] at hs
+        obtain ⟨q, hq, rfl⟩ := hs
+        obtain ⟨v, hv⟩ := allPrios_mem kvs _ hps q hq
+        exact (mem_jstrsO_of_mem kvs (q.1, v) hv).1
+      · cases h
+    | _ => simp [readF] at h
+  | .u8, ov, x, _ => by simp [strsOfF]
+  | .u32, ov, x, _ => by simp [strsOfF]
+  | .u32d, ov, x, _ => by simp [strsOfF]
+  | .optU8, ov, x, _ => by simp [strsOfF]
+  | .optU32, ov, x, _ => by simp [strsOfF]
+  | .flag, ov, x, _ => by simp [strsOfF]
+  | .num, ov, x, _ => by simp [strsOfF]
+
+theorem readArgs_strs (kvs : List (List Char × JVal)) :
+    ∀ (s : List (List Char × FTy)) (a : Args s), readArgs kvs s = .ok a →
+      ∀ str ∈ argStrs s a, str ∈ jstrsO kvs
+  | [], (), _ => by simp [argStrs]
+  | (k, t) :: s, (x, xs), h => by
+    simp only [readArgs] at h
+    obtain ⟨h1, h2⟩ := FR.pair_ok h
+    intro str hstr
+    simp only [argStrs, List.mem_append] at hstr
+    rcases hstr with hstr | hstr
+    · obtain ⟨v, hv, hsv⟩ := readF_strs k t _ x h1 str hstr
+      exact (mem_jstrsO_of_mem kvs (k, v) (lastVal_mem kvs k v hv)).2 str hsv
+    · exact readArgs_strs kvs s xs h2 str hstr
+
+theorem dedupStep_sub : ∀ (xs acc : List (List Char × JVal)) (kv : List Char × JVal),
+    kv ∈ xs.foldl dedupStep acc → kv ∈ acc ∨ kv ∈ xs
+  | [], acc, kv, h => Or.inl h
+  | x :: xs, acc, kv, h => by
+    simp only [List.foldl_cons] at h
+    rcases dedupStep_sub xs _ kv h with h | h
+    · unfold dedupStep at h
+      split at h
+      · split at h
+        · rcases List.mem_cons.mp h with rfl | h
+          · exact Or.inr List.mem_cons_self
+          · exact Or.inl (List.mem_cons_of_mem _ h)
+        · rcases List.mem_cons.mp h with rfl | h
+          · exact Or.inr List.mem_cons_self
+          · exact Or.inl h
+      · rcases List.mem_cons.mp h with rfl | h
+        · exact Or.inr List.mem_cons_self
+        · cases h
+    · exact Or.inr (List.mem_cons_of_mem _ h)
+
+theorem restOf_sub (kvs : List (List Char × JVal)) : ∀ kv ∈ restOf kvs, kv ∈ kvs := by
+  intro kv h
+  unfold restOf at h
+  rcases dedupStep_sub _ [] kv (List.mem_reverse.mp h) with h | h
+  · cases h
+  · exact (List.mem_filter.mp (List.mem_mergeSort.mp h)).1
+
+/-- What an entry verdict says about its line: the trimmed line is within the bound, parses to an
+object, and that object reads as the entry. -/
+theorem readLine_entry_inv (n : Nat) (l : List Char) (e : Entry) (h : readLine n (some l) = .entry e) :
+    ∃ kvs, (trimCR l).length ≤ maxLineChars ∧ jparse (trimCR l) = .ok (.obj kvs) ∧
+      readObject n kvs = .entry e := by
+  simp only [readLine] at h
+  by_cases hb : (trimCR l).all isSp = true
+  · rw [if_pos hb] at h; cases h
+  rw [if_neg hb] at h
+  by_cases hl : maxLineChars < (trimCR l).length
+  · rw [if_pos hl] at h; cases h
+  rw [if_neg hl] at h
+  by_cases hd : maxLineDepth < depthOf (trimCR l)
+  · rw [if_pos hd] at h; cases h
+  rw [if_neg hd] at h
+  cases hp : jparse (trimCR l) with
+  | error x => rw [hp] at h; cases h
+  | ok v =>
+    rw [hp] at h
+    simp only [readValue] at h
+    by_cases hf : allFinite v = true
+    · rw [if_pos hf] at h
+      cases v with
+      | obj kvs => exact ⟨kvs, Nat.not_lt.mp hl, rfl, h⟩
+      | _ => cases h
+    · rw [if_neg hf] at h; cases h
+
+/-- **`lineTooLong` bounds every string** (design §15, B3; R10; added and discharged in B3): every
+string an entry holds is no longer than the line bound. -/
+theorem lineTooLong_bounds_every_string (n : Nat) (l : List Char) (e : Entry)
+    (h : readLine n (some l) = .entry e) : ∀ s ∈ e.ev.strings, s.length ≤ maxLineChars := by
+  intro s hs
+  obtain ⟨kvs, hlen, hp, ho⟩ := readLine_entry_inv n l e h
+  have hbound := jparse_strs _ _ hp
+  suffices hin : s ∈ jstrsO kvs by have := hbound s hin; omega
+  simp only [readObject] at ho
+  cases ht : readT kvs with
+  | error w => rw [ht] at ho; cases ho
+  | ok p =>
+    rw [ht] at ho
+    obtain ⟨t, o⟩ := p
+    simp only at ho
+    cases hev : lastVal kvs kEv with
+    | none => rw [hev] at ho; cases ho
+    | some v =>
+      rw [hev] at ho
+      cases v with
+      | str tag =>
+        simp only at ho
+        cases hk : kindOf tag with
+        | some k =>
+          rw [hk] at ho
+          simp only at ho
+          cases ha : readArgs kvs k.schema with
+          | ok a =>
+            rw [ha] at ho
+            simp only [Verdict.entry.injEq] at ho
+            subst ho
+            rw [Event.strings_of_split _ k a (Event.split_build k a)] at hs
+            exact readArgs_strs kvs k.schema a ha s hs
+          | missing key => rw [ha] at ho; cases ho
+          | bad key => rw [ha] at ho; cases ho
+        | none =>
+          rw [hk] at ho
+          simp only [Verdict.entry.injEq] at ho
+          subst ho
+          simp only [Event.strings, List.mem_cons] at hs
+          rcases hs with rfl | hs
+          · exact (mem_jstrsO_of_mem kvs _ (lastVal_mem kvs kEv _ hev)).2 s (by simp [jstrs])
+          · exact jstrsO_sub _ _ (restOf_sub kvs) s hs
+      | _ => cases ho
+
+/-! ## Laws: `finiteF64`'s cost -/
+
+/-- The value of a digit run, as a number. -/
+def digitsValue (a : Nat) (l : List (Fin 10)) : Nat := l.foldl (fun a f => a * 10 + f.val) a
+
+theorem digitsValue_ge (a : Nat) (l : List (Fin 10)) : a ≤ digitsValue a l := by
+  induction l generalizing a with
+  | nil => exact Nat.le_refl _
+  | cons f l ih =>
+    simp only [digitsValue, List.foldl_cons]
+    exact Nat.le_trans (by omega) (ih (a * 10 + f.val))
+
+theorem capExp_none (l : List (Fin 10)) : l.foldl (fun a f => capExp a f.val) none = none := by
+  induction l with
+  | nil => rfl
+  | cons f l ih => simpa [capExp] using ih
+
+theorem capExp_fold (l : List (Fin 10)) (a : Nat) (ha : a ≤ i32Max) :
+    l.foldl (fun acc f => capExp acc f.val) (some a) =
+      if i32Max < digitsValue a l then none else some (digitsValue a l) := by
+  induction l generalizing a with
+  | nil => simp [digitsValue, Nat.not_lt.mpr ha]
+  | cons f l ih =>
+    rw [List.foldl_cons]
+    have hstep : capExp (some a) f.val =
+        if i32Max < a * 10 + f.val then none else some (a * 10 + f.val) := rfl
+    have hv : digitsValue a (f :: l) = digitsValue (a * 10 + f.val) l := rfl
+    rw [hstep, hv]
+    by_cases h : i32Max < a * 10 + f.val
+    · rw [if_pos h, capExp_none, if_pos (Nat.lt_of_lt_of_le h (digitsValue_ge _ _))]
+    · rw [if_neg h, ih _ (by omega)]
+
+/-- **Past `i32::MAX`, an exponent's digits decide nothing but its sign** (design §5.4's cost
+bound, CRIT 14; the design's `finiteF64_reads_only_the_digit_counts_beyond_seven_exponent_digits`,
+restated for serde's algorithm, whose cut is `i32::MAX` and not seven digits): a numeral whose
+exponent is written with a value above 2,147,483,647 is finite exactly when the exponent is
+negative or the kept significand is zero.  No power of ten is computed and the exponent's value is
+never formed. -/
+theorem finiteF64_reads_only_the_sign_past_an_i32_exponent (d : JDec) (neg : Bool) (x : Fin 10)
+    (xs : List (Fin 10)) (hexp : d.exp = some (neg, x, xs)) (hbig : i32Max < digitsValue 0 (x :: xs)) :
+    finiteF64 d = (neg || (capOf d).sig == 0) := by
+  have hc := capExp_fold (x :: xs) 0 (by decide)
+  rw [if_pos hbig] at hc
+  unfold finiteF64
+  simp only [hexp, Option.isNone_some, Bool.and_false, Bool.false_and, Bool.false_eq_true, if_false]
+  rw [hc]
+
+/-! ## Laws: R10, the widths and the bounds refuse by name -/
+
+theorem readF_refuses_a_u8_past_255 (k : List Char) (n : Nat) (h : 256 ≤ n) :
+    readF k .u8 (some (.num n)) = .bad k ∧ readF k .optU8 (some (.num n)) = .bad k := by
+  simp [readF, Nat.not_lt.mpr h]
+
+theorem readF_refuses_a_u32_past_its_width (k : List Char) (n : Nat) (h : 4294967296 ≤ n) :
+    readF k .u32 (some (.num n)) = .bad k ∧ readF k .u32d (some (.num n)) = .bad k ∧
+      readF k .optU32 (some (.num n)) = .bad k := by
+  simp [readF, Nat.not_lt.mpr h]
+
+/-- A numeral that is not a bare natural (`-0`, `3.0`, `1e2`, `-1`) is a type error at an integer
+field, as serde's float/negative-integer visitors make it (B3 probe, lines 1, 2, 5, 6). -/
+theorem readF_refuses_a_decimal_at_an_integer_field (k : List Char)
+    (d : { d : JDec // d.plain = false }) :
+    readF k .u8 (some (.dec d)) = .bad k ∧ readF k .u32 (some (.dec d)) = .bad k ∧
+      readF k .u32d (some (.dec d)) = .bad k ∧ readF k .optU8 (some (.dec d)) = .bad k ∧
+      readF k .optU32 (some (.dec d)) = .bad k := by
+  simp [readF]
+
+/-- ...and it is accepted, as written, at `hsw`. -/
+theorem readF_reads_hsw_as_written (k : List Char) (d : { d : JDec // d.plain = false }) (n : Nat) :
+    readF k .num (some (.dec d)) = .ok (.dec d) ∧ readF k .num (some (.num n)) = .ok (.nat n) ∧
+      readF k .num none = .ok Num.zero := by
+  simp [readF]
+
+theorem readLine_refuses_a_line_past_the_bound (n : Nat) (l : List Char)
+    (hb : (trimCR l).all isSp = false) (hl : maxLineChars < (trimCR l).length) :
+    readLine n (some l) = .warn n .lineTooLong := by
+  simp [readLine, hb, hl]
+
+theorem readLine_refuses_a_line_nested_past_the_bound (n : Nat) (l : List Char)
+    (hb : (trimCR l).all isSp = false) (hl : (trimCR l).length ≤ maxLineChars)
+    (hd : maxLineDepth < depthOf (trimCR l)) :
+    readLine n (some l) = .warn n .lineTooDeep := by
+  simp [readLine, hb, Nat.not_lt.mpr hl, hd]
+
+theorem readLine_refuses_a_line_that_is_not_utf8 (n : Nat) : readLine n none = .warn n .invalidUtf8 := rfl
+
+section Witnesses
+/- The decided witnesses below unfold the reader a few thousand levels deep in the elaborator: the
+recursion budget, not a heartbeat or memory budget, is raised for this section only (as `Json.lean`
+does file-wide), and every witness was probed under `MemoryMax=8G timeout 120` (§14.0 item 4). -/
+set_option maxRecDepth 8000
+
+/-! ## Witnesses: `tests/fixtures/logs/malformed.jsonl`, line by line
+
+`kernel/corpus/logs/malformed.jsonl` (the fork's fixture, 11 lines and a final newline).  Every
+warning line is decided on its bytes, spelled as a `List Char` (§5.10a); the good lines are
+instances of `the_log_reads_what_it_renders`, so the reader is never run on them under `decide`:
+only `renderLine` and `Entry.canonical` are.  Line 5 is 96 characters, over §14.0 item 4's 90, so it
+is not parsed either: it is `jemit` of its value (`jparse_jemit` is the rewrite), and only the reading
+of that value is decided. -/
+
+def malformedLine1 : List Char :=
+  ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','6',':','0','5',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','w','a','k','e','"',',','"','s','l','e','p','t','_','m','i','n','"',':','4','9','0','}']
+
+def malformedLine2 : List Char :=
+  ['t','h','i','s',' ','i','s',' ','n','o','t',' ','j','s','o','n']
+
+def malformedLine3 : List Char :=
+  ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','7',':','0','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','w','a','k','e','"','}']
+
+def malformedLine4 : List Char :=
+  ['{','"','e','v','"',':','"','n','o','t','e','"',',','"','t','e','x','t','"',':','"','n','o',' ','t','i','m','e','s','t','a','m','p','"','}']
+
+/-- Line 5 of `corpus/logs/malformed.jsonl`, 96 characters, spelled pair by pair so that no literal
+is over design §14.0.4's 90 characters (W-2 repair; B3 had one 96-character literal).  The list is
+the same: `{`, the six pairs below joined by `,`, then `}`. -/
+def malformedLine5T : List Char := ['"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','7',':','3','0',':','0','0','-','0','5',':','0','0','"']
+def malformedLine5Ev : List Char := ['"','e','v','"',':','"','d','o','n','e','"']
+def malformedLine5Id : List Char := ['"','i','d','"',':','"','t','1','"']
+def malformedLine5Est : List Char := ['"','e','s','t','_','m','i','n','"',':','"','s','i','x','t','y','"']
+def malformedLine5Act : List Char := ['"','a','c','t','u','a','l','_','m','i','n','"',':','6','7']
+def malformedLine5Ci : List Char := ['"','c','i','"',':','5']
+
+def malformedLine5 : List Char :=
+  '{' :: (malformedLine5T ++ ',' :: (malformedLine5Ev ++ ',' :: (malformedLine5Id ++ ',' ::
+    (malformedLine5Est ++ ',' :: (malformedLine5Act ++ ',' :: (malformedLine5Ci ++ ['}']))))))
+
+def malformedLine6 : List Char :=
+  ['{','"','t','"',':','"','n','o','t',' ','a',' ','t','i','m','e','"',',','"','e','v','"',':','"','n','o','t','e','"',',','"','t','e','x','t','"',':','"','b','a','d',' ','t','i','m','e','"','}']
+
+def malformedLine7 : List Char :=
+  ['[','1',',','2',',','3',']']
+
+def malformedLine8 : List Char :=
+  []
+
+def malformedLine9 : List Char :=
+  ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','8',':','0','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','m','o','o','d','"',',','"','l','e','v','e','l','"',':','3','}']
+
+def malformedLine10 : List Char :=
+  ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','8',':','3','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','7','}']
+
+def malformedLine11 : List Char :=
+  ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','9',':','0','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','n','o','t','e','"',',','"','t','e','x','t','"',':','"','l','a','s','t',' ','g','o','o','d',' ','l','i','n','e','"','}']
+
+/-- 2026-09-07T06:05:00-05:00, 07:30, 08:00 and 09:00 in `Cal.Instant` seconds (B2's
+`renderStamp_is_fmt_timestamp` fixes the first), and `-05:00`. -/
+def at0605 : VInstant := ⟨⟨63924375900, 0⟩, by decide⟩
+def at0800 : VInstant := ⟨⟨63924382800, 0⟩, by decide⟩
+def at0900 : VInstant := ⟨⟨63924386400, 0⟩, by decide⟩
+def cdt : VOffset := ⟨⟨true, 18000⟩, by decide⟩
+
+def malformedEntry1 : Entry := ⟨1, at0605, cdt, .wake ⟨490, by decide⟩ none⟩
+def malformedEntry9 : Entry := ⟨9, at0800, cdt, .unknown ['m','o','o','d'] [(['l','e','v','e','l'], .num 3)]⟩
+def malformedEntry11 : Entry := ⟨11, at0900, cdt, .note ['l','a','s','t',' ','g','o','o','d',' ','l','i','n','e']⟩
+
+theorem malformed_line_1_is_a_wake : readLine 1 (some malformedLine1) = .entry malformedEntry1 := by
+  have h : malformedLine1 = renderLine malformedEntry1 := by decide
+  rw [h]; exact the_log_reads_what_it_renders _ (by decide)
+
+theorem malformed_line_2_is_not_json :
+    readLine 2 (some malformedLine2) = .warn 2 (.notJson (.notAValue 't')) := by decide
+
+theorem malformed_line_3_is_a_wake_without_slept_min :
+    readLine 3 (some malformedLine3) = .warn 3 (.missingField ['s','l','e','p','t','_','m','i','n']) := by
+  decide
+
+theorem malformed_line_4_has_no_t : readLine 4 (some malformedLine4) = .warn 4 .noT := by decide
+
+/-- Line 5's value: `{"t":…,"ev":"done","id":"t1","est_min":"sixty","actual_min":67,"ci":5}`. -/
+def malformedValue5 : JVal :=
+  .obj [(kT, .str ['2','0','2','6','-','0','9','-','0','7','T','0','7',':','3','0',':','0','0','-','0','5',':','0','0']),
+    (kEv, .str ['d','o','n','e']), (['i','d'], .str ['t','1']),
+    (['e','s','t','_','m','i','n'], .str ['s','i','x','t','y']),
+    (['a','c','t','u','a','l','_','m','i','n'], .num 67), (['c','i'], .num 5)]
+
+theorem malformed_line_5_is_a_done_with_est_min_sixty :
+    readLine 5 (some malformedLine5) = .warn 5 (.badField ['e','s','t','_','m','i','n']) := by
+  have h : malformedLine5 = jemit malformedValue5 := by
+    have h1 : jemitPair (kT, .str ['2','0','2','6','-','0','9','-','0','7','T','0','7',':','3','0',':','0','0',
+      '-','0','5',':','0','0']) = malformedLine5T := by decide
+    have h2 : jemitPair (kEv, .str ['d','o','n','e']) = malformedLine5Ev := by decide
+    have h3 : jemitPair (['i','d'], .str ['t','1']) = malformedLine5Id := by decide
+    have h4 : jemitPair (['e','s','t','_','m','i','n'], .str ['s','i','x','t','y']) = malformedLine5Est := by
+      decide
+    have h5 : jemitPair (['a','c','t','u','a','l','_','m','i','n'], .num 67) = malformedLine5Act := by decide
+    have h6 : jemitPair (['c','i'], .num 5) = malformedLine5Ci := by decide
+    simp only [malformedValue5, jemit, jemitObj, jemitOTail, h1, h2, h3, h4, h5, h6, malformedLine5]
+  have ht : trimCR malformedLine5 = malformedLine5 := by rw [h]; exact trimCR_jemit_obj _
+  rw [readLine_of_parse 5 _ malformedValue5 (by rw [ht, h]; exact not_blank_jemit_obj _)
+    (by rw [ht, h]; decide) (by rw [ht, h]; decide) (by rw [ht, h]; exact jparse_jemit _)]
+  decide
+
+theorem malformed_line_6_has_a_t_that_is_not_a_stamp :
+    readLine 6 (some malformedLine6) = .warn 6 (.badT .tooShort) := by decide
+
+theorem malformed_line_7_is_an_array : readLine 7 (some malformedLine7) = .warn 7 .notAnObject := by
+  decide
+
+theorem malformed_line_8_is_blank : readLine 8 (some malformedLine8) = .blank := by decide
+
+/-- Line 9, `{"t":…,"ev":"mood","level":3}`, is an entry, and it meets every hypothesis of
+`an_unknown_tag_is_never_a_warning` (which is therefore not vacuous). -/
+theorem malformed_line_9_is_an_unknown_mood :
+    readLine 9 (some malformedLine9) = .entry malformedEntry9 ∧
+      isObjectWithStampAndTag malformedLine9 = true ∧ isKnownTag (tagIn malformedLine9) = false ∧
+      malformedLine9.length ≤ maxLineChars ∧ depthOf malformedLine9 ≤ maxLineDepth ∧
+      allNumeralsFinite malformedLine9 = true := by
+  have h : malformedLine9 = renderLine malformedEntry9 := by decide
+  refine ⟨?_, ?_, ?_, by decide, by decide, ?_⟩
+  · rw [h]; exact the_log_reads_what_it_renders _ (by decide)
+  · rw [h]; unfold renderLine lineVal isObjectWithStampAndTag; rw [trimCR_jemit_obj, jparse_jemit]; decide
+  · rw [h]; unfold renderLine lineVal tagIn; rw [trimCR_jemit_obj, jparse_jemit]; decide
+  · rw [h]; unfold renderLine lineVal allNumeralsFinite; rw [trimCR_jemit_obj, jparse_jemit]; decide
+
+theorem malformed_line_10_has_an_ev_that_is_not_a_string :
+    readLine 10 (some malformedLine10) = .warn 10 .evNotString := by decide
+
+theorem malformed_line_11_is_a_note : readLine 11 (some malformedLine11) = .entry malformedEntry11 := by
+  have h : malformedLine11 = renderLine malformedEntry11 := by decide
+  rw [h]; exact the_log_reads_what_it_renders _ (by decide)
+
+/-- **The malformed corpus reads as the fork point did**: 3 entries (`wake`, the unknown `mood`,
+`note`), 7 warnings of 7 classes, and the blank line (fork `Log::parse_bytes`, inventory §0.1; B3
+probe: every class agrees with serde's error on these lines). -/
+theorem the_malformed_corpus_reads_as_the_fork_point_did :
+    [readLine 1 (some malformedLine1), readLine 2 (some malformedLine2), readLine 3 (some malformedLine3),
+     readLine 4 (some malformedLine4), readLine 5 (some malformedLine5), readLine 6 (some malformedLine6),
+     readLine 7 (some malformedLine7), readLine 8 (some malformedLine8), readLine 9 (some malformedLine9),
+     readLine 10 (some malformedLine10), readLine 11 (some malformedLine11)] =
+    [.entry malformedEntry1, .warn 2 (.notJson (.notAValue 't')),
+     .warn 3 (.missingField ['s','l','e','p','t','_','m','i','n']), .warn 4 .noT,
+     .warn 5 (.badField ['e','s','t','_','m','i','n']), .warn 6 (.badT .tooShort), .warn 7 .notAnObject,
+     .blank, .entry malformedEntry9, .warn 10 .evNotString, .entry malformedEntry11] := by
+  rw [malformed_line_1_is_a_wake, malformed_line_2_is_not_json,
+    malformed_line_3_is_a_wake_without_slept_min, malformed_line_4_has_no_t,
+    malformed_line_5_is_a_done_with_est_min_sixty, malformed_line_6_has_a_t_that_is_not_a_stamp,
+    malformed_line_7_is_an_array, malformed_line_8_is_blank, malformed_line_9_is_an_unknown_mood.1,
+    malformed_line_10_has_an_ev_that_is_not_a_string, malformed_line_11_is_a_note]
+
+/-! ## Witnesses: the other warnings, and the numeral an unknown event cannot hide -/
+
+/-- `{"t":"2026-09-07T08:00:00-05:00","ev":"mood","x":1e400}`. -/
+def moodOutOfRange : List Char :=
+  ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','8',':','0','0',':','0','0','-','0','5',':','0','0','"',',','"','e','v','"',':','"','m','o','o','d','"',',','"','x','"',':','1','e','4','0','0','}']
+
+/-- **An out-of-range numeral warns even in an unknown event** (design §5.4, G-d, CRIT 15; cheat 130):
+the line meets every other hypothesis of `an_unknown_tag_is_never_a_warning`, and is still a
+warning, because the fork collects the whole line as a `Map<String, Value>` first. -/
+theorem an_out_of_range_numeral_warns_even_in_an_unknown_event :
+    readLine 1 (some moodOutOfRange) = .warn 1 .numberOutOfRange ∧
+      isObjectWithStampAndTag moodOutOfRange = true ∧ isKnownTag (tagIn moodOutOfRange) = false ∧
+      allNumeralsFinite moodOutOfRange = false :=
+  ⟨by decide, by decide, by decide, by decide⟩
+
+/-- **Every line warning is reachable**, each by a line of its own (the corpus lines above, and four
+short ones); `lineTooLong` by a 65,537-character line through `readLine_refuses_a_line_past_the_bound`,
+whose length is rewritten, never evaluated. -/
+theorem every_line_warning_is_reachable :
+    (∃ n, readLine n none = .warn n .invalidUtf8) ∧
+    (∃ n l, readLine n (some l) = .warn n .lineTooLong) ∧
+    (∃ n l, readLine n (some l) = .warn n .lineTooDeep) ∧
+    (∃ n l e, readLine n (some l) = .warn n (.notJson e)) ∧
+    (∃ n l, readLine n (some l) = .warn n .numberOutOfRange) ∧
+    (∃ n l, readLine n (some l) = .warn n .notAnObject) ∧
+    (∃ n l, readLine n (some l) = .warn n .noT) ∧
+    (∃ n l, readLine n (some l) = .warn n .tNotString) ∧
+    (∃ n l e, readLine n (some l) = .warn n (.badT e)) ∧
+    (∃ n l, readLine n (some l) = .warn n .duplicateT) ∧
+    (∃ n l, readLine n (some l) = .warn n .noEv) ∧
+    (∃ n l, readLine n (some l) = .warn n .evNotString) ∧
+    (∃ n l k, readLine n (some l) = .warn n (.missingField k)) ∧
+    (∃ n l k, readLine n (some l) = .warn n (.badField k)) := by
+  refine ⟨⟨0, rfl⟩, ⟨0, List.replicate 65536 'x' ++ ['x'], ?_⟩, ⟨0, List.replicate 65 '[', by decide⟩,
+    ⟨2, _, _, malformed_line_2_is_not_json⟩, ⟨1, _, an_out_of_range_numeral_warns_even_in_an_unknown_event.1⟩,
+    ⟨7, _, malformed_line_7_is_an_array⟩, ⟨4, _, malformed_line_4_has_no_t⟩,
+    ⟨0, ['{','"','t','"',':','5','}'], by decide⟩, ⟨6, _, _, malformed_line_6_has_a_t_that_is_not_a_stamp⟩,
+    ⟨0, ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','6',':','0','5',':','0','0','-','0','5',':','0','0','"',',','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','6',':','0','5',':','0','0','-','0','5',':','0','0','"','}'], by decide⟩,
+    ⟨0, ['{','"','t','"',':','"','2','0','2','6','-','0','9','-','0','7','T','0','6',':','0','5',':','0','0','-','0','5',':','0','0','"','}'], by decide⟩,
+    ⟨10, _, malformed_line_10_has_an_ev_that_is_not_a_string⟩,
+    ⟨3, _, _, malformed_line_3_is_a_wake_without_slept_min⟩,
+    ⟨5, _, _, malformed_line_5_is_a_done_with_est_min_sixty⟩⟩
+  apply readLine_refuses_a_line_past_the_bound
+  · rw [trimCR_of_last _ _ (by decide), List.all_append]
+    have hx : ['x'].all isSp = false := by decide
+    rw [hx, Bool.and_false]
+  · rw [trimCR_of_last _ _ (by decide), List.length_append, List.length_replicate]; decide
+
+/-! ## Witnesses: serde's float band (B3 probe, lines 36, 37, 39 and 49) -/
+
+set_option exponentiation.threshold 1100 in
+set_option maxRecDepth 20000 in
+/-- `1.7976931348623157e308` is finite and `1.7976931348623158e308` is not; `1e309` is not; the
+309-digit integer spelling of `f64::MAX` itself is **not** finite to serde, whose significand keeps
+20 of its digits (IEEE's reading of the same decimal is finite; this is why the band is ported, not
+derived); and `1e9999999999` and `1e-9999999999` meet
+`finiteF64_reads_only_the_sign_past_an_i32_exponent`'s hypothesis and read by the sign alone.  The
+power `10 ^ 292` is past the elaborator's default `exponentiation.threshold` (256),
+which is raised for this one theorem; it bounds the size of a literal power, not memory. -/
+theorem finiteF64_is_serdes_band :
+    finiteF64 ⟨false, 1, [7,9,7,6,9,3,1,3,4,8,6,2,3,1,5,7], some (false, 3, [0,8])⟩ = true ∧
+    finiteF64 ⟨false, 1, [7,9,7,6,9,3,1,3,4,8,6,2,3,1,5,8], some (false, 3, [0,8])⟩ = false ∧
+    finiteF64 ⟨false, 1, [], some (false, 3, [0,9])⟩ = false ∧
+    finiteF64 ⟨false, (2 ^ 53 - 1) * 2 ^ 971, [], none⟩ = false ∧
+    (i32Max < digitsValue 0 [9,9,9,9,9,9,9,9,9,9] ∧
+      finiteF64 ⟨false, 1, [], some (false, 9, [9,9,9,9,9,9,9,9,9])⟩ = false ∧
+      finiteF64 ⟨false, 1, [], some (true, 9, [9,9,9,9,9,9,9,9,9])⟩ = true) :=
+  ⟨by decide, by decide, by decide, by decide, by decide, by decide, by decide⟩
+
+/-! ## Witnesses: the small grammars (B3 differential against `stamp_from_key`, `parse_date`,
+`parse_instance_status`) -/
+
+theorem the_small_grammars_read_as_the_fork_does :
+    stampFromKey ['2','0','2','6','-','W','3','7'] = some (.week 37) ∧
+    stampFromKey ['2','0','2','6','-','W','+','5'] = some (.week 5) ∧
+    stampFromKey ['2','0','2','6','-','W','0','0'] = none ∧
+    stampFromKey ['2','0','2','0','-','W','5','3'] = some (.week 53) ∧
+    stampFromKey [' ','2','0','2','6','-','9','-','0','7'] = some (.day 7) ∧
+    stampFromKey ['2','0','2','6','-','0','9'] = none ∧
+    instDate? ['2','0','2','6','-','0','9','-','0','7'] = some (Cal.toDay ⟨2026, 9, 7⟩) ∧
+    instDate? ['2','0','2','6','-','0','2','-','2','9'] = none ∧
+    parseInstanceStatus ['s','k','i','p'] = some .skipped ∧
+    parseInstanceStatus ['D','o','n','e'] = none :=
+  ⟨by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide,
+    by decide⟩
+
+/-- **`parse_date` counts bytes** (stage 5 D9 C4's repair): `2026-9-` then a no-break space (U+00A0,
+two bytes) then `07` is 10 characters that chrono's `%Y-%m-%d` reads as 2026-09-07, but 11 bytes, so
+the fork's `s.len() != 10` refuses it first.  A routine `done` on that instance is dated by its day, not
+by its `inst` (T5's completion arm writes it). -/
+theorem the_date_grammars_count_bytes_not_characters :
+    chronoDateParts ['2','0','2','6','-','9','-','\u00A0','0','7'] = some ((2026 : Int), 9, 7) ∧
+    ['2','0','2','6','-','9','-','\u00A0','0','7'].length = 10 ∧
+    instDate? ['2','0','2','6','-','9','-','\u00A0','0','7'] = none ∧
+    stampFromKey ['2','0','2','6','-','9','-','\u00A0','0','7'] = none ∧
+    instDate? ['2','0','2','6','-','9','-',' ','0','7'] = some (Cal.toDay ⟨2026, 9, 7⟩) :=
+  ⟨by decide, by decide, by decide, by decide, by decide⟩
+
+/-- **A signed year is a year to chrono** (stage 5 D9 C5's repair of C4's recorded disagreement 7): chrono's
+`%Y` reads `-` or `+` with any number of digits, so `-001-09-07` (year −1) and `+10000-1-7` are dates.
+`stamp_from_key` gives each its day of the month, and `parse_date` the second (a `Day`); the first, and
+year 0, are before `Cal.Day`'s origin (parity P33).  The leap rule holds before the origin: year −4 is a
+leap year and year −1 is not.  An unsigned year is still at most four digits (`10000-1-07` is not a date). -/
+theorem a_signed_year_is_a_date_to_chrono :
+    stampFromKey ['-','0','0','1','-','0','9','-','0','7'] = some (.day 7) ∧
+    stampFromKey ['+','1','0','0','0','0','-','1','-','7'] = some (.day 7) ∧
+    stampFromKey ['-','0','0','4','-','0','2','-','2','9'] = some (.day 29) ∧
+    stampFromKey ['-','0','0','1','-','0','2','-','2','9'] = none ∧
+    stampFromKey ['1','0','0','0','0','-','1','-','0','7'] = none ∧
+    instDate? ['+','1','0','0','0','0','-','1','-','7'] = some (Cal.toDay ⟨10000, 1, 7⟩) ∧
+    instDate? ['-','0','0','1','-','0','9','-','0','7'] = none ∧
+    instDate? ['0','0','0','0','-','0','9','-','0','7'] = none :=
+  ⟨by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide⟩
+
+end Witnesses
+
+/-! ## S2 (D16): the kernel writes the line it reads
+
+APPENDED 2026-09-16 (stage 5, W-12, step S2; owner decision **D16**, design §22.1's "a new step
+after S (§14.6), under D16", §14.7 F5, §4 Q5 (b)).
+
+The switch made the kernel the only *reader* of `.tm/log.jsonl`.  D16 makes it the only
+*definition of the format*: an appending verb sends the event's values and the kernel returns the
+bytes to append, so `LogEntry::to_json` stops being a second definition of the line held level
+with this one by T2 alone.
+
+**This section adds no grammar, and that is the point.**  `emitEvent` reads the host's values with
+`readArgs` — the very reader `readObject` uses for a line off the disk — and `emitLine` writes them
+with `renderLine`, the very writer.  A third definition of the format would be the defect the step
+exists to remove (§5.3).
+
+**The host supplies values; the kernel decides bytes.**  The key order (`Kind.schema`), which
+fields are left out (`renderF`: a `none` `Option`, `partial: false`), how each numeral is spelled,
+and the stamp (`LogStamp.renderStamp`) are all the kernel's.  There is deliberately no way to hand
+the kernel a *line*, so the two cannot drift: `the_log_emits_what_it_reads` says emitting a line's
+own parts rebuilds that line byte for byte, and `the_log_reads_what_it_emits` says every line the
+kernel emits is one the reader reads back to the event it named.
+-/
+
+/-- **The event a host's values name** (D16).  The tag picks the kind and `readArgs` reads that
+kind's fields out of `kvs`, exactly as `readObject` does for a line: a field missing with no
+default is `missingField`, one of the wrong type or outside its width is `badField`, and among
+each the first in declaration order is named (`FR.pair`).  An unknown tag is `unknown`, its `rest`
+the pairs as serde's `Map` keeps them (`restOf`), so a verb may append an event this version does
+not know and the line still reads back.
+
+The refusals are the **reader's own**, by name: a value that could not survive a round trip
+through the file is refused here rather than written. -/
+def emitEvent (tag : List Char) (kvs : List (List Char × JVal)) : Except LWarn Event :=
+  match kindOf tag with
+  | some k =>
+    match readArgs kvs k.schema with
+    | .ok a => .ok (k.build a)
+    | .missing key => .error (.missingField key)
+    | .bad key => .error (.badField key)
+  | none => .ok (.unknown tag (restOf kvs))
+
+/-- **The bytes to append** (D16): the event's values, written by `renderLine` — the one writer.
+The physical line number is the file's to choose and not the host's, so it is `0` here; nothing in
+the bytes reads it (`renderLine` is `jemit (lineVal e)`, and `lineVal` reads only `t`, `off` and
+`ev`), which `renderLine_ignores_the_line` states. -/
+def emitLine (t : VInstant) (o : VOffset) (tag : List Char) (kvs : List (List Char × JVal)) :
+    Except LWarn (List Char) :=
+  match emitEvent tag kvs with
+  | .ok ev => .ok (renderLine ⟨0, t, o, ev⟩)
+  | .error w => .error w
+
+/-- The bytes do not depend on the physical line number. -/
+theorem renderLine_ignores_the_line (n m : Nat) (t : VInstant) (o : VOffset) (ev : Event) :
+    renderLine ⟨n, t, o, ev⟩ = renderLine ⟨m, t, o, ev⟩ := rfl
+
+theorem restOf_cons_t_ev (a b : JVal) (rest : List (List Char × JVal)) :
+    restOf ((kT, a) :: (kEv, b) :: rest) = restOf rest := by
+  simp only [restOf, List.filter_cons]
+  have h1 : (!(kT == kT) && !(kT == kEv)) = false := by decide
+  have h2 : (!(kEv == kT) && !(kEv == kEv)) = false := by decide
+  simp only [h1, h2, Bool.false_eq_true, if_false]
+
+/-- An event's own `rest` is already the `Map` it came from, so re-reading it changes nothing. -/
+theorem restOf_of_canonical (rest : List (List Char × JVal)) (h : restCanonical rest = true) :
+    restOf rest = rest := by
+  rw [← restOf_cons_t_ev .null .null rest]
+  exact restOf_canonical .null .null rest h
+
+/-- **The reader's values name the reader's event.**  Handing `emitEvent` the tag and fields an
+event writes gives that event back — for a known kind through `readArgs ∘ renderArgs`, for an
+unknown one through `restOf` on a `rest` that is already sorted. -/
+theorem emitEvent_of_fields (ev : Event) (h : ev.canonical = true) :
+    emitEvent ev.tag ev.fields = .ok ev := by
+  cases hu : ev.isUnknown with
+  | false =>
+    obtain ⟨k, a, hsp⟩ := Event.split_of_not_unknown ev hu
+    have hca : argsFinite k.schema a = true ∧ ArgsReadable k.schema a := by
+      exact (Event.canonical_of_split ev k a hsp).1 h
+    simp only [emitEvent, Event.tag_of_split ev k a hsp, kindOf_tag,
+      Event.fields_of_split ev k a hsp]
+    have hag := agrees_renderArgs k.schema a [] (Kind.keys_nodup k) (by intro kv hkv; cases hkv)
+    simp only [List.nil_append] at hag
+    rw [readArgs_of_agrees _ k.schema a hca.2 hag]
+    exact congrArg Except.ok (Kind.build_of_split ev k a hsp)
+  | true =>
+    cases ev with
+    | unknown tag rest =>
+      simp only [Event.canonical, Bool.and_eq_true, Bool.not_eq_true'] at h
+      obtain ⟨⟨hkn, _hfr⟩, hrc⟩ := h
+      have hk : kindOf tag = none := by
+        simp only [isKnownTag, Option.isSome_eq_false_iff] at hkn; simpa using hkn
+      simp only [emitEvent, Event.tag, Event.fields, hk]
+      rw [restOf_of_canonical rest hrc]
+    | _ => cases hu
+
+/-- **The bytes do not move** (D16's acceptance, in the kernel): emitting a line's own parts
+rebuilds that line, byte for byte.  With `the_log_reads_what_it_renders` this closes the circle —
+the writer and the reader are one definition, not two that happen to agree. -/
+theorem the_log_emits_what_it_reads (e : Entry) (h : e.ev.canonical = true) :
+    emitLine e.t e.off e.ev.tag e.ev.fields = .ok (renderLine e) := by
+  obtain ⟨line, t, o, ev⟩ := e
+  simp only [emitLine, emitEvent_of_fields ev h]
+  rfl
+
+/-- **The log reads what it emits** (D16's end-to-end law): every line the kernel hands back to be
+appended is a line the kernel's own reader reads back to exactly the event the host named. -/
+theorem the_log_reads_what_it_emits (n : Nat) (t : VInstant) (o : VOffset) (tag : List Char)
+    (kvs : List (List Char × JVal)) (ev : Event) (l : List Char)
+    (hev : emitEvent tag kvs = .ok ev) (he : emitLine t o tag kvs = .ok l)
+    (hc : Entry.canonical ⟨n, t, o, ev⟩ = true) :
+    readLine n (some l) = .entry ⟨n, t, o, ev⟩ := by
+  simp only [emitLine, hev] at he
+  cases he
+  exact the_log_reads_what_it_renders ⟨n, t, o, ev⟩ hc
+
+/-- **§5.8, both directions, at the writer.**  The check bites — a field a line could not carry is
+refused by the reader's own name, and the offending key is named — and it does not over-bite: the
+same values with the field supplied are the event.  `wake`'s `slept_min` has no default, so an
+absent one is `missingField`; a string there is `badField`. -/
+theorem emitEvent_refuses_what_a_line_could_not_carry :
+    emitEvent ['w','a','k','e'] [] = .error (.missingField ['s','l','e','p','t','_','m','i','n']) ∧
+    emitEvent ['w','a','k','e'] [(['s','l','e','p','t','_','m','i','n'], .str ['x'])]
+      = .error (.badField ['s','l','e','p','t','_','m','i','n']) ∧
+    emitEvent ['w','a','k','e'] [(['s','l','e','p','t','_','m','i','n'], .num 480)]
+      = .ok (.wake 480 none) :=
+  -- `rfl`, not `decide`: `Except` has no `DecidableEq` in this package (the same reason
+  -- `logAnswered` and `LogStamp.accepted` exist), and these are closed terms that reduce.
+  ⟨rfl, rfl, rfl⟩
+
+/-- **The omission rule is the kernel's** (D16).  An `Option` the host sends as `null` and a
+`partial` it sends as `false` are left out of the bytes, because `renderF` leaves them out — the
+host's own omission is redundant, never authoritative.  Stated on the fields alone, so no stamp is
+evaluated. -/
+theorem the_kernel_decides_what_is_left_out :
+    (Event.wake 480 none).fields = [(['s','l','e','p','t','_','m','i','n'], .num 480)] ∧
+    emitEvent ['w','a','k','e'] [(['s','l','e','p','t','_','m','i','n'], .num 480),
+        (['o','n','s','e','t','_','m','i','n'], .null)] = .ok (.wake 480 none) ∧
+    (Event.close ['d','a','y'] ['k']).fields
+      = [(['p','e','r','i','o','d'], .str ['d','a','y']), (['k','e','y'], .str ['k'])] :=
+  ⟨rfl, rfl, rfl⟩
+
+/-! ## D111 — a `break_start`'s place has one reader (stage 6 W-47 track L, README gap 4904)
+
+The owner's **D111**: a logged `break_start`'s place is read through the table of places
+(`placeWords`), in the log grammar, and any other word makes the line MALFORMED — D18's warning
+in `lime check`, and no running break, as fork 4748911 reads it.  Parity **P108**.
+
+**Both directions, at every layer the line crosses** (AGENTS §5.8): the field (`readF_place`),
+the writer D16 made the kernel's (`a_break_start_is_emitted_only_with_a_place` — `lime break` can
+append no word the reader would refuse, because the emit is the reader), and the line off the
+disk (`a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word`).  The laws that
+were stated over every canonical entry keep their statements (`the_log_reads_what_it_renders`,
+`the_log_emits_what_it_reads`, `a_known_event_is_never_read_as_unknown`): a `break_start` is
+canonical when its place is a word of the table (`Event.canonical`), as an `hsw` is when serde
+reads it finite.  The per-field lemma under them is not: it held at every value until this step
+and is refuted there (`readF_renderF_at_every_value_is_refuted`). -/
+
+/-- Every word of the table is a place, and the table holds no word twice — so a word the TUI's
+prompt lists is one the reader takes, and the prompt lists each once. -/
+theorem placeWords_are_places_and_distinct :
+    placeWords.all isPlace = true ∧ placeWords.Nodup := by
+  refine ⟨by decide, by decide⟩
+
+/-- **The four, and nothing else**: gap 4904's `moon` is no place, nor the empty word, nor a place
+spelled with a capital (the table is matched exactly as written, as `lime break --where` was). -/
+theorem isPlace_reads_the_four_and_refuses_any_other_word :
+    isPlace ['w','a','l','k'] = true ∧ isPlace ['s','e','a','t'] = true ∧
+    isPlace ['b','e','d'] = true ∧ isPlace ['p','h','o','n','e'] = true ∧
+    isPlace ['m','o','o','n'] = false ∧ isPlace [] = false ∧ isPlace ['W','a','l','k'] = false := by
+  decide
+
+/-- **D111 at the field**: a `place` is a word of the table or `badField` — and absent or `null`
+is no place, as the `Option` it is. -/
+theorem readF_place (k s : List Char) :
+    readF k .place (some (.str s)) = (if isPlace s then .ok (some s) else .bad k) ∧
+    readF k .place none = .ok none ∧ readF k .place (some .null) = .ok none :=
+  ⟨rfl, rfl, rfl⟩
+
+/-- **D111 at the writer** (D16: the emit IS the reader).  A `break_start` with a place is
+emitted; with gap 4904's `moon` it is refused by the reader's own name, so no verb can append a
+line the replay would not read; with no place it is a break with none. -/
+theorem a_break_start_is_emitted_only_with_a_place :
+    emitEvent Kind.brkStart.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['w','a','l','k'])] = .ok (.brkStart 20 (some ['w','a','l','k'])) ∧
+    emitEvent Kind.brkStart.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['m','o','o','n'])] = .error (.badField ['w','h','e','r','e']) ∧
+    emitEvent Kind.brkStart.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20)]
+      = .ok (.brkStart 20 none) :=
+  ⟨rfl, rfl, rfl⟩
+
+/-- **D111 at the line**: `{"t":…,"ev":"break_start","planned_min":20,"where":"walk"}` is the
+running break's entry, and the same line hand-edited to `"where":"moon"` is a MALFORMED line —
+`badField where`, the warning D18 lists in `lime check`, and no entry for the replay to hold a
+running break from.  Its `t` is 2026-09-07T10:00:00-05:00.  Stated over the line's object (what `jparse`
+hands `readObject`), so no JSON is parsed in the kernel's evaluation (AGENTS §5.10a). -/
+theorem a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word :
+    (∃ t o, readObject 7 [(kT, (.str ['2','0','2','6','-','0','9','-','0','7','T','1','0',':','0','0',':','0','0','-','0','5',':','0','0'])), (kEv, .str Kind.brkStart.tag),
+        (['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['w','a','l','k'])]
+      = .entry ⟨7, t, o, .brkStart 20 (some ['w','a','l','k'])⟩) ∧
+    readObject 7 [(kT, (.str ['2','0','2','6','-','0','9','-','0','7','T','1','0',':','0','0',':','0','0','-','0','5',':','0','0'])), (kEv, .str Kind.brkStart.tag),
+        (['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['m','o','o','n'])]
+      = .warn 7 (.badField ['w','h','e','r','e']) := by
+  refine ⟨⟨_, _, rfl⟩, rfl⟩
+
+/-- **The `break` line that ENDS a break keeps the fork's free `where`** — D111 names the
+`break_start` line and no other: a fork-written `break` with any place reads as it did. -/
+theorem a_break_line_keeps_any_place :
+    emitEvent Kind.brk.tag [(['p','l','a','n','n','e','d','_','m','i','n'], .num 20),
+        (['w','h','e','r','e'], .str ['m','o','o','n'])] = .ok (.brk 20 none (some ['m','o','o','n'])) :=
+  rfl
+
+/-- **A place is never a numeral serde could refuse**: `fieldFinite` holds of every `place`, absent or
+present, so D111's table adds no clause to `Event.canonical`'s finiteness — the place's own clause is
+`FieldReadable`'s, and only a word off the table fails it. -/
+theorem fieldFinite_of_a_place (o : Option (List Char)) : fieldFinite .place o = true := rfl
+
+/-- **Every place has its own key** — each word of the table has a first character and no two
+words share one.  The host's TUI picks a place by its word's first character (§12.6's `w`/`s`/`b`/`p`,
+derived and never spelled, `tui::app::Places::key_of`), so a word added to the table that began
+with another's letter would be a place the `b` chord could never reach; this is what would stop
+building first. -/
+theorem every_place_has_its_own_key :
+    placeWords.all (fun w => w.head?.isSome) = true ∧ (placeWords.map List.head?).Nodup := by
+  refine ⟨by decide, by decide⟩
+
+/-- **The reader returns only what it can read back** (D111): a field `readF` reads is
+`FieldReadable` — for every type but `place` that is no condition, and for a `place` it is a word of
+the table or none. -/
+theorem readF_readable (k : List Char) : ∀ (t : FTy) (ov : Option JVal) (x : t.T),
+    readF k t ov = .ok x → FieldReadable t x
+  | .place, none, x, h => by simp [readF] at h; subst h; rfl
+  | .place, some v, x, h => by
+    cases v <;> simp [readF] at h
+    · subst h; rfl
+    · rename_i w
+      split at h
+      · cases h; simp [FieldReadable, *]
+      · cases h
+  | .u8, _, _, _ => trivial
+  | .u32, _, _, _ => trivial
+  | .u32d, _, _, _ => trivial
+  | .optU8, _, _, _ => trivial
+  | .optU32, _, _, _ => trivial
+  | .str, _, _, _ => trivial
+  | .optStr, _, _, _ => trivial
+  | .strs, _, _, _ => trivial
+  | .flag, _, _, _ => trivial
+  | .num, _, _, _ => trivial
+  | .pair, _, _, _ => trivial
+  | .prios, _, _, _ => trivial
+
+/-- …and so does every schema it reads: `ArgsReadable` of what `readArgs` returns. -/
+theorem readArgs_readable (kvs : List (List Char × JVal)) :
+    ∀ (s : List (List Char × FTy)) (a : Args s), readArgs kvs s = .ok a → ArgsReadable s a
+  | [], (), _ => trivial
+  | (k, t) :: s, (x, xs), h => by
+    simp only [readArgs] at h
+    obtain ⟨h1, h2⟩ := FR.pair_ok h
+    exact ⟨readF_readable k t _ x h1, readArgs_readable kvs s xs h2⟩
+
+/-- **D111 over EVERY line, not one witness: a `break_start` the kernel reads off the disk is at a
+place of the table** — whatever the line, whatever the word, an entry the reader returns whose event
+is a `break_start` with a place has that place in `placeWords`.  So the replay can hold a running
+break at no other place (P100's `Replay.Machine.brkOpen` is folded from these entries), the planner's
+request reads every such place (`PlanWire.placeOf_reads_exactly_the_table`), and gap 4904's
+`badBreak place` has no logged line left to come from.  The witnesses above
+(`a_break_start_line_reads_its_place_and_is_malformed_with_any_other_word`) are this law's two
+directions at `walk` and `moon`. -/
+theorem a_break_start_read_off_the_disk_is_at_a_place (n : Nat) (l : List Char) (e : Entry)
+    (h : readLine n (some l) = .entry e) (p : U32) (w : List Char)
+    (he : e.ev = .brkStart p (some w)) : isPlace w = true := by
+  obtain ⟨kvs, _, _, ho⟩ := readLine_entry_inv n l e h
+  unfold readObject at ho
+  cases hT : readT kvs with
+  | error x => simp [hT] at ho
+  | ok tp =>
+    obtain ⟨t, off⟩ := tp
+    cases hE : lastVal kvs kEv with
+    | none => simp [hT, hE] at ho
+    | some v =>
+      cases v with
+      | str tag =>
+        cases hK : kindOf tag with
+        | none => simp [hT, hE, hK] at ho; subst ho; simp at he
+        | some k =>
+          cases hA : readArgs kvs k.schema with
+          | ok a =>
+            simp [hT, hE, hK, hA] at ho
+            subst ho
+            have hr := readArgs_readable kvs k.schema a hA
+            have hs := congrArg Event.split he
+            simp only at hs
+            rw [Event.split_build] at hs
+            simp only [Event.split, Option.some.injEq] at hs
+            cases hs
+            simpa [ArgsReadable, FieldReadable, Kind.schema] using hr
+          | missing key => simp [hT, hE, hK, hA] at ho
+          | bad key => simp [hT, hE, hK, hA] at ho
+      | _ => simp [hT, hE] at ho
+
+/-! ## D108: the day's first `plan` carries §7.4's hysteresis input (README gap 4893, W-48 track A, parity P119) -/
+
+/-- **A `plan` line's hysteresis input is read as written** (the owner's D108): `{"d1":1,"m2":3}` at `yesterday` is the
+pairs `d1 1`, `m2 3`, in order — the field the day's first `plan` carries, from which `Replay.DayAcc.late` and D42's
+rebuild of `.tm/state.json`'s `priorities_yesterday` read it. -/
+theorem a_plan_line_carries_its_hysteresis_input :
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h','1']),
+        (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1), (['d','r','i','f','t','_','m','i','n'], .num 0),
+        (['y','e','s','t','e','r','d','a','y'], .obj [(['d','1'], .num 1), (['m','2'], .num 3)])]
+      = .ok (.plan ['h','1'] 1 0 [(['d','1'], 1), (['m','2'], 3)]) :=
+  rfl
+
+/-- **A `plan` line without the key carries no hysteresis input** — every `plan` a binary before D108 wrote, and every
+`plan` after the day's first, which writes none: absent is the empty map, as serde's `#[serde(default)]` reads it. -/
+theorem a_plan_line_without_it_carries_none :
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h','1']),
+        (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 2), (['d','r','i','f','t','_','m','i','n'], .num 5)]
+      = .ok (.plan ['h','1'] 2 5 []) :=
+  rfl
+
+/-- **The empty map is not written** (`skip_serializing_if = "BTreeMap::is_empty"`): a `plan` that carries none renders
+the fork's three keys alone, so every `plan` but the day's first is the line fork 4748911 writes. -/
+theorem an_empty_hysteresis_input_is_not_written (h : List Char) (r d : U32) :
+    (Event.plan h r d []).fields = [(['h','a','s','h'], .str h), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num r.val),
+      (['d','r','i','f','t','_','m','i','n'], .num d.val)] :=
+  rfl
+
+/-- **The check bites, both ways** (AGENTS §5.8): a `p` past a `u8`, a value that is not a numeral, and a map that is
+not an object are each `badField yesterday` — serde's `BTreeMap<String, u8>` refuses all three. -/
+theorem a_malformed_hysteresis_input_is_refused :
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h']), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1),
+        (['d','r','i','f','t','_','m','i','n'], .num 0), (['y','e','s','t','e','r','d','a','y'], .obj [(['d','1'], .num 256)])]
+      = .error (.badField ['y','e','s','t','e','r','d','a','y']) ∧
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h']), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1),
+        (['d','r','i','f','t','_','m','i','n'], .num 0), (['y','e','s','t','e','r','d','a','y'], .obj [(['d','1'], .str ['x'])])]
+      = .error (.badField ['y','e','s','t','e','r','d','a','y']) ∧
+    emitEvent Kind.plan.tag [(['h','a','s','h'], .str ['h']), (['r','e','p','l','a','n','s','_','t','o','d','a','y'], .num 1),
+        (['d','r','i','f','t','_','m','i','n'], .num 0), (['y','e','s','t','e','r','d','a','y'], .null)]
+      = .error (.badField ['y','e','s','t','e','r','d','a','y']) :=
+  ⟨rfl, rfl, rfl⟩
+
+/-- **Every hysteresis input the writer writes is read back** (D108, over EVERY map, not one witness): the field's own
+round trip, `readF_renderF` at `prios`, which the line's (`the_log_reads_what_it_renders`) composes. -/
+theorem every_hysteresis_input_is_read_back (k : List Char) (ps : List (List Char × U8)) :
+    readF k .prios (renderF .prios ps) = .ok ps :=
+  readF_renderF k .prios ps trivial
+
+/-- **A state change is told from the bookkeeping, both ways** (README gap 4893's step, W-48 track A: `mutate.py`
+found `Event.isStateChange` indistinguishable from `fun _ => false` once the `plan` arm changed shape): a `wake` is a
+state change, a `plan` (whatever hysteresis input it carries) is not. -/
+theorem a_wake_is_a_state_change_and_a_plan_is_not :
+    (Event.wake 480 none).isStateChange = true ∧ (Event.plan [] 0 0 [(['a'], 6)]).isStateChange = false := by
+  decide
+
+end Log
+end Lime

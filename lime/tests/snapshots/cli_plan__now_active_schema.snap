@@ -1,0 +1,41 @@
+---
+source: lime/tests/cli_plan.rs
+expression: schema(&json)
+---
+{
+  "active": {
+    "elapsed_min": "integer",
+    "est_min": "integer",
+    "id": "string",
+    "paused": "bool",
+    "started": "string",
+    "title": "string"
+  },
+  "blocks_done": "integer",
+  "break": "null",
+  "budget_blocks": "integer",
+  "current": {
+    "end": "string",
+    "energy": "null",
+    "item": "string",
+    "kind": "string",
+    "mark": "string",
+    "minutes": "integer",
+    "start": "string",
+    "text": "string"
+  },
+  "date": "string",
+  "next": [
+    {
+      "end": "string",
+      "energy": "integer",
+      "item": "string",
+      "kind": "string",
+      "mark": "string",
+      "minutes": "integer",
+      "start": "string",
+      "text": "string"
+    }
+  ],
+  "now": "string"
+}

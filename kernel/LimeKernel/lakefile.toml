@@ -1,0 +1,6 @@
+name = "LimeKernel"
+version = "0.1.0"
+defaultTargets = ["LimeKernel"]
+
+[[lean_lib]]
+name = "LimeKernel"

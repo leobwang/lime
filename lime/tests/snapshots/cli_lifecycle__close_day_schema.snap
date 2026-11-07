@@ -1,0 +1,25 @@
+---
+source: lime/tests/cli_lifecycle.rs
+expression: schema(&json)
+---
+{
+  "key": "string",
+  "period": "string",
+  "report": {
+    "closes": [
+      {
+        "did": "string",
+        "from": "string",
+        "grain": "string",
+        "id": "string",
+        "min": {
+          "den": "integer",
+          "num": "integer"
+        },
+        "stamp": "string",
+        "to": "string"
+      }
+    ],
+    "dropped": []
+  }
+}

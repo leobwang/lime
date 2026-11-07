@@ -30,7 +30,7 @@ under `"diagnostics"` on the planner wire, whatever it is called.
 WHY THE EMITTED GRAPH AND NOT THE SOURCE.  A writer has to be REACHED from
 the day, not merely present: `Diagnostics.withNote` writes `notes` and nothing
 in the day calls it, and a fixture in `PlannerWit.lean` that wrote `hot` would
-be a witness, not the planner.  Reachability from `Tm.Planner.dayPlan` in the
+be a witness, not the planner.  Reachability from `Lime.Planner.dayPlan` in the
 C the code generator emitted is the one instrument in this tree that answers
 "does the day run this", and check 12 already reads it.
 
@@ -72,12 +72,12 @@ import ratchet
 from reach import committed_exemptions
 
 HERE = pathlib.Path(__file__).resolve().parent
-LIB = HERE / "TmKernel"
+LIB = HERE / "LimeKernel"
 EXEMPT_FILE = HERE / "fields-exempt.txt"
 # The wire key whose object this checks, and the one total day builder (D28)
 # the walk is rooted at.
 WIRE_KEY = "diagnostics"
-ROOT_DEF = "Tm.Planner.dayPlan"
+ROOT_DEF = "Lime.Planner.dayPlan"
 DEF = re.compile(r"(?<![\w'?!.«])def[ \t\r\n]+([^\s(){}:]+)")
 ISO_DATE = re.compile(r"\b20\d\d-[01]\d-[0-3]\d\b")
 EXIT = re.compile(r"\bEXIT\b")
@@ -656,14 +656,14 @@ def inputs_main(audit, files, codes):
 # the file may only shrink, W-27's shape.
 #
 # WHAT IT CANNOT SEE is `sentkeys.py`'s header.  Until W-40 it asked ONE section,
-# the planner's, of ONE encoder, `tm-core/src/planwire.rs` (README gap 3081, and gap
+# the planner's, of ONE encoder, `lime-core/src/planwire.rs` (README gap 3081, and gap
 # 3717: `day.rs`' `call_the_walls` wrote `emit.walls.week` with no gate asking whether
 # a kernel reader decoded it).
 #
 # SINCE W-40 TRACK E (README gap 3717) IT ASKS EVERY SECTION, AT EVERY PLACE A REQUEST
 # GAINS ONE.  The sections are the kernel's own -- `sections.spine`, the walk from the
 # export that check 12 roots itself on -- and the host side of each is
-# `sentkeys.host_sections`: every `json!` object any function of the program (`tm/src`
+# `sentkeys.host_sections`: every `json!` object any function of the program (`lime/src`
 # and every crate it links by path) builds that carries `docs`, wherever it is written,
 # and every request built as TEXT (`kernel_log`'s `log` section and request, the
 # `format!` that splices it into the capacity and walls requests) is a request, and
@@ -671,7 +671,7 @@ def inputs_main(audit, files, codes):
 # calls, in whatever module (`Foreign`); the codec's `<section>_json` that no codec
 # function composes is a section's root (the only host side `planner` has until R3),
 # and its `&mut Value` writers join it.  The sites are held to check 12's own scan of
-# `tm/src` (`sections.sent_sections`): a request that scan reads and no site holds
+# `lime/src` (`sections.sent_sections`): a request that scan reads and no site holds
 # FAILS, UNREAD REQUEST.
 # Both sides are compared NORMALIZED (`sentkeys.normalized`): prefix-closed, an array
 # of scalars read as its key.  A key path is reported once, at its shallowest, and an
@@ -717,7 +717,7 @@ SENT_EXEMPT_FILE = HERE / "sent-exempt.txt"
 #
 # WHAT IT CANNOT SEE: whether the binary CALLS the writer.  `add_worked_min`
 # writes `state.active.workedMin`, and until the W-41 repair had no caller in
-# `tm/src` (README gap 3043; its first is `tm check`'s planner request, gap
+# `lime/src` (README gap 3043; its first is `lime check`'s planner request, gap
 # 4142): "written by the codec" is a floor under "sent by the binary",
 # the same sentence as the input half's read-is-a-floor-under-used.
 # ===========================================================================

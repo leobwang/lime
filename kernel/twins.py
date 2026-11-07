@@ -33,17 +33,17 @@ definitions of one concept unless one of these holds:
                 **AND THE SECOND HALF OF THAT SENTENCE WAS NEVER CHECKED**
                 (W-30 repair, README gap 2126).  This file said "deleting the
                 copy would silently deoptimise the original" and offered
-                `Tm.edf` and its twin as the driven example.  The bytes refute
-                it: rooted at `tm_kernel_call` (`PlanWire.lean:1198`) over
+                `Lime.edf` and its twin as the driven example.  The bytes refute
+                it: rooted at `lime_kernel_call` (`PlanWire.lean:1198`) over
                 `.lake/build/ir/**/*.c`, 2,092 of 11,949 emitted functions are
-                reachable and NEITHER `Tm.edf` nor its twin is among them --
+                reachable and NEITHER `Lime.edf` nor its twin is among them --
                 each symbol occurs
                 three times in the emitted tree -- a prototype, a body and a
                 `___boxed` wrapper, and no call site.  There was no
                 deoptimisation to fear because there was no call.  So the
                 exemption is now the WHOLE sentence: the bytes differ, and the
-                export REACHES at least one of them.  `Tm.planWf`/`planWfFast`,
-                `Tm.Seal.daysIn`/`daysInT` and `daysFrom`/`daysFromT` each pass
+                export REACHES at least one of them.  `Lime.planWf`/`planWfFast`,
+                `Lime.Seal.daysIn`/`daysInT` and `daysFrom`/`daysFromT` each pass
                 it -- in all three the FAST twin is reached and the original is
                 the spec it is proved equal to.  edfFast and edfGrantsFast
                 answered nothing, and the W-30 repair DELETED them with their
@@ -89,14 +89,14 @@ and no list at all.
 WHAT IT CANNOT SEE, and the list matters because the hand sweep's own declared
 blind spot is where four of the five csimp pairs hid:
 
-  * a duplicate that reaches its own auxiliary BY NAME -- `Tm.reserveOut` calls
-    `Tm.availUntil` and `Tm.reserveOutFast` calls `Tm.availUntilFast`, so the
+  * a duplicate that reaches its own auxiliary BY NAME -- `Lime.reserveOut` calls
+    `Lime.availUntil` and `Lime.reserveOutFast` calls `Lime.availUntilFast`, so the
     bodies differ in one identifier and this file reports the AUXILIARIES as the
     twins and not the callers.  It is still named, one level down.  (The
     example this bullet used to give was edf and its twin, which the W-30 repair
     deleted: nothing called either.)
   * a duplicate whose bodies differ by a `let` hoist or an argument order
-    (`Tm.sitesInRange` / `sitesInRangeFast` hoists `let n := p.docs.length`) --
+    (`Lime.sitesInRange` / `sitesInRangeFast` hoists `let n := p.docs.length`) --
     NOT character-identical, and a `@[csimp]`-proved-by-`rfl` grep alone is not
     the rule either.
   * a MONOMORPHIC COPY of a polymorphic definition.  `Replay.ciSum (m : KMap Id
@@ -131,7 +131,7 @@ blind spot is where four of the five csimp pairs hid:
     they are outside this population by construction, not by accident.
   * a duplicate across the Rust and the Lean sides.
   * E2 answers with the EMITTED code, so it can only answer for a definition the
-    compiler emits.  A definition with no `lp_TmKernel_*` function in the module
+    compiler emits.  A definition with no `lp_LimeKernel_*` function in the module
     it was declared in is UNEMITTED, and unemitted is not an exemption: the
     group is reported, which is the loud direction.
 
@@ -226,7 +226,7 @@ after §5.3.
   E4 WIRE-NAMED the rule members are identical once parameters are numbered
                 and differ ONLY in the keys they spell: string and character
                 literals, and nullary constructors of a `WIRE_KEY_TYPES` type
-                (`Tm.Field.Key`, the line grammar's field key -- `.floor`,
+                (`Lime.Field.Key`, the line grammar's field key -- `.floor`,
                 `.cap`, `.est`) AT A POSITION LEAN RESOLVES TO THAT TYPE: an
                 explicit argument of a library `def` whose parameter there is
                 typed by it, or the type named qualified (`wire_positions`,
@@ -272,7 +272,7 @@ after §5.3.
   unanswered); a FIXTURE that re-spells its rule fails (`noonClock : Clock :=
   ⟨43200 % 86400 / 60, by omega⟩`); and a
   short name shared with the field key is a name only where Lean resolves it
-  to `Tm.Field.Key` (a `.floor` sibling over a planted type, and a `.machine`
+  to `Lime.Field.Key` (a `.floor` sibling over a planted type, and a `.machine`
   one over the replay's `Key`,
   each answered WIRE-NAMED before and unanswered now).  The last bullet's
   premise was FALSE when written: `Key` named TWO types, and `.floor`,
@@ -353,7 +353,7 @@ NEXT_COMMAND = leanfiles.NEXT_COMMAND
 LITERAL = re.compile(r"^(?:fun[ \t][^=]*=>[ \t]*)?"
                      r"(true|false|True|False|[0-9]+|\"[^\"]*\"|'.')$")
 # One emitted function: its header, then its brace-balanced body.
-EMITTED = re.compile(r"(?m)^LEAN_EXPORT[^\n(]*\b(?:l|lp_TmKernel)_(\w+)\([^\n]*\{")
+EMITTED = re.compile(r"(?m)^LEAN_EXPORT[^\n(]*\b(?:l|lp_LimeKernel)_(\w+)\([^\n]*\{")
 # THE WALK ITSELF IS `callgraph.py` AND NOT THIS FILE'S (W-31 track A).  It was
 # written here for E2 and check 12 needs the same graph; two copies of one walk
 # would be §5.3's defect inside the two gates that exist to catch it, so the
@@ -375,7 +375,7 @@ CVAR = re.compile(r"\bv_[A-Za-z0-9_]*?_\d+_")
 # the constant itself, its `_value`/`_value_aux_<k>` static data, its `_once`
 # cell, its `_init_` function, and a `___boxed__const__<k>` scalar.  Group 1 is
 # the constant the family belongs to (W-43 repair, README gap 4500).
-CLOSED = re.compile(r"\b(?:_init_)?((?:l|lp_TmKernel)_\w*?___closed__\d+(?:___boxed__const__\d+)?)"
+CLOSED = re.compile(r"\b(?:_init_)?((?:l|lp_LimeKernel)_\w*?___closed__\d+(?:___boxed__const__\d+)?)"
                     r"(?:_value_aux_\d+|_value|_once)?\b")
 # Brackets, for the depth-zero split and for the second key's collapse.
 OPENERS, CLOSERS = "([{⟨⦃", ")]}⟩⦄"
@@ -644,7 +644,7 @@ def emitted(path, name):
 # CARRIES** (W-43 repair, README gap 4500).  The code generator shares one
 # closed term among every definition of a MODULE that needs it, and names the
 # shared constant after the FIRST definition that hoisted it -- so `Log.chronoYear`
-# in `Line.c` reads lp_TmKernel_Tm_serializeItem___closed__0 (an empty
+# in `Line.c` reads lp_LimeKernel_Lime_serializeItem___closed__0 (an empty
 # array), while a character-identical copy of it in another module hoists its
 # own and reads `..._SELF___closed__0`.  SELF above normalised only the
 # definition's OWN name; a constant named after ANOTHER parent still read as
@@ -728,12 +728,12 @@ def qualify_all(path, code, found):
     **AND THE TABLE WAS KEYED ON THE WRITTEN NAME, first occurrence winning**
     (W-34 track A, README gap 2604), which is `mutate.py`'s gap 1422 inside
     this file: SIX `def`s of the library share a written name with an earlier
-    one in the same file -- `Line.lean`'s `setEst` is `Tm.setEst` at line 532
-    and `Tm.Field.setEst` at 3817, and `readTz`, `readStep`, `keyOf`, `get`
+    one in the same file -- `Line.lean`'s `setEst` is `Lime.setEst` at line 532
+    and `Lime.Field.setEst` at 3817, and `readTz`, `readStep`, `keyOf`, `get`
     and `alter` are the same shape -- and each second one was REPORTED under
     the first one's name, its C symbol read for E2 and its namespace used for
-    name resolution.  E4's group read `Tm.setEst` where the member was
-    `Tm.Field.setEst`.  The two scanners are now joined by POSITION, and a
+    name resolution.  E4's group read `Lime.setEst` where the member was
+    `Lime.Field.setEst`.  The two scanners are now joined by POSITION, and a
     disagreement about which `def`s a file declares is a hard error rather
     than a guess: `found` is this file's own scan, and it must name the same
     `def`s in the same order."""
@@ -746,7 +746,7 @@ def qualify_all(path, code, found):
 
 
 def namespace_of(full):
-    """`Tm.Field` for `Tm.Field.viewMin`."""
+    """`Lime.Field` for `Lime.Field.viewMin`."""
     return full.rsplit(".", 1)[0] if "." in full else ""
 
 
@@ -781,7 +781,7 @@ def compiled_apart(group):
     if None in seen.values():
         return None  # unemitted is not an exemption
     if len(set(seen.values())) > 1 and live:
-        return ("E2 COMPILED -- the emitted C differs (%s) and `tm_kernel_call` "
+        return ("E2 COMPILED -- the emitted C differs (%s) and `lime_kernel_call` "
                 "reaches %s, so the copy is what the callers run"
                 % (", ".join("%s %d chars" % (k.rsplit("/", 1)[-1], len(v))
                              for k, v in sorted(seen.items())), ", ".join(sorted(live))))
@@ -964,7 +964,7 @@ def collapse(out, ctors, protect=False):
 # THE CONSTRUCTORS E4 READS AS NAMES (W-33 repair, README gap 2562).  E4's
 # rule is "differ ONLY in the keys they spell", and a key is spelled two ways
 # in this kernel: as a string or character literal on the wire, and as a
-# constructor of the line grammar's field-key type, `Tm.Field.Key`
+# constructor of the line grammar's field-key type, `Lime.Field.Key`
 # (`Line.lean`), which `lookupKey`/`setKey` take and whose constructors ARE
 # the `est:`, `min:` .. field names.  `normalise(names=True)` used to read
 # EVERY nullary constructor as a name, so restSegLike -- `windDownSeg` with
@@ -987,7 +987,7 @@ def collapse(out, ctors, protect=False):
 # gate could not tell `Field.Key.floor` from `CandKey.floor`.  So the tuple
 # holds the QUALIFIED type, and a dot constructor is a name only when LEAN'S
 # OWN RULE resolves it there (`wire_positions`).
-WIRE_KEY_TYPES = ("Tm.Field.Key",)
+WIRE_KEY_TYPES = ("Lime.Field.Key",)
 
 # The tables `wire_positions` resolves against, filled once by `main`: every
 # library `def` by the name `lean` gives it, and every `inductive` likewise.
@@ -1459,24 +1459,13 @@ def not_one_pairs(entries):
 def committed_verdicts(path):
     """The sentences as `git` has them at HEAD: the text, `""` when the file is
     not at HEAD yet (its first landing), or None when git cannot say."""
-    try:
-        ls = subprocess.run(["git", "-C", str(path.parent), "ls-tree", "HEAD", "--", path.name],
-                            capture_output=True, text=True, timeout=60)
-        if ls.returncode != 0:
-            return None
-        if not ls.stdout.strip():
-            return ""
-        show = subprocess.run(["git", "-C", str(path.parent), "show", "HEAD:./" + path.name],
-                              capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return show.stdout if show.returncode == 0 else None
+    return ratchet.show(path, "HEAD")
 
 
 def main(argv):
     audit = "--audit" in argv
     roots = [a for a in argv if not a.startswith("--")] or \
-        [str(pathlib.Path(__file__).resolve().parent / "TmKernel")]
+        [str(pathlib.Path(__file__).resolve().parent / "LimeKernel")]
     files = set()
     for d in roots:
         files.update(leanfiles.lean_files(pathlib.Path(d)))
@@ -1498,7 +1487,7 @@ def main(argv):
     # The library's own declaration of a name wins over a package-root file's
     # (`Negative.lean` and `Goals.lean` are swept and never compiled): name
     # resolution is about the code the export runs.
-    for d in sorted(everything, key=lambda d: "/TmKernel/TmKernel/" not in str(d.path)):
+    for d in sorted(everything, key=lambda d: "/LimeKernel/LimeKernel/" not in str(d.path)):
         DEFS.setdefault(d.full, d)
     exact, gen, unsplit = collections.defaultdict(list), collections.defaultdict(list), []
     onehole = 0
