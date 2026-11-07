@@ -18,7 +18,7 @@ something must FAIL.  If nothing fails, no theorem, witness or test in the
 package distinguishes the definition from that constant, and the definition is
 unwitnessed no matter how carefully it is written.
 
-WHAT IS MUTATED.  Every `def` and `abbrev` in kernel/LimeKernel/LimeKernel/*.lean --
+WHAT IS MUTATED.  Every `def` and `abbrev` in kernel/LimeKernel/LimeKernel/**.lean --
 the library -- that is NEW OR CHANGED since the baseline commit named on the
 first line of `mutations.txt`.  Scoped that way because D40 scoped it that way:
 a full sweep of the existing kernel was DECLINED as producing a backlog rather
@@ -472,11 +472,11 @@ def lib_files():
 #     convenience -- is exempt by (a) the moment (c) holds of it.  What stops
 #     that costing anything is (b): nothing outside the module can read it, so
 #     a rule declared there is a rule nothing runs.
-WITNESS_MODULES = ("LimeKernel/LimeKernel/PlannerWit.lean",)
+WITNESS_MODULES = ("LimeKernel/LimeKernel/Laws/PlannerWit.lean",)
 
 
 def module_name(path):
-    """`LimeKernel/LimeKernel/PlannerWit.lean` -> `LimeKernel.PlannerWit`, the name
+    """`LimeKernel/LimeKernel/Laws/PlannerWit.lean` -> `LimeKernel.Laws.PlannerWit`, the name
     an `import` line spells."""
     rel = path.split("/", 1)[1] if "/" in path else path
     return rel[:-len(".lean")].replace("/", ".")
@@ -505,7 +505,7 @@ def witness_violations():
     the W-23 repair step is where that had to be said out loud (README gap
     1314).  `lib_files()` was called on the module DIRECTORY and so had never
     seen `LimeKernel/LimeKernel.lean`; the moment the root module joined the walk,
-    this check went RED -- the root module imports `LimeKernel.PlannerWit`, as it
+    this check went RED -- the root module imports `LimeKernel.Laws.PlannerWit`, as it
     must, or Lake would not compile it at all.  So conjunct (b) as it was
     written -- "nothing in the library imports those modules" -- was NEVER TRUE,
     and nobody could see it.

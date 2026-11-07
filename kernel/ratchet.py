@@ -75,7 +75,7 @@ import subprocess
 #: and a second copy of it here would be AGENTS 5.3's bug.  WHAT THAT COSTS, declared: a NEW module in a folder whose name
 #: is another module's old flat name reads that module's old text as its own past, which can only make a definition with
 #: an unchanged body count as unchanged; and a module moved between two folders after the regroup is read as absent at
-#: the commits before that move, loudly, as the chain's first miss was.
+#: the commits between the regroup and that move, loudly, as the chain's first miss was (README gap 6115).
 RENAMED_PATHS = (
     ("kernel/LimeKernel/LimeKernel/", "kernel/TmKernel/TmKernel/"),
     ("kernel/LimeKernel/LimeKernel.lean", "kernel/TmKernel/TmKernel.lean"),

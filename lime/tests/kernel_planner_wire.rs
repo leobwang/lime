@@ -1,6 +1,6 @@
 //! **The planner's inputs, through the FFI** — stage 6 W-27, step R2, D48.
 //!
-//! `kernel/LimeKernel/LimeKernel/PlanWire.lean` decodes the four values
+//! `kernel/LimeKernel/LimeKernel/Wire/PlanWire.lean` decodes the four values
 //! `Planner.PlanReq` needed and no section carried: `state` (§9's `RuntimeIn`),
 //! `routines`, `overrides` and `prio.batchMaxMin` (§16's `[priority]
 //! batch_max_min`, README gap 801). Every bound it puts on them is one this

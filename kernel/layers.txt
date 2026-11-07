@@ -1,0 +1,13 @@
+# kernel/layers.txt -- check 15's table.  `layers.py`'s header is the specification; AGENTS D162 is the decision.
+#
+# One line per folder of kernel/LimeKernel/LimeKernel/, top first: a module imports from its own folder and the folders
+# above it, never below.  A `PREFIX` line names a family a folder owns.  The folders and their order are the owner's;
+# moving a line of this file changes what "green" means and is a decision, never a repair.
+Base -- exact arithmetic, the calendar, the horizon order, tokens, the kernel's own JSON
+Plan -- the item line and the plan: `Store`, `planWf`, the commands, the close and what it reports
+Log -- the log: its stamp, its event grammar, and the replay
+Seal -- the window over the replay: the checkpoint, the sealed records and their laws
+Planner -- priority, capacity, the lookahead, recurrence, the day plan, and the cells it is drawn in
+Wire -- the door: the request readers, `callExport` and the planner's wire
+Laws -- theorems and witnesses over the whole planner, which no library module outside this folder imports (the root module imports every module)
+PREFIX Seal Seal

@@ -1198,7 +1198,7 @@ open Lime
 
 -- ===========================================================================
 -- APPENDED 2026-09-12 (stage-3, J-route step 1: the JSON fragment's
--- foundations).  Every theorem of LimeKernel/Json.lean, in declaration order.
+-- foundations).  Every theorem of LimeKernel/Base/Json.lean, in declaration order.
 -- Nothing here is on the wire yet -- Boundary.lean still builds Lean.Json --
 -- so these audit the replacement, not the crossing.
 -- ===========================================================================
@@ -1237,7 +1237,7 @@ open Lime
 
 -- ===========================================================================
 -- APPENDED 2026-09-12 (stage-3, J-route step 2: the emitter, the parser and
--- the round trip).  Every theorem LimeKernel/Json.lean gained at J3-J4, in
+-- the round trip).  Every theorem LimeKernel/Base/Json.lean gained at J3-J4, in
 -- declaration order: jemit, the fuel bound, the scanner, the parser's step
 -- equations, jval_jemit / jparse_jemit, the fuel-sufficiency induction ending
 -- in jparse_never_runs_out, and the witnesses.  Still not on the wire --
@@ -4999,7 +4999,7 @@ open Lime
 #print axioms Lime.parseLine_serializeItem
 /-! ############################################################################
 ## Stage 6, track W (run W-15): the `PlanReq` builder and its witnesses
-`LimeKernel/PlannerWit.lean` — README gap 348, and the three gaps it blocked (366's
+`LimeKernel/Laws/PlannerWit.lean` — README gap 348, and the three gaps it blocked (366's
 refutation half, 393's witness half, 396).  Nothing imports this module; it is the
 end-to-end witness `Planner.lean` and `PlanCheck.lean` could not write.
 ############################################################################ -/

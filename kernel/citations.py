@@ -365,6 +365,7 @@ import re
 import sys
 import os
 import glob
+import pathlib
 import collections
 
 import callgraph
@@ -392,6 +393,7 @@ ROOT = os.path.dirname(HERE)
 # 28699/27174/1525/0, byte-identical again.  `leanfiles.is_derived` prunes on a
 # property a build directory has, never on a name.
 LEAN_FILES = [str(p) for p in leanfiles.lean_files(os.path.join(HERE, "LimeKernel"))]
+LIB_DIR = os.path.join(HERE, "LimeKernel", "LimeKernel")
 # **THE EIGHTH LEVEL OF THE ENUMERATION HOLE, AND THE RULE THAT ENDS THE CLASS**
 # (README gap 1525, answered at W-27).
 #
@@ -1005,6 +1007,9 @@ def declared():
     names = set()
     for path in LEAN_FILES:
         text = read(path)
+        # A FOLDER OF THE LIBRARY IS A COMPONENT OF A MODULE'S NAME (the regroup, AGENTS D162): `import LimeKernel.Laws.PlannerWit`
+        # names a module, and `Laws` is declared by nothing a Lean file spells but the path it sits in.
+        names.update(pathlib.PurePath(os.path.relpath(path, LIB_DIR)).parts[:-1])
         for m in LEAN_DECL.finditer(lean_code(text)):
             names.add(m.group(1).split(".")[-1])
         for m in LEAN_NS.finditer(text):

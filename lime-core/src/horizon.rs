@@ -34,7 +34,7 @@
 //!
 //!   **The shipped binary no longer calls these three** (stage 4 step 6):
 //!   `lime close` and the automatic close go through the Lean kernel
-//!   (`lime/src/cli/closing.rs`, `kernel/LimeKernel/LimeKernel/Close.lean`), whose
+//!   (`lime/src/cli/closing.rs`, `kernel/LimeKernel/LimeKernel/Plan/Close.lean`), whose
 //!   close files into the week and month containing *now* (the owner's D1),
 //!   not the ones containing the closed period, as these do. They stay as
 //!   the fork-point library record — the rows the kernel still owes (the

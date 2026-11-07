@@ -110,9 +110,12 @@ WHAT IT CANNOT SEE, beyond `callgraph.py`'s own declared blind spots:
     own header asserting its blind spot was empty (W-31 repair, gap 2257).
     `--audit` prints the population so the number is re-measured, not believed.
   * The Rust side, which is R3's business and not a Lean symbol's.
-  * Two library modules whose file STEMS collide -- the comparison below is by
-    stem, because that is how the code generator names its output, and the
-    library is flat today.
+  * Two library modules with one FILE NAME, in two folders (the regroup, AGENTS
+    D162).  UNCOMPILED and STALE ARTEFACT compare by path, but the definitions,
+    the `dead` keys, the exemption sections and `CLASS proof` key a module by its
+    file name, so two namesakes read as one here: run alone, this passes an
+    unreached definition in a new `Wire/PlannerWit.lean` as the witness class.
+    Check 15's NAMESAKE arm is what refuses the pair (`layers.py`, README gap 6120).
 
 AND IT CHECKS THE TREE IT READS, BOTH WAYS (README gap 2149).  A gate that reads
 a build answers for the source only if the two agree: every library module must
@@ -363,10 +366,10 @@ def proof_violations(stem):
     module nor a declaration-free manifest imports it -- mutate.py's
     `witness_violations` scan, applied to one more module."""
     files = set(mutate.lib_files())
-    target = "LimeKernel/LimeKernel/%s.lean" % stem
-    if target not in files:
-        return ["%s is named by `CLASS proof %s` and is not a library module"
-                % (target, stem)]
+    target = next((f for f in files if pathlib.PurePath(f).name == stem + ".lean"), None)
+    if target is None:
+        return ["%s.lean is named by `CLASS proof %s` and is not a library module"
+                % (stem, stem)]
     name = mutate.module_name(target)
     out = []
     for path in sorted(files - set(mutate.WITNESS_MODULES) - {target}):
@@ -559,8 +562,10 @@ def main(argv):
     reached, emitted = callgraph.reachable(
         ir, {callgraph.symbol(k): {callgraph.symbol(v) for v in vs}
              for k, vs in cuts.items()})
-    library = {p.stem: p for p in leanfiles.library_files(pkg)}
-    compiled = {c.stem for c in ir.rglob("*.c")}
+    # BY PATH AND NOT BY STEM (the regroup): a flat `Plan.c` left by a build from before the module moved has the stem of
+    # the `Plan/Plan.c` beside it, so a stem comparison read it as the module and this walk read both.
+    library = {str(p.relative_to(pkg).with_suffix("")): p for p in leanfiles.library_files(pkg)}
+    compiled = {str(c.relative_to(ir).with_suffix("")) for c in ir.rglob("*.c")}
     closed = callgraph.closed_users(ir)
 
     population = [d for d in defs if d[3] in emitted]
@@ -657,7 +662,7 @@ def main(argv):
     for stem in sorted(compiled - set(library)):
         bad.append("STALE ARTEFACT: %s has no library module -- it is what a "
                    "DELETED module left behind, and this walk reads its functions "
-                   "as if they were emitted; delete it" % (ir / "LimeKernel" / (stem + ".c")))
+                   "as if they were emitted; delete it" % (ir / (stem + ".c")))
     for key in sorted(dead):
         if key in answered and key in entries:
             bad.append("ANSWERED BY PROPERTY: %s (%s) is %s, and this file still "

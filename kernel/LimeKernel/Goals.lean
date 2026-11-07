@@ -164,7 +164,7 @@ kernel's parser, printer and splitter, which the FFI and corpus suites evidence.
 was stated over `Lean.Json.parse ∘ Lean.Json.compress`, whose `partial def`s
 make it neither provable nor refutable (README "Gap 39 REPRICED"); its doc
 comment licensed the narrowing to the code `call` runs.  `call` now reads with
-the kernel's structural `jparse` and writes with `jemit` (`LimeKernel/Json.lean`,
+the kernel's structural `jparse` and writes with `jemit` (`LimeKernel/Base/Json.lean`,
 no `Lean.Json` on the wire), `jparse_jemit` is the round trip for every `JVal`
 unconditionally, and `the_response_call_emits_parses_back (input : String) :
 jparse (call input).toList = .ok (respond input.toList)` is its instance at the
@@ -224,7 +224,7 @@ law beside it; **no goal of stage 4 stands**.
 
 /- **`close` is real (2026-09-12, stage 4 step 2).**  The provisional
 `def close (g : Grain) (now : Day) : Transform := sorry` that stood here is
-replaced by `Lime.close` in `LimeKernel/Close.lean`, with the signature it declared:
+replaced by `Lime.close` in `LimeKernel/Plan/Close.lean`, with the signature it declared:
 the grain, the instant, `Transform` as the shape, and `ClosePolicy` read from a
 table indexed by `Grain` rather than passed.  Every goal below that names
 `close` now elaborates against that definition.  `close_spec` is its
@@ -234,7 +234,7 @@ scopes out.  (Since goal B3's repair the signature also takes the block length,
 
 /- **`autoClose` is real (2026-09-12, stage 4 step 4).**  The provisional
 `def autoClose (now : Day) : Transform := sorry` that stood here is replaced by
-`Lime.autoClose` in `LimeKernel/Close.lean`, with the signature it declared: each
+`Lime.autoClose` in `LimeKernel/Plan/Close.lean`, with the signature it declared: each
 grain's close once, in `autoCloseOrder = [day, week, month]` — coarsest last. -/
 
 /- **`close_is_idempotent` (L16) is discharged (2026-09-12, stage 4 step 3)** —
@@ -339,7 +339,7 @@ header's not-yet-stateable list; what follows is the half that has vocabulary.
 
 /- **§6.4's `remaining` and §5.4's series head are real (2026-09-14, stage 5 step 1).**
 The provisional `remainingMin` and `seriesHead` that stood here are replaced by
-`Lime.remainingMin` and `Lime.seriesHead` in `LimeKernel/Tree.lean`, with the signatures
+`Lime.remainingMin` and `Lime.seriesHead` in `LimeKernel/Plan/Tree.lean`, with the signatures
 they declared.  Of this section's five goals, `the_series_head_is_not_settled` and
 `the_series_head_ranks_first` are proved as stated (`Tree.lean`).  The three §6.4 rows
 were stated over every item and with no `dur:` row; fork-point `Tree::remaining_inner`
@@ -354,7 +354,7 @@ children, so each is refuted as written on a loaded plan (`Boundary.lean`:
 
 /- **§7's `prio` and §7.4's `hysteresis` are real (2026-09-14, stage 5 step 2).**
 The provisional `prio` and `hysteresis` that stood here are replaced by `Lime.prio` and
-`Lime.hysteresis` in `LimeKernel/Priority.lean`, with the signatures they declared.  All six
+`Lime.hysteresis` in `LimeKernel/Planner/Priority.lean`, with the signatures they declared.  All six
 goals of this block are proved as stated there: `prio_of_hot_is_zero`,
 `prio_is_clamped`, `prio_is_antitone_in_utilisation`,
 `hysteresis_improves_by_at_most_one_bin`, `hysteresis_worsens_freely` and
@@ -364,7 +364,7 @@ step 2". -/
 
 /- **§7.3's EDF pass is real, over D10's rational minutes (2026-09-14, stage 5 step 3).**
 The provisional `DayCapacity`, `Deadline` and `edf` that stood here are replaced by
-`Lime.DayCapacity`, `Lime.Deadline` and `Lime.edf` in `LimeKernel/Capacity.lean`.  D10 makes a
+`Lime.DayCapacity`, `Lime.Deadline` and `Lime.edf` in `LimeKernel/Planner/Capacity.lean`.  D10 makes a
 level's expected minutes an exact rational, so `DayCapacity.minutesAt : Fin 6 → Nat` became
 numerators `numAt` over one positive denominator `den : Den` that `edf` now takes, with
 `c.minutesAt den l : Arith.Pos` the rational.  The three goals are proved over that
@@ -378,7 +378,7 @@ over the numerators at every denominator), and `edf_reserves_only_before_the_dea
 The owner's D12 pulls stage 6's window into stage 5, so STAGE 6's E7 block — the real
 `wallsInside`, the provisional `windowEnd` and the goals `the_window_end_solves_the_equation`
 and `the_window_end_is_the_least_solution` — is deleted here and its vocabulary lives in
-`LimeKernel/Lookahead.lean` (`Look.windowEnd`, `Look.windowBase`, `Look.wallOverlap`).  Both
+`LimeKernel/Planner/Lookahead.lean` (`Look.windowEnd`, `Look.windowBase`, `Look.wallOverlap`).  Both
 goals were **false as written** against fork-point `capacity::window_and_budget`, which clips
 walls at the arrival, merges them and counts their overlap, and clamps the base to the
 arrival: `Look.the_window_end_is_not_the_least_solution_as_stage_6_wrote_it` (a wall
@@ -390,7 +390,7 @@ over `Look.wallOverlap` and `Look.windowBase`, both are proved under the same na
 
 /- **§7.1's undo mask is real (2026-09-14, stage 5 D9 step C1).**
 The four C1 goals of design §15 were added here as written, elaborated against
-`LimeKernel/Replay.lean` (17 goals, no error), and discharged in the same step, so the
+`LimeKernel/Log/Replay.lean` (17 goals, no error), and discharged in the same step, so the
 burn-down stays at 13: `Replay.survivors_snoc_event`, `Replay.survivors_snoc_undo` and
 `Replay.a_cancelled_event_is_never_revived` are proved as stated, and
 `Replay.a_dangling_undo_dangles_in_every_extension` is proved **without** §15's `hl` and
@@ -399,7 +399,7 @@ arguments).  README "Stage 5 D9 C1". -/
 
 /- **§6.2's day index is real (2026-09-14, stage 5 D9 step C2).**
 The three C2 goals of design §15 were added here **restated in chrono's order**, elaborated against
-`LimeKernel/Replay.lean` (16 goals, no error), and discharged in the same step, so the burn-down stays
+`LimeKernel/Log/Replay.lean` (16 goals, no error), and discharged in the same step, so the burn-down stays
 at 13.  §15 wrote them on `Cal.Instant.nanos`; the fork sorts `DateTime`s and tests
 `t.signed_duration_since(w) < Duration::hours(24)`, which differ from nanosecond counts at a leap
 second, and each statement as written is false of the fork's index
@@ -413,7 +413,7 @@ README "Stage 5 D9 C2". -/
 
 /- **§8.2's machine is real for the block family (2026-09-15, stage 5 D9 step C3).**
 The three C3 goals of design §15 were added here as written, elaborated against
-`LimeKernel/Replay.lean` (16 goals, no error), and discharged in the same step, so the burn-down stays
+`LimeKernel/Log/Replay.lean` (16 goals, no error), and discharged in the same step, so the burn-down stays
 at 13: `Replay.applyEffects_touches_only_named_keys` (the frame law),
 `Replay.every_known_event_has_an_arm` (one header effect per entry, whatever its kind) and
 `Replay.credit_conserves_the_day_minutes` (a day's ci minutes and ci-unknown minutes add up to its
@@ -424,7 +424,7 @@ here) is false under the owner's D14, which ports `extended_min`:
 `Replay.an_extend_changes_only_the_bookkeeping_and_its_extended_minutes`.  README "Stage 5 D9 C3". -/
 
 /- **§8.2's completion family is real (2026-09-15, stage 5 D9 step C4).**
-The C4 goals of design §15 were added here, elaborated against `LimeKernel/Replay.lean` (16 goals, no
+The C4 goals of design §15 were added here, elaborated against `LimeKernel/Log/Replay.lean` (16 goals, no
 error), and discharged in the same step, so the burn-down stays at 13, each checked against its goal by a
 scratch `example`.  Quirk Q6(b) is ported faithfully (gap 118): `Replay.an_instance_is_its_last_record_in_file_order`
 (fork `instances[item][inst]` holds the last surviving `routine` or `skip` in file order) is proved as
@@ -439,7 +439,7 @@ design §8.4's "a since filter commutes with max" is refuted
 README "Stage 5 D9 C4". -/
 
 /- **§8.2's day header and records family is real (2026-09-15, stage 5 D9 step C5).**
-The C5 goals were added here, elaborated against `LimeKernel/Replay.lean` (17 goals, no error), and discharged in
+The C5 goals were added here, elaborated against `LimeKernel/Log/Replay.lean` (17 goals, no error), and discharged in
 the same step, so the burn-down stays at 13, each checked against its proof by a scratch `example`.
 `Replay.energy_obs_slept_is_the_days_first_logged_sleep` (§15's late binding: an energy observation that is not a
 start's reads the first surviving wake in file order of its day, a wake logged after it included) is proved as
@@ -456,7 +456,7 @@ fixed at W-12** (gap 86), its witness now
 spelling's behaviour as its own conjunct.  README "Stage 5 D9 C5". -/
 
 /- **§8.4's view is real: the facts, the observations and the headers (2026-09-15, stage 5 D9 step C6).**
-The two C6 goals of design §15 were added here, elaborated against `LimeKernel/Replay.lean` (15 goals, no error), and
+The two C6 goals of design §15 were added here, elaborated against `LimeKernel/Log/Replay.lean` (15 goals, no error), and
 discharged in the same step, so the burn-down stays at 13, each checked against its proof by a scratch `example`.
 `Replay.every_dated_output_names_its_day_key` is proved for every effect (§15's statement, over an entry's effects,
 is it given fewer arguments), with `Replay.Effect.day?` the day of the dated record an effect writes and
@@ -469,7 +469,7 @@ lines strictly increase: `Replay.observations_are_in_file_order_on_increasing_li
 
 /- **§7.3's undo law is real (2026-09-15, stage 5 D9 step C7).**
 The three C7 goals of design §15 were added here, with `Replay.undosFor` taking the offset `ctx.now` is written at
-(`o`, which the stamp of an `Entry` needs), elaborated against `LimeKernel/Replay.lean` (16 goals, no error), and
+(`o`, which the stamp of an `Entry` needs), elaborated against `LimeKernel/Log/Replay.lean` (16 goals, no error), and
 discharged in the same step, so the burn-down stays at 13, each checked against its proof by a scratch `example`.
 `Replay.undoing_a_command_replays_the_log_without_it` is proved **without** §15's `hl`, which it does not need (the
 mask's half is about entries, not lines; §15's statement is that theorem given fewer arguments), in two halves:
@@ -485,7 +485,7 @@ conclusion, `Replay.the_undo_law_fails_without_untouchedBy`.  README "Stage 5 D9
 /-! ############################################################################
 # STAGE 5 — D9 window (W1, added: the burn-down rises by 16) → discharged in W2
 Design `kernel/design/stage5/stage5-D9-D10-design.md` §9.5 and §15's W block, elaborated against
-`LimeKernel/Seal.lean`.  `T₀` is the day a checkpoint was sealed at, `T` the request's day, `L` its
+`LimeKernel/Seal/Seal.lean`.  `T₀` is the day a checkpoint was sealed at, `T` the request's day, `L` its
 ledger day; `a` the folded lines, `r` the unfolded lines known when it was sealed (a prefix of the
 tail `b`).
 
@@ -872,8 +872,8 @@ days this module already builds.
 
 **And §8.2 step 8 landed between W-22 and W-23 and gave no checker a subject either** — for a
 reason that is structural rather than measured, which is the one improvement W-23 makes on the
-form of W-21's and W-22's answers.  `PlanCheck.lean` imports `LimeKernel.Planner` and **not**
-`LimeKernel.Emit`; `Emit.lean` is that module's sibling, downstream of the battery.  So no
+form of W-21's and W-22's answers.  `PlanCheck.lean` imports `LimeKernel.Planner.Planner` and **not**
+`LimeKernel.Planner.Emit`; `Emit.lean` is that module's sibling, downstream of the battery.  So no
 checker of the eleven can read a cell, no row text can be any checker's subject, and P8 could
 not have moved the census whatever it emitted.  What P8 was owed by name is a different
 sentence and it is **not** paid: the impossibility goal (refuted and gone at W-32) still needed

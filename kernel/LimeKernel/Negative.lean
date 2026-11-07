@@ -128,7 +128,7 @@ theorem monthDayCheat :
 end Lime
 
 /- ======================================================================
-   THE EXACT-ARITHMETIC LAYER (`LimeKernel/Arith.lean`).
+   THE EXACT-ARITHMETIC LAYER (`LimeKernel/Base/Arith.lean`).
    Appended as its own block so that the three stage-one branches merge.
    ====================================================================== -/
 namespace Lime

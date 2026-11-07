@@ -246,8 +246,8 @@ fn root() -> std::path::PathBuf {
 /// for each `Planner.RoutineErr`; and the table is printed for the README block.
 #[test]
 fn every_planner_refusal_is_classified() {
-    let plan_wire = lean_code(&std::fs::read_to_string(root().join("kernel/LimeKernel/LimeKernel/PlanWire.lean")).expect("PlanWire.lean"));
-    let planner = lean_code(&std::fs::read_to_string(root().join("kernel/LimeKernel/LimeKernel/Planner.lean")).expect("Planner.lean"));
+    let plan_wire = lean_code(&std::fs::read_to_string(root().join("kernel/LimeKernel/LimeKernel/Wire/PlanWire.lean")).expect("PlanWire.lean"));
+    let planner = lean_code(&std::fs::read_to_string(root().join("kernel/LimeKernel/LimeKernel/Planner/Planner.lean")).expect("Planner.lean"));
     let ctors = constructors(&plan_wire, "PlannerRefusal");
     let errs = constructors(&planner, "RoutineErr");
     // 20 until the W-47 repair, whose D112 exits deleted `badHash`, `badOverride` and `tooManyOverrides` with the

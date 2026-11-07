@@ -221,7 +221,7 @@ impl LaterWriter {
 }
 
 /// One named kernel refusal (or FFI fault), as the kernel bridge mapped it
-/// from the response's `err` shape (`kernel/LimeKernel/LimeKernel/Boundary.lean`).
+/// from the response's `err` shape (`kernel/LimeKernel/LimeKernel/Wire/Boundary.lean`).
 #[derive(Debug)]
 pub struct KernelIssue {
     /// The refusal's name, exactly as the wire carries it.

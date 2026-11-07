@@ -11,7 +11,7 @@ it is linked by section number.
 that, `kernel/README.md` is later than `PLAN-lean-kernel.md` — the plan has not
 been rewritten as the kernel learned things, and several of its statements are
 now stale in ways §10.2 lists by name. This document is the authority on
-*process* only: rules, conventions, verification, stop conditions. **The product was renamed from `tm` to `lime`** (D159, step 1): `tm/`, `tm-core/`, `kernel/tm-kernel-ffi/`, `kernel/TmKernel/` and `tm-spec-v1.md` are `lime/`, `lime-core/`, `kernel/lime-kernel-ffi/`, `kernel/LimeKernel/` and `lime-spec-v1.md`; the namespace `Tm` is `Lime`; every function, test, crate and command `tm` is `lime`; `.tm/` and the `tm:plan` markers stay on a user's disk until step 2 (D161), and the fork keeps its own names. `PLAN-lean-kernel.md`, `kernel/design/**`, `kernel/README.md`, `lime/DORMANT.md`, `.claude/API-NOTES.md`, §4's D-rows and this file's dated records keep the old spelling in full, on purpose, and check 8 reads them through `ratchet.respell`. `TM_*` developer variables are `LIME_*` now, and an old one is refused by name; `TM_DIR`, a user's, still answers when `LIME_DIR` is unset. **History across the rename:** for one file `git log --follow` crosses it; for a directory or a pickaxe, name both paths (`git log -- tm/src/cli lime/src/cli`), or the answer is short with no warning; and the rename commit is a merge, so plain `git log -S` does not list it: add `--first-parent`. Bisect across it in a fresh worktree (kernel/README.md, the rename's follow-up block).
+*process* only: rules, conventions, verification, stop conditions. **The product was renamed from `tm` to `lime`** (D159, step 1): `tm/`, `tm-core/`, `kernel/tm-kernel-ffi/`, `kernel/TmKernel/` and `tm-spec-v1.md` are `lime/`, `lime-core/`, `kernel/lime-kernel-ffi/`, `kernel/LimeKernel/` and `lime-spec-v1.md`; the namespace `Tm` is `Lime`; every function, test, crate and command `tm` is `lime`; `.tm/` and the `tm:plan` markers stay on a user's disk until step 2 (D161), and the fork keeps its own names. `PLAN-lean-kernel.md`, `kernel/design/**`, `kernel/README.md`, `lime/DORMANT.md`, `.claude/API-NOTES.md`, §4's D-rows and this file's dated records keep the old spelling in full, on purpose, and check 8 reads them through `ratchet.respell`. `TM_*` developer variables are `LIME_*` now, and an old one is refused by name; `TM_DIR`, a user's, still answers when `LIME_DIR` is unset. **History across the rename:** for one file `git log --follow` crosses it; for a directory or a pickaxe, name both paths (`git log -- tm/src/cli lime/src/cli`), or the answer is short with no warning; and the rename commit is a merge, so plain `git log -S` does not list it: add `--first-parent`. Bisect across it in a fresh worktree (kernel/README.md, the rename's follow-up block). **The library was then regrouped** (D162): `kernel/LimeKernel/LimeKernel/Foo.lean` is `kernel/LimeKernel/LimeKernel/<Folder>/Foo.lean` under one of seven folders (§2.3). The move shifted no line and changed no file name, so an older `Foo.lean:<line>` reads as it did before the move, and older line citations remain as stale as they were: find a declaration by its name, not its number (§2.2, §5.11). Those records keep the flat paths on purpose. `git log --follow` crosses the move; for a directory, name the flat files too, because `git log -- kernel/LimeKernel/LimeKernel/Plan` starts at the move.
 
 **Measurement date.** Every number here was re-measured on `rebuild-on-lean` at
 `bf7cc63` on 2026-09-12, with a clean working tree, every build and test command
@@ -178,8 +178,9 @@ theorems with `sorry` proofs. Its number is a **burn-down** (§3.2), not a score
 | `/Users/psixyzt/code/planner/PLAN-lean-kernel.md` | the decision document. §3 architecture, §4 defect-by-defect verdicts, §5 the stage table, §6 risks/open questions/stop conditions, §7 standing rules |
 | `/Users/psixyzt/code/planner/lime-spec-v1.md` | the spec the kernel implements |
 | `/Users/psixyzt/code/planner/kernel/README.md` | what is built, what is proved, and **one gap list, 1–51, in five places** (§6.4) |
-| `/Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel/` | the ten modules (§10.1) |
-| `/Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel.lean` | the root module: ten `import` lines and nothing else. **A module not listed here is not built** (§2.3) |
+| `/Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel/` | the library: 97 modules in seven folders, `Base/ Plan/ Log/ Seal/ Planner/ Wire/ Laws/` (§2.3, §10.1, D162) |
+| `/Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel.lean` | the root module: 97 `import LimeKernel.<Folder>.<Mod>` lines and nothing else. **A module not listed here is not built** (§2.3) |
+| `/Users/psixyzt/code/planner/kernel/layers.txt`, `kernel/layers.py` | the folders as a table, top first, and check 15, which fails on an import against it (§2.3, §7.1) |
 | `/Users/psixyzt/code/planner/kernel/LimeKernel/Check.lean` | the axiom audit: `#print axioms`, one line per theorem |
 | `/Users/psixyzt/code/planner/kernel/LimeKernel/Negative.lean` | the cheats. **Must fail to compile** |
 | `/Users/psixyzt/code/planner/kernel/LimeKernel/Goals.lean` | stages 4–6 as 40 unproved statements (stage 3's section holds none any more). The one place a `sorry` may appear (§3.2) |
@@ -228,6 +229,20 @@ Cite the oracle **by function name, never by line number** — the plan's line
 citations no longer resolve (§10.2).
 
 ### 2.3 The module map, in one line each
+
+**The folders (D162, 2026-11-07).** The library is seven folders, and the order is the rule: a module imports from its own folder and the folders above it, never below, so no library module outside `Laws/` imports `Laws/`. The root module `LimeKernel.lean` imports every module, `Laws/`'s seven among them, because a module it does not import is not built, so `Laws/` is in the archive with the rest. `kernel/layers.txt` holds this table as data and check 15 (`kernel/layers.py`, its header is the specification) fails on an import against it. A new module takes a file name no other `.lean` file of the package has: the gates key a module by its file name, one flat directory never let two share one, and check 15 fails if two do (`NAMESAKE`, README gap 6120). A module's name carries its folder: `kernel/LimeKernel/LimeKernel/Seal/SealLaw.lean` is `import LimeKernel.Seal.SealLaw`. Namespaces do not: `Lime.Seal.*` is where it was.
+
+| folder | modules |
+|---|---|
+| `Base/` | `Arith Cal Grain Text Json` |
+| `Plan/` | `Line State Plan Fast Tree Cmd Close Report` |
+| `Log/` | `Stamp Log Replay` |
+| `Seal/` | every `Seal*`, 58 of them, `Seal.lean` included |
+| `Planner/` | `Priority Capacity Lookahead Recur PastCut WallTimer Planner PlanOnce PlanDiff GridCut EmitDue Emit` |
+| `Wire/` | `Width Boundary EmitWire PlanWire` |
+| `Laws/` | `PlanFold PlanStable MidnightCut BreakFold PlanCheck TodayWhole PlannerWit` |
+
+**A new module goes in a folder of that table and its name starts there**, and a module in a folder the table does not name, directly under `LimeKernel/LimeKernel/`, or a `Seal*` outside `Seal/`, fails check 15. The paragraphs below use the flat names the modules had when each was written; the file names are unchanged.
 
 ```
 Cal ──▶ Grain ──▶ Text ──▶ Line ──▶ State ──▶ Plan ──▶ Cmd ──▶ Close ──▶ Report ──▶ Boundary
@@ -311,7 +326,7 @@ named, follow `Arith`.*
 - `PlanStable` — three stability laws of the planner's day (D77's break counter among them), theorems only. W-40.
 
 **A new module is not built until it is imported.** `kernel/LimeKernel/LimeKernel.lean`
-is **78** `import LimeKernel.<Mod>` lines at stage 5's close (twenty at D9 step C1, nineteen at
+is **78** `import LimeKernel.<Mod>` lines (`import LimeKernel.<Folder>.<Mod>` since D162) at stage 5's close (twenty at D9 step C1, nineteen at
 D9 step B3, eighteen at D9 step B2, seventeen at D10 step L1, sixteen at step 3, fifteen at step 2,
 fourteen at step 1) and nothing else — **58 of the 78 are the `Seal*` group**, and each of the 58 has
 its own line: the group is a grouping in this document, never in `LimeKernel.lean`; `lakefile.toml` names one
@@ -454,8 +469,8 @@ and `blockMinAbsent` (a close op in a request without one), `badNow` and
 
 ```bash
 cd /Users/psixyzt/code/planner/kernel/LimeKernel/LimeKernel
-grep -n '"err"\|"kernel"\|jsonErr\|lerrJson\|throw\|kerrName' Boundary.lean
-grep -n 'def jget' -A 8 Json.lean
+grep -n '"err"\|"kernel"\|jsonErr\|lerrJson\|throw\|kerrName' Wire/Boundary.lean
+grep -n 'def jget' -A 8 Base/Json.lean
 ```
 
 *Stage 4 step 5 (2026-09-12) added `now` and `blockMin` to the request and
@@ -806,6 +821,7 @@ that needs the user's assent, not an agent's judgment.
 | **D159** (2026-11-06, the owner's rename, step 1): **the command, crates, directories, the Lean package and namespace, the FFI symbols, the env vars and every function and test name become `lime`, in one measured commit made by a repeatable codemod; nothing on a user's disk changes** (`.tm/`, the `tm:plan` markers and the log keep their bytes) — the moves alone are that commit's second parent, so `git log --follow` crosses the rename while the first-parent line stays green (D88), which is a stated exception to D120's rule that a land merges a snapshot's tree and never the snapshot; `$TM_DIR` keeps answering when `LIME_DIR` is unset, because a user's shell profile holds it; `Lime.PErr.*` in output and in the wire's `why` is accepted for this step; a registered divergence (P150). *Campaign call inside this, revisable:* an old developer variable (`TM_ORACLE`, `TM_*_BLESS`) is refused by name, because the frozen record still spells it and a differential arm that goes inert passes green | the owner asked for the full rename, and the kernel round goes on the renamed tree (D158). **Declined:** two commits on the line (the script's commit is red until its gates are taught, against D88); the moves first on the line; bare constructor names in refusals (a kernel and wire change the rename does not need) |
 | **D160** (2026-11-06, the rename's old trees): **`lime check` names a tree whose hooks still call the old command, as a warning (D18's family, exit code unchanged), `lime init --force` removes `.claude/hooks/tm-check.sh`, and the root README carries an upgrade note**; a registered divergence (P151) with a behaviour row. The owner keeps a `tm` symlink on their own machine until each tree is regenerated | driven on the rename's tip: with only `lime` on PATH, a tree the old binary wrote commits a duplicate id at rc 0 with `pre-commit: tm is not on PATH — skipping tm check`, its Claude hook exits 0 silently, and `lime init --force` left `tm-check.sh` beside `lime-check.sh`, so the validation net is off with nothing to find. **Declined:** the note alone (nobody reads it before the first failed check); leaving old trees as they are |
 | **D161** (2026-11-06, the rename's step 2): **`.tm/` becomes `.lime/` and `tm:plan` becomes `lime:plan`, with a migration of existing trees, LAST — after W-55, under its own parity number and D-row** | it changes bytes on a user's disk, so it cannot share step 1's proof that every tree the old and new binary write is byte-identical, and a migration is written once against the final format. **Declined:** at the same time as step 1; dropping it |
+| **D162** (2026-11-07, the owner's regroup, queued 2026-11-05 as "queue grouping after rename", on the seven-folder proposal; D158's order): **the kernel's 97 library modules move into seven folders, `Base/ Plan/ Log/ Seal/ Planner/ Wire/ Laws/`, one-way: a module imports from its own folder and the folders above it, so no library module outside `Laws/` imports `Laws/`, and the root module imports every module, as Lake needs it to. Moves only:** file names, declarations, namespaces and `LimeKernel.lean`'s import order are unchanged, the archive's symbols are equal under the folder map (Lean puts a module's path into `initialize_*` and `_private_*`), and the emitted C holds the same lines (91 of 98 files byte-identical under the map, 7 with their prototypes in another order), so the binary differs only by the refusal text that names `Boundary.lean`'s path and the kernel id. *Campaign call inside this, revisable as D39's was:* **check.sh gains check 15**, which fails on an import against the table (`kernel/layers.txt`), a module outside the folders, a folder or a `Seal*` module out of place, and two `.lean` files of one name, because the folders are what made that possible and the gates key a module by its file name. That changes what "green" means. The map is `Base`: Arith Cal Grain Text Json; `Plan`: Line State Plan Fast Tree Cmd Close Report; `Log`: Stamp Log Replay; `Seal`: every `Seal*`; `Planner`: Priority Capacity Lookahead Recur PastCut WallTimer Planner PlanOnce PlanDiff GridCut EmitDue Emit; `Wire`: Width Boundary EmitWire PlanWire; `Laws`: PlanFold PlanStable MidnightCut BreakFold PlanCheck TodayWhole PlannerWit | 97 modules in one directory read as a list, and the import graph was already one-way when measured (0 of 178 imports against the table), so the folders state what the code already does. Nothing else holds the direction (`replay.py` reads the whole graph for a memo key, `totality.py` one file's imports, the leaf rules in `mutate.py` and `reach.py` one module's importers), so it would be true on the day of the move and held by nothing after it. **Declined for check 15:** a list of modules per folder (a new module would cost a row, and the table states a direction, not a census); a prose rule with no gate |
 | Behaviour changes are recorded next to the rule they replace, with a theorem separating them — never taken silently | *"this is a bug" vs "this is an undocumented deliberate choice" is a judgment reading cannot settle* |
 
 ---
@@ -827,7 +843,7 @@ nothing else.
 `PLAN-lean-kernel.md` §5 lists "scaling `Core` from five fields to the real
 `Item`'s twenty-two" as remaining stage-1 work, and it **did not happen and will
 not**: `Core` still has five fields (`live`, `archive`, `status`, `line`,
-`parent` — `sed -n '/^structure Core/,/^$/p' State.lean`), because §5.3's fix
+`parent` — `sed -n '/^structure Core/,/^$/p' Plan/State.lean`), because §5.3's fix
 made the item fields *views over the token vector* instead of record fields. What
 was measured is the theorem getting **stronger**: `wf_ignores_the_item_fields`
 was a thirteen-binder statement listing the fields it was safe to set, and is now
@@ -1005,7 +1021,7 @@ of its order; and a pair the documents genuinely do not order is
 
 Landed since, at `8eea3d6`: `orientPair` is **lexicographic** — the `[-]` line is
 the tombstone, and horizon order is consulted only when both lines are `[-]`
-(`sed -n '/^def orientPair/,/^$/p' Boundary.lean`). The box decides first,
+(`sed -n '/^def orientPair/,/^$/p' Wire/Boundary.lean`). The box decides first,
 because §6.3's sanctioned pre-close pair is `[-]`/`[ ]`.
 
 Same discipline, on dead code: seven definitions were **deleted** rather than
@@ -1261,7 +1277,7 @@ demonstrably lost names:
 cd /Users/psixyzt/code/planner/kernel/LimeKernel
 grep -c '^#print axioms' Check.lean                                     # 4971 (3993 at e7b816c, 1299 at bf7cc63, 1006 at c8f3a38)
 grep '^#print axioms' Check.lean | awk '{print $3}' | sort -u | wc -l   # 4971
-grep -hcE '^(@\[[^]]*\][[:space:]]*)?theorem ' LimeKernel/*.lean | awk '{s+=$1} END {print s}'   # 4969
+grep -hcE '^(@\[[^]]*\][[:space:]]*)?theorem ' LimeKernel/*/*.lean | awk '{s+=$1} END {print s}'   # 4969
 ```
 
 **These told an inconsistent story and were repaired at `e7b816c`; the trap that
@@ -1442,7 +1458,7 @@ banner which range is yours and fix it at the merge (§6.5).
 
 ## 7. How to verify your own work before an audit does
 
-### 7.1 The seven checks this section documents — and `check.sh` runs FOURTEEN
+### 7.1 The seven checks this section documents — and `check.sh` runs FIFTEEN
 
 **This heading said "the seven checks" while `check.sh` ran nine**, and the
 number is repaired here rather than the section: checks **8** (the prose
@@ -1479,7 +1495,15 @@ route that plant took) and a `decide +kernel` outside `kernel/kernel-decide-exem
 (§5.10a, may only shrink); and check 13 gained an INPUT half — every field the
 planner request decodes must be READ by a definition `Planner.dayPlan` reaches, or be
 a dated line of `kernel/inputs-exempt.txt` with an EXIT (may only shrink). What is
-written out below is checks 1–7. Do not read
+written out below is checks 1–7.
+
+**Since D162:** check **15** (`kernel/layers.py`, its table `kernel/layers.txt`) fails on an import against
+the seven folders' order, a library module outside exactly one folder of the table, a folder the table does
+not name, a folder of the table with no module, a `Seal*` module outside `Seal/`, an import the table
+cannot place, and two `.lean` files of one name. It reads no build. Its header is the specification and what it cannot see is written there. The
+folders are the owner's; that a check holds them is a campaign call (D162).
+
+Do not read
 "seven" here as the size of the acceptance; §2.1 and §6.5 carry that number and
 both said "seven" too until the W-24 repair step.
 
@@ -3339,6 +3363,19 @@ as 'lime becomes verified' is overstating it by a factor of three."*
 
 ### 10.1 The package, re-measured at stage 5's CLOSING commit, 2026-09-16 (after `2b26be3`, `47a0443`, `760ead6`)
 
+*By folder at the regroup, D162, 2026-11-07, re-measured on the tree that commit carries: `wc -l` and `leanfiles.qualified_theorem_names`, the roster `python3 leanfiles.py --theorems LimeKernel` prints whole. The tables below are older stamps and name each module by its flat name; the file names did not change. `check.sh` prints eighteen lines since then: fifteen checks, check 13 printing four.*
+
+| folder | modules | lines | theorem declarations |
+|---|---:|---:|---:|
+| `Base/` | 5 | 7,988 | 538 |
+| `Plan/` | 8 | 23,238 | 1,323 |
+| `Log/` | 3 | 19,223 | 1,066 |
+| `Seal/` | 58 | 18,337 | 913 |
+| `Planner/` | 12 | 23,361 | 1,373 |
+| `Wire/` | 4 | 17,646 | 802 |
+| `Laws/` | 7 | 26,263 | 1,187 |
+| **seven folders** | **97** | **136,056** | **7,202** |
+
 *Re-measured at W-43 track G, 2026-10-03, on the tree this step commits (README gap 4325): per module,
 `wc -l`, and the names `leanfiles.qualified_theorem_names` returns for that file — the roster
 `python3 leanfiles.py --theorems LimeKernel` prints whole and check 3 reads.  The table after this one is
@@ -3558,8 +3595,8 @@ Check these before you quote them.
 
 ```bash
 cd /Users/psixyzt/code/planner/kernel/LimeKernel
-wc -l LimeKernel/*.lean LimeKernel.lean Check.lean Negative.lean Goals.lean
-grep -cE '^(@\[[^]]*\][[:space:]]*)?theorem ' LimeKernel/*.lean   # attr-aware; §6.3
+wc -l LimeKernel/*/*.lean LimeKernel.lean Check.lean Negative.lean Goals.lean
+grep -cE '^(@\[[^]]*\][[:space:]]*)?theorem ' LimeKernel/*/*.lean   # attr-aware; §6.3
 grep -c '^#print axioms' Check.lean
 grep -c '^theorem ' Goals.lean                                  # what check 7 prints
 cat LimeKernel.lean                                               # every module built

@@ -65,7 +65,7 @@ thmInfo
 # or track G's prose until the tracks were merged, so their vocabulary is a merge-time
 # obligation (README gap 870).  `List.getElem?_eq_some_iff` is used one line below the
 # doc comment that cites it (Planner.lean `lt_of_getElem?_some`); `by_cases` is a tactic,
-# 588 uses in LimeKernel/LimeKernel/*.lean.
+# 588 uses in LimeKernel/LimeKernel/**.lean.
 List.getElem?_eq_some_iff
 by_cases
 

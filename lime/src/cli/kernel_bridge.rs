@@ -1463,7 +1463,7 @@ fn refusal(err: &Value) -> KernelIssue {
             "siteOutOfRange" => "a placement points at a document the plan does not hold",
             "noTarget" => "a close has no file to put a line in — the host must hand over the destination week, month or backlog file (kernel/README.md gap 56)",
             "noSection" => "a close's destination file has no section to land the line in (`# Demoted`, the backlog's `# Overdue`, or the heading it stood under; gap 56)",
-            _ => "an unlisted kernel refusal — see kernel/LimeKernel/LimeKernel/Boundary.lean",
+            _ => "an unlisted kernel refusal — see kernel/LimeKernel/LimeKernel/Wire/Boundary.lean",
         };
         (name.to_string(), format!("kernel refusal: {name} — {why}"))
     } else if let Some(text) = err.get("capacity").and_then(Value::as_str) {

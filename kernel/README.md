@@ -107831,3 +107831,109 @@ None of this blocked the land. Driven on the landed binary by the main session: 
 2. *Why.* Later steps moved them. It is no part of the rename.
 3. *Cost.* A reader who quotes §7.3 is a few values behind.
 4. *Clears it.* W-55's close, when gap 6082's sweep reports every set.
+
+<!-- ======================================================================
+     The regroup (2026-11-07): the owner's seven folders, D162, over ee61cf7. Gaps 6115-6120 are this block's, and 6118 re-measures gap 6080. The tree cannot
+     carry its own measurement: the acceptance figures are in the commit message (gap 6083's reason). No parity number: the
+     binary's output moves by one refusal's text, the one that names `Boundary.lean`'s path.
+     ====================================================================== -->
+
+## The regroup: 97 modules in seven folders, moved and nothing else, and check 15 holds the direction
+
+**What moved.** All 97 library modules, by `git mv`, into `Base/ Plan/ Log/ Seal/ Planner/ Wire/ Laws/`, the map in AGENTS §2.3. The table was re-derived on this tree before the move: 97 modules, 136,056 lines, Base 5, Plan 8, Log 3, Seal 58, Planner 12, Wire 4, Laws 7; none unplaced, none named and absent, 0 of 178 imports against it. A Lean file changed in its `import` lines and in 28 comment lines that spell a moved module, each kept on its own line, so the move shifted no line and changed no file name: an older `Foo.lean:<line>` in this file reads as it did before the move, and older line citations remain as stale as they were (AGENTS §2.2, §5.11). `LimeKernel.lean` keeps its import order. `git diff -M` finds 97 renames, the lowest at 97%, and `git log --follow` reaches the `kernel/TmKernel/TmKernel/` spelling on every one.
+
+**The commit before this one taught `ratchet` the chain**, because a moved module needs two steps back, folder to flat path and flat path to the name before the rename. That commit's message has the plants.
+
+**What the move forced, and nothing else:**
+* `mutations.txt`'s second column, 1,004 rows, and `mutate.WITNESS_MODULES`.
+* `reach.proof_violations`, which built the flat path of `CLASS proof <Module>`, now finds the module by its file name.
+* `reach.py`'s `UNCOMPILED` and `STALE ARTEFACT`, which compared stems, now compare paths. By stems a flat `Plan.c` left by an older build reads as `Plan/Plan.c`, and the walk reads both. See gap 6117.
+* `citations.declared` now declares a library folder, because `LimeKernel.Laws.PlannerWit` names a module and `Laws` is spelled by nothing but the path.
+* `parity.txt`'s P36, the one row that names a module's path.
+* `lime/tests/kernel_planner_refusals.rs`, which reads two modules by path, and `kernel_bridge::refusal`'s text.
+
+**What the move opened.** One flat directory could not hold two files of one name, so the gates were free to key a module by its file name, and they do. A new `Wire/PlannerWit.lean` was the witness class and a new `Wire/PlanCheck.lean` the proof class, with all 18 lines of `check.sh` green. Check 15's `NAMESAKE` arm now holds that premise (gap 6120).
+
+**What needed nothing**, each shown by the plants below rather than by reading: `totality.py`, `twins.py`, `callgraph.py`, `fields.py`, `sections.py`, `sentkeys.py`, `replay.py`, the `leanfiles` walk, and `lime-kernel-ffi/build.rs`, whose `rerun_dir` is recursive (its output lists `Laws/TodayWhole.lean`).
+
+**Identity, against ee61cf7, on this commit's code.**
+* `nm --defined-only` on the archive: 98 members, 44,847 symbols, each member's lines equal under the folder map, addresses included. The map changes 2,013 symbol names: 97 `initialize_LimeKernel_*`, the root's stays, and 1,916 `_private_LimeKernel_*`.
+* The emitted C: 91 of 98 files byte-identical under the map. The other 7 (`Cmd Plan Priority Recur Seal Text Tree`) hold the same lines with their prototypes in another order, and nothing else differs. Why the order moves was not traced; the object code's symbols and addresses are equal.
+* The theorem roster, 7,202 names, equal as a multiset. Check 3's printed output, 8,620 lines and 7,210 audit lines, byte-identical, order included.
+* `kernel/corpus/**`, `lean-toolchain`, `lakefile.toml`, `lake-manifest.json` and the 28 `fork-4748911` fixtures: no diff.
+* Every gate's output, diffed against the base's: `twins.py`, `reach.py`, `fields.py`, `replay.py` and `mutate.py --gate` byte-identical, and `reach.py --audit` equal as a set of lines. Two moved, and each is explained: `citations.py` by this commit's prose (440 files swept for 438, the two new files), `parity.py` by the same two files (794 swept for 792).
+
+**The new gate.** Check 15, `kernel/layers.py`, its table `kernel/layers.txt`. The header is the specification. It reads no build. The imports come through `leanfiles.imports`, which reads the header as Lean does. Driven on Lean 4.33.1: `import X import Y` on one line and an `import` with its module on the next line compile, and `import X Y` and an `import` below the header do not. So "several modules on one line" means the first of those.
+
+**Plants, one per arm, each in a nested folder, each named in the output.**
+
+| gate | plant | failed with |
+|---|---|---|
+| 1 | `theorem` cut short in `Seal/SealInStep.lean` | `lake build` FAILED |
+| 2 | `partial def` in `Plan/Line.lean`; `import Lean` in `Wire/Boundary.lean`; `decide +kernel` in `Base/Cal.lean`; a `sorry` in `Laws/Goals.lean`, which is not the exempt root file | `banned`, each by path |
+| 3 | a theorem in `Laws/TodayWhole.lean`; a `sorry` there | `no #print axioms for: Lime.w55_plant_thm`; `sorryAx` |
+| 4 | a cheat that compiles only because `Laws/TodayWhole.lean` defines its name | `no error in: CHEAT 9999` |
+| 5 | `callExport`, in `Wire/PlanWire.lean`, answering one more byte | `cargo test`: 51 of 90 `kernel` tests fail |
+| 6 | `callExport` rewriting `# Tasks` in what it answers | `no_file_is_silently_rewritten` and two more, 3 of 8 `corpus` tests |
+| 7 | a goal deleted | `gone from Goals.lean and not named in Check.lean` |
+| 8 | a dead name in `Seal/SealLaw.lean` | `SealLaw.lean:1485 ... resolves to nothing` |
+| 9 | a new `def` in `Seal/SealInStep.lean`; a changed body in `Plan/Close.lean`; a roster row with its flat path; `WITNESS_MODULES` with its flat path; `Laws/TodayWhole.lean` importing the witness module | `ABSENT` then `SURVIVED`; `new_or_changed` names it at 86c4dc6 and at the rename; `naming a declaration this library no longer holds`; `is not a library module`; `imports the witness module` |
+| 9, real | `mutate.py --verify --only` over `Laws/BreakFold.lean` | 6 mutations built, all `PINNED` in their theorems |
+| 10 | `**Parity P151 taken**` in `Planner/Emit.lean`; the same line for `P200` in `Wire/Width.lean`; P36 with its flat path | `TAKEN twice`; `NO index row`; `which does not exist` |
+| 11 | a generalisation pair in `Seal/SealInStep.lean`; an exact pair in `Laws/TodayWhole.lean`; a new `NOT ONE CONCEPT` line | `GENERALISATION`; `TWIN`; `RATCHET` |
+| 12 | an unreached `def` in `Seal/SealInStep.lean`, then its exempt line in the tree, then committed; `Wire/W55Mod.lean` imported by nothing; a flat `Plan.c` in the build; `Seal/SealInStep.lean` importing `Laws/PlanCheck`; a wrong census | `NOT EXEMPT`; `RATCHET`, then `RATCHET (committed)`; `UNCOMPILED`; `STALE ARTEFACT`; `PROOF`; `CENSUS` |
+| 13 | a field on `Diagnostics` and on `RuntimeIn` in `Planner/Planner.lean`; a key decoded in `Wire/PlanWire.lean`; a new line in each of `fields-exempt`, `inputs-exempt`, `sent-exempt`, `written-exempt` | `NOT EMITTED` and `UNWRITTEN`; `UNREAD`; `UNWRITTEN: planner.state.w55Key`; `RATCHET` or `needs an ISO date` |
+| 14 | a false theorem past the elaborator through `debug.skipKernelTC`, `Laws/W55Bad.lean`, imported by the root | `the kernel refuses LimeKernel.Laws.W55Bad` |
+
+**Check 15's arms**, every one rc 1 by name:
+* `AGAINST`: `import`, `public import`, `import all`, the second import on a line, the module on the next line, indented, with comments around it, and `Laws` imported from `Wire`.
+* `OUTSIDE`: a flat module, and one two folders down.
+* `FOLDER`: `Extra/W55.lean`.
+* `STALE`: a table line for an empty folder.
+* `PREFIX`: `Wire/SealNew.lean`, and `SealGroup` moved to `Laws/`.
+* `UNPLACED`: `import LimeKernel`, `import LimeKernel.Plan`, `import Lean`.
+* `NAMESAKE`: a new `Wire/PlannerWit.lean` and `Wire/PlanCheck.lean`, each built and audited, where `check.sh` goes rc 1 with this line its one `FAILED`; `Laws/Planner.lean`, `Base/PlanWire.lean` and `Wire/Arith.lean`; and `Wire/Check.lean`, `Laws/Goals.lean` and `Wire/LimeKernel.lean`, beside the package root's own.
+* An empty table, a `PREFIX` line for no folder, and a malformed line.
+* `Laws` moved to the top of the table: `AGAINST` over the real imports, so the order is what is read.
+
+Seven controls stay green: an import in a line comment, a block comment, a string after the header, and a doc comment, an import from the module's own folder, one from a folder above, and a new module of a new file name.
+
+**Left flat on purpose,** and the rule that keeps them: a script's comment that quotes a drive or a command as it ran then. `lime/tests/mutation_in_flight.rs:11`, `mutate.py:890` and `:920`, `leanfiles.py:14` and `:348`, `totality.py:66`, `check.sh:87` and `:1179`, `citations.py:386`, and `AGENTS.md`'s history of the old roster grep. Older blocks of this file, the design and the plan keep theirs too. A Lean file's comment is not in that class: every one that names a library path spells its folder, dated discharge notes included, because a reader follows it to the file. `ratchet.py` and `layers.py` hold flat spellings as their own examples. AGENTS' first paragraph says how to read history across the move.
+
+**Noted, not this land's.** `mutate.py --verify --only` over `BreakFold.lean` prints `STALE ROW` for `Lime.BreakFold.OpenAfter` (roster line 41, actual 43), on the flat base too. The named site still encloses the line, so the gate does not fail, and the verdict is unchanged.
+
+**Gap 6115 — the chain knows one move.**
+1. *What.* `ratchet.old_path` strips one folder to reach the flat path. A module moved from one folder to another after this commit has no path for the commits between the regroup and that move.
+2. *Why.* No such move exists, and a list of moves would be machinery for nothing.
+3. *Cost.* `ratchet.show` answers absent at those commits, so a gate reading one calls that module's definitions new: it fails loudly, in the safe direction. The baseline and `ratchet.BASE` are older than the regroup and still resolve.
+4. *Clears it.* The first such move, in its own commit.
+
+**Gap 6116 — four import readers read less than Lean does.**
+1. *What.* `totality.py`'s `IMPORT_LINE` and `replay.py`'s `IMPORT` take one module per line, `totality.py`'s does not cross a newline, and `replay.py`'s starts at column zero. `mutate.witness_violations` and `reach.proof_violations` read `import ` at column zero only. Driven: `import LimeKernel.Base.Text import Lean` and `import` + newline + an indented `Lean` each give `totality.py` rc 0 where a plain `import Lean` is named, and Lean 4.33.1 compiles both spellings. At column zero the next-line `Lean` is named, by the `ALLOWED_COMMANDS` rule, though Lean compiles it too.
+2. *Why not fixed.* The move does not force it, and this commit moves files. `leanfiles.imports` is there to use.
+3. *Cost.* R2's import rule has a way round it in `Check.lean`, `Negative.lean` and `Goals.lean`, which check 15 does not read. For the 97 library modules check 15's `UNPLACED` now refuses it. A `Laws/` module can import the witness module or `PlanCheck` as a second import on a line, or as an indented next-line import, with neither leaf rule seeing it, driven on both modules. `public import` is no way past them here: Lean refuses it without `module`, and a `module` cannot import a non-module, which every module of this package is. A second import on a line is missing from `replay.py`'s memo key, so a change to that module alone would not re-replay its importer.
+4. *Clears it.* W-55, or any step that touches one of the four: one reader.
+
+**Gap 6117 — a checkout that built the flat tree goes red once.**
+1. *What.* Lake prunes nothing, so a `.lake` from before the move keeps 97 flat `.c` files and their `.olean`s beside the new ones.
+2. *Why.* A build directory is not a commit's to delete.
+3. *Cost.* Check 12 fails naming 97 `STALE ARTEFACT`s, and a stale `LimeKernel/Plan.olean` lets `import LimeKernel.Plan` elaborate until it goes, which check 15's `UNPLACED` names. The first build after the fast-forward is the whole library, about ten minutes, because every module's name changed. Clearing it: `find kernel/LimeKernel/.lake/build/ir/LimeKernel kernel/LimeKernel/.lake/build/lib/lean/LimeKernel -maxdepth 1 -type f -delete`, 1,067 files on the tree this was driven on. A language server holding the old `.olean`s needs a restart.
+4. *Clears it.* Whoever lands this, once per checkout.
+
+**Gap 6118 — gap 6080, re-measured across the move, and not a second gap.**
+1. *What.* The hole is gap 6080's, and this number adds no defect and no clearance of its own. Re-driven on this commit's tree, one plant at a time: `**Parity P5 taken**` in `README.md`, in `AGENTS.md` and in `Planner/Emit.lean`, `| P5 |`, `| **P5** |` and `| P149 |` in `README.md`, and `**Parity P36 taken**` in `README.md`, each `parity.py` rc 0. Controls: `**Parity P151 taken**` and `**Parity P149 taken**` rc 1, `TAKEN twice`, and an unregistered `| P152 |` rc 1.
+2. *Why not fixed.* Planting check 10 met it again. It is older than this move: on the flat base the same plants give the same codes.
+3. *Cost.* Gap 6080's, with its figure moved: 47 of the 151 numbers have no `taken` line for a second one to collide with, the 46 row anchors and the one cite anchor, P36, where gap 6080 counted 46 of 149 and named the row anchors alone. A second register row goes unseen over any number.
+4. *Clears it.* Gap 6080's clearance closes this number with it. As gap 6080 words it, a row or issuance line "appears once", which does not refuse a first `**Parity P36 taken**`, because P36 holds neither: its only record is a cite. The step that clears gap 6080 decides that one too.
+
+**Gap 6119 — check 15 reads a direction, not a placement.**
+1. *What.* A module in the wrong folder passes while its imports run the right way: nothing says `Emit` belongs in `Planner/`, and a non-`Seal*` module in `Seal/` passes. The table lists folders, not modules.
+2. *Why.* A new module would cost a row, and the owner's rule is the direction. D162 records this as a campaign call.
+3. *Cost.* The map can drift down the table, one module at a time, with check 15 green.
+4. *Clears it.* The owner, if a census per folder is wanted.
+
+**Gap 6120 — the gates key a module by its file name, and check 15 holds the premise.**
+1. *What.* `reach.py`'s definitions, witness class, proof class and exemption sections, `mutate.py`'s error sites, `totality.py`'s `kernel-decide-exempt.txt` keys, `sections.py`, and `twins.py`'s search for a module's C all name a module by its file name. Two modules of one name read as one. None was rewritten: check 15's `NAMESAKE` arm refuses the pair.
+2. *Why.* One rule stated once, against a rewrite of six readers for a layout nothing wants. D162's move made it possible and no module has wanted it.
+3. *Cost.* Each of those scripts run alone still gives the wrong answer on a pair, and `check.sh` alone is what refuses it. Driven before the arm, each from a build of the plant: an unreached, pinned `def` in a new `Wire/PlannerWit.lean` or `Wire/PlanCheck.lean` left `check.sh` rc 0, reached as the witness or proof class, while the same text in `Wire/W55Dead.lean` failed checks 9 and 12. `mutate.py` looked up `Wire/PlannerWit.lean:3` in the first file of that name, found no declaration enclosing the line, and called the definition PINNED; the same false verdict reaches an ordinary name, `Wire/Arith.lean`, where only check 12 then failed. `decide +kernel` in a new `Laws/Planner.lean` under a theorem name `Planner.lean`'s exempt line holds gave `totality.py` rc 0. A second `callExport` in `Base/PlanWire.lean` was loud, but counted in the real section's census, 38 of 42.
+4. *Clears it.* A step that wants two modules of one name: it keys the readers by path first, then drops the arm.

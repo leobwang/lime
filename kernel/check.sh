@@ -1377,4 +1377,17 @@ else
   printf '%s\n' "$out" | head -20
 fi
 
+# 15. The seven folders are a one-way table (kernel/layers.txt, the owner's folders, AGENTS D162).  `layers.py`'s header is
+#     the specification: an import against the table, a library module outside the seven folders, a folder the table does
+#     not name, a folder of the table with no module, a `Seal*` module outside `Seal/`, an import the table cannot place and
+#     two `.lean` files of one name each fail by name.  It reads no build, so its population is the walk's: the number of modules printed here is the
+#     number check 14 replays.  This check changes what "green" means, so D162 says so and marks it a campaign call.
+out=$( python3 layers.py 2>&1 )
+if [ $? -eq 0 ]; then
+  say "no import against the folder table" "ok  ($( printf '%s\n' "$out" | tail -1 ))"
+else
+  say "no import against the folder table" "FAILED"; fail=1
+  printf '%s\n' "$out" | head -20
+fi
+
 exit $fail

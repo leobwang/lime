@@ -278,6 +278,28 @@ def repo_files(root):
     return sorted(set(out))
 
 
+def imports(text):
+    """The modules a Lean file's HEADER imports, in order, as Lean reads them: check 15's reader.
+
+    Comments and string bodies go first (`strip_comments`), so neither can fake one.  Then the header's words, which end
+    at the first word a header cannot hold: `import` takes one module, with `all` between them where it is written, and
+    `public`, `meta`, `private`, `module` and `prelude` may stand around it.  So `import X import Y` on one line and an
+    `import` whose module is on the next line each count, as Lean 4.33.1 reads them (driven), and an `import` below the
+    header is not read, because Lean refuses it.  The older readers take less: kernel/README.md's gap 6116 says which and
+    what that costs."""
+    out, want = [], False
+    for word in strip_comments(text).split():
+        if want:
+            if word != "all":
+                out.append(word.replace("\u00ab", "").replace("\u00bb", ""))
+                want = False
+        elif word == "import":
+            want = True
+        elif word not in ("public", "meta", "private", "module", "prelude"):
+            break
+    return out
+
+
 def lean_files(root):
     """Every .lean file under `root` (`source_files`, at this kernel's suffix)."""
     return source_files(root, ".lean")
