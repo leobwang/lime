@@ -105,29 +105,33 @@ your validation net is off.
 ### Upgrading a tree from `tm`
 
 The command used to be called `tm`. Your plan does not move: `.tm/`, your files
-and your log stay as they are. Only the hooks and the Claude Code files in each
-plan directory still name the old command. To bring a tree up to date, put `lime`
-on your `PATH` and run this in each plan directory:
+and your log stay as they are. The hooks and the Claude Code files in each plan
+directory still name the old command, and so do the starter comments in your own
+files, which nothing reads and you are free to edit. To bring a tree up to date,
+put `lime` on your `PATH` and run this in each plan directory:
 
 ```sh
 lime init "$PWD" --force
 ```
 
-It rewrites `CLAUDE.md`, the skills and both hooks, leaves your files alone, and
-removes `.claude/hooks/tm-check.sh` unless you edited it (it says which). Name the
-directory, as here: `init` does not look for your plan as the other verbs do, so a
-bare `lime init --force` makes a new tree at `./plan` and leaves this one as it was.
+It rewrites `CLAUDE.md`, `.claude/settings.json`, the skills and both hooks, and
+removes `.claude/hooks/tm-check.sh` unless you edited it (it says which). Anything
+you added to the files it rewrites is replaced without a word, a pre-commit hook of
+your own included, so commit first. It leaves your existing plan files alone, and
+adds this month's and this week's files if they are missing. Name the directory,
+as here: `init` does not look for your plan as the other verbs do, so a bare
+`lime init --force` makes a new tree at `./plan` and leaves this one as it was.
 `lime check` prints the same command with the tree's path filled in.
 
 Until you do, with only `lime` on your `PATH`, that tree's validation net is off:
 its pre-commit hook prints `pre-commit: tm is not on PATH — skipping tm check` and
 lets the commit through, and its Claude Code hook exits 0 silently. `lime check`
 still reads the tree and names each such hook (`old-hook`), from wherever it finds
-the tree. If you have scripts
-that call `tm`, keep a symlink, which also keeps the old hooks working:
+the tree. If you have scripts that call `tm`, keep a symlink beside `lime`, which
+also keeps the old hooks working:
 
 ```sh
-ln -s "$(command -v lime)" ~/.local/bin/tm
+ln -s lime "$(dirname "$(command -v lime)")/tm"
 ```
 
 ### Finding your plan directory

@@ -107754,3 +107754,80 @@ Measured by the rename's verifiers, none caused by this land. Each was re-measur
 2. *Why.* It is the reply of every `init` and not what D160 asked for, so the note and the warning stay clear of it by naming the tree absolutely, where the line is right.
 3. *Cost.* A user who names a tree relatively from below the top and follows the reply loses the hook. `lime check` does not read `core.hooksPath` (gap 6101), so nothing says so.
 4. *Clears it.* The owner or W-55: the line printed absolute, or from the repository's top, moving the reply the differential's `init` rows allow by name.
+
+<!-- ======================================================================
+     The rename's follow-up (2026-11-07), after the land: what the land's verifiers noted and the land left. Gaps 6105-6114 are
+     this block's. Documentation only; the root README's upgrade note changes with it, and no behaviour does.
+     ====================================================================== -->
+
+## The rename's follow-up: what the two blocks above overstate, and what they leave out
+
+None of this blocked the land. Driven on the landed binary by the main session: the matcher's shapes, the symlink and the user's pre-commit in gaps 6107 and 6108, the read-only directory in gap 6111, gap 6106, and the commands in the next paragraph. Gaps 6109, 6110, 6112 and 6114, the non-UTF-8 path and the plants in gap 6108, and the TUI's and the cache's figures in gap 6111 are the land's verifiers' measurements, read and not run again.
+
+**Corrections to the two blocks above**, which stay as they were written:
+* Gap 6098's cost says the next bless moves one line. It moves ten: the header and nine rows, because the frozen file holds `Tm.PErr.manyIds` in nine detail cells and the kernel now prints `Lime.PErr.manyIds`. That is a rename diff (P150), not a grammar change.
+* Gap 6099 names one cost and there are two more. Plain `git log -S` does not list the rename, because it is a merge: `git log -S 'The rename, step 1' -- kernel/README.md` prints nothing, and with `--first-parent` it prints the commit. Directory logs stop there too: `git log -- lime/src/cli` lists 3 commits and `git log -- tm/src/cli lime/src/cli` lists 213. And `--first-parent` does not make a bisect across the rename clean in a tree that has built the new layout: the older commit's `.gitignore` has no line for `kernel/LimeKernel/.lake`, so checks 8 and 10 fail for that reason at every older step. Use a fresh worktree, or move the other layout's `.lake` aside at each step. AGENTS' precedence paragraph says this now.
+* "`git log --all` holds two commits naming the path" went stale when the moves commit was made, and the count depends on which local refs remain. The claim that matters is one blob, `c13343c`.
+* The first block's heading says nothing moves on a user's disk. A regenerated `day/*.svg` changes its two ids and `.tm/cache/replay/ckpt.json` changes its `digest` and `gen`. P150 lists both. D159 is the owner's text and stays.
+* D161 names two kept classes, `.tm/` and `tm:plan`. Step 2 has four, as the first block says: `.tm/`, the `tm:plan` and `tm:review` markers, the `.tm-tmp-` name and the `PRODID`. `lime --help` prints `tm:review`. Step 2's brief names all four and gap 6105's lines, and asks the owner about those D161 leaves out.
+* The land's plant of the `written-exempt.txt` ratchet used `plan.bed`, a D124 grant. It did not exercise an ordinary line of that file, such as `cmds[].min`. The gate holds; that plant did not show it.
+
+**Gap 6105 — an old tree's starter comments keep the old name.**
+1. *What.* After `lime init "$PWD" --force`, `.gitignore`'s first line says `# tm — runtime state and caches`, and the comments `init` wrote into `month/`, `inbox.md` and `routines.md` still say to run `tm`. `lime check` says no problems.
+2. *Why.* These are the user's files by then, and `init` leaves existing plan files alone on purpose.
+3. *Cost.* A reader of their own plan file is told a command that no longer exists. Nothing reads these lines. The root README's note said only the hooks and the Claude Code files name the old command, and it says this now.
+4. *Clears it.* Step 2 (D161) decides whether its migration rewrites them.
+
+**Gap 6106 — the old directory argument gives §6.3's reconciliation nothing to compare.**
+1. *What.* `python3 leanfiles.py --theorems TmKernel`, typed from habit, stops with a Python traceback at rc 1. Inside §6.3's pipeline `sed` and `sort` hide that rc, so `/tmp/decl` is empty and `comm -23`, which MUST BE EMPTY, prints nothing. AGENTS no longer spells this form.
+2. *Why.* The roster was written when the directory could not be missing. A gate change waits for W-55.
+3. *Cost.* A hand reconciliation typed from memory passes with a traceback above it. Check 3 runs its own reconciliation, so the gate is not affected.
+4. *Clears it.* W-55: `leanfiles.py` refuses by name a directory that does not exist or holds no `.lean` file.
+
+**Gap 6107 — the old-hook matcher reads lines, and misses or over-reads shapes a shell treats otherwise.**
+1. *What.* `init::calls_old_command` names a hook on `tm` then `check` as words where a line starts a command. Named though nothing runs it, or only after a guard: a heredoc body, a line inside a multi-line string, a `case` pattern, `echo run \; tm check`, and `true || tm check`. Not named though the shell runs it: ``x=`tm check` ``, `command tm check`, `env`, `time` and `nice` before it, `FOO=1 tm check`, `sh -c "tm check"`, `eval tm check`, `/usr/local/bin/tm check`, `tm --dir plan check` and `"tm" check`. The first block's "a quoted string" and "merely mentions" do not hold for the first list.
+2. *Why.* The brief asked for the shipped shapes, and both are named. A shell parser for a user's hook is not a rename's job.
+3. *Cost.* A hand-written hook of the second list gets no warning, though it still prints `tm is not on PATH` if it guards itself as the generated one does. A hook of the first list gets advice it does not need, and gap 6108 says what following it costs.
+4. *Clears it.* W-55 if wanted: match the generated blob's lines, with softer wording for anything else.
+
+**Gap 6108 — following the warning's advice can overwrite or fail to clear.**
+1. *What.* (a) When `.claude/hooks/tm-check.sh` is a symlink to the generated script, `lime check` says to run `lime init <tree> --force`, that leaves the link and says so, and `lime check` repeats the same advice forever: `old_hooks` follows the link and `remove_old_hook` does not. The first block's "a message that says `--force` will not clear it" is false for this shape. (b) For a `.githooks/pre-commit` the user wrote, the advice replaces the whole file, their lines included, and the reply does not say so. (c) On a tree whose path is not UTF-8, the printed command names a different directory, and pasted it makes a new tree there. (d) Five plants of the new code survive all of `cli_old_hooks`: following a symlink and removing it, not reporting a non-file, dropping the shell keywords, the trailing-comment arm, and the backslash arm.
+2. *Why.* (b) is `init`'s standing behaviour, which the brief left alone. The rest were found after the land's trees were measured.
+3. *Cost.* (a) needs a dotfile manager or a hand link, and nothing is lost. (b) loses a user's hook lines unless they committed first, which the root README now tells them to do. (c) is rare, and the real tree stays as it was. (d) is two promises of the first block that no row holds.
+4. *Clears it.* W-55: `force_clears` from the same test `remove_old_hook` uses; the softer wording when the pre-commit is not the old blob; rows for a symlink and a directory at the script path, and one per keyword.
+
+**Gap 6109 — the codemod's limits if it is run again.**
+1. *What.* A second run on its own output changes nothing but stops at rc 2, because the `LITERALS` row for `build-oracle.sh` is spelt with the old `tm-oracle`. Its docstring cites a `--check` that does not exist. Its literal stop covers a whole `"tm"` or `\"tm\"` and maps silently `'tm'`, `"tm "`, `format!("tm{x}")`, `format!("tm-{x}")`, and a known name used as a path, such as `join("tm.json")`. Plants of those shapes exit 0 with no stop.
+2. *Why.* It ran once on one base, and every kept path in the live files was listed by hand. None of those shapes occurs there.
+3. *Cost.* None on this tree. Step 2 or anyone re-using the tool on another base inherits the holes.
+4. *Clears it.* Whoever re-uses it: widen the stop to any literal whose first word is the name, match `LITERALS` per atom, and drop `--check` or build it. `refs/archive/rename-tools` holds it as it ran.
+
+**Gap 6110 — `old_developer_names.rs` is narrower than the first block says.**
+1. *What.* The source row misses a braced import of the read (`use std::env::{var_os}`) and a read inside a `#[cfg(test)]` module of `lime/src` or `lime-core/src`. Its old-spelling half misses `kernel/*.py` and `kernel/check.sh`. And `examples/oracle/arms.py` reads the row's specimen `an_arm_that_asks_for_its_variable` as an oracle arm, so input set 7 runs 21 arms where the base ran 20, and that one compares nothing.
+2. *Why.* The row walks the three test directories and looks for one needle.
+3. *Cost.* No such read exists today, so nothing is quiet now. The extra arm prints one line that reads as an arm that asked the oracle, and no real arm drops out.
+4. *Clears it.* W-55: widen the walk, and have `arms.py` skip the specimen by a stated property.
+
+**Gap 6111 — three moves P150's row does not name.**
+1. *What.* (a) The TUI's top row starts with the command's name, two cells wider, so where it is already cut the ellipsis comes two cells earlier: 354 of 28,396 rows, and 14 `lime:` error rows cut at the width. (b) On an old tree whose `.claude/hooks` is read-only, `init --force` used to rewrite the script in place, and now fails at rc 1 creating `lime-check.sh`. (c) Two binaries sharing a tree rebuild each other's replay cache on the kernel id, so `logLines` and the sealed records differ from a run that kept its cache. No printed output, exit code or data file differs; that is D113.
+2. *Why.* Each follows from the name, and none was on the brief's list.
+3. *Cost.* A reader of P150 is not told. (b) needs a user who made that directory read-only, and it fails loudly.
+4. *Clears it.* Nothing owed in the code. These lines are the record.
+
+**Gap 6112 — comments the codemod respelled or kept against their sense.**
+1. *What.* Some comments whose subject is the fork had its verb respelled, because the fork's name did not stand right before the word: `lime/src/cli/day.rs` says the fork's resume drew `lime now`, and `Planner.lean` respells a quotation of the fork's docstring. `citations-allow.txt` calls PLAN's name `LimeArch`, where PLAN spells it `TmArch`. And four comments in `examples/oracle/` still name this tree's crates `tm` and `tm-core`, among them `build-oracle.sh`'s "beside this repository's own `tm` and `tm-core`". The examples are not a census.
+2. *Why.* The keep rule for the fork's names needs the name directly before the word, and the oracle's file class keeps every token that is not a known path.
+3. *Cost.* A reader takes a fork fact for a statement about the new command, or a stale crate name for a current one. No code, expectation or frozen data is affected.
+4. *Clears it.* W-55, when it passes those lines.
+
+**Gap 6113 — two small leftovers in the code.**
+1. *What.* `old_hook_problems` sits between `log_problems`' doc comment and its function in `lifecycle.rs`, so the comment documents the wrong function. `lime-core/src/snapshots/lime_core__log__reader_tests__three_days_jsonl.snap` is orphaned: no Rust source names it, and its test left at the switch. The rename only moved it.
+2. *Why.* The land's trees were measured, so neither rode in them.
+3. *Cost.* A misleading doc comment, and one file nothing reads.
+4. *Clears it.* W-55.
+
+**Gap 6114 — AGENTS §7.3's denominators are stale, on both sides of the rename.**
+1. *What.* §7.3 says 195,243 scalar values, 1,375 renderings read back and 24 P21 sightings. The oracle prints 195,390, 1,380 and 49; §8.3 already corrects the last. The others match: 138 and 43, 2,048 and 1,395, 469, 8,442, 285, 7 and 8.
+2. *Why.* Later steps moved them. It is no part of the rename.
+3. *Cost.* A reader who quotes §7.3 is a few values behind.
+4. *Clears it.* W-55's close, when gap 6082's sweep reports every set.
