@@ -7,7 +7,8 @@
 > kernel under `kernel/`; the terminal UI and the rest are Rust. The record of
 > the rebuild is `kernel/README.md`, and `AGENTS.md` says how to work on it.
 
-`lime` is a personal planner for people who think in plain text. You keep a small
+`lime`, an abbreviation of **lean-time-manager**, is a personal planner for people
+who think in plain text. You keep a small
 tree of Markdown files — a month of outcomes, a week of milestones and tasks, a
 backlog, your routines — and `lime` works out what to do next, an hour at a time,
 from what is in those files and from what you tell it about your day.
