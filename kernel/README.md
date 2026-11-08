@@ -107937,3 +107937,29 @@ Seven controls stay green: an import in a line comment, a block comment, a strin
 2. *Why.* One rule stated once, against a rewrite of six readers for a layout nothing wants. D162's move made it possible and no module has wanted it.
 3. *Cost.* Each of those scripts run alone still gives the wrong answer on a pair, and `check.sh` alone is what refuses it. Driven before the arm, each from a build of the plant: an unreached, pinned `def` in a new `Wire/PlannerWit.lean` or `Wire/PlanCheck.lean` left `check.sh` rc 0, reached as the witness or proof class, while the same text in `Wire/W55Dead.lean` failed checks 9 and 12. `mutate.py` looked up `Wire/PlannerWit.lean:3` in the first file of that name, found no declaration enclosing the line, and called the definition PINNED; the same false verdict reaches an ordinary name, `Wire/Arith.lean`, where only check 12 then failed. `decide +kernel` in a new `Laws/Planner.lean` under a theorem name `Planner.lean`'s exempt line holds gave `totality.py` rc 0. A second `callExport` in `Base/PlanWire.lean` was loud, but counted in the real section's census, 38 of 42.
 4. *Clears it.* A step that wants two modules of one name: it keys the readers by path first, then drops the arm.
+
+<!-- ===== The regroup's land (D162), 2026-11-08: what the land found after the workflow's block. Gaps 6121-6123. ===== -->
+
+## The regroup's land: the history advice corrected, the reverse of gap 6117, and gap 5541's row measured on both sides
+
+The regroup's two commits (`e996818`, `d7844c1`) are on `rebuild-on-lean` by fast-forward. The main session re-measured `d7844c1` in a worktree it made itself, with no `.lake` and no `target`: the Lean build was 198 jobs, rc 0, 588 s; `check.sh` printed 18 lines, all ok, with 7210 audited theorems; the FFI tests were 105 passed, 0 failed. `cargo test --workspace` ran three times: 3396 passed, 0 failed, 56 ignored at load 1.55, and 3395 passed, 1 failed at loads 3.41 and 2.85, the failure both times being gap 5541's latency row (the three-year-log `lime drop ^z15` still running after 1 s). Gap 6123 says why that is not the regroup.
+
+**Gap 6121 — AGENTS' history advice for the regroup answered short.**
+1. *What.* AGENTS' precedence paragraph told a reader to "name the flat files too" for a directory. Measured at `d7844c1`: `git log --oneline -- kernel/LimeKernel/LimeKernel/Log` with the flat `Stamp.lean`, `Log.lean` and `Replay.lean` lists 3 commits, and adding the three `kernel/TmKernel/TmKernel/` paths lists 57; a pickaxe for brkFx on `Log/Replay.lean` and its flat path finds 1 commit, and with `--follow` or the third path 17. The workflow's last critic found it.
+2. *Why.* The sentence named two moves' worth of history with one move's paths.
+3. *Cost.* A W-55 agent reading history the way AGENTS said would see a module with no past, and no warning.
+4. *Clears it.* This commit: the paragraph names all three spellings, says a pickaxe needs `--follow` or all three, and gives the measured example.
+
+**Gap 6122 — going back across the move in a checkout built after it reads two builds.**
+1. *What.* Gap 6117 is the fast-forward. The reverse is silent: at a commit before the move, in a checkout whose `.lake` holds the nested build output, reach.py compares file stems and finds no stale artefact (nested `Plan/Plan.c` and flat `Plan.c` share a stem), and the call graph reads every `.c` file, so checks 8, 11, 12 and 13 read the nested bodies beside the flat ones. The critic planted an unreached definition at `ee61cf7` with nested build output present: the NOT EXEMPT line it should cause was gone.
+2. *Why.* A build directory is not a commit's to delete, as for gap 6117.
+3. *Cost.* Nothing today, because the two sides' bodies are identical under the folder map. Once W-55 changes code, a bisect or a base comparison in a reused checkout gets the gates' answer over two versions.
+4. *Clears it.* AGENTS now says it: bisect across the move in a fresh worktree, or delete the nested build output first.
+
+**Gap 6123 — gap 5541's row fails on both sides of the move, equally.**
+1. *What.* Run alone and interleaved, base `ee61cf7` (worktree `rename-final`) against `d7844c1` (worktree `regroup-mine`), six rounds each, loads 1.15 to 1.45: each side failed 2 of 6, in the same rounds (3 and 5), with the first verb at 3.29 to 3.36 s and the later verb at 172 to 193 ms on both.
+2. *Why not fixed.* It is gap 5541's, unchanged by a move that changed no Rust behaviour. The regroup's own runs failed it 0 of 3; this session's failed it 2 of 3. It fails at a load near 1, so load alone does not explain it.
+3. *Cost.* The workspace suite is red about one run in three, on this row only, on any tree since the row was written. A block quoting "0 failed" should say how many runs it made (§7.5) and whether this row was among the failures.
+4. *Clears it.* W-55, which has gap 5541 in its scope.
+
+The first fast-forward after the move also left the main checkout's build directory holding only flat output (97 modules' files under `kernel/LimeKernel/.lake/build/ir/LimeKernel/` and `lib/lean/LimeKernel/`). The main session deleted those files, gap 6117's clearance, and rebuilt the library there under the 40 GB cap (198 jobs, 614 s; a second capped `lake build` then had nothing to do), so the editor's `cargo check`, whose `build.rs` runs `lake build` with no cap, meets a built library. What the editor then did was not observed.
