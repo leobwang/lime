@@ -1,9 +1,11 @@
 # lime
 
-> **`lime` works here, on `rebuild-on-lean`; `main` was discarded.** The
-> planner, the log and the lifecycle verbs run on the Lean 4 kernel under
-> `kernel/`; the terminal UI and the rest are Rust. The record of the rebuild is
-> `kernel/README.md`, and `AGENTS.md` says how to work on it.
+> **`lime` is developed on `main`.** The branch was called `rebuild-on-lean`
+> until 2026-11-08, and the records under `kernel/` and `AGENTS.md` keep that
+> name; the `main` they call discarded is the old Rust-only line, gone since
+> 2026-09-12. The planner, the log and the lifecycle verbs run on the Lean 4
+> kernel under `kernel/`; the terminal UI and the rest are Rust. The record of
+> the rebuild is `kernel/README.md`, and `AGENTS.md` says how to work on it.
 
 `lime` is a personal planner for people who think in plain text. You keep a small
 tree of Markdown files — a month of outcomes, a week of milestones and tasks, a
@@ -72,22 +74,50 @@ shared team tracker, notifications, or a calendar you drag things around in.
 
 ## Install
 
-**If you already have a `lime` binary**, put it somewhere on your `PATH` and you
-are done:
+**If you already have a `lime` binary** built on this machine, put it somewhere
+on your `PATH` and you are done:
 
 ```sh
 mkdir -p ~/.local/bin && cp ./lime ~/.local/bin/lime
 ```
 
-**To build it from source** you need a Rust toolchain. `lime` is a Rust
-workspace — a library (`lime-core`) and one binary (`lime`) — so run these from the
-workspace root, the directory that holds `Cargo.toml` beside the `lime/` and
-`lime-core/` folders:
+On Linux the binary loads the Lean runtime's C++ libraries (`libc++`,
+`libc++abi`, `libunwind`) from the Lean toolchain it was built with, by an
+absolute path recorded in the binary, so that toolchain must stay installed
+where it was. A binary copied to a machine without it will not start.
+
+**To build it from source** you need four things. A Rust toolchain alone is not
+enough: the planner is a Lean 4 kernel that is compiled to C and linked into the
+Rust binary.
+
+1. **The Lean toolchain, through [elan](https://github.com/leanprover/elan).**
+   `kernel/LimeKernel/lean-toolchain` pins `leanprover/lean4:v4.33.1`, and elan
+   downloads that version the first time the build asks for it. The build
+   scripts look for `lean` and `lake` in `~/.elan/bin` first, then on your
+   `PATH`. Do not run `lake update` and do not edit `lean-toolchain`: a moved
+   pin fails to link with a misleading error.
+2. **A Rust toolchain**, stable, edition 2021.
+3. **A C compiler** (`cc`), for the small shim between Rust and Lean
+   (`kernel/lime-kernel-ffi/shim.c`).
+4. **Network access on the first build**, for cargo's crates and elan's
+   toolchain. Later builds work offline.
+
+Then, from the workspace root, the directory that holds `Cargo.toml` beside the
+`lime/`, `lime-core/` and `kernel/` folders:
 
 ```sh
-cargo build --release          # binary at ./target/release/lime
+cargo build --release -p lime    # binary at ./target/release/lime
 cargo install --path lime        # or: install `lime` into ~/.cargo/bin
 ```
+
+The first build compiles the kernel's 97 Lean modules (`lake build
+LimeKernel:static`, run by `kernel/lime-kernel-ffi/build.rs`) before any Rust,
+and takes about ten minutes on a fast desktop. It peaks at several gigabytes of
+memory. On a machine with no swap, cap it, for example on Linux with
+`systemd-run --user --scope -p MemoryMax=40G -p MemorySwapMax=0 cargo build
+--release -p lime`. After that, a build redoes only the Lean modules that
+changed, and a Rust-only change takes seconds. The Lean build output is about
+360 MB, under `kernel/LimeKernel/.lake/`.
 
 Either way, check it:
 
